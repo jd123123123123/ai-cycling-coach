@@ -59,12 +59,25 @@ CONDITION_BONUS_PCT = 12
 #: Labels are short because the loadout rail draws all five across a 390 px
 #: screen — "GLÜCKSBRINGER" truncated to "GLÜCKSBRIN…" there, which is the kind
 #: of detail that makes a screen look unfinished. Kept German and kept whole.
+#:
+#: TWO OF THEM ARE WORN, NOT BOLTED ON, and that is new as of 2026-08-20. Every
+#: slot before this one hung something on the machine, which meant the rider's
+#: own figure never changed no matter what they owned — and the figure is the
+#: half of the picture a rider actually identifies with. A helmet and a pair of
+#: glasses are also the two things a cyclist genuinely chooses per ride, so they
+#: earn their place under rule 1 as much as tyres do.
+#:
+#: They render through `rider_wear`, not `bike_build`: the bike is EDITED from
+#: its stored photograph, while the rider is COMPOSED fresh into each scene, so
+#: worn items are prompt clauses in the scene rather than an edit pass.
 SLOTS: dict[str, str] = {
     "tyres": "REIFEN",
     "wheels": "LAUFRÄDER",
     "mounted": "ANBAU",
     "cockpit": "COCKPIT",
     "charm": "GLÜCK",
+    "helmet": "HELM",
+    "eyewear": "BRILLE",
 }
 
 #: Rarity drives price and how loudly the item is drawn. It does NOT strictly
@@ -340,6 +353,46 @@ _ALL: list[Modifier] = [
        why="Zählt im Dunkeln.",
        flavour_de="Niemand sieht gut darin aus. Alle sehen dich.",
        applies=lambda f: f.in_dark is True),
+
+    # ── helmet ──────────────────────────────────────────────────────────────
+    # The worn slots follow the same rule as every other: conditional, tied to a
+    # fact we actually hold, and chosen before the ride rather than after it.
+    _m(id="aero_helm", name_de="Aero-Helm", slot="helmet", rarity="rare", pct=24,
+       why="Zählt auf flachen Fahrten ab 30 km/h Schnitt.",
+       flavour_de="Sieht albern aus im Café. Sieht großartig aus auf Strava.",
+       applies=lambda f: (
+           f.avg_speed_kmh is not None and f.avg_speed_kmh >= 30 and (_per_km(f) or 99) < 6
+       )),
+    _m(id="kletterhelm", name_de="Leichter Kletterhelm", slot="helmet", rarity="rare", pct=25,
+       why="Zählt ab 800 Höhenmetern.",
+       flavour_de="Jedes eingesparte Gramm zählt. Behauptest du, bergauf, laut.",
+       applies=lambda f: (f.elevation_gain_m or 0) >= 800),
+    _m(id="winter_helm", name_de="Helm mit Unterziehmütze", slot="helmet", rarity="common", pct=19,
+       why="Zählt bei 5 °C und kälter.",
+       flavour_de="Die Mütze ist nicht schön. Deine Ohren sind dir aber wichtiger.",
+       applies=lambda f: f.temp_c is not None and f.temp_c <= 5),
+    _m(id="casquette", name_de="Baumwollmütze unterm Helm", slot="helmet", rarity="common", pct=15,
+       why="Zählt auf Fahrten, die vor 8 Uhr starten.",
+       flavour_de="Schirm nach oben heißt Rennfahrer. Schirm nach unten heißt es regnet.",
+       applies=_dawn),
+
+    # ── eyewear ─────────────────────────────────────────────────────────────
+    _m(id="photochrome", name_de="Selbsttönende Brille", slot="eyewear", rarity="rare", pct=23,
+       why="Zählt, wenn du im Dunkeln losfährst oder im Dunkeln heimkommst.",
+       flavour_de="Tönt genau dann um, wenn du gerade nicht hinsiehst.",
+       applies=lambda f: f.in_dark is True),
+    _m(id="sonnenbrille", name_de="Große Sonnenbrille", slot="eyewear", rarity="common", pct=16,
+       why="Zählt ab 20 °C.",
+       flavour_de="Zwei Drittel deines Gesichts. Genau so ist es gedacht.",
+       applies=lambda f: f.temp_c is not None and f.temp_c >= 20),
+    _m(id="klarglas", name_de="Klare Gläser", slot="eyewear", rarity="common", pct=18,
+       why="Zählt, wenn es geregnet hat.",
+       flavour_de="Beschlagen sofort. Trägst du trotzdem, weil Steinchen unangenehmer sind.",
+       applies=lambda f: f.was_wet is True),
+    _m(id="gletscherbrille", name_de="Gletscherbrille", slot="eyewear", rarity="legendary", pct=28,
+       why="Zählt auf Fahrten ab 120 km.",
+       flavour_de="Mit Lederblenden an den Seiten. Aus einer Zeit, in der Pässe noch Schotter waren.",
+       applies=lambda f: _km(f) >= 120),
 ]
 
 MODIFIERS: dict[str, Modifier] = {m.id: m for m in _ALL}

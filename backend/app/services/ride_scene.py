@@ -224,13 +224,44 @@ def training_context(pose_key: str, g: RideGeo) -> str:
     return f"{pose}. {scene_descriptor(g)}"
 
 
-def day_context(pose_key: str) -> str:
-    """The `training_context` for TODAY's hero: the day-state's pose on the
-    shared starter backdrop.
+#: How hard the day's effort is PLAYED, read from a flat side profile.
+#:
+#: The pose prose says what the body is doing; this says how much to sell it.
+#: The camera stays side-on (`cyclr_studio._scene_prompt` records why turning it
+#: was tried and reversed), so the performance has to survive in silhouette:
+#: the line of the back, where the hands are, how the head is carried, and a
+#: profile's worth of face.
+#:
+#: THE ONE LINE THIS MUST NOT CROSS is already drawn above, in `_POSE`: character
+#: comes from posture and expression, never from cartoon devices. The first pass
+#: at these poses used sleep bubbles, puffed cheeks and speed lines, and against
+#: W3's near-black ground that read childish and fought the bike art. So the
+#: performance is broad and the vocabulary is not: a real cyclist's face at that
+#: effort, pushed one notch past what a photograph would catch.
+_PERFORMANCE = (
+    "PLAY THE EFFORT IN THE SILHOUETTE. How hard the day is must be legible from across a room, "
+    "before anything else in the picture registers, and it has to survive being seen from the "
+    "side: it lives in the line of the back, the angle of the head, where the hands are, how much "
+    "weight is on them, and the profile of the face. Push it one notch past life — a hard day is "
+    "gritted and driving, an easy day is unbothered to the point of smug, a rest day is comically, "
+    "luxuriously done with cycling — and keep every bit of it in a real cyclist's vocabulary of "
+    "postures and expressions. It is funny because it is recognisable, never because something "
+    "cartoonish has been added to the frame."
+)
 
-    No ride, no GPX, no invented location — the same road for every rider, so
-    the only thing that changes between two riders' Today heroes is the rider,
-    the bike and what the day is asking of them.
+
+def day_context(pose_key: str, backdrop_prose: str | None = None) -> str:
+    """The `training_context` for TODAY's hero: the day-state's pose, played to
+    camera, on the rider's chosen stage.
+
+    No ride, no GPX, no invented location. `backdrop_prose` comes from
+    `services.backdrops` — a stage the rider unlocked by riding, defaulting to
+    the starter road when they have not chosen one. A backdrop is deliberately
+    NOT a place we claim they rode: real places enter through
+    `scene_descriptor`, from real GPS, and only for real rides.
     """
     pose = _POSE.get(pose_key, _POSE["endurance"])
-    return f"{pose}. BACKGROUND: {STARTER_BACKDROP}. {_RENDER_STYLE}"
+    return (
+        f"{pose}. {_PERFORMANCE} "
+        f"BACKGROUND: {backdrop_prose or STARTER_BACKDROP}. {_RENDER_STYLE}"
+    )

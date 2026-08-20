@@ -116,3 +116,103 @@ export async function renderRideScene(activityId: number): Promise<RideScene> {
   const res = await apiClient.post<RideScene>(`/garage/scene/${activityId}`, undefined, { timeout: 180_000 })
   return res.data
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Today's stage — the avatar and the bike, exactly as the rider configured
+// them. Backend: `GET /garage/today`.
+//
+// NO COMPOSED SCENE HERE, deliberately. Today draws two pictures the rider
+// already owns — the bust above, the bike below — and never the slow
+// rider-on-bike composition. `DayScene` above still serves the ride surfaces.
+// ──────────────────────────────────────────────────────────────────────
+
+/** One backdrop the rider owns and can swipe to. */
+export interface Stage {
+  id: string
+  name: string
+  /** True for a real place someone rode, false for a hand-written stage. */
+  is_place: boolean
+}
+
+export interface TodayStage {
+  /** The bust, wearing whatever is in the helmet and eyewear slots. */
+  rider_image: string | null
+  /** The bike, wearing its parts, standing in `stage`. */
+  bike_image: string | null
+  bike_name: string | null
+  /** What the model was asked to change, so a build can be explained. */
+  changes: string[]
+  stage: string
+  stages: Stage[]
+  status: 'ok' | 'needs_assets' | string
+}
+
+/** The cheap read. Cached renders or the plain assets — never generates, so it
+ *  is safe on every Today open. */
+export async function fetchTodayStage(): Promise<TodayStage> {
+  const res = await apiClient.get<TodayStage>('/garage/today')
+  return res.data
+}
+
+/** Compose whichever of the two pictures this configuration is missing. Slow
+ *  and paid; idempotent, so re-posting an already-composed configuration is
+ *  free. Explicit intent only. */
+export async function renderTodayStage(): Promise<TodayStage> {
+  const res = await apiClient.post<TodayStage>('/garage/today/render', undefined, {
+    timeout: 180_000,
+  })
+  return res.data
+}
+
+/** One place in the gallery — real locations riders have been. */
+export interface Place {
+  slug: string
+  name: string
+  plate_url: string | null
+  price_rc: number
+  /** Rode there. The gate money cannot open. */
+  stamped: boolean
+  rides: number
+  owned: boolean
+  selected: boolean
+}
+
+export interface Backdrop {
+  id: string
+  name_de: string
+  unlock_de: string
+  unlocked: boolean
+  selected: boolean
+}
+
+export interface Backdrops {
+  backdrops: Backdrop[]
+  places: Place[]
+  selected: string
+  balance_rc: number
+}
+
+export async function fetchBackdrops(): Promise<Backdrops> {
+  const res = await apiClient.get<Backdrops>('/garage/backdrops')
+  return res.data
+}
+
+/** Switch stage. FREE AND INSTANT: it stores the choice and hands back the
+ *  screen. A stage the rider has stood in before comes back with its picture
+ *  already cached; a new one comes back with the plain bike until
+ *  `renderTodayStage` composes it. */
+export async function selectBackdrop(id: string): Promise<TodayStage> {
+  const res = await apiClient.post<TodayStage>(
+    `/garage/backdrops/${encodeURIComponent(id)}`,
+  )
+  return res.data
+}
+
+/** Spend RideCoin on a place this rider has a stamp for. 403 without the
+ *  stamp, 402 without the coins — two gates, refused differently. */
+export async function buyPlace(slug: string): Promise<Backdrops> {
+  const res = await apiClient.post<Backdrops>(
+    `/garage/places/${encodeURIComponent(slug.replace(/^place:/, ''))}/buy`,
+  )
+  return res.data
+}

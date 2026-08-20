@@ -971,9 +971,21 @@ class TestBuildRender:
         assert bike_render.describe(key) == []
 
     def test_the_prompt_locks_the_camera_and_forbids_changing_the_bike(self):
+        """The two invariants a build prompt must never lose.
+
+        ASSERTED ON THE MEANING, NOT ON A HEADING. This test asserted the literal
+        string "LOCKED CAMERA ANGLE" and went red on 2026-08-19 when
+        `cyclr_studio.BIKE_CAMERA` was rewritten to open "LOCKED CAMERA:" — the
+        camera was still locked, and harder than before, but the gate could no
+        longer see it. A test that breaks on a reworded constant while the rule
+        it guards is intact teaches everyone to ignore it.
+        """
         key = bike_render.build_key(w3catalog.STARTER_BIKE_ID, self._slots(frame="frame-lime"))
         prompt = bike_render.compose_prompt(key)
-        assert "LOCKED CAMERA ANGLE" in prompt
+        # The camera is pinned: a flat drive-side elevation, wherever the
+        # wording lands.
+        assert "LOCKED CAMERA" in prompt
+        assert "DRIVE SIDE" in prompt
         assert "Change ONLY the components listed below" in prompt
 
     def test_every_catalogue_item_carries_the_prompt_the_renderer_needs(self):

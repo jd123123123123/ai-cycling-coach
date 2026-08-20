@@ -1,6 +1,8 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Asterisk, ChevronsUp, Flame, Settings, Star, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
+import W3StageRail from './W3StageRail'
+import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
 import W3NavMenu from './W3NavMenu'
 import { W3CoachFab } from './W3CoachChat'
@@ -69,6 +71,13 @@ const BIKE_ART = {
 
 export interface W3StageVm {
   handle: string
+  /** Where the bike is standing, and everywhere else the rider owns. Absent
+   *  (or a single stage) draws no rail — see `W3StageRail`. */
+  stages?: Stage[]
+  stage?: string
+  onSelectStage?: (id: string) => void
+  /** True while a stage the rider just picked is being composed. */
+  rendering?: boolean
   /** The tier line under the handle ("FUNSEEKER" in the pen). Null → no pill,
    *  rather than a role the rider never earned. */
   role: string | null
@@ -249,6 +258,16 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
           </div>
         )}
       </motion.div>
+
+      {/* ── where it is standing ── */}
+      {vm.stages && vm.stage && vm.onSelectStage && (
+        <W3StageRail vm={{
+          stages: vm.stages,
+          current: vm.stage,
+          onSelect: vm.onSelectStage,
+          rendering: vm.rendering,
+        }} />
+      )}
     </div>
   )
 }

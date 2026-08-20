@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import base64
 import importlib.util
-import json
 import pathlib
 from typing import Any
 
@@ -119,12 +118,20 @@ CHARACTER_STYLE = (
     "shift in skin tone on an unbroken surface. An adult in their thirties, simplified but never "
     "childlike.\n\n"
 
-    "THE BODY is chunky and rounded: thick soft tubular limbs, full shoulders, mitten hands, a "
-    "short stout torso, all in the same clean matte finish.\n\n"
+    "THE BODY IS A RATIO, and the ratio is the look: a designer art-toy collectible. The head is a "
+    "big smooth sphere, two thirds as wide as the shoulders are broad, and the whole standing "
+    "figure is three and a half heads tall. The head nests straight down into the collar the way a "
+    "toy's head sits on its garment. Shoulders broad, soft and gently sloped, ending just past the "
+    "head's outer edge, with a short compressed torso beneath them. Everything else is volume "
+    "rather than anatomy — thick cylindrical limbs of even girth, mitten hands.\n\n"
 
-    "THE OUTFIT CARRIES ALL THE DETAIL and should look expensive — the fine ribbed weave of "
-    "technical lycra, crisp flatlock seams tracing each panel, a zip with real teeth, gripper "
-    "cuffs, and soft folds where fabric gathers."
+    "THE CONTRAST IS WHAT MAKES IT EXPENSIVE: simplified vinyl-toy geometry wearing "
+    "photorealistic technical clothing. Skin and hair stay one flawless soft-matte surface, "
+    "uniform and completely clean, and the whole detail budget goes to the kit — woven with real "
+    "physical relief, a weave with depth you could feel, seams that stand proud of the panels they "
+    "join, hardware with actual thickness. Hard trim anchors the soft forms: metal, enamel and "
+    "satin against matte vinyl, under a controlled key with a crisp rim light separating the "
+    "figure from the ground and deep ambient occlusion where forms meet."
 )
 BIKE_STYLE = (
     "The bicycle must maintain perfect, realistic mechanical geometry but with slightly chunky, "
@@ -257,11 +264,36 @@ BIKE_CAMERA = (
 )
 
 
-# The image model used when `IMAGE_MODEL` isn't set. Nano Banana 2 Lite — the
-# cheap tier, and verified against this file's exact call shape (locked-camera
-# bike prompt, deterministic seed, 1:1). NOTE: the flash models only render at
-# 1K; see `_generate`.
-DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-lite-image"
+# The image model used when `IMAGE_MODEL` isn't set.
+#
+# CHANGED 2026-08-20, and the reason is resolution. The default was
+# `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite), the cheap tier, which
+# renders at 1K ONLY — it rejects 2K outright with `400 Image size 2K is not
+# supported for this model`. 1K is not enough for the one thing a rider looks
+# hardest at: the brand lettering on their own frame. At 1K a Standert came back
+# reading "Stanlert"/"Standert" depending on the draw, because the model is
+# resolving type at the same scale it is resolving spokes.
+#
+# The non-lite flash model takes the same call shape and renders 2K (measured,
+# ~20 s) and 4K (~22 s). 2K is the sweet spot: legible decals, no meaningful
+# latency cost. `gemini-3-pro-image` also does both and is slower and dearer,
+# so it is not the default.
+DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image"
+
+#: What we ASK the model for. Bigger buys correctly-rendered small type and
+#: crisp mechanical detail; what we STORE is a different question — see
+#: `STORE_MAX_PX` and `_to_data_url`.
+RENDER_SIZE = getattr(settings, "IMAGE_SIZE", "") or "2K"
+
+#: What we KEEP. These images are stored inline (garage_assets.image_url,
+#: ride_scenes) and ride in JSON on Today's critical path of a mobile-first app,
+#: where base64 adds a third again on top of the file size. A full 2K WebP is
+#: ~4x the payload of the 1K one it replaces, for detail no surface displays:
+#: the Today hero paints at 252 px and the share card at 1080 px wide.
+#: Rendering at 2K and keeping 1536 px is the best of both — the model resolves
+#: the lettering properly, and a downscale of a correct render stays sharper
+#: than a 1K render of the same thing ever was.
+STORE_MAX_PX = 1536
 
 
 def _seed(s: str) -> int:
@@ -310,12 +342,9 @@ async def analyze_asset(photo_b64: str, kind: str) -> str | None:
     return (resp.text or "").strip() or None
 
 
-async def _generate(prompt: str, seed_src: str, size: str = "1K") -> str | None:
-    """Render one image. `size` is 1K by default and MUST stay 1K on the flash
-    models: `gemini-3.1-flash-lite-image` (Nano Banana 2 Lite) rejects 2K with
-    `400 Image size 2K is not supported for this model`, so a 2K default would
-    fail every render. 1K (1024²) is also more than the app ever displays — the
-    Today hero paints at 252 px and the share card at 1080 px wide."""
+async def _generate(prompt: str, seed_src: str, size: str = "") -> str | None:
+    """Render one image at `size`, defaulting to `RENDER_SIZE`."""
+    size = size or RENDER_SIZE
     from google import genai
     from google.genai import types
 
@@ -346,6 +375,12 @@ def _to_data_url(png: bytes) -> str:
     ~43 KB as WebP q85 (~57 KB base64) — a 12× cut for output that is displayed
     at 252 px, with no visible loss on flat toy-render shading.
 
+    IT ALSO DOWNSCALES, and that is deliberate rather than lossy by accident.
+    We render at `RENDER_SIZE` (2K) because the model needs that much room to
+    resolve the lettering on a rider's own frame correctly, and we keep
+    `STORE_MAX_PX` because no surface in the app displays more. Downscaling a
+    correct 2K render is not the same as rendering 1K: the type stays right.
+
     Pillow is a hard dependency (requirements.txt), but a missing or broken
     encoder must never cost the rider the bike they just made — we fall back to
     the original PNG rather than failing the render.
@@ -355,14 +390,24 @@ def _to_data_url(png: bytes) -> str:
 
         from PIL import Image
 
+        img = Image.open(io.BytesIO(png)).convert("RGB")
+        if max(img.size) > STORE_MAX_PX:
+            img.thumbnail((STORE_MAX_PX, STORE_MAX_PX), Image.LANCZOS)
         buf = io.BytesIO()
-        Image.open(io.BytesIO(png)).convert("RGB").save(buf, "WEBP", quality=85, method=6)
+        img.save(buf, "WEBP", quality=85, method=6)
         return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
     except Exception:
         return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
-def _isolated_prompt(description: str, kind: str) -> str:
+def _isolated_prompt(description: str, kind: str, wear: str = "") -> str:
+    """The standalone collectible: a rider bust, or a bike alone.
+
+    `wear` is `rider_wear.clause` — the helmet and glasses this rider has
+    equipped. It belongs HERE and not only in a scene, because Today shows the
+    bust itself: a rider who buys a helmet must be able to see it on the face
+    they look at every morning, not only in a picture of a ride.
+    """
     if kind == "rider":
         return (
             f"A tight front-facing PORTRAIT of a 3D character built from this description: "
@@ -373,7 +418,7 @@ def _isolated_prompt(description: str, kind: str) -> str:
             f"frontal angle, the face square to camera and perfectly centred, looking straight "
             f"down the lens. If the waist, hips or legs are visible the crop is far too wide — "
             f"push in until the head dominates.\n\n"
-            f"{DEFAULT_KIT} "
+            f"{DEFAULT_KIT} {wear} "
             # Stated explicitly, because without it the render invents a setting:
             # a blurred living room turned up behind the bust the first time the
             # style asked for a richly modelled world.
@@ -519,14 +564,24 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
     return img, prompt, "ok" if img else "image_model_unavailable"
 
 
-#: A shipped picture of the character BUILD the house style wants — thick
-#: tubular limbs, short stout torso, big round head.
+#: A shipped picture of the character BUILD the house style wants: a sphere of a
+#: head sitting straight into a collar with no neck, broad soft sloped shoulders,
+#: simple heavy volume for a body — and a garment rendered at product-photography
+#: density against that flawless matte skin.
 #:
 #: WHY AN IMAGE AND NOT MORE WORDS. The prompt described this build four times
 #: across two rounds, in progressively blunter language, and every render came
 #: back with near-anatomical limbs: the model has a very strong prior for
 #: "cyclist" and prose loses to it. The same lesson the bike learned — anything
 #: that must match is handed over as an image, never as a description.
+#:
+#: REPLACED 2026-08-20. The previous file was a pastel toy cyclist, and it was
+#: carrying two things at once: the chunky proportions we wanted, and a soft
+#: low-fidelity finish we did not. It set the ceiling — a render can't look more
+#: expensive than the picture it is told to match. This is now the W3 character
+#: itself, which holds the proportions AND the material contrast the look is
+#: actually built on. Its garment is streetwear, so `_BUILD_MANDATE` states
+#: explicitly that the fidelity carries over and the jacket does not.
 _BUILD_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_build.webp"
 
 #: A shipped picture of the FACE TREATMENT the house style wants — big round
@@ -540,18 +595,76 @@ _BUILD_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character
 #: explicitly, so there are now two, and the prompt says what each is for.
 _FACE_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_face.webp"
 
+#: The WHOLE FIGURE, standing, in the starter kit — the reference a SCENE needs.
+#:
+#: The gap this fills: every other reference in this module is a bust. The face
+#: reference is a face, the build reference is a bust, and the rider's own
+#: collectible is a portrait crop (see `_rider_compose_prompt`), so a scene had
+#: a picture of the head and prose for everything below it — and prose loses to
+#: the model's prior for "cyclist" exactly as it did for the build. Measured
+#: across four prompt rounds on 2026-08-20: the bust improved every round while
+#: the same wording sent the scene's body back and forth between a chunky toy
+#: and a lean adult, because nothing in the scene's inputs showed a body.
+#:
+#: Generated by the studio itself and then hand-vetted, the same way the other
+#: two style assets were. Its hair is a deliberately plain crop: the first draw
+#: came back wearing the build reference's distinctive locs, which is precisely
+#: the kind of detail a downstream render copies onto a rider who has no such
+#: thing. Its face is nobody, and every mandate that uses it says so.
+#:
+#: IT IS ON A BIKE, and that is the second half of the job. A standing figure
+#: only half survives the transfer to a riding position — the proportions came
+#: back thinner the moment the body had to fold onto a frame, and the rider read
+#: small against their own bicycle. This asset therefore shows the finished
+#: figure RIDING, on the same locked drive-side camera the scenes use, so it
+#: also carries the SCALE: shoulders wider than the bars, a frame that looks
+#: compact beneath its rider.
+#:
+#: HOW IT WAS MADE, because the obvious route fails. Generating it from prose
+#: against `_BUILD_REF` produced a render wearing the reference's streetwear,
+#: locs, goggles and graphic face, on a collector's plinth — the mandate saying
+#: "carry the fidelity, never the jacket" does not hold when the whole subject
+#: is being invented. Editing THIS figure into a new pose does hold: the pose
+#: changes and the character cannot, because it is the input.
+_BODY_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_body.webp"
+
 #: Used with the reference. The danger of a style image is that the model copies
 #: the WRONG things from it, so what to take and what to ignore is spelled out.
 _BUILD_MANDATE = (
-    "\n\nTHE TWO ATTACHED IMAGES ARE STYLE REFERENCES, not people. IMAGE 1 sets the FACE: copy "
-    "its eye size relative to the face, its short wide head proportions, how low the features sit "
-    "and how warm the expression is — your face should look built by the same hand. IMAGE 2 sets "
-    "the BODY: copy its chunky proportions and thick soft limbs. If your eyes are smaller or your "
-    "face longer than IMAGE 1, you have drifted back toward realism; match the reference.\n"
-    "Take nothing else from either image — not their faces, skin tones, hair, clothing, colours, "
-    "poses or backgrounds. The references supply the sculpt; the description supplies the person. "
+    "\n\nTHE TWO ATTACHED IMAGES ARE STYLE REFERENCES, not people. IMAGE 1 ALONE DECIDES THE "
+    "FACE: copy its eye size relative to the face, its short wide head proportions, how low the "
+    "features sit and how warm the expression is — your face should look built by the same hand. "
+    "If your eyes are smaller or your face longer than IMAGE 1, you have drifted back toward "
+    "realism; match the reference. IMAGE 2's face is flat graphic decal work and is NOT a face — "
+    "it has no bearing here, and nothing about the eyes, brows or mouth comes from it.\n"
+    "IMAGE 2 SETS THE BODY FROM THE COLLAR DOWN, and two things about it are the target. FIRST, "
+    "THE PROPORTIONS: the "
+    "size of that head against those shoulders, the head sitting straight into the collar with no "
+    "neck showing, the broad softly-sloped shoulders, the whole figure built from simple heavy "
+    "volume. SECOND, THE MATERIAL FIDELITY: how clean and matte the skin is, against how densely "
+    "real the garment is — visible fabric weave, a moulded zip with legible branding on its tape, "
+    "an enamel pin, crisp stitching, all lit like a product photograph. Match that gap between the "
+    "smooth figure and the expensive clothing.\n"
+    "TAKE ONLY THOSE FROM IMAGE 2. Its garment is streetwear and this rider wears the cycling kit "
+    "described above — carry over the fidelity, never the jacket. Take nothing else from either "
+    "image: not their faces, skin tones, hair, colours, poses or backgrounds. The references supply "
+    "the sculpt and the finish; the description supplies the person. "
     "The head is bare: no helmet, cap or glasses, so the hair stays fully visible."
 )
+
+
+def _style_reference(path: pathlib.Path) -> str | None:
+    """One shipped style reference as a data URL, or None when it isn't there.
+
+    Every caller treats a missing reference as "render without it" rather than
+    as an error: a deploy that ships neither degrades to the old text-only
+    render, which is worse-looking but still an avatar.
+    """
+    try:
+        raw = path.read_bytes()
+    except OSError:
+        return None
+    return "data:image/webp;base64," + base64.b64encode(raw).decode()
 
 
 def _style_references() -> list[str]:
@@ -564,16 +677,30 @@ def _style_references() -> list[str]:
     """
     out: list[str] = []
     for path in (_FACE_REF, _BUILD_REF):
-        try:
-            raw = path.read_bytes()
-        except OSError:
-            continue
-        out.append("data:image/webp;base64," + base64.b64encode(raw).decode())
+        ref = _style_reference(path)
+        if ref:
+            out.append(ref)
     return out
 
 
 async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> str | None:
-    """One render conditioned on several style references at once."""
+    """One render conditioned on several style references at once.
+
+    THE SEED DOES NOT MAKE THIS REPRODUCIBLE, and it is worth knowing before you
+    trust a single render as evidence. Measured 2026-08-20: the same description
+    through this function twice, same prompt and same seed value, returned two
+    different images. The seed fix this module shipped is still the right one —
+    it stopped the seed being derived from a vision pass that returns different
+    prose every run — but it buys a stable INPUT, not a stable output.
+
+    What actually keeps a rider's avatar stable is that the render is STORED
+    (`garage_assets`, `ride_scenes`, `DayScene`) and re-served rather than
+    re-rendered. Anything that re-renders hands the rider a slightly different
+    figure, so re-render on demand, never on a cache miss you could have avoided.
+
+    The practical consequence when tuning these prompts: one render is one
+    sample, and two prompts cannot be compared on one draw each.
+    """
     from google import genai
     from google.genai import types
 
@@ -585,7 +712,7 @@ async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> st
         config=types.GenerateContentConfig(
             response_modalities=["Image"],
             seed=_seed(seed_src),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=RENDER_SIZE),
         ),
     )
     for part in resp.candidates[0].content.parts:
@@ -596,7 +723,7 @@ async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> st
 
 
 async def render_isolated(
-    description: str, kind: str, *, seed_src: str | None = None,
+    description: str, kind: str, *, seed_src: str | None = None, wear: str = "",
 ) -> tuple[str | None, str, str]:
     """Render the standalone avatar bust or isolated bike from a description.
 
@@ -615,7 +742,7 @@ async def render_isolated(
     two descriptions of different lengths and two unrelated images. Callers that
     hold the photo pass it here; the description is only the fallback.
     """
-    prompt = _isolated_prompt(description, kind)
+    prompt = _isolated_prompt(description, kind, wear)
     seed = seed_src or description
 
     if kind == "rider":
@@ -651,18 +778,34 @@ async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
     return {"name": name, "description": description, "image": img, "prompt": prompt, "status": status}
 
 
-def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str:
+def _scene_prompt(
+    rider_desc: str, bike_desc: str, training_context: str, wear: str = "",
+) -> str:
     """The combined full-body hero. `training_context` is the pose + scene —
-    for a ride, built from the GPX via `ride_scene.scene_descriptor`."""
+    for a ride, built from the GPX via `ride_scene.scene_descriptor`.
+
+    `wear` is `rider_wear.clause` — what the rider has equipped on their own
+    head. It goes in AFTER the kit and BEFORE the action, so the helmet is part
+    of who is in the picture rather than something the action has to remember.
+    """
     return (
         f"LOCKED CAMERA ANGLE: A wide-angle, full-body shot of a 3D character and their bicycle. "
         f"CRITICAL INSTRUCTION: The character's face and hair MUST be 100% identical to "
         f"this exact description: [{rider_desc}]. Do not alter their facial features or expression "
-        f"from the description. {DEFAULT_KIT} You MUST strictly adhere to the exact details in this bicycle "
-        f"description: [{bike_desc}]. The action/scene is: {training_context}. CRITICAL ANATOMY: "
-        f"The character MUST be rendered with complete, correct human anatomy. Both arms, both "
-        f"hands, both legs, and both feet MUST be fully visible, distinct, and flawlessly rendered "
-        f"(no missing limbs, no clipping into the bike or ground). CRITICAL CAMERA FRAMING: The "
+        f"from the description. {DEFAULT_KIT} {wear} You MUST strictly adhere to the exact details in this bicycle "
+        f"description: [{bike_desc}]. The action/scene is: {training_context}. CRITICAL "
+        f"COMPLETENESS: the figure is whole. Both arms, both hands, both legs and both feet MUST be "
+        f"fully visible, distinct and flawlessly rendered, each one a heavy simple cylinder of the "
+        f"stylised build described above (no missing limbs, no clipping into the bike or ground). "
+        # This clause used to open "CRITICAL ANATOMY: the character MUST be
+        # rendered with complete, CORRECT HUMAN ANATOMY", and those two words
+        # were an all-caps realism absolute living in the one path that drifts
+        # realistic — the isolated bust has no equivalent line and holds its toy
+        # proportions, while the same description in a scene came back as a lean
+        # adult with anatomical legs. What the clause is actually for is limb
+        # COUNT and visibility (a pose that fights the framing renders as a
+        # clipped, three-limbed mess), and it still says exactly that.
+        f"CRITICAL CAMERA FRAMING: The "
         f"camera angle, lens focal length, height, and framing MUST be 100% identical and static "
         f"across all images. The character and bicycle MUST occupy the exact same scale and "
         f"proportions in the center of the frame, regardless of the pose. Use a fixed eye-level "
@@ -670,6 +813,17 @@ def _scene_prompt(rider_desc: str, bike_desc: str, training_context: str) -> str
         f"facing the camera), with the rider and bike travelling to the RIGHT of frame — the same "
         f"locked camera the isolated bike collectible uses, so a rider's scenes and their garage "
         f"bike read as one set. Do not use a three-quarter or front-on angle. "
+        # THE CAMERA STAYS FLAT, and this was tried the other way on 2026-08-20.
+        # Turning it to a front three-quarter did put the whole face in view, and
+        # cost more than it bought: the flat profile is what shows the entire
+        # machine — full frame geometry, both wheels, the drivetrain — and what
+        # lets the world around the bike read as a real place rather than as a
+        # backdrop behind a portrait. It is also the camera `BIKE_CAMERA` and
+        # `ride_framing` both lock, so all three surfaces stay one set.
+        #
+        # The worn slots do not need the rotation. A helmet is a silhouette and
+        # reads BETTER in profile than head-on; glasses read as a lens edge and
+        # an arm along the temple. What profile loses is only the second eye.
         f"Do not crop or zoom in; both wheels, the rider's head, and "
         f"BOTH FEET must be 100% visible with consistent padding around the edges. "
         f"{GROUNDING} "
@@ -696,6 +850,56 @@ _REFERENCE_MANDATE = (
     "The references govern WHO and WHAT; the action governs HOW THEY ARE MOVING."
 )
 
+#: Appended when the house-style build reference rides along as a THIRD image.
+#:
+#: WHY IT HAS TO. The rider's own collectible is a PORTRAIT CROP — head and
+#: chest — so a scene conditioned on it has a reference for the face and nothing
+#: at all for the body, and invents the rest from prose. Measured: the same
+#: description that renders a chunky toy bust in the garage comes back in a
+#: scene as a lean, near-anatomical adult with thin limbs and a visible neck.
+#: That is this module's oldest lesson arriving at a third surface — prose loses
+#: to the model's prior for "cyclist", and the fix is always an image.
+_BUILD_ROLE = (
+    "\n\nTHE THIRD IMAGE IS NOT A PERSON AND IT IS NOT THIS RIDER. It is the house-style BODY "
+    "REFERENCE: the same kit, on a bicycle, on this same camera — it exists to show you the build "
+    "from the collar down and how that build sits on a bike. COPY ITS PROPORTIONS EXACTLY: the "
+    "size of that head against those shoulders, the head sitting straight into the collar with no "
+    "neck showing, the softly-sloped shoulders, the short compressed torso, and above all the "
+    "THICKNESS of those arms and legs — heavy even cylinders of simple volume, no musculature and "
+    "no skeletal landmarks. COPY ITS SCALE TOO, which is the part that goes wrong most often: "
+    "this rider is BIG on this bicycle. Their shoulders are wider than the handlebars and the "
+    "frame looks compact beneath them. Take its material finish as well — flawless matte skin "
+    "against a kit with real woven texture and crisp raised seams.\n"
+    "Take nothing else from it. Its face, its hair, its skin tone and its grey studio ground have "
+    "no bearing here: the FIRST image is this rider's face and the description is who they are. "
+    "The third image is the body they are built on."
+)
+
+
+#: Appended when a shared PLACE PLATE rides along as a background reference.
+#:
+#: The economics of the whole place system live in this one paragraph. A place
+#: is rendered ONCE, globally, with no rider and no bike in it (`places.
+#: plate_prompt`), and every rider who owns that place has their own hero
+#: composed INTO that same picture. Two riders who both climbed the Stelvio are
+#: therefore looking at the same Stelvio, and the app paid for it once.
+#:
+#: It is handed over LAST, after the rider and the bike, because it is the least
+#: important thing in the frame to get exactly right: a plate that shifts a
+#: little is a different photograph of the same place, while a face that shifts
+#: is a different person.
+_PLATE_ROLE = (
+    "\n\nTHE LAST IMAGE IS THE PLACE ITSELF — the real location this scene happens in, "
+    "photographed without anybody in it. Use it as the actual background: keep its landforms, its "
+    "vegetation, its road surface, its light, its weather and its colour, and put the rider and "
+    "their bicycle into it as though they had been photographed there. Match the rider's lighting "
+    "to that plate — the same key direction, the same warmth, the same time of day — so the figure "
+    "belongs in the picture rather than being pasted onto it, and let the plate's own defocused "
+    "foreground stay in front of the rider where it already sits.\n"
+    "The plate holds no people and no bicycles, so nothing in it competes with them: the rider "
+    "and the bike are the only subjects, standing in the clear middle of that place."
+)
+
 
 async def compose_scene(
     rider_desc: str,
@@ -704,6 +908,8 @@ async def compose_scene(
     *,
     rider_img: str | None = None,
     bike_img: str | None = None,
+    wear: str = "",
+    plate_img: str | None = None,
 ) -> tuple[str | None, str, str]:
     """The rider-on-bike hero for a given training context / GPX scene.
 
@@ -718,10 +924,25 @@ async def compose_scene(
     Degrades cleanly: with no images this is exactly the old text-only path, so
     a rider who has a description but no render still gets a scene.
     """
-    prompt = _scene_prompt(rider_desc, bike_desc, training_context)
+    prompt = _scene_prompt(rider_desc, bike_desc, training_context, wear)
     refs = [i for i in (rider_img, bike_img) if i]
     if refs:
         prompt += _REFERENCE_MANDATE
+        # The build reference goes LAST so the rider's own two collectibles keep
+        # the strongest positions, and only when both of them are present — with
+        # one missing, "the FIRST/SECOND/THIRD image" stops describing what was
+        # actually handed over and the roles all shift by one.
+        if rider_img and bike_img:
+            body = _style_reference(_BODY_REF)
+            if body:
+                refs.append(body)
+                prompt += _BUILD_ROLE
+            # The place goes last of all — see `_PLATE_ROLE`. Only ever with the
+            # full set in front of it, so "the FIRST / SECOND / THIRD / LAST
+            # image" keeps describing what was actually handed over.
+            if plate_img:
+                refs.append(plate_img)
+                prompt += _PLATE_ROLE
     if not _gemini_ready():
         return None, prompt, "image_model_unavailable"
     if not refs:
@@ -742,7 +963,7 @@ async def compose_scene(
         config=types.GenerateContentConfig(
             response_modalities=["Image"],
             seed=_seed(prompt),
-            image_config=types.ImageConfig(aspect_ratio="1:1", image_size="1K"),
+            image_config=types.ImageConfig(aspect_ratio="1:1", image_size=RENDER_SIZE),
         ),
     )
     for part in resp.candidates[0].content.parts:
@@ -775,7 +996,9 @@ def _rider_compose_prompt() -> str:
     )
 
 
-async def edit_image(base_b64: str, prompt: str, seed_src: str, size: str = "1K") -> str | None:
+async def edit_image(
+    base_b64: str, prompt: str, seed_src: str, size: str = "", *, extra_b64: str | None = None,
+) -> str | None:
     """Image-conditioned edit: hand a picture back with an instruction.
 
     The difference from `_generate` is the whole reason `bike_build` works. A
@@ -796,9 +1019,19 @@ async def edit_image(base_b64: str, prompt: str, seed_src: str, size: str = "1K"
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
     model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
+    # The base image FIRST and always: it is the thing that must survive the
+    # edit unchanged. `extra` is for a second picture the instruction refers to
+    # — a place plate the bike is being set into — and it is deliberately not
+    # optional-by-default anywhere: an edit with two inputs and a prompt that
+    # only names one produces a composite of both, which is how a bike ends up
+    # wearing a mountain.
+    contents = [_img_part(base_b64)]
+    if extra_b64:
+        contents.append(_img_part(extra_b64))
+    contents.append(prompt)
     resp = client.models.generate_content(
         model=model,
-        contents=[_img_part(base_b64), prompt],
+        contents=contents,
         config=types.GenerateContentConfig(
             response_modalities=["Image"],
             seed=_seed(seed_src),
@@ -826,10 +1059,18 @@ def _img_part(photo_b64: str):
 
 
 async def compose_rider(
-    self_b64: str, bike_b64: str, helmet_b64: str, size: str = "2K"
+    self_b64: str, bike_b64: str, helmet_b64: str, size: str = ""
 ) -> dict[str, Any]:
     """Compose the final rider from three real photos (self, bike, helmet) in one
-    multi-image generation. Returns {image, prompt, status}. Honestly gated."""
+    multi-image generation. Returns {image, prompt, status}. Honestly gated.
+
+    `size` DEFAULTED TO A HARDCODED "2K", and that was a live bug rather than a
+    preference: the configured model was `gemini-3.1-flash-lite-image`, which
+    rejects 2K outright, so every call to this function — the whole
+    `/garage/rider/compose` endpoint — died on a 400. It defers to `RENDER_SIZE`
+    now, which the default model actually supports.
+    """
+    size = size or RENDER_SIZE
     prompt = _rider_compose_prompt()
     if not _gemini_ready():
         return {"image": None, "prompt": prompt, "status": "image_model_unavailable"}
@@ -850,6 +1091,9 @@ async def compose_rider(
     for part in resp.candidates[0].content.parts:
         data = getattr(part, "inline_data", None)
         if data and data.data:
-            img = "data:image/png;base64," + base64.b64encode(data.data).decode()
+            # `_to_data_url`, not a raw PNG: this is the same inline-stored,
+            # JSON-carried image every other render produces, and a 2K PNG here
+            # is ~2.7 MB once base64'd.
+            img = _to_data_url(data.data)
             return {"image": img, "prompt": prompt, "status": "ok"}
     return {"image": None, "prompt": prompt, "status": "image_model_unavailable"}

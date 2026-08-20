@@ -34,6 +34,10 @@ REASON_STREAK_BONUS = "streak_bonus"
 REASON_CHALLENGE_BONUS = "challenge_bonus"
 REASON_REFERRAL_BONUS = "referral_bonus"
 REASON_PART_PURCHASE = "part_purchase"
+#: Buying a place backdrop. A separate reason from a part so the ledger can
+#: answer "what did this rider spend on where they have been" — and because
+#: the two sinks are priced on completely different scales.
+REASON_PLACE_PURCHASE = "place_purchase"
 #: The harvest. Credited when a rider services a component, sized by the
 #: kilometres they rode on it — the counterpart to `ride_earn`, and the reason
 #: the maintenance loop can exist without any reason code that debits for

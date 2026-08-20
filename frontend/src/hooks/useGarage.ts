@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  fetchDayScene, fetchGarage, fetchRideScene, renderAsset, renderDayScene, renderRideScene,
-  type DayPose, type DayScene, type Garage, type GarageKind, type RideScene,
+  buyPlace, fetchBackdrops, fetchDayScene, fetchGarage, fetchRideScene, fetchTodayStage,
+  renderAsset, renderDayScene, renderRideScene, renderTodayStage, selectBackdrop,
+  type Backdrops, type DayPose, type DayScene, type Garage, type GarageKind,
+  type RideScene, type TodayStage,
 } from '../api/garage'
 
 export const GARAGE_KEY = ['garage'] as const
@@ -113,6 +115,98 @@ export function useRenderDayScene() {
     mutationFn: (pose: DayPose) => renderDayScene(pose),
     onSuccess: (scene) => {
       qc.setQueryData(['garage', 'scene', 'today', scene.pose], scene)
+    },
+  })
+}
+
+
+// ── Today's stage ───────────────────────────────────────────────────────────
+
+export const TODAY_STAGE_KEY = ['garage', 'today'] as const
+export const BACKDROPS_KEY = ['garage', 'backdrops'] as const
+
+/**
+ * The two pictures Today is built from, plus the stages the rider can swipe to.
+ *
+ * ONE QUERY FOR THE WHOLE SCREEN, matching the endpoint. The avatar and the
+ * bike each depend on something the rider changes elsewhere — a helmet from the
+ * shop, tyres from the garage, a stage from the gallery — and splitting them
+ * across queries means a window where the screen shows last week's bike under
+ * this morning's helmet.
+ *
+ * Same payload reasoning as `useGarage`: two inlined WebP renders, so `gcTime`
+ * is pinned at least as long as `staleTime` or the entry is evicted early and
+ * both images come down the wire again.
+ */
+export function useTodayStage() {
+  return useQuery<TodayStage>({
+    queryKey: TODAY_STAGE_KEY,
+    queryFn: fetchTodayStage,
+    staleTime: 10 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  })
+}
+
+/** Compose whatever this configuration is missing. Slow, paid, explicit — and
+ *  idempotent, so a rider who taps it twice pays once. */
+export function useRenderTodayStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: renderTodayStage,
+    onSuccess: (stage) => qc.setQueryData(TODAY_STAGE_KEY, stage),
+  })
+}
+
+/**
+ * Switch the stage the bike stands in.
+ *
+ * OPTIMISTIC, because the switch really is instant server-side: it stores a
+ * choice and returns the screen without rendering. Moving the selection in the
+ * cache first means the swipe rail tracks the finger rather than the network,
+ * and the response then replaces it with the truth — including the cached
+ * picture for a stage the rider has stood in before.
+ */
+export function useSelectStage() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => selectBackdrop(id),
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: TODAY_STAGE_KEY })
+      const previous = qc.getQueryData<TodayStage>(TODAY_STAGE_KEY)
+      if (previous) qc.setQueryData<TodayStage>(TODAY_STAGE_KEY, { ...previous, stage: id })
+      return { previous }
+    },
+    onError: (_e, _id, ctx) => {
+      // Put the rider back where they were. A failed switch that leaves the
+      // rail pointing at a stage the server never accepted is worse than a
+      // switch that visibly did not happen.
+      if (ctx?.previous) qc.setQueryData(TODAY_STAGE_KEY, ctx.previous)
+    },
+    onSuccess: (stage) => qc.setQueryData(TODAY_STAGE_KEY, stage),
+    onSettled: () => { void qc.invalidateQueries({ queryKey: BACKDROPS_KEY }) },
+  })
+}
+
+/** The gallery: every place the app knows, whoever rode it, plus this rider's
+ *  stamps and what they own. */
+export function useBackdrops() {
+  return useQuery<Backdrops>({
+    queryKey: BACKDROPS_KEY,
+    queryFn: fetchBackdrops,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
+  })
+}
+
+/** Buy a place. Refreshes the gallery AND the stage list, because a bought
+ *  place immediately becomes something the rider can swipe to. */
+export function useBuyPlace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (slug: string) => buyPlace(slug),
+    onSuccess: (data) => {
+      qc.setQueryData(BACKDROPS_KEY, data)
+      void qc.invalidateQueries({ queryKey: TODAY_STAGE_KEY })
     },
   })
 }

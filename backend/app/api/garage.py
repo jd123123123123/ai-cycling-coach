@@ -20,21 +20,44 @@ paid call, so it is cached and only ever generated on demand:
 """
 from __future__ import annotations
 
+import hashlib
 import math
+from types import SimpleNamespace
 from typing import Annotated, Literal, get_args
 
-from fastapi import APIRouter, Depends, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import status as http_status
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
-from app.models.garage import DayScene, GarageAsset, RideScene
+from app.models.garage import (
+    DayScene,
+    GarageAsset,
+    RiderBackdrop,
+    RiderStage,
+    RideScene,
+)
+from app.models.place import Place, RiderPlaceStamp
 from app.models.shop import BikeRender
 from app.models.user import User
-from app.services import bike_build, cyclr_studio, gear, rewards, workshop
-from app.services.ride_scene import DAY_POSES, RideGeo, day_context, training_context
+from app.services import (
+    backdrops,
+    bike_build,
+    cyclr_studio,
+    gear,
+    places,
+    rewards,
+    ride_facts,
+    ride_framing,
+    rider_wear,
+    stages,
+    workshop,
+)
+from app.services import earn_modifiers as em
+from app.services.ride_scene import DAY_POSES, RideGeo, day_context
 
 router = APIRouter(prefix="/garage", tags=["garage"])
 
@@ -95,11 +118,60 @@ class DaySceneOut(BaseModel):
     """Today's hero: the rider on their bike, posed for what the day asks."""
 
     pose: str
+    #: The stage it was composed on — `services.backdrops`. Echoed back so the
+    #: picker can show which one the picture the rider is looking at belongs to,
+    #: even while a switch is still rendering.
+    backdrop: str
     image_base64: str | None
     training_context: str | None
     prompt: str | None
     # Same vocabulary as SceneOut, so one frontend type covers both.
     status: str
+
+
+class BackdropOut(BaseModel):
+    """One stage in the picker."""
+
+    id: str
+    name_de: str
+    #: What it takes, in the rider's language. "" for the two starters.
+    unlock_de: str
+    #: Whether this rider has opened it. Locked stages are still returned: the
+    #: point of the picker is partly to show what riding somewhere would earn.
+    unlocked: bool
+    #: True for the one currently in use.
+    selected: bool
+
+
+class BackdropsOut(BaseModel):
+    backdrops: list[BackdropOut]
+    #: The places half of the same picker — real locations riders have been.
+    places: list[PlaceOut]
+    selected: str
+    balance_rc: int
+
+
+class PlaceOut(BaseModel):
+    """One real place in the gallery.
+
+    Every place the app knows is listed, whoever found it. That is the point of
+    a shared catalogue: the gallery grows as the app's riders go places, and a
+    rider scrolling past the Stelvio they have not ridden is being told what is
+    out there rather than being sold something.
+    """
+
+    slug: str
+    name: str
+    #: The shared plate, once it exists. Null while a place is on the map but
+    #: not yet rendered — the gallery shows it as pending rather than hiding it.
+    plate_url: str | None
+    price_rc: int
+    #: Has this rider actually ridden there. The gate money cannot open.
+    stamped: bool
+    #: How many times they have been.
+    rides: int
+    owned: bool
+    selected: bool
 
 
 def _to_out(asset: GarageAsset | None) -> AssetOut | None:
@@ -199,6 +271,204 @@ async def get_bike_build(
     cached.status = "ok"
     await db.commit()
     return BikeBuildOut(image_base64=image, status="ok", changes=changes)
+
+
+# ── what Today draws ────────────────────────────────────────────────────────
+class StageOut(BaseModel):
+    """One backdrop in the rider's own switchable set."""
+
+    id: str
+    name: str
+    #: Only ever backdrops this rider owns, so this list IS the swipe order.
+    is_place: bool
+
+
+class TodayStageOut(BaseModel):
+    """Everything the Today screen shows, in one read.
+
+    ONE CALL ON PURPOSE. Today draws the avatar and the bike as two pictures,
+    and both depend on things the rider changes elsewhere — a helmet bought in
+    the shop, tyres equipped in the garage, a stage picked from the gallery.
+    Three round trips to assemble one screen means three chances to draw a
+    half-updated rider, so the screen asks one question and gets a consistent
+    answer.
+    """
+
+    #: The bust, wearing whatever is in the two worn slots.
+    rider_image: str | None
+    #: The bike, wearing its equipped parts, standing in the chosen stage.
+    bike_image: str | None
+    bike_name: str | None
+    #: What the model was asked to change about the machine, so a build can be
+    #: explained rather than just appearing.
+    changes: list[str]
+    #: The stage in use, and every stage the rider can swipe to.
+    stage: str
+    stages: list[StageOut]
+    status: str
+
+
+@router.get("/today", response_model=TodayStageOut,
+            summary="The avatar and the bike, exactly as the rider has them configured")
+async def get_today_stage(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> TodayStageOut:
+    """The two renders Today is built from, plus the stages to swipe through.
+
+    NO RIDER ON THE BIKE. Today is the bike, with the avatar above it — the
+    composed rider-on-bike scene is not what this screen is for, and composing
+    one here would put the app's slowest, most failure-prone call on its most
+    visited surface. `compose_scene` still exists for the surfaces that want it.
+
+    CACHED, NEVER RENDERED ON OPEN. Both pictures come back from the render
+    cache or come back plain: a rider whose build has never been composed sees
+    their base bike on the base ground, which is honest and instant. Composing
+    is `POST /garage/today/render`, an explicit act.
+    """
+    rider = await _get_asset(db, current_user.id, "rider")
+    bike = await _get_asset(db, current_user.id, "bike")
+    stage_id = await _selected_backdrop(db, current_user.id)
+    owned = await _owned_stages(db, current_user.id)
+
+    equipped = await gear.equipped_ids(db, current_user.id)
+    changes = bike_build.describe(equipped)
+
+    rider_image = rider.image_url if rider else None
+    if rider is not None and rider.description:
+        worn = rider_wear.key(equipped)
+        cached = await _cached_render(db, _rider_key(rider, worn))
+        if cached:
+            rider_image = cached
+
+    bike_image = bike.image_url if bike else None
+    if bike is not None and bike.image_url:
+        cached = await _cached_render(db, _bike_key(bike, equipped, stage_id))
+        if cached:
+            bike_image = cached
+
+    return TodayStageOut(
+        rider_image=rider_image,
+        bike_image=bike_image,
+        bike_name=bike.name if bike else None,
+        changes=changes,
+        stage=stage_id,
+        stages=owned,
+        status="ok" if (rider_image and bike_image) else "needs_assets",
+    )
+
+
+def _rider_key(rider: GarageAsset, worn: str) -> str:
+    """Cache key for the bust wearing one loadout.
+
+    Namespaced away from the bike builds that share the table, and stamped with
+    the asset's own render time so re-photographing a face invalidates every
+    bust of the old one.
+    """
+    stamp = (rider.updated_at or rider.created_at).isoformat()
+    return hashlib.sha256(
+        f"rider:{rider.id}:{stamp}:{worn}".encode()
+    ).hexdigest()[:32]
+
+
+def _bike_key(bike: GarageAsset, equipped: list[str], stage_id: str) -> str:
+    stamp = (bike.updated_at or bike.created_at).isoformat()
+    return bike_build.build_key(bike.id, stamp, equipped, stage_id)
+
+
+async def _cached_render(db: AsyncSession, key: str) -> str | None:
+    row = (await db.execute(
+        select(BikeRender).where(BikeRender.build_key == key)
+    )).scalar_one_or_none()
+    return row.image if row is not None and row.image else None
+
+
+async def _store_render(db: AsyncSession, key: str, image: str) -> None:
+    row = (await db.execute(
+        select(BikeRender).where(BikeRender.build_key == key)
+    )).scalar_one_or_none()
+    if row is None:
+        row = BikeRender(build_key=key)
+        db.add(row)
+    row.image = image
+    row.status = "ok"
+    await db.commit()
+
+
+async def _owned_stages(db: AsyncSession, user_id: int) -> list[StageOut]:
+    """Every stage this rider may switch to, in swipe order.
+
+    The hand-written ones they have unlocked, then the places they have bought,
+    newest place last so a stage someone just paid for is at the end of the
+    swipe rather than buried in the middle.
+    """
+    out = [
+        StageOut(id=b.id, name=backdrops.CATALOGUE[b.id].name_de, is_place=False)
+        for b in [backdrops.CATALOGUE[i] for i in await _unlocked_backdrops(db, user_id)]
+    ]
+    owned = set((await db.execute(
+        select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == user_id)
+    )).scalars().all())
+    place_rows = (await db.execute(
+        select(Place).where(Place.slug.in_(owned)).order_by(Place.created_at)
+    )).scalars().all() if owned else []
+    out += [StageOut(id=p.slug, name=p.name, is_place=True) for p in place_rows]
+    return out
+
+
+@router.post("/today/render", response_model=TodayStageOut,
+             summary="Compose the avatar and the bike as currently configured")
+async def render_today_stage(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> TodayStageOut:
+    """Render whichever of the two pictures is missing for this configuration.
+
+    Slow and paid, so it is a POST and never happens on open. It is also
+    idempotent and cheap to repeat: anything already composed for this exact
+    (bike, parts, stage) or (face, worn) combination comes straight back out of
+    the cache, so a rider swiping back to a stage they used last week pays
+    nothing.
+    """
+    rider = await _get_asset(db, current_user.id, "rider")
+    bike = await _get_asset(db, current_user.id, "bike")
+    equipped = await gear.equipped_ids(db, current_user.id)
+    stage_id = await _selected_backdrop(db, current_user.id)
+    stage = await stages.stage_for(db, stage_id)
+
+    # THE BUST, wearing what the rider owns. Re-rendered rather than edited:
+    # a helmet changes the silhouette of the head, which is more than an edit
+    # pass holds onto, and the bust is cheap to redraw from its description.
+    if rider is not None and rider.description:
+        worn = rider_wear.key(equipped)
+        key = _rider_key(rider, worn)
+        if worn != "bare" and not await _cached_render(db, key):
+            image, _, _ = await cyclr_studio.render_isolated(
+                rider.description, "rider", seed_src=f"{rider.id}:{worn}",
+                wear=rider_wear.clause(equipped),
+            )
+            if image:
+                await _store_render(db, key, image)
+
+    # THE BIKE, wearing its parts and standing in the chosen place. One edit
+    # from the ORIGINAL render — never from a previous build — so the frame,
+    # the decals and the components stay the rider's own.
+    if bike is not None and bike.image_url:
+        key = _bike_key(bike, equipped, stage_id)
+        needs = not bike_build.is_stock(equipped) or stage.id != backdrops.DEFAULT_ID
+        if needs and not await _cached_render(db, key):
+            image = await cyclr_studio.edit_image(
+                bike.image_url,
+                bike_build.edit_prompt(
+                    equipped, world=stage.prose, has_plate=bool(stage.plate_url),
+                ),
+                key,
+                extra_b64=stage.plate_url,
+            )
+            if image:
+                await _store_render(db, key, image)
+
+    return await get_today_stage(current_user, db)
 
 
 # ── the gear shop ───────────────────────────────────────────────────────────
@@ -560,10 +830,86 @@ async def _missing_asset(db: AsyncSession, user_id: int) -> str | None:
     return None
 
 
-async def _cached_day_scene(db: AsyncSession, user_id: int, pose: str) -> DayScene | None:
+async def _cached_day_scene(
+    db: AsyncSession, user_id: int, pose: str, backdrop: str,
+) -> DayScene | None:
     return (await db.execute(
-        select(DayScene).where(DayScene.user_id == user_id, DayScene.pose == pose)
+        select(DayScene).where(
+            DayScene.user_id == user_id,
+            DayScene.pose == pose,
+            DayScene.backdrop == backdrop,
+        )
     )).scalar_one_or_none()
+
+
+async def _selected_backdrop(db: AsyncSession, user_id: int) -> str:
+    """The stage this rider picked, or the starter road.
+
+    Resolved through `backdrops.resolve` rather than returned raw, so a stored
+    id that a deploy has since removed from the catalogue degrades to the
+    default instead of 500-ing every hero request until the rider picks again.
+    """
+    row = (await db.execute(
+        select(RiderStage).where(RiderStage.user_id == user_id)
+    )).scalar_one_or_none()
+    return (await stages.stage_for(db, row.backdrop if row else None)).id
+
+
+async def _cheap_history_facts(db: AsyncSession, user_id: int) -> list[em.RideFacts]:
+    """Every ride, as far as the WEATHERLESS unlock rules can see it.
+
+    Deliberately partial. Climbing, distance, start hour, intensity and surface
+    all come off the activity itself, so evaluating them across a rider's whole
+    history costs one query. Wetness and temperature do not — each is a lookup
+    per ride (`services.ride_facts.weather_of`) — so they are left None here and
+    the rules that need them (`backdrops.NEEDS_WEATHER`) simply do not fire.
+    Those two are earned going forward instead, captured at ingestion where the
+    facts are already paid for. Rule 4 of the modifier catalogue, applied to
+    unlocks: a fact we do not have never fires.
+
+    The whole history, not a window: a stage is earned once and kept, and a pass
+    climbed last spring should not close again because time passed.
+    """
+    rows = (await db.execute(
+        select(
+            Activity.id, Activity.distance_meters, Activity.elevation_gain_m,
+            Activity.duration_seconds, Activity.started_at, Activity.tss, Activity.raw_data,
+        ).where(Activity.user_id == user_id)
+    )).all()
+
+    out: list[em.RideFacts] = []
+    for r in rows:
+        dist, dur = r.distance_meters, r.duration_seconds
+        # The same two derivations `ride_economy._ride_facts` makes, kept
+        # identical on purpose: a rider must not unlock the velodrome here at an
+        # IF the earn engine would have computed differently.
+        avg_kmh = (dist / 1000) / (dur / 3600) if dist and dur else None
+        iff = (r.tss / ((dur / 3600) * 100)) ** 0.5 if r.tss and dur and dur > 0 else None
+        try:
+            surface = ride_facts.surface_of(SimpleNamespace(raw_data=r.raw_data))
+        except Exception:
+            surface = None
+        out.append(em.RideFacts(
+            distance_m=dist,
+            elevation_gain_m=r.elevation_gain_m,
+            duration_s=dur,
+            avg_speed_kmh=avg_kmh,
+            start_hour=r.started_at.hour if r.started_at else None,
+            intensity_factor=iff,
+            surface=surface,
+        ))
+    return out
+
+
+async def _unlocked_backdrops(db: AsyncSession, user_id: int) -> list[str]:
+    """Every stage this rider may choose: starters, what they earned at
+    ingestion, and what their history proves without a weather lookup."""
+    earned = set((await db.execute(
+        select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == user_id)
+    )).scalars().all())
+    live = set(backdrops.unlocked_ids(await _cheap_history_facts(db, user_id)))
+    have = earned | live | set(backdrops.STARTERS)
+    return [b for b in backdrops.CATALOGUE if b in have]
 
 
 # ── today's hero ────────────────────────────────────────────────────────────
@@ -582,13 +928,14 @@ async def get_day_scene(
     (a tap away), or `needs_rider` / `needs_bike` (the studio first). Composing
     costs money and minutes and only ever happens on an explicit POST.
     """
-    scene = await _cached_day_scene(db, current_user.id, pose)
+    backdrop = await _selected_backdrop(db, current_user.id)
+    scene = await _cached_day_scene(db, current_user.id, pose, backdrop)
     if scene is not None and scene.image_url:
-        return DaySceneOut(pose=pose, image_base64=scene.image_url,
+        return DaySceneOut(pose=pose, backdrop=backdrop, image_base64=scene.image_url,
                            training_context=scene.training_context,
                            prompt=scene.prompt, status="ok")
     missing = await _missing_asset(db, current_user.id)
-    return DaySceneOut(pose=pose, image_base64=None, training_context=None,
+    return DaySceneOut(pose=pose, backdrop=backdrop, image_base64=None, training_context=None,
                        prompt=None, status=missing or "not_generated")
 
 
@@ -608,39 +955,201 @@ async def render_day_scene(
     returns its cached image without re-rendering — this endpoint is safe to hit
     twice, it just isn't safe to hit automatically.
     """
-    cached = await _cached_day_scene(db, current_user.id, pose)
+    return await _compose_day_scene(db, current_user.id, pose)
+
+
+async def _compose_day_scene(db: AsyncSession, user_id: int, pose: str) -> DaySceneOut:
+    """Compose (or read back) one pose on the rider's currently chosen stage.
+
+    Shared by `POST /scene/today` and by a stage switch, because they are the
+    same operation seen from two directions: "render today's pose" and "render
+    today's pose somewhere else" differ only in which backdrop is selected when
+    they run.
+    """
+    backdrop = await _selected_backdrop(db, user_id)
+    cached = await _cached_day_scene(db, user_id, pose, backdrop)
     if cached is not None and cached.image_url:
-        return DaySceneOut(pose=pose, image_base64=cached.image_url,
+        return DaySceneOut(pose=pose, backdrop=backdrop, image_base64=cached.image_url,
                            training_context=cached.training_context,
                            prompt=cached.prompt, status="ok")
 
-    missing = await _missing_asset(db, current_user.id)
+    missing = await _missing_asset(db, user_id)
     if missing:
-        return DaySceneOut(pose=pose, image_base64=None, training_context=None,
-                           prompt=None, status=missing)
+        return DaySceneOut(pose=pose, backdrop=backdrop, image_base64=None,
+                           training_context=None, prompt=None, status=missing)
 
-    rider = await _get_asset(db, current_user.id, "rider")
-    bike = await _get_asset(db, current_user.id, "bike")
+    rider = await _get_asset(db, user_id, "rider")
+    bike = await _get_asset(db, user_id, "bike")
     assert rider is not None and bike is not None  # _missing_asset just proved it
-    ctx = day_context(pose)
+    # What the rider has on their own head — the two worn slots. Composed into
+    # the scene rather than edited onto a stored figure, because unlike the bike
+    # the rider is drawn fresh every time. See `services.rider_wear`.
+    equipped = await gear.equipped_ids(db, user_id)
+    stage = await stages.stage_for(db, backdrop)
+    ctx = day_context(pose, stage.prose)
     # The rider's own renders ride along as image references, so the figure on
     # the day-state hero is recognisably the one in their garage rather than a
     # fresh interpretation of the same words.
     image, prompt, render_status = await cyclr_studio.compose_scene(
         rider.description or "", bike.description or "", ctx,
         rider_img=rider.image_url, bike_img=bike.image_url,
+        wear=rider_wear.clause(equipped),
+        # A real place hands its shared plate over as the background, so every
+        # rider who owns the Dolomites is standing in the SAME Dolomites — the
+        # one render the app paid for. A hand-written stage has no plate and is
+        # built from prose, exactly as before.
+        plate_img=stage.plate_url,
     )
     if image:
         if cached is None:
-            cached = DayScene(user_id=current_user.id, pose=pose)
+            cached = DayScene(user_id=user_id, pose=pose, backdrop=backdrop)
             db.add(cached)
         cached.image_url = image
         cached.training_context = ctx
         cached.prompt = prompt
         await db.commit()
 
-    return DaySceneOut(pose=pose, image_base64=image, training_context=ctx,
-                       prompt=prompt, status=render_status)
+    return DaySceneOut(pose=pose, backdrop=backdrop, image_base64=image,
+                       training_context=ctx, prompt=prompt, status=render_status)
+
+
+# ── the stage Today's hero plays on ─────────────────────────────────────────
+# Earned by riding, never bought. The garage already has a shop; a picture you
+# paid for says nothing about you, and a picture you opened by climbing a
+# thousand metres says exactly one thing. See `services.backdrops`.
+@router.get("/backdrops", response_model=BackdropsOut,
+            summary="The stages, which ones this rider has opened, and which is in use")
+async def get_backdrops(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> BackdropsOut:
+    """Every stage in the catalogue, locked ones included.
+
+    Locked stages are returned deliberately. Half the value of this screen is
+    telling a rider what a ride would earn them — a picker that hid everything
+    unearned would show a new rider two entries and no reason to ride.
+    """
+    unlocked = set(await _unlocked_backdrops(db, current_user.id))
+    selected = await _selected_backdrop(db, current_user.id)
+
+    all_places = (await db.execute(
+        select(Place).order_by(Place.created_at.desc())
+    )).scalars().all()
+    stamps = {
+        s.place_id: s.rides for s in (await db.execute(
+            select(RiderPlaceStamp).where(RiderPlaceStamp.user_id == current_user.id)
+        )).scalars().all()
+    }
+    owned = set((await db.execute(
+        select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == current_user.id)
+    )).scalars().all())
+
+    return BackdropsOut(
+        selected=selected,
+        balance_rc=await rewards.balance_of(db, current_user.id),
+        backdrops=[
+            BackdropOut(
+                id=b.id, name_de=b.name_de, unlock_de=b.unlock_de,
+                unlocked=b.id in unlocked, selected=b.id == selected,
+            )
+            for b in backdrops.CATALOGUE.values()
+        ],
+        places=[
+            PlaceOut(
+                slug=p.slug, name=p.name, plate_url=p.plate_url, price_rc=p.price_rc,
+                stamped=p.id in stamps, rides=stamps.get(p.id, 0),
+                owned=p.slug in owned, selected=p.slug == selected,
+            )
+            for p in all_places
+        ],
+    )
+
+
+@router.post("/places/{slug}/buy", response_model=BackdropsOut,
+             summary="Buy a place you have ridden")
+async def buy_place(
+    slug: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> BackdropsOut:
+    """Spend RideCoin on a place this rider has a stamp for.
+
+    TWO GATES, AND THEY REFUSE DIFFERENTLY. No stamp is a 403 and always will
+    be — no amount of money opens it, because the stamp is the part that means
+    something. No coins is a 402: come back after a few more rides.
+    """
+    full_slug = slug if slug.startswith(places.PREFIX) else places.PREFIX + slug
+    try:
+        await places.buy(db, current_user.id, full_slug)
+    except KeyError:
+        raise HTTPException(http_status.HTTP_404_NOT_FOUND,
+                            "Diesen Ort gibt es noch nicht.") from None
+    except places.NotStampedError:
+        raise HTTPException(http_status.HTTP_403_FORBIDDEN,
+                            "Da bist du noch nicht gefahren.") from None
+    except places.AlreadyOwnedError:
+        raise HTTPException(http_status.HTTP_409_CONFLICT,
+                            "Gehört dir schon.") from None
+    except rewards.InsufficientBalanceError:
+        raise HTTPException(http_status.HTTP_402_PAYMENT_REQUIRED,
+                            "Dafür reichen deine RideCoins noch nicht.") from None
+
+    return await get_backdrops(current_user, db)
+
+
+@router.post("/backdrops/{backdrop_id}", response_model=TodayStageOut,
+             summary="Stand the bike somewhere else")
+async def select_backdrop(
+    backdrop_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> TodayStageOut:
+    """Switch the stage Today's bike stands in.
+
+    THE SWITCH ITSELF IS FREE AND INSTANT. It stores a choice and returns the
+    screen; it does not render. A stage the rider has stood in before comes
+    straight back out of the cache with its picture, and a new one comes back
+    with the plain bike until `POST /garage/today/render` composes it. That is
+    what makes swiping through a set of backdrops feel like flicking through
+    photographs rather than like queuing up image-model calls.
+
+    A locked stage is refused rather than quietly ignored: the picker knows what
+    is open, so a request for a closed one is a client that has drifted from the
+    server, and honouring it would hand out a reward nobody earned.
+    """
+    # A stage is either hand-written or a real place, and they are gated
+    # differently: a hand-written one is EARNED by what the rider did, a place is
+    # earned by going there AND bought. `stages` is the seam that lets the rest
+    # of this endpoint stop caring which kind it is holding.
+    if places.is_place(backdrop_id):
+        if await places.by_slug(db, backdrop_id) is None:
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND,
+                                detail="Diesen Ort gibt es noch nicht.")
+        owned = set((await db.execute(
+            select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == current_user.id)
+        )).scalars().all())
+        if backdrop_id not in owned:
+            raise HTTPException(status_code=http_status.HTTP_402_PAYMENT_REQUIRED,
+                                detail="Diesen Ort hast du noch nicht gekauft.")
+    else:
+        if backdrop_id not in backdrops.CATALOGUE:
+            raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND,
+                                detail="Diesen Hintergrund gibt es nicht.")
+        if backdrop_id not in await _unlocked_backdrops(db, current_user.id):
+            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN,
+                                detail="Diesen Hintergrund hast du noch nicht freigefahren.")
+
+    row = (await db.execute(
+        select(RiderStage).where(RiderStage.user_id == current_user.id)
+    )).scalar_one_or_none()
+    if row is None:
+        row = RiderStage(user_id=current_user.id, backdrop=backdrop_id)
+        db.add(row)
+    else:
+        row.backdrop = backdrop_id
+    await db.commit()
+
+    return await get_today_stage(current_user, db)
 
 
 @router.get("/scene/{activity_id}", response_model=SceneOut)
@@ -697,25 +1206,37 @@ async def render_scene(
                         training_context=cached.training_context, prompt=cached.prompt, status="ok")
 
     activity = await _load_activity(db, current_user.id, activity_id)
-    rider = await _get_asset(db, current_user.id, "rider")
     bike = await _get_asset(db, current_user.id, "bike")
-    if not (rider and rider.description):
-        return SceneOut(activity_id=activity_id, image_base64=None, training_context=None,
-                        prompt=None, status="needs_rider")
-    if not (bike and bike.description):
+    if not (bike and bike.description and bike.image_url):
         return SceneOut(activity_id=activity_id, image_base64=None, training_context=None,
                         prompt=None, status="needs_bike")
 
-    ctx = training_context(_pose_for(activity), RideGeo(
+    # ── THE MACHINE, ALONE ──────────────────────────────────────────────────
+    # A past ride is shot in the PHOTOREAL register (`services.ride_framing`),
+    # not the stylised Today one, and it has no rider in it. That module's own
+    # header argues the case better than a comment here can: the human figure is
+    # where these models fail, the reference this app is chasing has no human in
+    # it at all, and a finished ride is about the machine and where it went.
+    #
+    # It was built and tuned against the real model (commits 3634ad9, 5690736,
+    # `docs/framing-garden-r3.webp`) and then never wired to anything — this
+    # endpoint kept composing the Today register. `needs_rider` is gone from
+    # this path as a result: a rider who has photographed their bike but not
+    # themselves can now have every one of their rides shot.
+    geo = RideGeo(
         distance_m=activity.distance_meters,
         elevation_gain_m=activity.elevation_gain_m,
-    ))
-    # Same here: a ride hero must show the rider's actual bike, down to the
-    # lettering on the frame. Text alone re-derives it and gets that wrong.
-    image, prompt, render_status = await cyclr_studio.compose_scene(
-        rider.description, bike.description, ctx,
-        rider_img=rider.image_url, bike_img=bike.image_url,
     )
+    framing_id = ride_framing.default_framing_for(geo)
+    ctx = ride_framing.get(framing_id).name_de
+    # EDIT, never redraw. The rider's own bike render goes back in as the input
+    # image so the frame, the decals and the components stay pixel-identical
+    # between two framings — the measurement in `docs/w3-bike-customisation.md`.
+    image = await cyclr_studio.edit_image(
+        bike.image_url, ride_framing.edit_prompt(framing_id), f"ride:{activity_id}:{framing_id}",
+    )
+    prompt = ride_framing.edit_prompt(framing_id)
+    render_status = "ok" if image else "image_model_unavailable"
     if image:
         if cached is None:
             cached = RideScene(user_id=current_user.id, activity_id=activity_id)

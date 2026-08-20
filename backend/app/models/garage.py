@@ -29,7 +29,13 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
-    DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -134,7 +140,7 @@ class DayScene(Base):
 
     __tablename__ = "day_scenes"
     __table_args__ = (
-        UniqueConstraint("user_id", "pose", name="uq_day_scene_user_pose"),
+        UniqueConstraint("user_id", "pose", "backdrop", name="uq_day_scene_user_pose_backdrop"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -142,9 +148,98 @@ class DayScene(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     pose: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Which stage this pose was composed on — `services.backdrops`.
+    #:
+    #: PART OF THE KEY, added 2026-08-20 with the backdrop picker. A rider who
+    #: switches from the starter road to the pass and back must not be billed a
+    #: fresh render for a picture they already have, so the pair is the cache
+    #: entry rather than the pose alone. The ceiling rises with it — seven poses
+    #: across nine backdrops rather than seven rows — but only for combinations
+    #: the rider actually asked to see, and each one stays free forever after.
+    #:
+    #: NOT NULLABLE, and defaulted at the column so existing rows adopt the
+    #: starter road rather than becoming a NULL that the unique constraint would
+    #: stop deduplicating (Postgres treats NULLs as distinct).
+    backdrop: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="starter_road",
+    )
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     training_context: Mapped[str | None] = mapped_column(Text, nullable=True)
     prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
+    )
+
+
+class RiderStage(Base):
+    """Which backdrop this rider has chosen for Today's hero. One row per rider.
+
+    A single-column preference does not obviously deserve a table, and the
+    alternatives were both worse. Hanging it on ``users`` puts a garage concern
+    in the auth model, and inferring it from the newest ``DayScene`` row would
+    make the rider's CHOICE a side effect of what happened to render last — so a
+    failed render, or a pose they have not reached yet, would silently move them
+    back to a stage they did not pick.
+
+    Absent means the starter road: a rider who has never opened the picker still
+    has a hero, and `backdrops.resolve` turns both the missing row and a stale id
+    into the same default rather than an error.
+    """
+
+    __tablename__ = "rider_stages"
+    __table_args__ = (
+        UniqueConstraint("user_id", name="uq_rider_stage_user"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    #: A `services.backdrops` id. Not an enum column: the catalogue is code, and
+    #: a database enum would make adding a stage a migration.
+    backdrop: Mapped[str] = mapped_column(String(32), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False,
+    )
+
+
+class RiderBackdrop(Base):
+    """A stage this rider has EARNED. One row per rider per backdrop.
+
+    Why this is stored rather than computed on read. Two of the unlock rules ask
+    about weather — was it wet, how cold — and weather is not a column on
+    `activities`: it is resolved per ride by `services.ride_facts`, one lookup
+    each. Recomputing the whole catalogue over a rider's entire history every
+    time they open the picker would mean a lookup per ride per open, for an
+    answer that cannot change for any ride already in the past.
+
+    So the expensive half is captured once, at ingestion, where
+    `ride_economy._ride_facts` has already paid for the full fact set in order to
+    settle the ride's earn. The cheap half — climbing, distance, start hour,
+    intensity, surface — is still evaluated live over history in
+    `api/garage`, so a rider who earned a stage before this table existed sees it
+    immediately rather than having to ride again.
+
+    An unlock is permanent: rows are only ever inserted.
+    """
+
+    __tablename__ = "rider_backdrops"
+    __table_args__ = (
+        UniqueConstraint("user_id", "backdrop", name="uq_rider_backdrop"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    backdrop: Mapped[str] = mapped_column(String(32), nullable=False)
+    #: The ride that earned it, so the picker can one day say "am Gardasee, 4. Mai".
+    #: Nullable because a stage may be granted by a backfill with no single ride.
+    #: NO FOREIGN KEY, matching `RideScene` above and `RideFeedback`.
+    #: `activities` is a Timescale hypertable whose primary key must include
+    #: the partition column, so it is composite ``(id, started_at)`` and
+    #: `activities.id` alone cannot be referenced.
+    activity_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    unlocked_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
     )

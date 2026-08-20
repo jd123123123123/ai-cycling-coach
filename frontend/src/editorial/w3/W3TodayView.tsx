@@ -60,6 +60,15 @@ export interface W3Signal {
 export interface W3Vm {
   handle: string
   tierLine: string | null
+  // ── the stage the bike stands in ──
+  // Optional across the board: the preview harnesses build a W3Vm by hand and
+  // have no server behind them, and a rider with one stage gets no rail either
+  // way. Absent means "draw the bike on the plain floor", which is exactly what
+  // this screen did before backdrops existed.
+  stages?: import('../../api/garage').Stage[]
+  stage?: string
+  onSelectStage?: (id: string) => void
+  stageRendering?: boolean
   avatarUrl: string | null
   avatarInitial: string
   // The rider's digitalised bike (garage). `bikeImage` is null until they've
@@ -231,6 +240,10 @@ export default function W3TodayView({ vm, onAdapt }: {
               coins: vm.coins,
               streak: vm.streak,
               bonus: vm.earnRate === DASH ? null : vm.earnRate,
+              stages: vm.stages,
+              stage: vm.stage,
+              onSelectStage: vm.onSelectStage,
+              rendering: vm.stageRendering,
             }} />
 
           {/* The pen's bottom slot: padding 16, one panel, centred. */}

@@ -79,7 +79,9 @@ INTEGRATION = (
 )
 
 
-def build_key(asset_id: int, asset_stamp: str, equipped: list[str]) -> str:
+def build_key(
+    asset_id: int, asset_stamp: str, equipped: list[str], backdrop: str = "",
+) -> str:
     """The cache key for one build of one rider's bike.
 
     Includes the ASSET's identity and a stamp of its own render, so re-uploading
@@ -91,7 +93,11 @@ def build_key(asset_id: int, asset_stamp: str, equipped: list[str]) -> str:
     it short and stable regardless of how many items exist.
     """
     worn = "|".join(sorted(i for i in equipped if i in VISUALS))
-    raw = f"a{asset_id}:{asset_stamp}:{worn}"
+    # The BACKDROP is part of the build, added 2026-08-20. Today shows the
+    # rider's bike standing in the place they chose, so the same wheels on the
+    # starter road and on the Dolomites are two different pictures — and a key
+    # that ignored the stage would serve whichever of them rendered first.
+    raw = f"a{asset_id}:{asset_stamp}:{worn}:{backdrop}"
     return hashlib.sha256(raw.encode()).hexdigest()[:32]
 
 
@@ -114,23 +120,55 @@ def describe(equipped: list[str]) -> list[str]:
     return [VISUALS[m.id] for m in em.catalogue() if m.id in worn]
 
 
-def edit_prompt(equipped: list[str]) -> str:
-    """The full instruction: this exact bicycle, wearing these parts.
+def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -> str:
+    """The full instruction: this exact bicycle, wearing these parts, standing
+    wherever the rider chose to stand it.
 
     The bike arrives as an IMAGE, so it is deliberately not re-described here —
     describing it again invites the model to redraw the one thing that must stay
     pixel-identical.
+
+    ONE CALL DOES BOTH, and that is not a shortcut. `docs/w3-bike-customisation.md`
+    measured three part changes in a single call costing no more drift than one,
+    while two stacked calls drifted further than either — so fitting the parts
+    and placing the bike in its world has to happen together, from the rider's
+    original render, or the bike stops being the bike.
+
+    `world` is the chosen stage's prose. `has_plate` says a picture of that place
+    is being handed over alongside the bike, in which case the prose steps back
+    and the plate is the authority.
     """
     from app.services.cyclr_studio import (
-        BIKE_CAMERA, GENERAL_STYLE, ISOLATED_BIKE_STYLE,
+        BIKE_CAMERA,
+        GENERAL_STYLE,
+        ISOLATED_BIKE_STYLE,
     )
 
     changes = describe(equipped)
-    ground = (
-        "Set the bicycle on a clean, soft, neutral light-grey studio backdrop with a subtle "
-        "contact shadow directly beneath the wheels. The background must be plain — no props, "
-        "no scenery, no text, no watermark."
-    )
+    if has_plate:
+        ground = (
+            "SET THE BICYCLE INTO THE PLACE IN THE SECOND IMAGE. That photograph is the world "
+            "this bike now stands in: keep its landforms, its vegetation, its ground surface, its "
+            "light, its weather and its colour exactly as they are, and stand the bicycle in the "
+            "clear middle of it, upright and side-on, with the ground closing over the bottom of "
+            "both tyres so it is planted in the terrain rather than pasted onto it. Relight the "
+            "bike to match that place — the same key direction, the same warmth, the same time of "
+            "day — and let the plate's own defocused foreground pass in front of the wheels where "
+            "it already sits. There is nobody in the picture: the bicycle stands alone."
+        )
+    elif world:
+        ground = (
+            f"Stand the bicycle, upright and side-on, in this setting: {world} The ground closes "
+            "over the bottom of both tyres so the bike is planted in the terrain rather than "
+            "pasted onto it, and the light on the bike matches the light of the place. There is "
+            "nobody in the picture: the bicycle stands alone."
+        )
+    else:
+        ground = (
+            "Set the bicycle on a clean, soft, neutral light-grey studio backdrop with a subtle "
+            "contact shadow directly beneath the wheels. The background must be plain — no props, "
+            "no scenery, no text, no watermark."
+        )
     return (
         "Edit the bicycle in the supplied photograph. Keep the SAME bicycle: the same frame "
         "geometry, the same paint and finish, the same camera, the same position in frame, the "

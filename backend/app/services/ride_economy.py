@@ -27,10 +27,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
+from app.models.garage import RiderBackdrop
 from app.models.rewards import REASON_EDDINGTON, REASON_GEAR_BONUS
+from app.services import backdrops, bike_wear, eddington, gear, rewards, ride_facts, workshop
 from app.services import earn_modifiers as em
-from app.services import ride_facts
-from app.services import bike_wear, eddington, gear, rewards, workshop
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,20 @@ async def _pay_gear(
         return 0
     equipped = await gear.equipped_ids(db, user_id)
     facts = await _ride_facts(db, user_id, activity, chain_km)
+    # The facts are already paid for here, weather included, so this is the one
+    # place a stage gated on rain or cold can honestly be earned. Never fatal:
+    # a rider must not lose the RideCoin their ride earned because a backdrop
+    # failed to unlock. See `services.backdrops` and `models.garage.RiderBackdrop`.
+    try:
+        await _open_backdrops(db, user_id, activity, facts)
+    except Exception:
+        logger.info("a backdrop unlock failed (non-fatal)", exc_info=True)
+    try:
+        await _stamp_place(db, user_id, activity)
+    except Exception:
+        # Reverse geocoding is a network call to a text model. It failing must
+        # cost this ride its passport stamp and absolutely nothing else.
+        logger.info("a place stamp failed (non-fatal)", exc_info=True)
     breakdown = em.resolve(equipped, facts)
     bonus = em.bonus_rc(base_rc, breakdown)
     if bonus <= 0:
@@ -130,6 +145,71 @@ async def _pay_gear(
         },
     )
     return bonus
+
+
+async def _open_backdrops(
+    db: AsyncSession, user_id: int, activity: Activity, facts: em.RideFacts
+) -> list[str]:
+    """Record every stage this ride opened. Returns the newly earned ids.
+
+    Insert-only and idempotent: a re-synced ride re-evaluates the same rules and
+    the rows it would add are already there, so nothing changes. An unlock is
+    permanent by construction rather than by policy — there is no code path that
+    deletes one.
+    """
+    earned = backdrops.earned_by(facts)
+    if not earned:
+        return []
+    have = set((await db.execute(
+        select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == user_id)
+    )).scalars().all())
+    fresh = [b for b in earned if b not in have]
+    for b in fresh:
+        db.add(RiderBackdrop(user_id=user_id, backdrop=b, activity_id=activity.id))
+    if fresh:
+        await db.commit()
+    return fresh
+
+
+async def _stamp_place(db: AsyncSession, user_id: int, activity: Activity) -> str | None:
+    """Put this ride's place on the global map and stamp the rider's passport.
+
+    Returns the place slug, or None when the ride cannot honestly be located —
+    no GPS, no resolver, or a resolver that answered "I don't know". None is a
+    completely normal outcome and never an error: an indoor ride belongs
+    nowhere, and `ride_place.resolve` is built to say so rather than guess.
+
+    THE STAMP IS THE ONLY THING EARNED HERE. It does not grant the backdrop —
+    that still has to be bought — so a rider passing through the Dolomites gets
+    the right to own them, not the picture. See `models.place`.
+    """
+    stream = (await db.execute(
+        select(ActivityStream).where(ActivityStream.activity_id == activity.id)
+    )).scalar_one_or_none()
+    data = stream.streams if stream is not None else None
+    if not isinstance(data, dict):
+        return None
+    lats = [v for v in (data.get("latitude") or []) if v]
+    lngs = [v for v in (data.get("longitude") or []) if v]
+    if not lats or not lngs:
+        return None
+
+    name = await ride_place.resolve(float(lats[0]), float(lngs[0]))
+    if not name:
+        return None
+
+    geo = RideGeo(
+        distance_m=activity.distance_meters,
+        elevation_gain_m=activity.elevation_gain_m,
+        start_lat=float(lats[0]),
+        start_lng=float(lngs[0]),
+        place_name=name,
+    )
+    place = await places.ensure(
+        db, name, geo, user_id=user_id, activity_id=activity.id,
+    )
+    await places.stamp(db, user_id, place)
+    return place.slug
 
 
 async def _pay_eddington(db: AsyncSession, user_id: int) -> int:

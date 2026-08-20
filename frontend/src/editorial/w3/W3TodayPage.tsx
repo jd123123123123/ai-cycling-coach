@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
 import { useDayState } from '../state/useDayState'
 import { useStreak } from '../../hooks/useStreak'
-import { useGarage } from '../../hooks/useGarage'
+import { useGarage, useSelectStage, useTodayStage } from '../../hooks/useGarage'
 import { useGarageCollection } from '../../hooks/useShop'
 import { itemById } from './w3shop'
 import { useWallet } from '../../hooks/useWallet'
@@ -292,6 +292,10 @@ export default function W3TodayPage() {
   )
   // REAL RideCoin balance for the hero's identity card.
   const { data: wallet } = useWallet()
+  // The avatar and the bike exactly as the rider has them configured, plus the
+  // stages they can swipe between. A cheap cached read — it never renders.
+  const { data: today } = useTodayStage()
+  const selectStage = useSelectStage()
   const qc = useQueryClient()
   const ftp = profile?.ftp_watts ?? null
 
@@ -662,10 +666,20 @@ export default function W3TodayPage() {
       // pass reading their photo; "Your bike" is only a label fallback for a
       // render the model couldn't name — never a stand-in for a missing bike,
       // which stays `bikeImage: null` and gets the hero's empty state.
-      bikeName: garage?.bike?.name ?? 'Dein Bike',
-      bikeImage: garage?.bike?.image_base64 ?? null,
+      bikeName: today?.bike_name ?? garage?.bike?.name ?? 'Dein Bike',
+      // THE CONFIGURED BIKE FIRST. `/garage/today` returns the machine wearing
+      // its equipped parts and standing in the stage the rider chose; the plain
+      // garage render is the fallback for a build that has never been composed,
+      // and it is the same bicycle either way — just on the bare floor.
+      bikeImage: today?.bike_image ?? garage?.bike?.image_base64 ?? null,
       bikeLoading: garageLoading,
-      riderImage: garage?.rider?.image_base64 ?? null,
+      // Same for the face: the bust WEARING its helmet and glasses when one has
+      // been composed, the bare-headed collectible until then.
+      riderImage: today?.rider_image ?? garage?.rider?.image_base64 ?? null,
+      stages: today?.stages,
+      stage: today?.stage,
+      onSelectStage: selectStage.mutate,
+      stageRendering: selectStage.isPending,
       // REAL: the collectible they claimed and have been upgrading. A separate
       // thing from `bikeImage` (that one is a render of their actual machine),
       // and the reason Today no longer shows a stranger's bike to a rider who
@@ -743,6 +757,9 @@ export default function W3TodayPage() {
     // Without these the memo never re-runs when the collection query lands, and
     // the hero would keep showing the empty state to a rider who owns a bike.
     collectibleArt, collectibleBike,
+    // Same reason for the stage: without it a rider swipes to another backdrop,
+    // the query updates, and the hero keeps drawing the old one.
+    today, selectStage.mutate, selectStage.isPending,
   ])
 
   // Real adapt that PERSISTS: Easier/Harder/Shorter/Indoor hit POST
