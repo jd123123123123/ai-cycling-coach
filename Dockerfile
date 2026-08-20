@@ -3,21 +3,20 @@ FROM node:20-slim AS frontend
 WORKDIR /fe
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
-# WHY THIS ARG EXISTS. Buildkit keys `COPY` on the content of what it copies, so
-# changing the SPA source should always miss the cache — and on this project it
-# has repeatedly NOT. A whole afternoon of commits shipped a backend that was
-# current beside a bundle built hours earlier: the deploy said SUCCESS, the API
-# schema showed the new fields, and the browser loaded a bundle with none of the
-# new screens in it. The tell in the build log is `RUN npx vite build` printing
-# its step name and NO output at all — a replayed cache layer.
+# An escape hatch for a stale SPA. Buildkit keys `COPY` on copied-file content,
+# so changed source normally misses the cache on its own — but a cached
+# `frontend` stage DOES get replayed here (seen 2026-08-20: `RUN npx vite build`
+# printing its step name and no output, with the served index.html keeping an
+# older build's `last-modified` across a redeploy). Bumping this number rebuilds
+# the COPY and everything after it.
 #
-# BUMP THIS NUMBER whenever the deployed SPA is stale. Everything below it
-# rebuilds. It is above the COPY on purpose, so the copy re-runs too.
-#
-# HOW TO CHECK, and do check — "deployment SUCCESS" does not mean the SPA
-# shipped. Grep the served bundle for a string only the new code contains:
-#   H=$(curl -s $HOST/e/w3-today | grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -1)
-#   curl -s "$HOST/$H" | grep -c "<a string from your new code>"
+# BEFORE BUMPING, CHECK PROPERLY — the app is code-split, and the entry chunk
+# hash barely moves between builds, so "the bundle hash didn't change" proves
+# nothing at all. Read the entry chunk to find the lazy chunk you care about,
+# then grep THAT for a string only your new code contains:
+#   E=$(curl -s $HOST/e/w3-today | grep -o 'assets/index-[A-Za-z0-9_-]*\.js')
+#   curl -s "$HOST/$E" | grep -oE '[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8}\.js' | sort -u
+#   curl -s "$HOST/assets/<the chunk>" | grep -c "<a string from your new code>"
 ARG SPA_CACHE_EPOCH=2
 
 COPY frontend/ ./
