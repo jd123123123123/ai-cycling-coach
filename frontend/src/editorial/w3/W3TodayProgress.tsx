@@ -228,7 +228,13 @@ export default function W3TodayProgress() {
         {/* Subtitle dropped — see the note in W3TodayRank's Head: the motto ran
             under all three lower titles and now appears once, on the first. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Dein Fortschritt</span>
+{/* WHISPERED, NOT SHOUTED. This was 24px bold white — the loudest thing in
+              its section, above data set in 11 and 12. The hero inverts that: its
+              label ("BEREITSCHAFT") is 9px of grey and the NUMBER carries the
+              size. Four bold section titles down one page read as four
+              interruptions; as kickers they become signposts and the data
+              becomes the voice. */}
+          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', color: T.heroMid }}>Dein Fortschritt</span>
         </div>
         {tag && (
           <div style={{ flex: 'none', padding: '7px 13px', borderRadius: 100, background: T.acidDim }}>

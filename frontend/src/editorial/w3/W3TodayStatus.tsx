@@ -9,6 +9,12 @@ import { T, FONT, EASE, Kicker, DASH } from './w3tokens'
 import { S, lux, hairline, TNUM } from './w3surfaces'
 
 /**
+ * NO BORDERED PILLS. A tinted pill carried a 1px ring of its own hue on top of
+ * its tint — an edge drawn around something that is already a shape. The hero
+ * has no strokes anywhere: its chips are a tone, its panel is a tone, and depth
+ * comes from light. The tint is lifted slightly (1A → 26) to keep the same
+ * presence the ring was propping up.
+ *
  * W3 · Today "Dein aktueller Status" — where the rider's fitness actually
  * stands, and what that number MEANS.
  *
@@ -311,7 +317,7 @@ export default function W3TodayStatus() {
             <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, minWidth: 0, paddingTop: 2 }}>{meaning}</span>
           </div>
           {atPeak && (
-            <span style={{ flex: 'none', padding: '6px 12px', borderRadius: 100, background: T.acidDim, border: `1px solid ${T.acid}2E`, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>BESTWERT</span>
+            <span style={{ flex: 'none', padding: '6px 12px', borderRadius: 100, background: T.acidDim, fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>BESTWERT</span>
           )}
         </div>
 
@@ -391,7 +397,7 @@ export default function W3TodayStatus() {
                   {projWhere ?? 'Wohin das führt'}
                 </span>
                 {track && (
-                  <span style={{ flex: 'none', padding: '4px 10px', borderRadius: 100, background: `${track.hue}1A`, border: `1px solid ${track.hue}2E`, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: track.hue }}>{track.text}</span>
+                  <span style={{ flex: 'none', padding: '4px 10px', borderRadius: 100, background: `${track.hue}26`, fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: track.hue }}>{track.text}</span>
                 )}
               </div>
               {/* now → then, on its own tile so the projection reads as a
@@ -430,7 +436,13 @@ function Head({ tag }: { tag: string | null }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-        <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Dein aktueller Status</span>
+{/* WHISPERED, NOT SHOUTED. This was 24px bold white — the loudest thing in
+            its section, above data set in 11 and 12. The hero inverts that: its
+            label ("BEREITSCHAFT") is 9px of grey and the NUMBER carries the
+            size. Four bold section titles down one page read as four
+            interruptions; as kickers they become signposts and the data
+            becomes the voice. */}
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', color: T.heroMid }}>Dein aktueller Status</span>
         <span style={{ ...ellipsis, fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Erarbeitet, nicht gekauft</span>
       </div>
       {tag && (
