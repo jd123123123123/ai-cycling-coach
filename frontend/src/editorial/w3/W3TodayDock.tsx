@@ -91,12 +91,26 @@ export interface W3DockVm {
    * the fold instead, where scrolling is the gesture that asks "why".
    */
   showStats?: boolean
+  /**
+   * How far open the panel is, 0 → 1, driven by the page's own scroll.
+   *
+   * ONE PANEL THAT GROWS, rather than a compact panel with a second band
+   * underneath it. The band was a separate surface, which meant a second edge
+   * where its colour stopped — and the whole point of reading the stage's
+   * ground colour is that the screen should have no edges to hide. Folding the
+   * overnight signals INTO the panel removes the surface, and scrolling
+   * becomes the gesture that asks "why 88" instead of a jump to another card.
+   */
+  expand?: number
 }
 
 export default function W3TodayDock({ vm, onOpen }: {
   vm: W3DockVm
   onOpen?: () => void
 }) {
+  // Clamped here rather than at the call site: a scroll value that overshoots
+  // would otherwise animate the panel past its own open state.
+  const open = Math.max(0, Math.min(1, vm.expand ?? 0))
   const reduce = useReducedMotion()
   const hue = vm.score != null ? scoreHue(vm.score) : T.heroOff
   const shown = useCountUp(vm.score ?? 0, reduce)
@@ -108,8 +122,11 @@ export default function W3TodayDock({ vm, onOpen }: {
       aria-label="Bereitschaft im Detail"
       style={{
         width: '100%', border: 0, textAlign: 'left', cursor: onOpen ? 'pointer' : 'default',
-        background: T.heroDock, borderRadius: 28, padding: 16,
-        display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT,
+        background: T.heroDock, borderRadius: 28,
+        // SMALLER WHEN CLOSED. 16 all round pushed the panel up into the back
+        // wheel; it breathes out again as it opens.
+        padding: `${12 + open * 4}px 16px ${12 + open * 4}px`,
+        display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT,
       }}>
 
       {/* ── score · verdict · bonus ── */}
@@ -166,8 +183,17 @@ export default function W3TodayDock({ vm, onOpen }: {
       </div>
 
       {/* ── the three overnight signals ── */}
+      {/* THE WORKING BEHIND THE NUMBER, revealed by scrolling rather than by
+          navigating. Height and opacity are driven together so the row grows
+          out of the panel instead of appearing on top of it — and at `open: 0`
+          it occupies nothing at all, so the closed panel is genuinely small
+          rather than merely transparent. */}
       {vm.showStats !== false && (
-      <div style={{ display: 'flex', gap: 12, width: '100%' }}>
+      <div style={{
+        display: 'flex', gap: 12, width: '100%',
+        height: open * 44, opacity: open, overflow: 'hidden',
+        marginTop: open * 2, pointerEvents: open > 0.6 ? 'auto' : 'none',
+      }}>
         {vm.stats.map((s) => (
           <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>{s.label}</span>

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { Sparkles, Star } from 'lucide-react'
@@ -208,6 +208,16 @@ export default function W3TodayView({ vm, onAdapt }: {
   // page. Null until the sample lands, and null forever if a canvas read is
   // refused; both cases fall back to the token.
   const ground = useGroundColour(STAGE_PLATE)
+  // How far the readiness panel is open, from the page's own scroll. The first
+  // 130px of travel opens it fully — far enough that a stray flick does not
+  // trigger it, short enough that the answer is there before the hero leaves.
+  const [openness, setOpenness] = useState(0)
+  useEffect(() => {
+    const onScroll = () => setOpenness(Math.min(1, window.scrollY / 130))
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))
@@ -279,7 +289,10 @@ export default function W3TodayView({ vm, onAdapt }: {
               scroll cue needs. */}
           <div style={{
             position: 'relative', zIndex: 2, marginTop: 'auto',
-            padding: '16px 16px 28px', flex: 'none',
+            // LOWER, so the closed panel clears the back wheel. The bike stands
+            // on a floor line at 76% of the stage; a panel that starts higher
+            // than that cuts across the machine it is standing next to.
+            padding: '10px 16px 18px', flex: 'none',
           }}>
             <W3TodayDock
               vm={{
@@ -300,46 +313,33 @@ export default function W3TodayView({ vm, onAdapt }: {
                 // The first screen answers ONE question with one number and one
                 // meter. The overnight signals are the working behind it and
                 // live below the fold — see `W3DockVm.showStats`.
-                showStats: false,
+                // Not hidden — FOLDED. The row is in the panel and opens with
+                // the scroll; see `W3DockVm.expand`.
+                showStats: true,
+                expand: openness,
               }}
               onOpen={() => navigate('/e/w3-readiness')} />
           </div>
         </div>
 
-        {/* ── below the fold ──────────────────────────────────────────────
-            THE SIGNALS THAT EXPLAIN THE SCORE, one scroll down. Kept directly
-            under the first screen rather than on the readiness page, because
-            scrolling is a cheaper question than a navigation: "why 88" should
-            cost a thumb-flick, not a screen change and a way back. */}
-        <div style={{
-          padding: '0 16px 20px', display: 'flex', flexDirection: 'column', gap: 12,
-          // Carries the stage's colour past the fold, so scrolling off the hero
-          // is a continuation rather than a step down onto a different surface.
-          background: ground ?? T.heroBg,
-        }}>
-          <span style={{
-            fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.heroMid,
-          }}>ÜBER NACHT</span>
-          <div style={{
-            display: 'flex', gap: 10, width: '100%',
-            background: T.heroDock, borderRadius: 22, padding: '16px 18px',
-          }}>
-            {[
-              { label: 'HRV', value: vm.hrv ? `${vm.hrv.value} ${vm.hrv.unit}`.trim() : null },
-              { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null },
-              { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null },
-            ].map((s) => (
-              <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>{s.label}</span>
-                <span style={{
-                  fontSize: 18, fontWeight: 700, color: s.value ? T.ink : T.heroOff,
-                  fontVariantNumeric: 'tabular-nums', minWidth: 0,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}>{s.value ?? DASH}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        {/* The overnight signals used to live here as their own band. They are
+            inside the readiness panel now, opened by scrolling — which removes
+            a whole surface from the screen, and with it the second place where
+            a background colour had to stop. */}
+
+        {/* THE ONE TRANSITION IN THE SCREEN.
+            The stage's ground colour used to stop at the bottom of the first
+            screen and the page resumed in flat black — a second hard line,
+            directly below the horizon line that belongs there. A colour that
+            ENDS is always an edge; a colour that runs out is not. This band
+            carries the sampled ground into the app's own black over 180px, so
+            the eye reads one continuous room rather than three stacked
+            surfaces. It draws nothing and holds nothing — it is only the
+            distance the two colours need to meet in. */}
+        <div aria-hidden style={{
+          height: 180, flex: 'none',
+          background: `linear-gradient(180deg, ${ground ?? T.heroBg} 0%, ${T.bg} 100%)`,
+        }} />
 
         {/* ── Hero: readiness + charge meter ──
              The card is `W3ScoreCard` now — the same element grades a finished
