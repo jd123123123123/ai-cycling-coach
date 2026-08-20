@@ -1,7 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Asterisk, ChevronsUp, Flame, Settings, Star, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
-import W3StageRail from './W3StageRail'
 import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
 import W3NavMenu from './W3NavMenu'
@@ -74,7 +73,12 @@ const BIKE_ART = {
   // hide, so the machine simply sits in the space at its true proportions and
   // the stage's own floor shows through around it.
   objectFit: 'contain' as const,
-  objectPosition: 'center 58%',
+  objectPosition: 'center 55%',
+  // The cut-out is trimmed to the machine itself, so 100% of the box IS the
+  // bicycle rather than a bicycle with studio around it. It can finally be
+  // drawn at the size the stage was always offering.
+  padding: '0 8px 22px',
+  boxSizing: 'border-box' as const,
   display: 'block' as const,
   // NO SCREEN BLEND AND NO MASK. Both existed for one reason: the art arrived
   // on a pale grey studio ground, and a bright rectangle on a near-black app has
@@ -82,10 +86,25 @@ const BIKE_ART = {
   // every dark part of the machine toward grey. With transparency there is
   // nothing to dissolve.
   //
-  // A cut-out has no contact shadow either, and a bike floating with none reads
-  // as a sticker — so the stage draws one under it in CSS, where it is always
-  // in the right place instead of wherever the model happened to paint it.
-  filter: 'drop-shadow(0 18px 26px rgba(0,0,0,0.55))',
+}
+
+/** The shadow the cut-out no longer carries.
+ *
+ *  A `drop-shadow` filter traces the whole silhouette — every spoke gets its
+ *  own halo, which reads as a glow rather than as weight on a floor. A real
+ *  bike casts ONE soft ellipse under the two contact patches, so that is what
+ *  this is: an elliptical pool on the ground, sized to the wheelbase, sitting
+ *  behind the machine. */
+const BIKE_SHADOW = {
+  position: 'absolute' as const,
+  left: '50%',
+  bottom: '11%',
+  transform: 'translateX(-50%)',
+  width: '76%',
+  height: 26,
+  borderRadius: '50%',
+  background: 'radial-gradient(closest-side, rgba(0,0,0,0.62), rgba(0,0,0,0))',
+  pointerEvents: 'none' as const,
 }
 
 /**
@@ -322,7 +341,10 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
           // The screen-blend and the radial mask stay for the studio render
           // ONLY because that art has a pale ground baked in and needs its
           // edges dissolved; the scene render already reaches its own frame.
-          <img src={vm.bike} alt={vm.bikeName} style={vm.bikeInScene ? SCENE_ART : BIKE_ART} />
+          <>
+            {!vm.bikeInScene && <div aria-hidden style={BIKE_SHADOW} />}
+            <img src={vm.bike} alt={vm.bikeName} style={vm.bikeInScene ? SCENE_ART : BIKE_ART} />
+          </>
         ) : (
           <div style={{ position: 'relative', width: '103%', height: '100%', display: 'grid', placeItems: 'end center' }}>
             <div style={BIKE_ART}><GhostBike /></div>
@@ -334,15 +356,14 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
         )}
       </motion.div>
 
-      {/* ── where it is standing ── */}
-      {vm.stages && vm.stage && vm.onSelectStage && (
-        <W3StageRail vm={{
-          stages: vm.stages,
-          current: vm.stage,
-          onSelect: vm.onSelectStage,
-          rendering: vm.rendering,
-        }} />
-      )}
+      {/* THE STAGE RAIL IS NOT HERE ANY MORE. Today is one thing — the rider
+          and the machine — and a row of dots at the foot of it turned the
+          screen into a carousel of pictures the rider had not rendered yet: it
+          named a stage ("MORGENGRAUEN") while showing the plain studio bike,
+          which is the app promising something the picture does not deliver.
+          Choosing where the bike stands belongs in the garage, next to the rest
+          of what a rider owns. `W3StageRail` still exists and is still wired
+          there; only this mount is gone. */}
     </div>
   )
 }

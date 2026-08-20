@@ -560,11 +560,19 @@ def split_name(description: str | None) -> tuple[str | None, str | None]:
 #: and "LAUEK" — which is worse than no branding at all, because it looks like
 #: the app got the rider's bike wrong rather than declining to letter it.
 NO_INVENTED_TEXT = (
-    "CRITICAL — NO INVENTED LETTERING: reproduce brand names, logos and decal TEXT only where they "
-    "are clearly legible in the source photograph, and reproduce them exactly. Where text is not "
-    "clearly readable, render that decal as an abstract shape, a colour block or nothing at all. "
-    "NEVER invent a brand name, a model name, a slogan or any word. Misspelled or fabricated "
-    "lettering on the frame, rims or tyres is a failure."
+    "CRITICAL — THE LETTERING ON THIS BICYCLE IS COPIED, NEVER WRITTEN.\n"
+    "The frame in the supplied photograph carries a brand name. That name is the single detail the "
+    "rider will check first, because it is the difference between their bicycle and a bicycle. "
+    "COPY IT CHARACTER BY CHARACTER from the photograph: the same letters in the same order, the "
+    "same shapes, the same spacing, the same size, in the same place on the same tube. Read it off "
+    "the picture rather than recalling what bicycle brands are called — a real name that is not "
+    "the one in the photograph is the worst outcome of all, and a plausible near-miss "
+    "('SALLON' for 'Standert') is exactly how this fails.\n"
+    "The same rule governs every other word in frame: rim decals, tyre sidewalls, component "
+    "markings. Where text is too small or too blurred to read with confidence, render that decal "
+    "as an abstract shape, a colour block or nothing at all — an honest smudge is correct and an "
+    "invented word never is. NEVER add a brand, a model name, a slogan or any word that is not "
+    "already in the photograph."
 )
 
 

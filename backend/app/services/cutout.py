@@ -92,6 +92,18 @@ def cut_out(data_url: str) -> str | None:
         src = Image.open(io.BytesIO(base64.b64decode(raw))).convert("RGB")
         out = remove(src, session=_get_session())
 
+        # TRIM TO THE MACHINE. The model renders a bicycle inside a square with a
+        # lot of studio around it, and cutting the ground away leaves that
+        # emptiness behind as transparent margin — so the bike still draws at
+        # about 70% of the frame and still looks small, which is precisely the
+        # complaint the cut-out was supposed to answer. Cropping to the alpha
+        # bounding box makes the picture BE the bicycle, and every surface that
+        # places it then gets to decide its size instead of inheriting the
+        # model's framing.
+        box = out.getbbox()
+        if box:
+            out = out.crop(box)
+
         buf = io.BytesIO()
         out.save(buf, "PNG", optimize=True)
         return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode()
