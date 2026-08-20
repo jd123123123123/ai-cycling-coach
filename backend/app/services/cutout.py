@@ -100,7 +100,16 @@ def cut_out(data_url: str) -> str | None:
         # bounding box makes the picture BE the bicycle, and every surface that
         # places it then gets to decide its size instead of inheriting the
         # model's framing.
-        box = out.getbbox()
+        # THRESHOLD BEFORE MEASURING. `getbbox()` counts any pixel with alpha
+        # above ZERO, and a cut-out's edges are anti-aliased — so the box picks
+        # up a fringe of near-invisible pixels below the tyres and the picture
+        # ends a few rows lower than the bicycle does. On a screen that stands
+        # the bike on a measured floor line, those rows are the difference
+        # between "on the ground" and "hovering", which is exactly the fault
+        # this whole pipeline has been chasing. Measuring at alpha > 24 finds
+        # the machine instead of its halo.
+        alpha = out.getchannel("A")
+        box = alpha.point(lambda v: 255 if v > 24 else 0).getbbox()
         if box:
             out = out.crop(box)
 
