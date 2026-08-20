@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+from datetime import UTC, date, datetime, time
 from types import SimpleNamespace
 from typing import Annotated, Literal, get_args
 
@@ -53,7 +54,9 @@ from app.services import (
     rewards,
     ride_facts,
     ride_framing,
+    ride_place,
     rider_wear,
+    service_proof,
     stages,
     workshop,
 )
@@ -617,8 +620,21 @@ class ComponentOut(BaseModel):
     name_de: str
     action_de: str
     km_since: float
-    interval_km: float
+    #: Null for a part kilometres do not wear — sealant dries out in a cellar.
+    interval_km: float | None
     km_total: float
+    #: The CALENDAR clock, for parts that age on one. Null when we have never
+    #: been told when it was last done.
+    days_since: int | None = None
+    interval_days: int | None = None
+    #: "km" | "days" — which clock is currently driving `status`, and therefore
+    #: which unit the meter must be labelled with. Labelling a sealant top-up in
+    #: kilometres is the exact misunderstanding this release fixes.
+    clock: str = "km"
+    #: True while this is an optional part we have not asked about. The screen
+    #: shows a QUESTION, never a job — see `bike_wear.is_dormant`.
+    dormant: bool = False
+    optional: bool = False
     #: Unharvested Service Bonus sitting on this component right now.
     bonus_rc: int
     #: "fresh" | "due" | "overdue" — never a failure state, and never blocking.
@@ -639,23 +655,49 @@ class WorkshopOut(BaseModel):
     chain_km_total: float
     chain_record_km: float
     balance: int
+    #: The next part we still have to ask the rider about, or null. ONE at a
+    #: time and only when the workshop is already open: six questions up front
+    #: is a form, and forms get abandoned.
+    open_question: ComponentOut | None = None
+
+
+class ServiceRequest(BaseModel):
+    """Optionally, a photo of the job.
+
+    OPTIONAL IS LOAD-BEARING. The Service Bonus is paid in full without one; a
+    confirmed photo adds on top. See `services/service_proof` for why proof can
+    never be allowed to gate the reward.
+    """
+
+    #: A data URL or bare base64 JPEG. Absent, and the service just pays.
+    proof_image: str | None = None
 
 
 class ServiceOut(BaseModel):
     component_id: str
     name_de: str
+    #: TOTAL credited, proof bonus included. One number, so the balance the
+    #: screen shows can never disagree with the arithmetic beside it.
     paid_rc: int
     balance: int
     km_serviced: float
     new_record: bool
     record_km: float
+    #: Of `paid_rc`, how much the photo added. Zero without a photo.
+    proof_rc: int = 0
+    #: What the check saw, in one German sentence. Never accusatory, and null
+    #: when no photo was sent.
+    proof_note: str | None = None
+    proof_confirmed: bool = False
     #: The refreshed workshop, so the screen redraws without a second round trip.
     workshop: WorkshopOut
 
 
 def _workshop_out(view: workshop.WorkshopView, balance: int) -> WorkshopOut:
+    questions = workshop.open_questions(view)
     return WorkshopOut(
         components=[ComponentOut(**vars(c)) for c in view.components],
+        open_question=ComponentOut(**vars(questions[0])) if questions else None,
         total_bonus_rc=view.total_bonus_rc,
         drivetrain_fresh=view.drivetrain_fresh,
         drivetrain_watts=view.drivetrain_watts,
@@ -686,6 +728,7 @@ async def service_component(
     component_id: str,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    body: ServiceRequest | None = None,
 ) -> ServiceOut:
     """Reset one component's interval and CREDIT the bonus it banked.
 
@@ -694,8 +737,17 @@ async def service_component(
     fair trade the rider is allowed to make, not an error. Nothing in this path
     can ever debit; see `services/workshop`.
     """
+    # The photo is checked BEFORE the transaction does anything, and its every
+    # failure mode returns "unavailable" rather than raising — see
+    # `services/service_proof`. An exception here would roll back a service the
+    # rider genuinely performed, which is the one outcome this loop must never
+    # produce.
+    verdict = (
+        await service_proof.check(body.proof_image, component_id)
+        if body and body.proof_image else None
+    )
     try:
-        result = await workshop.service(db, current_user.id, component_id)
+        result = await workshop.service(db, current_user.id, component_id, verdict)
     except workshop.UnknownComponentError:
         raise HTTPException(
             http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}"
@@ -711,8 +763,100 @@ async def service_component(
         km_serviced=result.km_serviced,
         new_record=result.new_record,
         record_km=result.record_km,
+        proof_rc=result.proof_rc,
+        proof_note=result.proof_note,
+        proof_confirmed=result.proof_confirmed,
         workshop=_workshop_out(view, result.balance),
     )
+
+
+class SeedRequest(BaseModel):
+    """When the rider last did this job, as a plain date."""
+
+    #: ISO date. The future is clamped to now rather than rejected — a rider
+    #: whose phone clock is a day ahead should not meet a validation error.
+    last_service_on: date
+
+
+class SeedOut(BaseModel):
+    component_id: str
+    name_de: str
+    km_since: float
+    #: How many real rides were replayed to reach that number. This is what
+    #: makes the answer believable on screen — "aus 34 Fahrten berechnet" is a
+    #: claim the rider can check against their own feed.
+    rides: int
+    days_since: int
+    workshop: WorkshopOut
+
+
+class HaveRequest(BaseModel):
+    #: False is a first-class answer: a rim-brake rider is never asked again.
+    owned: bool
+
+
+@router.post("/workshop/seed/{component_id}", response_model=SeedOut, summary="Start a component's clock from the date the rider gives")
+async def seed_component(
+    component_id: str,
+    body: SeedRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> SeedOut:
+    """Answer "wann zuletzt?" and rebuild the odometer from the ride history.
+
+    NOT an estimate from the date. Every ride since it is already stored with
+    its distance, its measured work and its elevation, so the same physics that
+    scores a ride at ingestion scores the backlog — the rider lands on the
+    number they would have had if the app had been installed all along. See
+    `workshop.seed` for the one approximation this makes and why it is stated.
+    """
+    try:
+        result = await workshop.seed(
+            db, current_user.id, component_id,
+            datetime.combine(body.last_service_on, time.min, tzinfo=UTC),
+        )
+    except workshop.UnknownComponentError:
+        raise HTTPException(
+            http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}"
+        ) from None
+
+    view = await workshop.read(db, current_user.id)
+    balance = await rewards.balance_of(db, current_user.id)
+    await db.commit()
+    return SeedOut(
+        component_id=result.component_id,
+        name_de=result.name_de,
+        km_since=result.km_since,
+        rides=result.rides,
+        days_since=result.days_since,
+        workshop=_workshop_out(view, balance),
+    )
+
+
+@router.post("/workshop/have/{component_id}", response_model=WorkshopOut, summary="Say whether the bike has an optional part")
+async def declare_component(
+    component_id: str,
+    body: HaveRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> WorkshopOut:
+    """Record that the bicycle has — or does not have — this part.
+
+    "Nein" is permanent until changed. Rim brakes have no fluid and inner tubes
+    have no sealant, and an app that keeps asking teaches the rider that the
+    whole maintenance surface guesses.
+    """
+    try:
+        await workshop.declare(db, current_user.id, component_id, body.owned)
+    except workshop.UnknownComponentError:
+        raise HTTPException(
+            http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}"
+        ) from None
+
+    view = await workshop.read(db, current_user.id)
+    balance = await rewards.balance_of(db, current_user.id)
+    await db.commit()
+    return _workshop_out(view, balance)
 
 
 @router.post("/asset/render", response_model=AssetRenderResponse)

@@ -227,8 +227,9 @@ class ComponentSpec:
 
     id: str
     name_de: str
-    #: Kilometres between services. Real intervals, from real practice.
-    interval_km: float
+    #: Kilometres between services, or None for a part that kilometres do not
+    #: wear. Real intervals, from real practice.
+    interval_km: float | None
     #: RideCoin a FULL service of this component is worth — the payout at
     #: exactly one interval. Sized against `rewards.base_ride_rc`, where a
     #: typical ride earns 40-150: the chain's service lands at about one and a
@@ -237,6 +238,21 @@ class ComponentSpec:
     rc_at_interval: int
     #: What servicing it is called, in the rider's language.
     action_de: str
+    #: Days between services, or None for a part that only kilometres wear.
+    #:
+    #: SOME PARTS AGE ON A CALENDAR AND NOT ON AN ODOMETER, and a kilometre
+    #: model is not merely imprecise for them — it is the wrong quantity.
+    #: Tubeless sealant dries out whether the bike is ridden or hangs in a
+    #: cellar; DOT fluid is hygroscopic and absorbs water from the air on the
+    #: same schedule either way. A rider who does 8 000 km a year and one who
+    #: does 800 need their fluid bled at the same time.
+    interval_days: int | None = None
+    #: True when this part is not on every bike. Rim brakes have no fluid and
+    #: an inner tube has no sealant, so these stay DORMANT until the rider says
+    #: they have one — see `bike_wear.is_dormant`. Nagging somebody about a
+    #: component their bicycle does not have is the fastest way to teach them
+    #: that the whole maintenance surface is noise.
+    optional: bool = False
 
 
 COMPONENTS: dict[str, ComponentSpec] = {
@@ -262,6 +278,27 @@ COMPONENTS: dict[str, ComponentSpec] = {
         id="cassette", name_de="Kassette", interval_km=6000, rc_at_interval=300,
         action_de="Reinigen",
     ),
+
+    # ── the two the odometer cannot see ─────────────────────────────────────
+    #
+    # 120 days is the middle of what the sealant makers themselves quote — Stan's
+    # says two to three months, Orange Seal up to four — and the mechanism is
+    # evaporation through the casing, which does not care whether the wheel
+    # turns. A rider who finds out their sealant dried up finds out at the
+    # roadside.
+    "sealant": ComponentSpec(
+        id="sealant", name_de="Dichtmilch", interval_km=None, interval_days=120,
+        rc_at_interval=120, action_de="Nachfüllen", optional=True,
+    ),
+    # A year, which is both Shimano's and SRAM's own figure. DOT fluid is
+    # hygroscopic: it pulls water out of the air through the seals, and water
+    # boils far below the temperature a long descent puts into a caliper. This
+    # is the one entry in this catalogue with a safety argument behind it.
+    "brakefluid": ComponentSpec(
+        id="brakefluid", name_de="Bremsflüssigkeit", interval_km=None,
+        interval_days=365, rc_at_interval=220, action_de="Entlüften",
+        optional=True,
+    ),
 }
 
 #: The drivetrain component whose freshness drives the earn bonus. One
@@ -278,7 +315,7 @@ class ComponentState:
     action_de: str
     #: Kilometres since this component was last serviced.
     km_since: float
-    interval_km: float
+    interval_km: float | None
     #: Lifetime kilometres — never reset by a service. This is the number
     #: cyclists brag about, so it survives everything except replacement.
     km_total: float
@@ -290,23 +327,88 @@ class ComponentState:
     progress: float
     #: True once accrual has stopped. The pile is intact; it just isn't growing.
     accrual_stopped: bool
+    #: Days since the last service, or None when we have never been told.
+    days_since: int | None = None
+    interval_days: int | None = None
+    #: 'km' | 'days' — which clock the meter should be labelled with.
+    clock: str = "km"
+    #: True while this is an optional part we have not asked about yet. The
+    #: screen shows it as a QUESTION, never as a job.
+    dormant: bool = False
+    optional: bool = False
 
 
-def status_of(km_since: float, interval_km: float) -> str:
+def elapsed(spec: ComponentSpec, km_since: float, days_since: int | None) -> float:
+    """How far through its own service interval this component is, 0 upward.
+
+    ONE NUMBER FOR TWO CLOCKS. A part can be worn by kilometres, by days, or —
+    like bar tape under sweat and sun — by both, and the industry states those
+    parts exactly the way this reads them: "every 5 000 km OR every 6 months,
+    whichever comes first". So the fraction is the LARGER of the two ratios, and
+    every other function here is written on top of it. Uncapped on purpose: the
+    callers each clamp differently, and the raw number is what says how far past
+    due something has gone.
+    """
+    ratios = []
+    if spec.interval_km:
+        ratios.append(max(0.0, km_since) / spec.interval_km)
+    if spec.interval_days and days_since is not None:
+        ratios.append(max(0, days_since) / spec.interval_days)
+    return max(ratios) if ratios else 0.0
+
+
+def which_clock(spec: ComponentSpec, km_since: float, days_since: int | None) -> str:
+    """'km' or 'days' — the clock currently driving this component's status.
+
+    The screen has to label the meter with something, and labelling a sealant
+    top-up in kilometres is exactly the misunderstanding this release exists to
+    fix. Whichever ratio is winning is the one the rider is shown.
+    """
+    if not spec.interval_km:
+        return "days"
+    if not (spec.interval_days and days_since is not None):
+        return "km"
+    km_r = max(0.0, km_since) / spec.interval_km
+    day_r = max(0, days_since) / spec.interval_days
+    return "days" if day_r > km_r else "km"
+
+
+def is_dormant(spec: ComponentSpec, owned: bool | None) -> bool:
+    """Whether this component should stay silent.
+
+    An optional part we have never asked about is not "fresh" and it is not
+    "due" — we do not know whether the bicycle HAS one. A rim-brake rider told
+    to bleed their brakes learns that this whole surface guesses, and after that
+    they will ignore the one warning that matters. So an unanswered optional
+    part shows up only as a question, never as a job, and a part the rider has
+    told us they do not have never shows up again at all.
+    """
+    return spec.optional and owned is not True
+
+
+def status_of(
+    km_since: float, interval_km: float | None,
+    days_since: int | None = None, interval_days: int | None = None,
+) -> str:
     """Three states, and none of them is a failure.
 
     'due' begins at the interval rather than before it: a component inside its
     real service window is genuinely fine, and nagging early is how a system
     teaches riders to ignore it.
     """
-    if km_since < interval_km:
+    spec = ComponentSpec(
+        id="", name_de="", interval_km=interval_km, rc_at_interval=0,
+        action_de="", interval_days=interval_days,
+    )
+    f = elapsed(spec, km_since, days_since)
+    if f < 1.0:
         return "fresh"
-    if km_since < interval_km * OVERRUN_FACTOR:
+    if f < OVERRUN_FACTOR:
         return "due"
     return "overdue"
 
 
-def accrued_rc(km_since: float, spec: ComponentSpec) -> int:
+def accrued_rc(km_since: float, spec: ComponentSpec, days_since: int | None = None) -> int:
     """The Service Bonus banked on a component right now.
 
     Linear in the fraction of its own interval covered, so one interval always
@@ -317,16 +419,16 @@ def accrued_rc(km_since: float, spec: ComponentSpec) -> int:
     stopped accruing has lost nothing, they have simply stopped gaining, and the
     workshop says exactly that.
     """
-    if spec.interval_km <= 0:
-        return 0
-    fraction = min(km_since / spec.interval_km, OVERRUN_FACTOR)
-    return max(0, int(spec.rc_at_interval * fraction))
+    return max(0, int(spec.rc_at_interval * min(elapsed(spec, km_since, days_since), OVERRUN_FACTOR)))
 
 
-def state_of(component_id: str, km_since: float, km_total: float) -> ComponentState:
+def state_of(
+    component_id: str, km_since: float, km_total: float,
+    days_since: int | None = None, owned: bool | None = None,
+) -> ComponentState:
     spec = COMPONENTS[component_id]
-    status = status_of(km_since, spec.interval_km)
-    ceiling = spec.interval_km * OVERRUN_FACTOR
+    dormant = is_dormant(spec, owned)
+    f = elapsed(spec, km_since, days_since)
     return ComponentState(
         id=spec.id,
         name_de=spec.name_de,
@@ -334,10 +436,20 @@ def state_of(component_id: str, km_since: float, km_total: float) -> ComponentSt
         km_since=km_since,
         interval_km=spec.interval_km,
         km_total=km_total,
-        bonus_rc=accrued_rc(km_since, spec),
-        status=status,
-        progress=min(1.0, km_since / spec.interval_km) if spec.interval_km else 0.0,
-        accrual_stopped=km_since >= ceiling,
+        days_since=days_since,
+        interval_days=spec.interval_days,
+        clock=which_clock(spec, km_since, days_since),
+        # A dormant part banks nothing, because we do not know it exists. The
+        # moment the rider confirms it, its clock starts from the date they
+        # give us and the bonus starts building from there.
+        bonus_rc=0 if dormant else accrued_rc(km_since, spec, days_since),
+        status="unknown" if dormant else status_of(
+            km_since, spec.interval_km, days_since, spec.interval_days,
+        ),
+        progress=min(1.0, f),
+        accrual_stopped=not dormant and f >= OVERRUN_FACTOR,
+        dormant=dormant,
+        optional=spec.optional,
     )
 
 

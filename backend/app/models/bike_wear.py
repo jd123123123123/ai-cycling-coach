@@ -22,7 +22,14 @@ RLS-protected via ``user_id``, the same policy shape as ``garage_assets``.
 from datetime import datetime
 
 from sqlalchemy import (
-    DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func,
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -63,9 +70,17 @@ class BikeComponent(Base):
     #: live value is about to be destroyed by the reset.
     longest_run_km: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
+    #: When this component was last serviced. Doubles as the start of the
+    #: CALENDAR clock for parts that age on one, which is why a rider can set it
+    #: by answering "wann zuletzt?" rather than only by servicing in-app.
     last_service_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
+    #: Whether the bicycle HAS this part — three states, and the third one is
+    #: the point. True: confirmed, the clock runs. False: told us they have rim
+    #: brakes or inner tubes, so never mention it again. NULL: never asked, so
+    #: it is a question rather than a job. See `bike_wear.is_dormant`.
+    owned: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     #: The last activity folded into this odometer. The idempotency key: a ride
     #: that has already been counted can never be counted twice, however many
     #: times ingestion replays it.

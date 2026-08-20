@@ -61,9 +61,28 @@ def test_lifetime_km_survives_a_service():
 
 def test_one_interval_always_pays_that_component_in_full():
     """The pricing rule: a full service is worth `rc_at_interval`, whichever
-    component it is and however long its interval happens to be."""
+    component it is, however long its interval happens to be, AND WHICHEVER
+    CLOCK RUNS IT.
+
+    The last clause is the one that broke. Sealant and brake fluid age on a
+    calendar and have no kilometre interval at all, so this used to read
+    `accrued_rc(None, spec)` and price a full sealant top-up at zero. The rule
+    was never about kilometres — it is about one interval — so it is now stated
+    that way.
+    """
     for spec in w.COMPONENTS.values():
-        assert w.accrued_rc(spec.interval_km, spec) == spec.rc_at_interval
+        if spec.interval_km:
+            assert w.accrued_rc(spec.interval_km, spec) == spec.rc_at_interval
+        if spec.interval_days:
+            assert w.accrued_rc(0, spec, spec.interval_days) == spec.rc_at_interval
+
+
+def test_every_component_is_worn_by_something():
+    """A part with neither clock can never come due and never pays — it would
+    sit in the workshop forever reading 'fresh'. Cheap to state, and it is the
+    one way a new catalogue entry can be silently inert."""
+    for cid, spec in w.COMPONENTS.items():
+        assert spec.interval_km or spec.interval_days, f"{cid} never wears"
 
 
 def test_timing_is_neutral_so_waiting_cannot_be_farmed():
@@ -82,7 +101,8 @@ def test_the_frequent_job_is_the_satisfying_one():
     job pay six times the weekly one — the exact inverse of what engagement
     needs. The frequent action must pay like a real payday."""
     chain = w.COMPONENTS["chain"]
-    assert chain.interval_km == min(c.interval_km for c in w.COMPONENTS.values())
+    km_intervals = [c.interval_km for c in w.COMPONENTS.values() if c.interval_km]
+    assert chain.interval_km == min(km_intervals)
     # Worth more than a typical single ride's base earn (40-150 RC).
     assert chain.rc_at_interval >= 150
 
