@@ -152,3 +152,27 @@ def test_a_naive_timestamp_does_not_crash_the_clock():
     now = datetime.now(timezone.utc)
     naive = (now - timedelta(days=10)).replace(tzinfo=None)
     assert workshop._days_since(naive, now) == 10
+
+
+def test_a_confirmed_part_with_no_date_is_unknown_and_never_fresh():
+    """THE BUG THIS PINS, found by clicking through the real screen. Answering
+    "ja, hab ich" to the brake-fluid question set `owned=True` and left the date
+    empty, so `elapsed` was zero and the row rendered FRISCH — the app telling a
+    rider their four-year-old fluid was fine, which is precisely the claim the
+    seeding question exists to stop it making.
+
+    Zero on a calendar part is not a reading. It is a missing reading.
+    """
+    s = w.state_of("brakefluid", 0, 0, days_since=None, owned=True)
+    assert s.dormant is False          # they confirmed they have it
+    assert s.undated is True           # but we still do not know its age
+    assert s.status == "unknown"       # so we claim nothing
+    assert s.bonus_rc == 0
+
+
+def test_a_kilometre_part_is_never_undated():
+    """Kilometres are measured rather than remembered, so a chain always has a
+    reading even when nobody has told us when it was last oiled."""
+    s = w.state_of("chain", 300, 300, days_since=None)
+    assert s.undated is False
+    assert s.status == "due"

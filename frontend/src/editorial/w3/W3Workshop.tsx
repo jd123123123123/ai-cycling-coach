@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Asterisk, Check, Trophy, Wrench, Zap } from 'lucide-react'
+import { Asterisk, Camera, Check, HelpCircle, Trophy, Wrench, Zap } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
+import { WHEN_CHIPS, daysAgoISO, readPhoto } from './workshopPhoto'
 import type { ServiceResult, Workshop, WorkshopComponent } from '../../api/workshop'
 
 /**
@@ -27,6 +28,30 @@ import type { ServiceResult, Workshop, WorkshopComponent } from '../../api/works
 const nf = (n: number) => n.toLocaleString('de-DE')
 const km = (n: number) => `${Math.round(n).toLocaleString('de-DE')} km`
 
+/** Days, said the way a person says them. 45 days is "6 Wochen", not "45 Tage",
+ *  and 400 is "über ein Jahr" — the precision the app HAS is not the precision
+ *  the rider gave us, and printing it back implies a measurement nobody made. */
+function age(days: number): string {
+  if (days <= 1) return 'heute'
+  if (days < 14) return `vor ${days} Tagen`
+  if (days < 60) return `vor ${Math.round(days / 7)} Wochen`
+  if (days < 365) return `vor ${Math.round(days / 30)} Monaten`
+  return days < 550 ? 'vor über einem Jahr' : `vor ${Math.floor(days / 365)} Jahren`
+}
+
+/** The meter's caption, in the unit of whichever clock is actually running.
+ *  Printing "1 200 / — km" against sealant is the confusion the two-clock model
+ *  exists to remove, so the label follows `clock` and never the other way. */
+function scaleLabel(c: WorkshopComponent): string {
+  if (c.clock === 'days' && c.interval_days) {
+    const every = c.interval_days >= 365
+      ? 'jährlich'
+      : `alle ${Math.round(c.interval_days / 30)} Monate`
+    return c.days_since == null ? every : `${age(c.days_since)} · ${every}`
+  }
+  return c.interval_km ? `${km(c.km_since)} / ${km(c.interval_km)}` : DASH
+}
+
 /** Status → how loud. Never red: nothing here is an error.
  *  `fresh` is the acid, because a fresh drivetrain is EARNING the bonus.
  *  `due` and `overdue` are warm — an invitation to collect, not a warning. */
@@ -34,11 +59,15 @@ const TONE: Record<WorkshopComponent['status'], string> = {
   fresh: T.acid,
   due: T.warn,
   overdue: T.mid,
+  // Not a severity at all — the absence of a claim. Quiet as the meta text,
+  // because "we have not asked yet" must not compete with a real job.
+  unknown: T.quiet,
 }
 const STATUS_DE: Record<WorkshopComponent['status'], string> = {
   fresh: 'FRISCH',
   due: 'FÄLLIG',
   overdue: 'ÜBERFÄLLIG',
+  unknown: 'UNBEKANNT',
 }
 
 function Meter({ progress, tone, reduce }: { progress: number; tone: string; reduce: boolean | null }) {
@@ -53,16 +82,124 @@ function Meter({ progress, tone, reduce }: { progress: number; tone: string; red
   )
 }
 
-function ComponentRow({ c, busy, onService }: {
+/** The two-button answer to "does your bike even have this?".
+ *
+ *  Rendered INSTEAD of a job, never above one. A rim-brake rider shown a
+ *  "Bremsflüssigkeit — FÄLLIG" row learns that this screen guesses about their
+ *  bicycle, and after that they will ignore the one warning that matters. */
+function HaveQuestion({ c, busy, onDeclare }: {
   c: WorkshopComponent
   busy: boolean
-  onService: () => void
+  onDeclare: (owned: boolean) => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
+        {QUESTION_DE[c.id] ?? `Hat dein Rad ${c.name_de}?`}
+      </span>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <Chip label="Ja, hab ich" tone="on" disabled={busy} onClick={() => onDeclare(true)} />
+        <Chip label="Nein" disabled={busy} onClick={() => onDeclare(false)} />
+      </div>
+    </div>
+  )
+}
+
+/** "Wann zuletzt?" — rough answers first, an exact date underneath.
+ *
+ *  Nobody knows the DATE they last oiled their chain; they know "ein paar
+ *  Wochen". A rough answer replayed against the real ride history beats an
+ *  exact-looking date somebody guessed, and it is far likelier to be given at
+ *  all — which matters more, because the alternative is the odometer staying at
+ *  zero and the app telling them their four-year-old fluid is fresh. */
+function WhenQuestion({ c, busy, onSeed, onCancel }: {
+  c: WorkshopComponent
+  busy: boolean
+  onSeed: (iso: string) => void
+  onCancel: () => void
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
+        {c.name_de}: wann zuletzt? Grob reicht — den Rest rechnen wir aus
+        deinen echten Fahrten seit dann.
+      </span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+        {WHEN_CHIPS.map((w) => (
+          <Chip key={w.days} label={w.label} disabled={busy}
+                onClick={() => onSeed(daysAgoISO(w.days))} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <input
+          type="date"
+          max={daysAgoISO(0)}
+          disabled={busy}
+          onChange={(e) => e.target.value && onSeed(e.target.value)}
+          aria-label={`Genaues Datum für ${c.name_de}`}
+          style={{
+            flex: 1, minWidth: 0, height: 32, padding: '0 10px', borderRadius: 10,
+            background: T.heroChip, border: 0, color: T.mid,
+            fontFamily: FONT, fontSize: 11.5, fontWeight: 600,
+          }} />
+        <Chip label="Später" disabled={busy} onClick={onCancel} />
+      </div>
+    </div>
+  )
+}
+
+function Chip({ label, tone, disabled, onClick }: {
+  label: string
+  tone?: 'on'
+  disabled?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} style={{
+      flex: 'none', height: 32, padding: '0 13px', borderRadius: 100, border: 0,
+      cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1,
+      background: tone === 'on' ? T.acid : T.heroChip,
+      color: tone === 'on' ? T.heroInk : T.mid,
+      fontFamily: FONT, fontSize: 11.5, fontWeight: 700, letterSpacing: 0.2,
+    }}>{label}</button>
+  )
+}
+
+/** What we actually ask, per part. Generic phrasing ("Hat dein Rad
+ *  Bremsflüssigkeit?") reads like a quiz; these read like a mechanic. */
+const QUESTION_DE: Record<string, string> = {
+  sealant: 'Fährst du tubeless? Dann altert die Dichtmilch mit — auch wenn das Rad steht.',
+  brakefluid: 'Hast du hydraulische Bremsen? Die Flüssigkeit zieht Wasser, unabhängig von den Kilometern.',
+}
+
+function ComponentRow({ c, busy, onService, onSeed, onDeclare }: {
+  c: WorkshopComponent
+  busy: boolean
+  onService: (proofImage?: string | null) => void
+  onSeed: (iso: string) => void
+  onDeclare: (owned: boolean) => void
 }) {
   const reduce = useReducedMotion()
+  const file = useRef<HTMLInputElement>(null)
+  // `null` means FOLLOW THE DATA, and that is the whole point of the three
+  // states. A `useState(undated)` initialiser only runs on mount, so answering
+  // "ja, hab ich" flipped the row from a question straight to a job reading
+  // FRISCH — the app asserting a four-year-old brake fluid was fine, one tap
+  // after admitting it had no idea. Derived, the row asks the moment the
+  // server says it is undated, and 'later' is the rider's own escape hatch.
+  const [asking, setAsking] = useState<'when' | 'later' | null>(null)
+  const showWhen = !c.dormant && (asking === 'when' || (asking === null && c.undated))
   const tone = TONE[c.status]
   // Nothing to collect yet — the button is still offered (servicing early is a
   // trade the rider may make) but it does not shout.
   const worth = c.bonus_rc > 0
+
+  const pick = async (f: File | undefined) => {
+    if (!f) return
+    // A photo we cannot decode services WITHOUT proof rather than failing. The
+    // base Service Bonus was earned by riding and must never hinge on a camera.
+    onService(await readPhoto(f))
+  }
 
   return (
     <div style={{
@@ -74,61 +211,114 @@ function ComponentRow({ c, busy, onService }: {
         <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.1, color: tone }}>
           {STATUS_DE[c.status]}
         </span>
-        <span style={{
-          marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
-          fontSize: 17, fontWeight: 700, color: worth ? T.ink : T.heroOff,
-          fontVariantNumeric: 'tabular-nums',
-        }}>
-          <Asterisk size={14} color={worth ? T.lilac : T.heroOff} />
-          {nf(c.bonus_rc)}
-        </span>
-      </div>
-
-      <Meter progress={c.progress} tone={tone} reduce={reduce} />
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        {/* One line, never two. Measured at 390 px: a four-digit interval
-            ("1.180 km / 2.500 km") plus the lifetime figure wrapped, which
-            made that one row taller than every other and broke the rhythm of
-            the stack. The meta shrinks and ellipses; the button never moves. */}
-        <span style={{
-          minWidth: 0, flex: 1, display: 'flex', gap: 5, alignItems: 'baseline',
-          overflow: 'hidden', whiteSpace: 'nowrap',
-        }}>
-          <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 600, color: T.heroMid, fontVariantNumeric: 'tabular-nums' }}>
-            {km(c.km_since)} / {km(c.interval_km)}
-          </span>
-          {/* The lifetime number. It survives every service and it is the thing
-              riders actually brag about, so it sits on the row permanently —
-              but it is the half that gives way when space runs out. */}
+        {!c.dormant && (
           <span style={{
-            minWidth: 0, fontSize: 10.5, fontWeight: 600, color: T.quiet,
-            fontVariantNumeric: 'tabular-nums', overflow: 'hidden', textOverflow: 'ellipsis',
+            marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 17, fontWeight: 700, color: worth ? T.ink : T.heroOff,
+            fontVariantNumeric: 'tabular-nums',
           }}>
-            · {km(c.km_total)} gesamt
+            <Asterisk size={14} color={worth ? T.lilac : T.heroOff} />
+            {nf(c.bonus_rc)}
           </span>
-        </span>
-        <button
-          onClick={onService}
-          disabled={busy}
-          style={{
-            flex: 'none', height: 34, padding: '0 16px',
-            borderRadius: 100, border: 0, cursor: busy ? 'default' : 'pointer',
-            background: worth ? T.acid : T.heroChip,
-            color: worth ? T.heroInk : T.mid,
-            fontFamily: FONT, fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
-            opacity: busy ? 0.6 : 1,
-          }}>
-          {c.action_de}
-        </button>
+        )}
+        {c.dormant && <HelpCircle size={15} color={T.quiet} style={{ marginLeft: 'auto' }} />}
       </div>
 
-      {/* Stated only when true, and stated as what it is: the pile is intact,
-          it has simply stopped growing. Never phrased as a loss. */}
-      {c.accrual_stopped && (
-        <span style={{ fontSize: 10.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
-          Der Bonus ist gesichert — er wächst ab hier nur nicht weiter.
-        </span>
+      {c.dormant ? (
+        <HaveQuestion c={c} busy={busy} onDeclare={onDeclare} />
+      ) : showWhen ? (
+        <WhenQuestion c={c} busy={busy}
+                      onSeed={(iso) => { setAsking(null); onSeed(iso) }}
+                      onCancel={() => setAsking('later')} />
+      ) : (
+        <>
+          <Meter progress={c.progress} tone={tone} reduce={reduce} />
+
+          {/* THE META GETS ITS OWN LINE. It shared one with the action button
+              until the camera arrived beside it, and three items competing for
+              ~150 px truncated the lifetime figure to "· 4…" — the number
+              riders care most about, reduced to an ellipsis. Text and controls
+              now own a row each; the card is one line taller and everything on
+              it is readable. */}
+          <div style={{
+            display: 'flex', gap: 6, alignItems: 'baseline',
+            fontSize: 10.5, fontWeight: 600, whiteSpace: 'nowrap',
+            overflow: 'hidden',
+          }}>
+            <span style={{ flex: 'none', color: T.heroMid, fontVariantNumeric: 'tabular-nums' }}>
+              {scaleLabel(c)}
+            </span>
+            {/* The lifetime number survives every service and is the thing
+                riders actually brag about, so it sits on the row permanently —
+                but it is still the half that gives way when space runs out.
+                NOT on a calendar part: "1.180 km gesamt" beside a sealant
+                top-up implies kilometres matter to it, which is the precise
+                belief the two-clock model exists to correct. */}
+            {c.clock === 'km' && (
+              <span style={{
+                minWidth: 0, color: T.quiet, fontVariantNumeric: 'tabular-nums',
+                overflow: 'hidden', textOverflow: 'ellipsis',
+              }}>
+                · {km(c.km_total)} gesamt
+              </span>
+            )}
+            {/* The clock can always be corrected. Last on the line and in the
+                meta's own weight, because it is a fix and not a task — but
+                present on every row, because an odometer a rider knows is wrong
+                is one they stop believing entirely. */}
+            <button onClick={() => setAsking('when')} style={{
+              flex: 'none', marginLeft: 'auto', background: 'none', border: 0,
+              padding: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 10.5,
+              fontWeight: 600, color: T.quiet,
+              textDecoration: 'underline', textUnderlineOffset: 3,
+            }}>
+              richtigstellen
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* Proof is a SECOND affordance beside the plain one, never a step
+                in front of it. Both are one tap; the camera simply pays more. */}
+            <input ref={file} type="file" accept="image/*" capture="environment"
+                   onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = '' }}
+                   style={{ display: 'none' }} />
+            <button
+              onClick={() => file.current?.click()}
+              disabled={busy}
+              aria-label={`Mit Foto nachweisen — ${c.name_de}`}
+              style={{
+                flex: 1, minWidth: 0, height: 34, borderRadius: 100,
+                border: `1px solid ${T.heroChip}`, background: 'transparent',
+                cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.lilac,
+              }}>
+              <Camera size={13} color={T.lilac} />Mit Foto · +40 %
+            </button>
+            <button
+              onClick={() => onService(null)}
+              disabled={busy}
+              style={{
+                flex: 1, minWidth: 0, height: 34, padding: '0 12px',
+                borderRadius: 100, border: 0, cursor: busy ? 'default' : 'pointer',
+                background: worth ? T.acid : T.heroChip,
+                color: worth ? T.heroInk : T.mid,
+                fontFamily: FONT, fontSize: 12, fontWeight: 700, letterSpacing: 0.3,
+                opacity: busy ? 0.6 : 1,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+              {c.action_de}
+            </button>
+          </div>
+
+          {/* Stated only when true, and stated as what it is: the pile is intact,
+              it has simply stopped growing. Never phrased as a loss. */}
+          {c.accrual_stopped && (
+            <span style={{ fontSize: 10.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
+              Der Bonus ist gesichert — er wächst ab hier nur nicht weiter.
+            </span>
+          )}
+        </>
       )}
     </div>
   )
@@ -141,12 +331,14 @@ export interface W3WorkshopProps {
   busyId: string | null
   /** The last service, for the celebration. Cleared by the page on dismiss. */
   lastResult: ServiceResult | null
-  onService: (componentId: string) => void
+  onService: (componentId: string, proofImage?: string | null) => void
+  onSeed: (componentId: string, lastServiceOn: string) => void
+  onDeclare: (componentId: string, owned: boolean) => void
   onDismissResult: () => void
 }
 
 export default function W3Workshop({
-  workshop, loading, busyId, lastResult, onService, onDismissResult,
+  workshop, loading, busyId, lastResult, onService, onSeed, onDeclare, onDismissResult,
 }: W3WorkshopProps) {
   const reduce = useReducedMotion()
   const [seen, setSeen] = useState(false)
@@ -241,7 +433,9 @@ export default function W3Workshop({
         <ComponentRow
           key={c.id} c={c}
           busy={busyId === c.id}
-          onService={() => { setSeen(false); onService(c.id) }} />
+          onService={(proof) => { setSeen(false); onService(c.id, proof) }}
+          onSeed={(iso) => onSeed(c.id, iso)}
+          onDeclare={(owned) => onDeclare(c.id, owned)} />
       ))}
 
       {/* ── the payday ── */}
@@ -262,10 +456,20 @@ export default function W3Workshop({
               {lastResult.name_de} gewartet · +{nf(lastResult.paid_rc)}
             </span>
             <span style={{ fontSize: 11, fontWeight: 600, color: '#00000099' }}>
-              {lastResult.new_record
-                ? `Rekord! ${km(lastResult.record_km)} auf einem Satz.`
-                : `${km(lastResult.km_serviced)} abgerechnet.`}
+              {/* The photo's own sentence wins the line when there was one: it
+                  is the part the rider just did something extra for, and it is
+                  the only line that could ever surprise them. It is never
+                  accusatory — see `services/service_proof`. */}
+              {lastResult.proof_note
+                ?? (lastResult.new_record
+                  ? `Rekord! ${km(lastResult.record_km)} auf einem Satz.`
+                  : `${km(lastResult.km_serviced)} abgerechnet.`)}
             </span>
+            {lastResult.proof_rc > 0 && (
+              <span style={{ fontSize: 11, fontWeight: 700, color: T.heroInk }}>
+                Nachweis bestätigt · +{nf(lastResult.proof_rc)} extra
+              </span>
+            )}
           </div>
         </motion.div>
       )}

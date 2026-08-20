@@ -634,6 +634,9 @@ class ComponentOut(BaseModel):
     #: True while this is an optional part we have not asked about. The screen
     #: shows a QUESTION, never a job — see `bike_wear.is_dormant`.
     dormant: bool = False
+    #: True when the part is confirmed but its age was never given, and it has
+    #: no kilometre clock to fall back on. The screen ASKS instead of reporting.
+    undated: bool = False
     optional: bool = False
     #: Unharvested Service Bonus sitting on this component right now.
     bonus_rc: int

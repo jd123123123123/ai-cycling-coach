@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { useServiceComponent, useWorkshop } from '../../hooks/useWorkshop'
+import {
+  useDeclareComponent, useSeedComponent, useServiceComponent, useWorkshop,
+} from '../../hooks/useWorkshop'
 import W3Workshop from './W3Workshop'
 import type { ServiceResult } from '../../api/workshop'
 
@@ -19,17 +21,31 @@ import type { ServiceResult } from '../../api/workshop'
 export default function W3WorkshopPanel() {
   const { data: workshop, isLoading } = useWorkshop()
   const service = useServiceComponent()
+  const seed = useSeedComponent()
+  const declare = useDeclareComponent()
   const [lastResult, setLastResult] = useState<ServiceResult | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
-  const onService = (componentId: string) => {
+  // Every one of the three writes marks the same row busy, because from the
+  // rider's side they are the same gesture — the row is answering. `onSettled`
+  // rather than `onSuccess` throughout: a failed write must not leave a row
+  // disabled forever, and the server is unchanged, so the next read re-agrees.
+  const onService = (componentId: string, proofImage?: string | null) => {
     setBusyId(componentId)
-    service.mutate(componentId, {
+    service.mutate({ componentId, proofImage }, {
       onSuccess: (result) => setLastResult(result),
-      // A failed service must not leave a row spinning forever. The workshop
-      // is unchanged on the server, so the next read simply re-agrees with it.
       onSettled: () => setBusyId(null),
     })
+  }
+
+  const onSeed = (componentId: string, lastServiceOn: string) => {
+    setBusyId(componentId)
+    seed.mutate({ componentId, lastServiceOn }, { onSettled: () => setBusyId(null) })
+  }
+
+  const onDeclare = (componentId: string, owned: boolean) => {
+    setBusyId(componentId)
+    declare.mutate({ componentId, owned }, { onSettled: () => setBusyId(null) })
   }
 
   return (
@@ -39,6 +55,8 @@ export default function W3WorkshopPanel() {
       busyId={busyId}
       lastResult={lastResult}
       onService={onService}
+      onSeed={onSeed}
+      onDeclare={onDeclare}
       onDismissResult={() => setLastResult(null)} />
   )
 }

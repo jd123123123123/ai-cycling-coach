@@ -335,6 +335,10 @@ class ComponentState:
     #: True while this is an optional part we have not asked about yet. The
     #: screen shows it as a QUESTION, never as a job.
     dormant: bool = False
+    #: True when this part is confirmed but we have never been told its age, and
+    #: it has no kilometre clock to fall back on. The screen must ASK rather
+    #: than report — see `is_undated`.
+    undated: bool = False
     optional: bool = False
 
 
@@ -371,6 +375,21 @@ def which_clock(spec: ComponentSpec, km_since: float, days_since: int | None) ->
     km_r = max(0.0, km_since) / spec.interval_km
     day_r = max(0, days_since) / spec.interval_days
     return "days" if day_r > km_r else "km"
+
+
+def is_undated(spec: ComponentSpec, days_since: int | None) -> bool:
+    """Whether we are missing the ONE reading this component needs.
+
+    A part worn only by the calendar has no other clock to fall back on, so
+    without a date its elapsed fraction is zero — and zero would render as
+    FRISCH. That is a claim about somebody's bicycle that we cannot support:
+    brake fluid we have never asked about is not fresh, it is UNKNOWN, and the
+    difference is the entire reason the seeding question exists.
+
+    A part with a kilometre interval is never undated, because kilometres are
+    measured rather than remembered.
+    """
+    return bool(spec.interval_days) and not spec.interval_km and days_since is None
 
 
 def is_dormant(spec: ComponentSpec, owned: bool | None) -> bool:
@@ -428,6 +447,7 @@ def state_of(
 ) -> ComponentState:
     spec = COMPONENTS[component_id]
     dormant = is_dormant(spec, owned)
+    undated = is_undated(spec, days_since)
     f = elapsed(spec, km_since, days_since)
     return ComponentState(
         id=spec.id,
@@ -443,12 +463,13 @@ def state_of(
         # moment the rider confirms it, its clock starts from the date they
         # give us and the bonus starts building from there.
         bonus_rc=0 if dormant else accrued_rc(km_since, spec, days_since),
-        status="unknown" if dormant else status_of(
+        status="unknown" if dormant or undated else status_of(
             km_since, spec.interval_km, days_since, spec.interval_days,
         ),
         progress=min(1.0, f),
         accrual_stopped=not dormant and f >= OVERRUN_FACTOR,
         dormant=dormant,
+        undated=undated,
         optional=spec.optional,
     )
 

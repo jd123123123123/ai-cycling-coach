@@ -1,5 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { fetchWorkshop, serviceComponent, type ServiceResult, type Workshop } from '../api/workshop'
+import {
+  declareComponent, fetchWorkshop, seedComponent, serviceComponent,
+  type SeedResult, type ServiceResult, type Workshop,
+} from '../api/workshop'
 
 /** `useWallet` declares this key inline; mirrored here rather than exported
  *  from there so this module adds no imports to a hook six screens already
@@ -38,11 +41,38 @@ export function useWorkshop(opts: { enabled?: boolean } = {}) {
  */
 export function useServiceComponent() {
   const qc = useQueryClient()
-  return useMutation<ServiceResult, Error, string>({
-    mutationFn: serviceComponent,
+  return useMutation<ServiceResult, Error, { componentId: string; proofImage?: string | null }>({
+    mutationFn: ({ componentId, proofImage }) => serviceComponent(componentId, proofImage),
     onSuccess: (result) => {
       qc.setQueryData(WORKSHOP_KEY, result.workshop)
       if (result.paid_rc > 0) qc.invalidateQueries({ queryKey: WALLET_KEY })
     },
+  })
+}
+
+/**
+ * Answer "wann zuletzt?" and let the server rebuild the odometer from the real
+ * ride history.
+ *
+ * No wallet invalidation, on purpose: seeding pays NOTHING. It would be easy to
+ * make backdating a service pay out its banked bonus retroactively, and that
+ * would turn one honest question into a slider a rider can drag for RideCoin.
+ * The seed only ever moves the clock to where it already was.
+ */
+export function useSeedComponent() {
+  const qc = useQueryClient()
+  return useMutation<SeedResult, Error, { componentId: string; lastServiceOn: string }>({
+    mutationFn: ({ componentId, lastServiceOn }) => seedComponent(componentId, lastServiceOn),
+    onSuccess: (result) => qc.setQueryData(WORKSHOP_KEY, result.workshop),
+  })
+}
+
+/** Say whether the bike has an optional part. Answering "no" is what stops the
+ *  app asking — see the tri-state `owned` on the server. */
+export function useDeclareComponent() {
+  const qc = useQueryClient()
+  return useMutation<Workshop, Error, { componentId: string; owned: boolean }>({
+    mutationFn: ({ componentId, owned }) => declareComponent(componentId, owned),
+    onSuccess: (workshop) => qc.setQueryData(WORKSHOP_KEY, workshop),
   })
 }

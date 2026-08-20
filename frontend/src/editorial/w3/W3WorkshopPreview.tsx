@@ -23,21 +23,39 @@ const FIXTURE: Workshop = {
   components: [
     { id: 'chain', name_de: 'Kette', action_de: 'Reinigen & ölen',
       km_since: 372, interval_km: 250, km_total: 4820, bonus_rc: 223,
-      status: 'due', progress: 1, accrual_stopped: false },
+      status: 'due', progress: 1, accrual_stopped: false,
+      days_since: null, interval_days: null, clock: 'km', dormant: false, undated: false, optional: false },
     { id: 'tyres', name_de: 'Reifen', action_de: 'Prüfen & aufpumpen',
       km_since: 1180, interval_km: 2500, km_total: 1180, bonus_rc: 94,
-      status: 'fresh', progress: 0.47, accrual_stopped: false },
+      status: 'fresh', progress: 0.47, accrual_stopped: false,
+      days_since: null, interval_days: null, clock: 'km', dormant: false, undated: false, optional: false },
     { id: 'brakes', name_de: 'Bremsbeläge', action_de: 'Beläge prüfen',
       km_since: 4310, interval_km: 2000, km_total: 4310, bonus_rc: 500,
-      status: 'overdue', progress: 1, accrual_stopped: true },
+      status: 'overdue', progress: 1, accrual_stopped: true,
+      days_since: null, interval_days: null, clock: 'km', dormant: false, undated: false, optional: false },
     { id: 'bartape', name_de: 'Lenkerband', action_de: 'Neu wickeln',
       km_since: 140, interval_km: 4000, km_total: 140, bonus_rc: 6,
-      status: 'fresh', progress: 0.035, accrual_stopped: false },
+      status: 'fresh', progress: 0.035, accrual_stopped: false,
+      days_since: null, interval_days: null, clock: 'km', dormant: false, undated: false, optional: false },
+    // The calendar part, confirmed and dated — the one row whose meter must
+    // read in months and whose kilometres are deliberately irrelevant.
+    { id: 'sealant', name_de: 'Dichtmilch', action_de: 'Nachfüllen',
+      km_since: 1180, interval_km: null, km_total: 1180, bonus_rc: 140,
+      status: 'due', progress: 1, accrual_stopped: false,
+      days_since: 141, interval_days: 120, clock: 'days', dormant: false, undated: false, optional: true },
+    // The one we have not asked about yet: a QUESTION, not a job. Rendering
+    // this as "FÄLLIG" on a rim-brake rider's bike is the failure the dormant
+    // state exists to prevent.
+    { id: 'brakefluid', name_de: 'Bremsflüssigkeit', action_de: 'Entlüften',
+      km_since: 0, interval_km: null, km_total: 0, bonus_rc: 0,
+      status: 'unknown', progress: 0, accrual_stopped: false,
+      days_since: null, interval_days: 365, clock: 'days', dormant: true, undated: true, optional: true },
     { id: 'cassette', name_de: 'Kassette', action_de: 'Reinigen',
       km_since: 2050, interval_km: 6000, km_total: 2050, bonus_rc: 102,
-      status: 'fresh', progress: 0.34, accrual_stopped: false },
+      status: 'fresh', progress: 0.34, accrual_stopped: false,
+      days_since: null, interval_days: null, clock: 'km', dormant: false, undated: false, optional: false },
   ],
-  total_bonus_rc: 925,
+  total_bonus_rc: 1065,
   // Deliberately NOT fresh, so the panel shows the bonus as something to go and
   // unlock rather than something already held — the harder of the two states to
   // word without it reading as a penalty.
@@ -46,6 +64,7 @@ const FIXTURE: Workshop = {
   chain_km_total: 4820,
   chain_record_km: 512,
   balance: 1448,
+  open_question: null,
 }
 
 export default function W3WorkshopPreview() {
@@ -62,7 +81,7 @@ export default function W3WorkshopPreview() {
       const next: Workshop = {
         ...ws,
         components: ws.components.map((x) => x.id === id
-          ? { ...x, km_since: 0, bonus_rc: 0, progress: 0, status: 'fresh', accrual_stopped: false }
+          ? { ...x, km_since: 0, bonus_rc: 0, progress: 0, status: 'fresh', accrual_stopped: false, days_since: 0 }
           : x),
         total_bonus_rc: ws.total_bonus_rc - c.bonus_rc,
         drivetrain_fresh: id === 'chain' ? true : ws.drivetrain_fresh,
@@ -74,6 +93,7 @@ export default function W3WorkshopPreview() {
         component_id: id, name_de: c.name_de, paid_rc: c.bonus_rc,
         balance: next.balance, km_serviced: c.km_since,
         new_record: c.km_since > ws.chain_record_km, record_km: Math.max(c.km_since, ws.chain_record_km),
+        proof_rc: 0, proof_note: null, proof_confirmed: false,
         workshop: next,
       })
       setBusy(null)
@@ -89,7 +109,25 @@ export default function W3WorkshopPreview() {
         </div>
         <W3Workshop
           workshop={ws} loading={false} busyId={busy} lastResult={last}
-          onService={onService} onDismissResult={() => setLast(null)} />
+          onService={onService}
+          // The preview owns no server, so these two answer locally: seeding
+          // moves the clock the rider names, declining a part makes the
+          // question go away. Enough to exercise every branch of the row from
+          // a static route.
+          onSeed={(id, iso) => setWs((w) => ({
+            ...w,
+            components: w.components.map((x) => x.id === id ? {
+              ...x, dormant: false, undated: false, status: 'fresh' as const,
+              days_since: Math.round((Date.now() - new Date(iso).getTime()) / 86400000),
+            } : x),
+          }))}
+          onDeclare={(id, owned) => setWs((w) => ({
+            ...w,
+            components: w.components.map((x) => x.id === id
+              ? { ...x, dormant: !owned, undated: owned, status: 'unknown' as const }
+              : x),
+          }))}
+          onDismissResult={() => setLast(null)} />
         <W3TabBar />
       </div>
     </div>

@@ -9,8 +9,13 @@ import { apiClient } from './client'
 // withdraws it; neglect only ever leaves money unharvested. Any field added
 // here that could reduce a rider's earn belongs to a different design.
 
-/** Never a failure state, and never blocking. */
-export type ComponentStatus = 'fresh' | 'due' | 'overdue'
+/** Never a failure state, and never blocking.
+ *
+ *  `unknown` is not a fourth severity — it is the ABSENCE of a claim. An
+ *  optional part we have never asked about (sealant on a bike that may run
+ *  tubes, fluid on a bike that may run rim brakes) is neither fresh nor due,
+ *  and saying either would be inventing a fact about someone's bicycle. */
+export type ComponentStatus = 'fresh' | 'due' | 'overdue' | 'unknown'
 
 export interface WorkshopComponent {
   id: string
@@ -18,9 +23,25 @@ export interface WorkshopComponent {
   /** What servicing it is called, in the rider's language. */
   action_de: string
   km_since: number
-  interval_km: number
+  /** Null for a part kilometres do not wear. Sealant dries out in a cellar. */
+  interval_km: number | null
   /** Lifetime km — survives every service. The number riders brag about. */
   km_total: number
+  /** The CALENDAR clock, for parts that age on one. Null until we are told. */
+  days_since: number | null
+  interval_days: number | null
+  /** Which clock is driving `status`, and therefore which unit the meter must
+   *  be labelled with. Rendering a sealant top-up in kilometres is the exact
+   *  confusion the two-clock model exists to remove. */
+  clock: 'km' | 'days'
+  /** True while this is an optional part we have not asked about. Render a
+   *  QUESTION, never a job. */
+  dormant: boolean
+  /** Confirmed, but we were never told its age — and it has no kilometre clock
+   *  to fall back on. Zero is not a reading here, it is a MISSING reading, so
+   *  the screen asks instead of reporting `fresh`. */
+  undated: boolean
+  optional: boolean
   /** Unharvested RideCoin sitting on this component right now. */
   bonus_rc: number
   status: ComponentStatus
@@ -41,6 +62,10 @@ export interface Workshop {
   chain_km_total: number
   chain_record_km: number
   balance: number
+  /** The next part to ask the rider about, or null. One at a time and only
+   *  when the workshop is already open: six questions up front is a form, and
+   *  forms get abandoned. */
+  open_question: WorkshopComponent | null
 }
 
 export interface ServiceResult {
@@ -53,7 +78,24 @@ export interface ServiceResult {
   km_serviced: number
   new_record: boolean
   record_km: number
+  /** Of `paid_rc`, how much the photo added. Zero without one. */
+  proof_rc: number
+  /** What the check saw, in one German sentence. Never accusatory, and null
+   *  when no photo was sent. */
+  proof_note: string | null
+  proof_confirmed: boolean
   /** The refreshed workshop, so the screen redraws with no second round trip. */
+  workshop: Workshop
+}
+
+export interface SeedResult {
+  component_id: string
+  name_de: string
+  km_since: number
+  /** How many real rides were replayed. This is what makes the number
+   *  believable — a claim the rider can check against their own feed. */
+  rides: number
+  days_since: number
   workshop: Workshop
 }
 
@@ -62,7 +104,39 @@ export async function fetchWorkshop(): Promise<Workshop> {
   return res.data
 }
 
-export async function serviceComponent(componentId: string): Promise<ServiceResult> {
-  const res = await apiClient.post<ServiceResult>(`/garage/workshop/service/${componentId}`)
+/** Service a component, optionally with a photo of the job.
+ *
+ *  The photo is OPTIONAL and can only ever add. The Service Bonus is paid in
+ *  full without one — a flat phone or a dark garage must never withhold
+ *  RideCoin that riding earned. See `services/service_proof` on the server. */
+export async function serviceComponent(
+  componentId: string, proofImage?: string | null,
+): Promise<ServiceResult> {
+  const res = await apiClient.post<ServiceResult>(
+    `/garage/workshop/service/${componentId}`,
+    { proof_image: proofImage ?? null },
+  )
+  return res.data
+}
+
+/** Answer "wann zuletzt?" — the server replays every ride since that date
+ *  rather than estimating from it. */
+export async function seedComponent(
+  componentId: string, lastServiceOn: string,
+): Promise<SeedResult> {
+  const res = await apiClient.post<SeedResult>(
+    `/garage/workshop/seed/${componentId}`, { last_service_on: lastServiceOn },
+  )
+  return res.data
+}
+
+/** Say whether the bike has an optional part. "No" is permanent until changed:
+ *  a rim-brake rider is never asked about brake fluid again. */
+export async function declareComponent(
+  componentId: string, owned: boolean,
+): Promise<Workshop> {
+  const res = await apiClient.post<Workshop>(
+    `/garage/workshop/have/${componentId}`, { owned },
+  )
   return res.data
 }
