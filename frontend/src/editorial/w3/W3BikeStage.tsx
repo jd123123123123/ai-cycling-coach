@@ -41,7 +41,15 @@ export default function W3BikeStage({ src, alt = '', rendering = false, children
       {src && (
         <img
           src={src} alt={alt} loading="lazy"
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+          // CONTAIN, NOT COVER. The composed builds are square and this stage is
+          // not, so `cover` cropped the render to fill — which cut the wheels
+          // off a bike shot side-on and threw away the place it was standing
+          // in, the two things the picture exists to show. Contain lets the
+          // whole frame breathe; the stage's own ground fills what is left.
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            objectFit: 'contain',
+          }}
         />
       )}
       {/* Said out loud, and quietly. A rider who just equipped something is

@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
-import { STARTER_BIKE } from './starterBike'
+import { useGarage, useRideScene } from '../../hooks/useGarage'
 import {
   renderSharePoster, sharePoster, downloadPoster, canShareImage,
   type ShareAngle, type PosterData,
@@ -16,7 +16,8 @@ import W3ShareView, { type W3ShareVm, type ShareAngleChip } from './W3ShareView'
  * REAL: the ride's stats + power PRs from `useRaceDebrief`
  * (`/analytics/activity-debrief/:id`); the GPX track (`route_polyline`) and the
  * ride's name/date from the activities list; the rider avatar/handle from
- * `useAuth`; the bike render (`STARTER_BIKE`). The poster is drawn once by
+ * `useAuth`; the ride's composed hero and the rider's own bike render. The
+ * poster is drawn once by
  * `renderSharePoster` and that exact PNG is what the OS share sheet posts to
  * Instagram / LinkedIn / WhatsApp. Celebratory comparatives (the "seit April"
  * pill sublines) are framing, not backed by an endpoint — marked below.
@@ -45,6 +46,10 @@ export default function W3SharePage() {
   }, [acts, id])
 
   const { data: debrief } = useRaceDebrief(activity?.id)
+  // The composed hero for this ride, and the rider's own garage bike behind it.
+  // Both are cheap cached reads and neither ever generates.
+  const { data: scene } = useRideScene(activity?.id)
+  const { data: garage } = useGarage()
 
   const [angle, setAngle] = useState<ShareAngle>('fahrt')
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null)
@@ -135,13 +140,20 @@ export default function W3SharePage() {
       // Real ride intensity (IF) — tints the route glow on the poster.
       intensity: iff ?? (h?.tss != null && durS ? Math.sqrt(h.tss / ((durS / 3600) * 100)) : undefined),
       polyline: activity?.route_polyline ?? null,
-      bikeSrc: STARTER_BIKE,
+      // THE RIDE'S OWN HERO when one has been composed: the rider's bike, shot
+      // in the framing that ride earned. It becomes the whole top half.
+      sceneSrc: scene?.image_base64 ?? null,
+      // THE RIDER'S OWN BIKE otherwise — never `STARTER_BIKE`, which is what
+      // stood here and put a grey catalogue bicycle on every rider's poster.
+      // Null draws no bike: a poster with a route and no machine is honest, one
+      // with somebody else's machine is not.
+      bikeSrc: garage?.bike?.image_base64 ?? null,
       avatarUrl: user?.avatar_url ?? null,
       avatarInitial,
       footer: `${rideName} · ${dateStr}`,
       ...data,
     }
-  }, [activity, debrief, angle, user])
+  }, [activity, debrief, angle, user, scene, garage])
 
   // ── render the poster whenever the payload changes ──
   useEffect(() => {

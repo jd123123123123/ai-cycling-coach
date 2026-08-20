@@ -34,7 +34,21 @@ export interface PosterData {
   /** Ride intensity (IF). When set, the route glows in the intensity accent
    *  (green→lime→amber→orange) instead of the angle's default colour. */
   intensity?: number
-  bikeSrc: string
+  /**
+   * The ride's OWN composed hero — the rider's bike shot in the framing that
+   * ride earned (`services/ride_framing`). When it exists it IS the top half of
+   * the poster: a real machine in a real place beats a studio cut-out pasted
+   * over invented mountains, which is what this card drew before.
+   */
+  sceneSrc?: string | null
+  /**
+   * The rider's own bike render, for when no scene has been composed. NULL is a
+   * valid value and draws no bike at all — the stock catalogue bike used to be
+   * hardcoded here, so every rider's poster showed a grey bicycle that was not
+   * theirs. A poster with a route and no bike is honest; one with someone
+   * else's bike is not.
+   */
+  bikeSrc: string | null
   avatarUrl: string | null
   avatarInitial: string
 }
@@ -161,24 +175,123 @@ function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
   ctx.fill(); ctx.restore()
 }
 
-async function paint(ctx: CanvasRenderingContext2D, d: PosterData, avatarImg: HTMLImageElement | null, bikeImg: HTMLImageElement | null) {
+/**
+ * A mark for one stat tile, drawn as a path because this is a canvas and an
+ * icon font would be another thing to load and taint the export.
+ *
+ * WHY THEY EARN THEIR SPACE. The three tiles are three numbers in identical
+ * boxes, and at poster scale — seen in a feed, thumbnailed — the labels under
+ * them are the first thing to become unreadable. The glyph survives that: a
+ * bolt reads as power and a clock as time long after "NORMALISIERT" has turned
+ * to grey mush.
+ *
+ * Chosen from the LABEL rather than passed in, so a new stat gets a sensible
+ * mark without every caller having to know this file exists. An unrecognised
+ * label draws nothing, which is the honest fallback — a wrong icon is worse
+ * than none.
+ */
+function statGlyph(ctx: CanvasRenderingContext2D, label: string, x: number, y: number, s: number, color: string) {
+  const l = label.toLowerCase()
+  ctx.save()
+  ctx.strokeStyle = color
+  ctx.fillStyle = color
+  ctx.lineWidth = Math.max(2, s * 0.11)
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+
+  if (/watt|leistung|normal|power|ftp/.test(l)) {
+    // a bolt
+    ctx.beginPath()
+    ctx.moveTo(x + s * 0.56, y)
+    ctx.lineTo(x + s * 0.24, y + s * 0.54)
+    ctx.lineTo(x + s * 0.48, y + s * 0.54)
+    ctx.lineTo(x + s * 0.40, y + s)
+    ctx.lineTo(x + s * 0.76, y + s * 0.44)
+    ctx.lineTo(x + s * 0.52, y + s * 0.44)
+    ctx.closePath()
+    ctx.fill()
+  } else if (/stunde|zeit|dauer|time/.test(l)) {
+    // a clock
+    ctx.beginPath(); ctx.arc(x + s / 2, y + s / 2, s * 0.42, 0, Math.PI * 2); ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x + s / 2, y + s * 0.26)
+    ctx.lineTo(x + s / 2, y + s / 2)
+    ctx.lineTo(x + s * 0.72, y + s * 0.6)
+    ctx.stroke()
+  } else if (/intensit|if\b|belastung/.test(l)) {
+    // a gauge: an arc with a needle
+    ctx.beginPath(); ctx.arc(x + s / 2, y + s * 0.66, s * 0.42, Math.PI, 0); ctx.stroke()
+    ctx.beginPath()
+    ctx.moveTo(x + s / 2, y + s * 0.66)
+    ctx.lineTo(x + s * 0.78, y + s * 0.36)
+    ctx.stroke()
+  } else if (/höhe|hoehe|hm|anstieg|climb/.test(l)) {
+    // a peak
+    ctx.beginPath()
+    ctx.moveTo(x + s * 0.06, y + s * 0.82)
+    ctx.lineTo(x + s * 0.40, y + s * 0.22)
+    ctx.lineTo(x + s * 0.62, y + s * 0.56)
+    ctx.lineTo(x + s * 0.74, y + s * 0.40)
+    ctx.lineTo(x + s * 0.96, y + s * 0.82)
+    ctx.closePath()
+    ctx.stroke()
+  } else if (/km|distanz|strecke|dist/.test(l)) {
+    // a winding route with a start dot
+    ctx.beginPath()
+    ctx.moveTo(x + s * 0.1, y + s * 0.78)
+    ctx.bezierCurveTo(x + s * 0.45, y + s * 0.78, x + s * 0.2, y + s * 0.24, x + s * 0.86, y + s * 0.24)
+    ctx.stroke()
+    ctx.beginPath(); ctx.arc(x + s * 0.1, y + s * 0.78, s * 0.11, 0, Math.PI * 2); ctx.fill()
+  } else if (/herz|hf|puls|hr\b/.test(l)) {
+    // a pulse line
+    ctx.beginPath()
+    ctx.moveTo(x, y + s * 0.6)
+    ctx.lineTo(x + s * 0.26, y + s * 0.6)
+    ctx.lineTo(x + s * 0.4, y + s * 0.28)
+    ctx.lineTo(x + s * 0.56, y + s * 0.86)
+    ctx.lineTo(x + s * 0.7, y + s * 0.6)
+    ctx.lineTo(x + s, y + s * 0.6)
+    ctx.stroke()
+  }
+  ctx.restore()
+}
+
+async function paint(
+  ctx: CanvasRenderingContext2D,
+  d: PosterData,
+  avatarImg: HTMLImageElement | null,
+  bikeImg: HTMLImageElement | null,
+  sceneImg: HTMLImageElement | null,
+) {
   const t = THEMES[d.angle]
   const heroH = Math.round(H * 0.56)
 
   // ── background ──
   ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, 0, W, H)
 
-  // sky
-  const sky = ctx.createLinearGradient(0, 0, 0, heroH)
-  sky.addColorStop(0, t.skyTop); sky.addColorStop(1, t.skyBot)
-  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, heroH)
+  if (sceneImg) {
+    // THE RIDE'S OWN PICTURE, EDGE TO EDGE. Cover-cropped rather than fitted:
+    // the scene is square and the hero band is not, and letterboxing it would
+    // reproduce the exact fault this replaces — a photograph floating in a
+    // rectangle instead of being the poster.
+    const scale = Math.max(W / sceneImg.width, heroH / sceneImg.height)
+    const sw = sceneImg.width * scale, sh = sceneImg.height * scale
+    ctx.drawImage(sceneImg, (W - sw) / 2, (heroH - sh) / 2, sw, sh)
+  } else {
+    // sky
+    const sky = ctx.createLinearGradient(0, 0, 0, heroH)
+    sky.addColorStop(0, t.skyTop); sky.addColorStop(1, t.skyBot)
+    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, heroH)
 
-  // mountains (back→front)
-  mountainPath(ctx, heroH * 0.62, 190, 0.4, t.mtnBack, heroH)
-  mountainPath(ctx, heroH * 0.74, 150, 2.1, t.mtnMid, heroH)
-  mountainPath(ctx, heroH * 0.86, 120, 4.0, t.mtnFront, heroH)
+    // mountains (back→front)
+    mountainPath(ctx, heroH * 0.62, 190, 0.4, t.mtnBack, heroH)
+    mountainPath(ctx, heroH * 0.74, 150, 2.1, t.mtnMid, heroH)
+    mountainPath(ctx, heroH * 0.86, 120, 4.0, t.mtnFront, heroH)
+  }
 
-  // route (the GPX), glowing in the intensity accent when we know it
+  // route (the GPX), glowing in the intensity accent when we know it. Over a
+  // real photograph it sits lower and lighter — the picture is the subject
+  // there, and a bright track across the middle of it competes.
   drawRoute(ctx, d.polyline, t, heroH, d.intensity != null ? intensityHue(d.intensity) : t.route)
 
   // hero→panel fade
@@ -186,9 +299,12 @@ async function paint(ctx: CanvasRenderingContext2D, d: PosterData, avatarImg: HT
   fade.addColorStop(0, 'rgba(11,11,11,0)'); fade.addColorStop(1, '#0B0B0B')
   ctx.fillStyle = fade; ctx.fillRect(0, heroH - 220, W, 220)
 
-  // bike (with the rider) sitting on the route
-  if (bikeImg) {
-    const bw = 640
+  // bike (with the rider) sitting on the route — only when no scene was
+  // composed, because a scene already HAS the bike in it.
+  if (bikeImg && !sceneImg) {
+    // 640 left the machine as a stamp in the middle of a big empty sky. The
+    // bike is the subject of a cycling poster; it gets the width.
+    const bw = 880
     const bh = bw * (bikeImg.height / bikeImg.width)
     const bx = (W - bw) / 2, by = heroH * 0.7 - bh / 2
     ctx.save()
@@ -267,6 +383,9 @@ async function paint(ctx: CanvasRenderingContext2D, d: PosterData, avatarImg: HT
     roundRect(ctx, x, y, tileW, tileH, 24)
     ctx.fillStyle = '#161616'; ctx.fill()
     ctx.restore()
+    // The mark sits top-right of the tile: out of the number's way, and the
+    // three of them make a rhythm across the row.
+    statGlyph(ctx, s.l, x + tileW - 60, y + 26, 34, t.acid)
     text(ctx, s.v, x + 26, y + 82, 52, '700', '#FFFFFF')
     text(ctx, s.l, x + 26, y + 126, 22, '700', 'rgba(255,255,255,0.5)', 1)
   })
@@ -286,12 +405,13 @@ export async function renderSharePoster(d: PosterData): Promise<{ blob: Blob | n
   const ctx = canvas.getContext('2d')
   if (!ctx) return { blob: null, dataUrl: '' }
 
-  const bikeImg = await loadImage(d.bikeSrc).catch(() => null)
+  const bikeImg = d.bikeSrc ? await loadImage(d.bikeSrc).catch(() => null) : null
+  const sceneImg = d.sceneSrc ? await loadImage(d.sceneSrc).catch(() => null) : null
   let avatarImg: HTMLImageElement | null = d.avatarUrl ? await loadImage(d.avatarUrl, 'anonymous').catch(() => null) : null
 
   const tryExport = async (): Promise<{ blob: Blob | null; dataUrl: string } | 'tainted'> => {
     ctx.clearRect(0, 0, W, H)
-    await paint(ctx, d, avatarImg, bikeImg)
+    await paint(ctx, d, avatarImg, bikeImg, sceneImg)
     try {
       const dataUrl = canvas.toDataURL('image/png')
       const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))

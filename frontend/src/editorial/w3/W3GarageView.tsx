@@ -10,6 +10,7 @@ import { artFit, itemById, type ShopItem } from './w3shop'
 import { LIGHT_WASH, type BikeSoul } from './w3BikeSoul'
 import W3BikeStage from './W3BikeStage'
 import { SLOTS, type PartSlot } from './w3parts'
+import W3SlotBrowser, { type W3SlotBrowserVm } from './W3SlotBrowser'
 import { TIERS } from './w3bikes'
 import type { Loadout } from '../../api/shop'
 
@@ -49,12 +50,15 @@ export interface W3GarageProps {
   rendering?: boolean
   onEquip: (item: ShopItem) => void
   onOpenShop: () => void
+  /** The lower half: a slot to browse, and what is in it. Optional so the
+   *  preview harnesses — which have no server — still render the garage. */
+  slots?: W3SlotBrowserVm
 }
 
 const TIER_LABEL = new Map(TIERS.map((t) => [t.tier, t.label]))
 
 export default function W3GarageView({
-  balance, owned, loadout, busyId, soul, render, rendering, onEquip, onOpenShop,
+  balance, owned, loadout, busyId, soul, render, rendering, onEquip, onOpenShop, slots,
 }: W3GarageProps) {
   const reduce = useReducedMotion()
   const bike = itemById(loadout?.bike)
@@ -198,13 +202,22 @@ export default function W3GarageView({
       </div>
 
       {/* ── What it's wearing ─────────────────────────────────────────────── */}
-      <div style={{ padding: `${S.section}px 20px 0`, display: 'flex', flexDirection: 'column', gap: S.md }}>
-        <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.1, color: T.ink }}>ANGELEGT</span>
-        <div style={{ display: 'flex', gap: S.sm }}>
-          {SLOTS.map(({ slot, label }) => (
-            <SlotTile key={slot} slot={slot} label={label} loadout={loadout} />
-          ))}
-        </div>
+      {/* Four read-only tiles used to sit here, and a rider who tapped one got
+          nothing. The slot is now the control: picking one swaps the half of
+          the screen below it for that slot's contents, owned first. */}
+      <div style={{ padding: `${S.section}px 0 0`, display: 'flex', flexDirection: 'column', gap: S.md }}>
+        <span style={{
+          fontSize: 11, fontWeight: 700, letterSpacing: 1.1, color: T.ink, padding: '0 20px',
+        }}>ANGELEGT</span>
+        {slots
+          ? <W3SlotBrowser vm={slots} />
+          : (
+            <div style={{ display: 'flex', gap: S.sm, padding: '0 20px' }}>
+              {SLOTS.map(({ slot, label }) => (
+                <SlotTile key={slot} slot={slot} label={label} loadout={loadout} />
+              ))}
+            </div>
+          )}
       </div>
 
       {/* ── The collection ────────────────────────────────────────────────── */}

@@ -48,6 +48,17 @@ class Backdrop:
 
 _ALL: list[Backdrop] = [
     Backdrop(
+        id="studio_black",
+        name_de="Studio",
+        unlock_de="",
+        prose=(
+            "a near-black studio — no scenery and no horizon at all, just deep matte darkness "
+            "falling away on every side, with a soft pool of light on the ground beneath the "
+            "wheels and a gentle falloff into black at the edges of frame. The only colour in the "
+            "picture is the machine itself"
+        ),
+    ),
+    Backdrop(
         id="starter_road",
         name_de="Startstraße",
         unlock_de="",
@@ -154,7 +165,13 @@ STARTERS: tuple[str, ...] = tuple(b.id for b in _ALL if b.is_starter)
 
 #: The one every rider starts on. Kept as the app's default everywhere so an
 #: unset choice and a deliberate one produce the same picture.
-DEFAULT_ID = "starter_road"
+#:
+#: THE BLACK STUDIO, not the starter road. A bike on a near-black ground is what
+#: the garage is built around — the floor sweep, the pool of light, the chips
+#: floating on it — and a rider who has chosen nothing should see their machine
+#: exactly the way the app presents machines. The starter road is still free and
+#: one swipe away; it is a place, and a place is something you move TO.
+DEFAULT_ID = "studio_black"
 
 
 #: The rules that need weather. Everything else can be answered from columns the

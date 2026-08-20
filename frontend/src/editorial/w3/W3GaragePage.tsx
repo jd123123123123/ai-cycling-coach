@@ -1,5 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useGear, useBuyGear, useEquipGear } from '../../hooks/useGear'
+import { useBackdrops, useBuyPlace, useSelectStage } from '../../hooks/useGarage'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { bikeSoul } from './w3BikeSoul'
 import W3GarageView from './W3GarageView'
@@ -31,6 +33,23 @@ export default function W3GaragePage() {
   // A stock build asks for nothing; anything else is composed once, ever, for
   // every rider who assembles the same bike.
   const { isRendering } = useEnsureBuildRender()
+
+  // ── the slot browser's data: the real gear economy and the real places ──
+  const { data: gear } = useGear()
+  const { data: stagesData } = useBackdrops()
+  const buyGear = useBuyGear()
+  const equipGear = useEquipGear()
+  const buyPlace = useBuyPlace()
+  const selectStage = useSelectStage()
+  // One spinner id across four mutations: only one of them can be in flight for
+  // a given row, and threading four separate pending states through the view
+  // would let two rows spin at once for one tap.
+  const busyId =
+    (buyGear.isPending ? buyGear.variables : null)
+    ?? (equipGear.isPending ? equipGear.variables : null)
+    ?? (buyPlace.isPending ? buyPlace.variables : null)
+    ?? (selectStage.isPending ? selectStage.variables : null)
+    ?? null
 
   const owned = useMemo(() => new Set(data?.owned ?? []), [data?.owned])
 
@@ -105,6 +124,21 @@ export default function W3GaragePage() {
       rendering={isRendering}
       onEquip={(item: ShopItem) => equip.mutate(item.id)}
       onOpenShop={() => navigate('/e/w3-shop')}
+      slots={{
+        // The REAL economy, not the fixture catalogue the bike list above still
+        // reads from: `/garage/gear` knows what is owned, worn, priced and
+        // affordable, and `/garage/backdrops` knows the same about places.
+        slots: Object.entries(gear?.slots ?? {}).map(([id, label]) => ({ id, label })),
+        gear: gear?.items ?? [],
+        places: stagesData?.places ?? [],
+        backdrops: stagesData?.backdrops ?? [],
+        balance: gear?.balance ?? data?.balance ?? null,
+        busyId,
+        onBuyGear: (id) => buyGear.mutate(id),
+        onEquipGear: (id) => equipGear.mutate(id),
+        onBuyPlace: (slug) => buyPlace.mutate(slug),
+        onSelectStage: (id) => selectStage.mutate(id),
+      }}
     />
   )
 }
