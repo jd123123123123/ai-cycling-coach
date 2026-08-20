@@ -559,6 +559,22 @@ def split_name(description: str | None) -> tuple[str | None, str | None]:
 #: nonsense onto a frame — a real Standert came back branded "GRAVEL MONSTER"
 #: and "LAUEK" — which is worse than no branding at all, because it looks like
 #: the app got the rider's bike wrong rather than declining to letter it.
+#: For GENERATED art, where there is no photograph to copy from.
+#:
+#: `NO_INVENTED_TEXT` governs the EDIT path and is written around one idea —
+#: copy the lettering off the supplied picture. Shipped art has no supplied
+#: picture, so that rule has nothing to bite on, and the model filled the gap
+#: the way it always does: it put a "W3" wordmark on the onboarding kit and a
+#: logo on the jersey of the first character a new rider ever sees. Invented
+#: branding on the app's own art is worse than invented branding on a rider's
+#: bike, because every single person sees it.
+NO_TEXT_AT_ALL = (
+    "NO TEXT ANYWHERE IN THIS IMAGE. No brand name, no wordmark, no logo, no number, no slogan, "
+    "no lettering of any kind — not on clothing, not on the frame, not on the rims or tyres, not "
+    "in the background. Where a real product would carry a logo, render clean unmarked fabric or "
+    "plain material instead. This is house art with no brand in it."
+)
+
 NO_INVENTED_TEXT = (
     "CRITICAL — THE LETTERING ON THIS BICYCLE IS COPIED, NEVER WRITTEN.\n"
     "The frame in the supplied photograph carries a brand name. That name is the single detail the "

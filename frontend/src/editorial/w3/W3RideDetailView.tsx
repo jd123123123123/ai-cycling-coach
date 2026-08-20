@@ -221,13 +221,13 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               : null
             if (!canCompose && !note && !scene.pending) return null
             return (
-              // With a scene behind it the affordance tucks into the corner;
-              // without one it is the only thing in that space, so it takes the
-              // middle of it rather than hanging off one edge.
-              <div style={{
+              // Over a picture it floats in the corner; with no picture it is an
+              // ordinary row at the top of the card (the hero places it there),
+              // so it never has to hover in an empty rectangle.
+              <div style={vm.hero.sceneImage ? {
                 position: 'absolute', top: 18, left: 20, right: 20, zIndex: 4,
-                display: 'flex', justifyContent: vm.hero.sceneImage ? 'flex-end' : 'center',
-              }}>
+                display: 'flex', justifyContent: 'flex-end',
+              } : { display: 'flex', justifyContent: 'flex-start' }}>
                 {canCompose && <ScenePill label={scene.failed ? 'Nochmal versuchen' : 'Sieh dich hier'} onClick={onCompose} />}
                 {note && <SceneNote {...note} />}
                 {scene.pending && <SceneComposing />}

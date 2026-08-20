@@ -71,7 +71,12 @@ def _prompts() -> dict[str, str]:
             "specific machine, because it stands for a bike the rider has not photographed yet.\n\n"
             f"{cyclr_studio.BIKE_CAMERA}\n\n"
             f"BACKGROUND: {stage.prose}.\n\n"
-            f"{cyclr_studio.GENERAL_STYLE} {cyclr_studio.ISOLATED_BIKE_STYLE}"
+            f"{cyclr_studio.GENERAL_STYLE} {cyclr_studio.ISOLATED_BIKE_STYLE} "
+            f"{cyclr_studio.NO_TEXT_AT_ALL}\n\n"
+            "RENDER THE WHEELS CLEANLY: every spoke a single crisp line, both rims perfectly "
+            "round, no doubled or ghosted wheel behind either one, no smeared or torn edges "
+            "anywhere. Thin repeating structures are where this render fails, and a bicycle with "
+            "two rear wheels is not a bicycle."
         ),
         # THE STAGE ITSELF. Today and the garage drew their floor as a CSS
         # gradient — four stops of near-black, which is flat by construction:
@@ -84,44 +89,67 @@ def _prompts() -> dict[str, str]:
         "stage-studio.webp": (
             # THE HOUSE STYLE IS GRAPHIC, NOT ATMOSPHERIC. The first version of
             # this plate asked for haze, falloff and a pool of light, and got
-            # back exactly that: a soft, blurred, foggy room. Held next to the
-            # W3 renders it was obviously wrong — every one of those is a SHARP
-            # graphic set, a flat wall meeting a flat floor at a clean horizon,
-            # everything in focus, one honest shadow under the wheels. The look
-            # is a product photograph of a toy, not a mood.
-            "A clean, sharp, graphic studio set, rendered in perfect focus: one flat seamless wall "
-            "meeting one flat floor at a clean horizontal line LOW in the frame — about four fifths "
-            "of the way down, so the wall fills most of the picture and the floor is a shallow "
-            "band along the bottom, exactly as a product set is shot.\n\n"
-            "There is NOTHING in the room — no objects, no props, no people, no text, no pattern.\n"
-            "COLOUR: deep charcoal, near-black at the top of the wall and lifting very slightly "
-            "toward the horizon; the floor a touch lighter than the wall so the two planes read "
-            "apart at a glance. One flat colour family only.\n"
-            "LIGHT: broad, even and soft-boxed, filling the whole set. The horizon line is crisp "
-            "and unmistakable. Light falls off gently toward the left and right edges and never "
-            "reaches black at the frame edge — the set continues past the picture.\n"
-            "SURFACE: matte and perfectly smooth, with a faint even sheen on the floor.\n\n"
+            # back exactly that: a soft, blurred, foggy room.
+            #
+            # THE SECOND VERSION WENT GREY. "Broad, even and soft-boxed" light
+            # plus "the floor a touch lighter than the wall" came back as a
+            # washed-out charcoal room with a bright milky floor band and a soft
+            # blob in the middle of the wall — held next to the app it was the
+            # brightest thing on Today, and the CSS gradient it replaced looked
+            # better. The lesson: this plate is not a photograph of a studio, it
+            # is the app's OWN GROUND, so it is specified in the app's own
+            # values rather than in photographic language.
+            #
+            # `w3tokens.heroFloor` is that ground: #0B0B0C at the top through
+            # #141416, #333336 and #47474B at the very bottom edge. Naming the
+            # hex is the whole point — "a touch lighter" is an invitation to
+            # drift and a number is not.
+            "A perfectly clean, sharp, graphic studio set for a product photograph, rendered in "
+            "perfect focus: one flat seamless wall meeting one flat floor at a clean horizontal "
+            "line LOW in the frame — about four fifths of the way down, so the wall fills most of "
+            "the picture and the floor is a shallow band along the bottom.\n\n"
+            "There is NOTHING in the room — no objects, no props, no people, no text, no pattern.\n\n"
+            "COLOUR — MATCH THESE VALUES EXACTLY. This image is nearly BLACK, not grey.\n"
+            "· The top edge of the wall is #0B0B0C — essentially black.\n"
+            "· The wall lifts almost imperceptibly toward the horizon, reaching about #141416.\n"
+            "· Across the horizon the floor steps up only slightly, to about #1C1C20.\n"
+            "· The floor continues lifting toward the very bottom edge, reaching at most #2A2A2E "
+            "in the nearest strip.\n"
+            "Cool blue-black throughout — never warm, never brown, never a mid grey. If any part "
+            "of this picture reads as 'grey' rather than 'black', it is wrong.\n\n"
+            "LIGHT: one broad soft source from high and slightly front, falling off gently and "
+            "evenly toward the left and right edges. NO bright band along the horizon, NO glowing "
+            "pool on the floor, NO soft blob or halo anywhere on the wall — the wall is an even, "
+            "quiet, near-black plane and the horizon is a clean edge rather than a light source.\n"
+            "SURFACE: matte and perfectly smooth, with the faintest even sheen on the floor.\n\n"
             "CRITICAL: every part of this image is IN FOCUS and CRISP. No depth of field, no "
             "blur, no fog, no haze, no smoke, no atmospheric perspective, no heavy vignette, no "
-            "spotlight pool, no visible grain. Flat, clean and modern — a graphic 3D set."
+            "spotlight, no visible grain, no text. Flat, clean, modern and DARK."
         ),
-        # THE FIRST PICTURE IN THE APP. The welcome screen ran a stock
-        # PHOTOGRAPH of a road cyclist, inlined as base64 — a different app's
-        # art on the one screen that sets the expectation for everything after
-        # it. This is the house's own character on the house's own ground.
+        # THE FIRST PICTURE IN THE APP, and it sets the expectation for every
+        # screen after it — so it has to be the SAME PICTURE the app is made of.
+        #
+        # It was a cartoon character with googly eyes and an invented "W3" on
+        # the jersey, formatfüllend and cropped at the chin, which is the exact
+        # opposite of what Today shows: a photoreal bicycle standing in a dark
+        # room, sharp, lit from above, one honest shadow. The rider is not the
+        # hero of this app's art — the machine is, and the rider's own avatar
+        # arrives later, made from their own photograph. Opening on a stranger's
+        # cartoon face promised a different product than the one behind it.
         "onboard-hero.webp": (
-            "A premium 3D designer art-toy collectible character riding a bicycle, seen in a flat "
-            "side view from the bike's drive side, facing right, riding along at an easy relaxed "
-            "pace with both hands on the bar tops and a calm, open, happy expression.\n\n"
-            f"{cyclr_studio.CHARACTER_STYLE}\n\n{cyclr_studio.DEFAULT_KIT}\n\n"
-            "THE FIGURE IS SMALL IN A BIG FRAME: it sits low and slightly right of centre with a "
-            "great deal of open space above it, because a headline and a button are drawn over the "
-            "top half of this picture. Nothing important happens in the upper half.\n\n"
-            "BACKGROUND: an empty road at dawn running left to right, deep near-black surroundings "
-            "falling away into shadow, a low horizon with the faintest cold light on it and a thin "
-            "acid-lime edge of first sun catching the road. Atmospheric and restrained.\n"
+            f"An isolated bicycle: {STARTER}.\n\n"
+            f"{cyclr_studio.BIKE_CAMERA}\n\n"
+            "THE BICYCLE IS SMALL AND LOW IN A TALL FRAME: it stands in the bottom third, with a "
+            "great deal of empty room above it, because a headline and a button are drawn over the "
+            "top half of this picture. Nothing important happens in the upper half — it is quiet "
+            "wall, falling to near-black at the very top.\n\n"
+            "BACKGROUND: the same studio the rest of this app is photographed in — one flat wall "
+            "meeting one flat floor at a clean horizon low in the frame, deep charcoal, matte, "
+            "everything in perfect focus. Along the horizon, the faintest cold edge of first light, "
+            "and a single thin warm line of acid-lime dawn where the wall meets the floor. "
+            "Restrained: one light source, no props, no road, no landscape, no people.\n"
             "PORTRAIT FRAME, taller than it is wide.\n\n"
-            f"{cyclr_studio.GENERAL_STYLE}"
+            f"{cyclr_studio.GENERAL_STYLE} {cyclr_studio.NO_TEXT_AT_ALL}"
         ),
         # The face-shaped absence on the avatar step, which until now was a
         # lucide BICYCLE icon — the wrong object entirely on a screen asking for
@@ -135,7 +163,7 @@ def _prompts() -> dict[str, str]:
             "chest, shot dead-on, the head filling most of the frame.\n\n"
             f"{cyclr_studio.DEFAULT_KIT}\n\n"
             f"BACKGROUND: {stage.prose}.\n\n"
-            f"{cyclr_studio.GENERAL_STYLE}"
+            f"{cyclr_studio.GENERAL_STYLE} {cyclr_studio.NO_TEXT_AT_ALL}"
         ),
     }
 

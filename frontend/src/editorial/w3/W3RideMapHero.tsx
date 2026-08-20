@@ -47,6 +47,11 @@ export interface W3RideHeroVm {
   polyline: [number, number][] | null
   /** The composed scene — bike and landscape — as a data URI, when one exists. */
   sceneImage: string | null
+  /** True while we do not yet know whether this ride has a route. Distinct from
+   *  a null polyline, which means it genuinely has none: the map region is held
+   *  open while loading, so the page does not paint a black card at the top and
+   *  then shove it down when the track arrives. */
+  routePending?: boolean
   /** "FAHRT ABGESCHLOSSEN" · the date line beside it. */
   dateLine: string
   /** The headline: total time, as h:mm:ss. */
@@ -148,18 +153,20 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
   const reduce = useReducedMotion()
   const [mapReady, setMapReady] = useState(false)
   const hasRoute = vm.polyline != null && vm.polyline.length > 1
-  // No GPS means no map — and then the card owns the whole screen rather than
-  // hanging below an empty grey block.
-  const mapH = hasRoute ? MAP_H : 0
-  const cardTop = hasRoute ? CARD_TOP : 0
+  // The map region is held open while the route is still on its way, and only
+  // collapses once we KNOW the ride has no GPS. Collapsing on "not yet" is what
+  // made the page open as a black rectangle and then jump.
+  const showMap = hasRoute || vm.routePending === true
+  const mapH = showMap ? MAP_H : 0
+  const cardTop = showMap ? CARD_TOP : 0
 
   return (
     <div style={{ position: 'relative', fontFamily: FONT }}>
 
       {/* ── the map ─────────────────────────────────────────────────────── */}
-      {hasRoute && (
+      {showMap && (
         <div style={{ position: 'relative', height: mapH, background: T.bg, overflow: 'hidden' }}>
-          <Suspense fallback={null}>
+          {hasRoute && <Suspense fallback={null}>
             <RouteMap
               polyline={vm.polyline!}
               styleKey="dark"
@@ -174,7 +181,7 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               // which is the one thing the licence actually asks for.
               attributionBottom={MAP_H - CARD_TOP + 10}
               className="w3-ride-map" />
-          </Suspense>
+          </Suspense>}
 
           {/* Until the tiles paint — and permanently if they never do — the
               route still has to be on screen. A ride page without its route is
@@ -216,7 +223,7 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
 
       {/* ── the card ────────────────────────────────────────────────────── */}
       <div style={{
-        position: 'relative', marginTop: hasRoute ? cardTop - mapH : 0,
+        position: 'relative', marginTop: showMap ? cardTop - mapH : 0,
         borderRadius: '30px 30px 0 0', overflow: 'hidden', background: T.heroBg,
       }}>
         {/* The scene bleeds past three edges on purpose: with no edges of its
@@ -230,9 +237,11 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               backgroundImage: `url(${vm.sceneImage})`, backgroundSize: 'cover', backgroundPosition: 'center 48%',
             }} />
         ) : (
+          // A quiet lit edge, so the card still reads as a surface catching the
+          // light from the map above it rather than as a void.
           <div style={{
-            position: 'absolute', top: 0, left: 0, right: 0, height: 170,
-            background: `radial-gradient(130% 100% at 50% 0%, ${T.acid}24, transparent 72%)`,
+            position: 'absolute', top: 0, left: 0, right: 0, height: 90,
+            background: `radial-gradient(140% 100% at 50% 0%, ${T.acid}1A, transparent 70%)`,
           }} />
         )}
 
@@ -250,7 +259,12 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
           background: `linear-gradient(180deg, ${T.ink}2E, ${T.ink}00)`,
         }} />
 
-        {sceneOverlay}
+        {/* With a picture, the affordance floats over it. WITHOUT one there is
+            no picture-shaped space to float in, so it becomes an ordinary row
+            at the top of the values — see the padding below. A card that
+            reserves 200 px for an image it does not have reads as broken, and
+            "just black" is exactly what it looks like on a phone. */}
+        {vm.sceneImage && sceneOverlay}
 
         {/* ── the values ──────────────────────────────────────────────────
              THE TODAY HERO IS THE STANDARD, and its whole argument is that
@@ -266,9 +280,11 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
              `paddingTop` reserves the picture, so no text ever sits on
              landscape and the numbers begin exactly where the dissolve ends. */}
         <div style={{
-          position: 'relative', padding: `${vm.sceneImage ? SCENE.textTop : 88}px ${S.xxl}px ${S.section}px`,
+          position: 'relative', padding: `${vm.sceneImage ? SCENE.textTop : S.xxl}px ${S.xxl}px ${S.section}px`,
           display: 'flex', flexDirection: 'column', gap: S.xl,
         }}>
+          {!vm.sceneImage && sceneOverlay}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
               <CircleCheck size={13} color={T.acid} />

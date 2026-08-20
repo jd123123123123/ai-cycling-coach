@@ -240,3 +240,17 @@ export async function updatePlannedWorkout(id: number, body: PlannedWorkoutUpdat
 export async function deletePlannedWorkout(id: number): Promise<void> {
   await apiClient.delete(`/planned-workouts/${id}`)
 }
+
+/**
+ * One activity, with its route.
+ *
+ * The ride page used to find its ride inside a whole SEASON's list, because the
+ * list was the only endpoint that carried `route_polyline`. That is 500 rows to
+ * answer a question about one of them; it painted a mapless black rectangle
+ * while the year loaded; and it returned nothing at all for a ride outside the
+ * requested window. `GET /activities/{id}` carries the route now.
+ */
+export async function fetchActivity(id: number): Promise<ActivityRead> {
+  const res = await apiClient.get<ActivityRead>(`/activities/${id}`)
+  return res.data
+}

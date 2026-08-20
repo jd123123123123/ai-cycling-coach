@@ -10,9 +10,8 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity_stream import ActivityStream
@@ -178,7 +177,32 @@ async def get_activity(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Activity not found",
         )
-    return ActivityRead.model_validate(activity)
+
+    # THE ROUTE, on the endpoint that is about this ride.
+    #
+    # Only the list carried a polyline, so a screen that wanted one ride's route
+    # had to fetch a whole SEASON and find its ride in it. That is 500 rows to
+    # answer a question about one, it is slow enough that the ride page painted
+    # a mapless black rectangle while it waited, and it silently returns nothing
+    # at all for a ride outside the requested window.
+    #
+    # Same query shape as the list: the two GPS channels only, so the big
+    # power/HR/cadence arrays stay in the database, and a ride whose stream was
+    # never stored simply comes back without a polyline.
+    out = ActivityRead.model_validate(activity)
+    row = (
+        await db.execute(
+            select(
+                ActivityStream.streams["latitude"],
+                ActivityStream.streams["longitude"],
+            ).where(ActivityStream.activity_id == activity_id)
+        )
+    ).first()
+    if row is not None:
+        out.route_polyline = route_sketch_polyline(
+            {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])}
+        )
+    return out
 
 
 @router.delete(

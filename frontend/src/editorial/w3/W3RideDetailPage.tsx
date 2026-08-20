@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { usePMC } from '../../hooks/usePMC'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useActivity } from '../../hooks/useActivity'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
@@ -278,7 +279,11 @@ export default function W3RideDetailPage() {
   const { data: pmc } = usePMC()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: season } = useActivitiesRange(seasonStart, new Date())
-  const activity = useMemo(() => (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null, [season, id])
+  // THIS ride, from the endpoint that is about it — not found by scanning a
+  // year. The season list is still fetched, but only for the season TOTALS the
+  // "was es bewegt hat" section adds up; the route no longer waits on it.
+  const { data: activityRow, isLoading: routePending } = useActivity(activityId)
+  const activity = activityRow ?? (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null
   const vm = useMemo(() => (data ? toVm(data, pmc, activity, season?.activities ?? []) : null), [data, pmc, activity, season])
 
   // The composed hero: a cheap cache read on open (it never generates), plus the
@@ -305,8 +310,12 @@ export default function W3RideDetailPage() {
   // so the hero has one object to render and cannot show a picture that
   // disagrees with the numbers beside it.
   const heroVm = useMemo(
-    () => (vm ? { ...vm.hero, sceneImage: scene.status === 'ok' && !scene.pending ? scene.image : null } : null),
-    [vm, scene.status, scene.image, scene.pending],
+    () => (vm ? {
+      ...vm.hero,
+      sceneImage: scene.status === 'ok' && !scene.pending ? scene.image : null,
+      routePending,
+    } : null),
+    [vm, scene.status, scene.image, scene.pending, routePending],
   )
 
   if (!vm || !heroVm) return <W3Loading label="Lade deine Fahrt…" />
