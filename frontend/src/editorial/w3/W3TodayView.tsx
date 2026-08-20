@@ -9,6 +9,7 @@ import W3TodayDock from './W3TodayDock'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
+import W3WorkshopNudge from './W3WorkshopNudge'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayStatus from './W3TodayStatus'
 import W3TodayRank from './W3TodayRank'
@@ -404,6 +405,13 @@ export default function W3TodayView({ vm, onAdapt }: {
              the brief's adaptation explainer + the real mesocycle block, and
              renders nothing when neither is on the wire. ── */}
         <W3WhyToday />
+
+        {/* ── The bike's own errand, when it has one. Below the training and
+             above the navigation on purpose: it is a real job with a real
+             payout, so it outranks a link to the plan — and it is never more
+             urgent than today's session, so it never outranks that. Renders
+             nothing on the great majority of days. ── */}
+        <W3WorkshopNudge />
 
         {/* ── Navigation, not week content: the season goal + the whole plan ── */}
         <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}

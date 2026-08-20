@@ -46,7 +46,12 @@ export const T = {
   // reads as standing in a studio rather than floating on a void.
   heroFloor: ['#0B0B0C', '#141416', '#333336', '#47474B'] as const,
   rule: '#FFFFFF14', stroke: '#FFFFFF1A',
-  d2: '#FFFFFF33', d3: '#FFFFFF4D', d4: '#FFFFFF8C',
+  // The data ramp. `d1` is the empty end of it — an unlit meter step or an
+  // unfilled slot, present enough to be counted and far enough below every
+  // lit hue that it can never read as data. It shares a value with `rule`
+  // and is deliberately named separately: one is a hairline, the other is a
+  // mark, and they will not always want to move together.
+  d1: '#FFFFFF14', d2: '#FFFFFF33', d3: '#FFFFFF4D', d4: '#FFFFFF8C',
   training: '#2BE68F', evening: '#7B5CFF', cool: '#6B8CFF',
   warn: '#FFB020', bad: '#FF4356',
 }

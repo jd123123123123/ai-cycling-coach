@@ -30,7 +30,6 @@ const BEAM_STEPS = 4
 const BEAM_SEG = 3
 const BEAM_GAP = 2
 const BEAM_CUTS = [1, 50, 100, 150]
-const BEAM_EMPTY = '#FFFFFF14'
 const BEAM_COL: CSSProperties = {
   width: '58%',
   display: 'flex',
@@ -786,7 +785,7 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
                         // #202020 on a #161616 card it simply disappeared, and
                         // a beam you cannot count the empty half of is just the
                         // old variable-length bar with steps in it.
-                        background: s < lit ? hue : BEAM_EMPTY,
+                        background: s < lit ? hue : T.d1,
                       }} />
                   ))}
                 </div>
