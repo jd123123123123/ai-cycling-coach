@@ -41,6 +41,22 @@ import { W3CoachFab } from './W3CoachChat'
 // frame — 45% of the width — which made the avatar the subject and left the
 // bike a strip at the bottom. In the reference the proportion is the other way
 // round: the face identifies the rider, the machine is the hero.
+/**
+ * Where the floor is, as a fraction of the stage.
+ *
+ * MEASURED, NOT GUESSED. `stage-studio.webp` is a graphic set — a flat wall
+ * meeting a flat floor — and the row where its mean brightness jumps IS the
+ * horizon: 978 of 1536 px, 63.7%. Every attempt before this one placed the bike
+ * by eye and it floated, because the plate was `cover`-cropped and its horizon
+ * moved with the viewport. The plate is stretched to the stage now, which a
+ * flat two-plane gradient takes without showing it, so this number holds on
+ * every device and the tyres land ON the line rather than near it.
+ *
+ * Re-measure if the plate is ever re-rendered: the row of the largest jump in
+ * mean brightness, divided by the height.
+ */
+const FLOOR = 0.637
+
 const AVATAR = 130
 const GLOW = 178
 const HANDLE_OVERLAP = -12
@@ -199,11 +215,13 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
 
   // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
   // which is flat by construction: no falloff in the corners, no grain, no light
-  // with a direction. `stage-studio.webp` is a 2K cyclorama — a seamless
-  // backdrop curving into a floor, one soft key throwing an elliptical pool, a
-  // cool rim along the curve. The gradient stays underneath as the ground the
-  // image is composited onto, so a slow or failed load degrades to exactly what
-  // shipped before rather than to a white box.
+  // with a direction. `stage-studio.webp` is a GRAPHIC SET in the house style:
+  // one flat wall meeting one flat floor at a crisp horizon, everything in
+  // focus. The first version of that plate asked for haze and falloff and came
+  // back a soft foggy room — held next to the W3 renders it was obviously the
+  // wrong register: those are sharp product photographs of a toy, not moods.
+  // The gradient stays underneath as the ground the image is composited onto,
+  // so a slow or failed load degrades to what shipped before, not a white box.
   const floor = `linear-gradient(180deg, ${T.heroFloor[0]} 0%, ${T.heroFloor[1]} 40%, ${T.heroFloor[2]} 76%, ${T.heroFloor[3]} 100%)`
 
   return (
@@ -218,7 +236,12 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
       <img aria-hidden src="/w3/stage-studio.webp" alt=""
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
-          objectFit: 'cover', objectPosition: 'center bottom', pointerEvents: 'none',
+          // `fill`, not `cover`: cover crops, and a cropped plate carries its
+          // own horizon around with the viewport — which is exactly why the
+          // bike kept floating however the percentages were nudged. Stretching
+          // a flat two-plane gradient is invisible and pins the floor at
+          // `FLOOR` on every screen.
+          objectFit: 'fill', pointerEvents: 'none',
         }} />
 
       {/* ── the corner chips: real figures, floating on the floor ── */}
@@ -350,10 +373,32 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
           // The screen-blend and the radial mask stay for the studio render
           // ONLY because that art has a pale ground baked in and needs its
           // edges dissolved; the scene render already reaches its own frame.
-          <>
-            {!vm.bikeInScene && <div aria-hidden style={BIKE_SHADOW} />}
-            <img src={vm.bike} alt={vm.bikeName} style={vm.bikeInScene ? SCENE_ART : BIKE_ART} />
-          </>
+          vm.bikeInScene ? (
+            <img src={vm.bike} alt={vm.bikeName} style={SCENE_ART} />
+          ) : (
+            // THE BIKE AND ITS SHADOWS ARE ONE OBJECT, positioned together.
+            // They were two independent percentages before, which is why they
+            // never agreed: the art was centred in its own box while the shadow
+            // was measured off that box's bottom, so any change to either drifted
+            // them apart and the machine floated. This wrapper's BOTTOM EDGE IS
+            // THE FLOOR — the picture sits on it and both shadows sit on it, so
+            // they cannot disagree.
+            <div style={{
+              position: 'absolute', left: 0, right: 0,
+              bottom: `${(1 - FLOOR) * 100}%`,
+              height: '52%',
+              display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            }}>
+              {/* ONE SHADOW PER TYRE. A single ellipse under the whole bike is a
+                  plinth, not a shadow: a bicycle touches the ground in two small
+                  places and the floor between them stays clean. The cut-out is
+                  trimmed to the machine, so the contact patches sit reliably near
+                  the outer edges of the frame. */}
+              <div aria-hidden style={{ ...BIKE_SHADOW, left: '19%' }} />
+              <div aria-hidden style={{ ...BIKE_SHADOW, left: '81%' }} />
+              <img src={vm.bike} alt={vm.bikeName} style={BIKE_ART} />
+            </div>
+          )
         ) : (
           <div style={{ position: 'relative', width: '103%', height: '100%', display: 'grid', placeItems: 'end center' }}>
             <div style={BIKE_ART}><GhostBike /></div>

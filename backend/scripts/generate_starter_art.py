@@ -82,19 +82,27 @@ def _prompts() -> dict[str, str]:
         # It is also the one asset every rider sees on every screen, so it is
         # worth 2K and worth being beautiful.
         "stage-studio.webp": (
-            "An EMPTY premium photographic studio, shot at eye level: a seamless dark backdrop "
-            "curving into a floor with no visible join, in deep near-black charcoal.\n\n"
-            "There is NOTHING in the room — no furniture, no props, no objects, no people, no "
-            "text. The subject of this photograph is the light itself.\n"
-            "LIGHT: one soft overhead key throws an elliptical pool onto the floor slightly below "
-            "the middle of the frame, brightest at its centre and falling away smoothly in every "
-            "direction into pure black at the edges of frame. A faint cool rim of light catches "
-            "the curve where the floor turns up into the backdrop, so the room has a horizon "
-            "without having an edge.\n"
-            "SURFACE: the floor has a subtle sheen and the faintest fine grain — a real swept "
-            "cyclorama, not a gradient. A whisper of atmospheric haze sits in the air above it.\n"
-            "RENDER: ray-traced global illumination, physically-based materials, extremely smooth "
-            "tonal falloff with no banding whatsoever. Expensive, restrained and quiet."
+            # THE HOUSE STYLE IS GRAPHIC, NOT ATMOSPHERIC. The first version of
+            # this plate asked for haze, falloff and a pool of light, and got
+            # back exactly that: a soft, blurred, foggy room. Held next to the
+            # W3 renders it was obviously wrong — every one of those is a SHARP
+            # graphic set, a flat wall meeting a flat floor at a clean horizon,
+            # everything in focus, one honest shadow under the wheels. The look
+            # is a product photograph of a toy, not a mood.
+            "A clean, sharp, graphic studio set, rendered in perfect focus: one flat seamless wall "
+            "meeting one flat floor at a clean horizontal line about two thirds of the way down "
+            "the frame.\n\n"
+            "There is NOTHING in the room — no objects, no props, no people, no text, no pattern.\n"
+            "COLOUR: deep charcoal, near-black at the top of the wall and lifting very slightly "
+            "toward the horizon; the floor a touch lighter than the wall so the two planes read "
+            "apart at a glance. One flat colour family only.\n"
+            "LIGHT: broad, even and soft-boxed, filling the whole set. The horizon line is crisp "
+            "and unmistakable. Light falls off gently toward the left and right edges and never "
+            "reaches black at the frame edge — the set continues past the picture.\n"
+            "SURFACE: matte and perfectly smooth, with a faint even sheen on the floor.\n\n"
+            "CRITICAL: every part of this image is IN FOCUS and CRISP. No depth of field, no "
+            "blur, no fog, no haze, no smoke, no atmospheric perspective, no heavy vignette, no "
+            "spotlight pool, no visible grain. Flat, clean and modern — a graphic 3D set."
         ),
         # THE FIRST PICTURE IN THE APP. The welcome screen ran a stock
         # PHOTOGRAPH of a road cyclist, inlined as base64 — a different app's
