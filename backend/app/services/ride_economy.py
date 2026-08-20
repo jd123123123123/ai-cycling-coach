@@ -30,7 +30,11 @@ from app.models.activity import Activity
 from app.models.activity_stream import ActivityStream
 from app.models.garage import RiderBackdrop
 from app.models.rewards import REASON_EDDINGTON, REASON_GEAR_BONUS
-from app.services import backdrops, bike_wear, eddington, gear, rewards, ride_facts, workshop
+from app.services import (
+    backdrops, bike_wear, eddington, gear, places, rewards, ride_facts, ride_place,
+    workshop,
+)
+from app.services.ride_scene import RideGeo
 from app.services import earn_modifiers as em
 
 logger = logging.getLogger(__name__)
@@ -192,6 +196,36 @@ def _route_points(data: dict) -> list[tuple[float, float]]:
     return [(float(lats[i]), float(lngs[i])) for i in range(0, n, step)][:6]
 
 
+def _descent_m(stream) -> float | None:
+    """Metres descended, summed from the altitude stream.
+
+    THE SUM OF NEGATIVE STEPS, not `max - min`: a ride that climbs and descends
+    the same pass twice dissipates twice the energy, and the range would report
+    it once. This is the quantity that wears brake pads.
+
+    SMOOTHED WITH A 3 m DEADBAND, because barometric altimeters wander by a
+    metre or two at rest and summing that noise over three hours invents
+    hundreds of metres of descent that never happened. Three metres is below
+    anything a rider would call a descent and above anything a sensor drifts.
+    """
+    if not isinstance(stream, dict):
+        return None
+    alt = [a for a in (stream.get("altitude") or []) if a is not None]
+    if len(alt) < 2:
+        return None
+
+    total = 0.0
+    ref = float(alt[0])
+    for raw in alt[1:]:
+        v = float(raw)
+        if v <= ref - 3.0:
+            total += ref - v
+            ref = v
+        elif v > ref:
+            ref = v
+    return total
+
+
 async def _stamp_place(db: AsyncSession, user_id: int, activity: Activity) -> str | None:
     """Put this ride's place on the global map and stamp the rider's passport.
 
@@ -335,8 +369,17 @@ async def settle(
         # `bike_wear.wear_factor`. A wet gravel ride advances the chain's service
         # clock four times as fast as a dry road ride of the same distance,
         # which is what a cyclist already knows and what an odometer cannot say.
+        # The ride's own physics, read from the row ingestion already wrote:
+        # measured work through the drivetrain, and the height that had to be
+        # braked away. Both optional — a ride without a power meter or without a
+        # barometer falls back to distance rather than to a guess.
+        stream = (await db.execute(
+            select(ActivityStream).where(ActivityStream.activity_id == activity.id)
+        )).scalar_one_or_none()
         if await workshop.accrue(
             db, user_id, activity.id, activity.distance_meters, facts,
+            kj=stream.total_kj if stream else None,
+            descent_m=_descent_m(stream.streams) if stream else None,
         ):
             result["km_accrued"] = km
     except Exception:

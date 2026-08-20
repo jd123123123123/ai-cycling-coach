@@ -78,3 +78,75 @@ def test_an_unknown_component_is_never_weighted():
     plainly rather than pick up another part's multipliers by accident."""
     wet = RideFacts(distance_m=50_000, was_wet=True, surface="gravel")
     assert w.wear_factor("bottom_bracket", wet) == 1.0
+
+
+# ── what actually wears each part ───────────────────────────────────────────
+
+def test_the_chain_is_worn_by_work_not_by_distance():
+    """Chain elongation comes from the pin/bush interface sliding under tension,
+    and the tension is the torque the rider puts through it. Two riders over the
+    same 100 km at 120 W and 250 W do not have the same chain — which is why
+    professional mechanics retire chains on kilojoules."""
+    easy = w.RideLoad(distance_km=100, kj=1500, descent_m=300)
+    hard = w.RideLoad(distance_km=100, kj=3000, descent_m=300)
+    assert w.equivalent_km("chain", hard) == 2 * w.equivalent_km("chain", easy)
+
+
+def test_the_pads_are_worn_by_descent_not_by_distance():
+    """A bicycle descending turns potential energy into heat, and whatever drag
+    does not take, the brakes do. A flat century does not wear pads however far
+    it is — the one component where distance is actively misleading."""
+    alpine = w.RideLoad(distance_km=100, kj=3000, descent_m=2500)
+    pancake = w.RideLoad(distance_km=100, kj=3000, descent_m=50)
+    assert w.equivalent_km("brakes", alpine) > 10 * w.equivalent_km("brakes", pancake)
+
+
+def test_the_tyres_are_worn_by_ground_covered():
+    """Abrasion really is distance against a surface, so distance stays the
+    driver here — the model must not 'improve' the one case it already had
+    right."""
+    a = w.RideLoad(distance_km=100, kj=1500, descent_m=2500)
+    b = w.RideLoad(distance_km=100, kj=3000, descent_m=50)
+    assert w.equivalent_km("tyres", a) == w.equivalent_km("tyres", b) == 100
+
+
+def test_a_missing_sensor_falls_back_to_distance():
+    """A ride with no power meter has no work term and a ride with no barometer
+    has no descent. Both fall back to distance rather than to an estimate: a
+    model that guesses where it cannot measure is worse than a plain odometer,
+    because it is wrong with authority."""
+    blind = w.RideLoad(distance_km=100)
+    assert w.equivalent_km("chain", blind) == 100
+    assert w.equivalent_km("brakes", blind) == 100
+
+
+def test_the_reference_kilometre_is_the_one_the_intervals_assume():
+    """Every published interval is quoted for dry road at endurance pace. A ride
+    that IS that must advance the clock by its own distance, or the whole
+    catalogue silently re-scales."""
+    ref = w.RideLoad(
+        distance_km=100,
+        kj=100 * w.REF_KJ_PER_KM,
+        descent_m=100 * w.REF_DESCENT_M_PER_KM,
+    )
+    for cid in ("chain", "brakes", "tyres"):
+        assert abs(w.equivalent_km(cid, ref) - 100) < 0.01
+
+
+def test_descent_sums_every_drop_rather_than_the_range():
+    """A ride over the same pass twice dissipates twice the energy, and
+    `max - min` would report it once."""
+    from app.services.ride_economy import _descent_m
+
+    one = list(range(0, 501, 10)) + list(range(500, -1, -10))
+    assert _descent_m({"altitude": one + one}) == 2 * _descent_m({"altitude": one})
+
+
+def test_sensor_drift_is_not_descent():
+    """Barometric altimeters wander a metre or two at rest, and summing that
+    noise over three hours invents hundreds of metres that never happened."""
+    from app.services.ride_economy import _descent_m
+
+    noise = [100.0, 101.1, 99.2, 100.8, 99.5, 100.3] * 400
+    assert _descent_m({"altitude": noise}) == 0.0
+    assert _descent_m({}) is None

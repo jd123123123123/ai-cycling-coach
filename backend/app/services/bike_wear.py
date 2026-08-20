@@ -137,6 +137,90 @@ def wear_factor(component_id: str, facts) -> float:
 MAX_WEAR_FACTOR = 4.0
 
 
+# ── WHAT ACTUALLY WEARS EACH COMPONENT ──────────────────────────────────────
+#
+# Distance is a PROXY for wear, and a poor one, because none of these parts is
+# worn by distance. Each is worn by a specific physical quantity, and the ride
+# streams already contain every one of them.
+#
+# THE CHAIN IS WORN BY TRANSMITTED WORK. Elongation comes from the pin/bush
+# interface sliding under tension, and the tension is the torque the rider puts
+# through it — so wear tracks the ENERGY that passed through the drivetrain, not
+# the ground covered. This is why professional mechanics retire chains on
+# kilojoules rather than kilometres: two riders over the same 100 km, one at
+# 120 W and one at 250 W, do not have the same chain. `activity_streams.total_kj`
+# is already measured and stored for every ride with power.
+#
+# THE PADS ARE WORN BY DISSIPATED ENERGY. A bicycle descending converts
+# potential energy into heat; whatever aerodynamic drag does not take, the brakes
+# do. So pad wear tracks DESCENT, which the altitude stream records directly —
+# and a flat 100 km simply does not wear pads, however far it is.
+#
+# THE TYRES ARE WORN BY ABRASION, which really is distance against a surface. So
+# distance stays the driver there, scaled by what the surface is made of.
+#
+# WHAT THIS DELIBERATELY DOES NOT CLAIM. The fraction of descent energy that
+# goes into the pads rather than into drag depends on gradient, speed and how
+# the rider brakes, and we cannot observe it — so descent metres are used as a
+# PROXY with a stated reference, not as a calculation of pad temperature. The
+# same honesty applies to a ride with no power meter: without kJ there is no
+# work term, and the chain falls back to distance rather than to an invented
+# number. A model that guesses where it cannot measure is worse than a plain
+# odometer, because it is wrong with authority.
+
+#: The reference kilometre every published interval is quoted against: dry road,
+#: endurance pace, rolling terrain. The constants below convert a real ride into
+#: how many of THESE it was worth, so an interval can stay in kilometres — the
+#: unit a rider reads on a service book — while being computed from physics.
+#:
+#: 18 kJ/km is 150 W held at 30 km/h, which is what "endurance pace" means for
+#: the rider these intervals are written for. 10 m of descent per kilometre is
+#: rolling terrain; a flat ride has near zero and an alpine day has ten times it.
+REF_KJ_PER_KM = 18.0
+REF_DESCENT_M_PER_KM = 10.0
+
+
+@dataclass(frozen=True)
+class RideLoad:
+    """What one ride did, in the quantities that wear things.
+
+    Every field is optional because every field comes from a sensor that may not
+    have been present. A missing quantity falls back to distance rather than to
+    an estimate — see the note above about being wrong with authority.
+    """
+
+    distance_km: float
+    #: Measured work through the drivetrain. `activity_streams.total_kj`.
+    kj: float | None = None
+    #: Metres descended, summed from the altitude stream.
+    descent_m: float | None = None
+
+
+def equivalent_km(component_id: str, load: RideLoad, facts=None) -> float:
+    """How many reference kilometres this ride was worth to this component.
+
+    The number the service clock advances by. It is in kilometres so a rider can
+    read "180 von 250 km" and know what it means, but it is computed from the
+    quantity that actually wears the part, then multiplied by the conditions
+    (`wear_factor`) that the published interval does not account for.
+    """
+    km = max(0.0, load.distance_km)
+    if km <= 0:
+        return 0.0
+
+    if component_id in ("chain", "cassette") and load.kj:
+        # Work, not ground covered. A hard 50 km can outweigh an easy 100.
+        base = load.kj / REF_KJ_PER_KM
+    elif component_id == "brakes" and load.descent_m is not None:
+        # Descent, not ground covered. A flat century does not wear pads, and
+        # this is the one component where distance is actively misleading.
+        base = load.descent_m / REF_DESCENT_M_PER_KM
+    else:
+        base = km
+
+    return base * (wear_factor(component_id, facts) if facts is not None else 1.0)
+
+
 @dataclass(frozen=True)
 class ComponentSpec:
     """One serviceable thing on the bike."""

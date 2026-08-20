@@ -91,17 +91,21 @@ async def read(db: AsyncSession, user_id: int) -> WorkshopView:
 
 async def accrue(
     db: AsyncSession, user_id: int, activity_id: int, distance_m: float | None,
-    facts=None,
+    facts=None, kj: float | None = None, descent_m: float | None = None,
 ) -> bool:
     """Fold one ride into every odometer, weighted by what that ride cost. True
     when it counted.
 
-    `facts` is the ride's `earn_modifiers.RideFacts` — already built to settle
-    the earn, so this is free. Given it, each component advances by the ride's
-    distance times ITS OWN wear factor: a wet ride is worth 2.2 chains to the
-    chain and 2.5 to the brake pads, while the tyres barely notice. Without it
-    every component advances by plain distance, which is exactly what this did
-    before and remains the honest fallback.
+    `facts` is the ride's `earn_modifiers.RideFacts`, `kj` its measured work and
+    `descent_m` the metres it descended — all three already computed for this
+    ride by other parts of the settlement, so none of this costs a lookup.
+
+    Each component advances by what THIS ride did to IT: the chain by the work
+    that passed through it, the pads by the height that had to be dissipated,
+    the tyres by ground covered — each then scaled by the conditions the
+    published interval never accounted for. See `bike_wear.equivalent_km`.
+    Missing any of it falls back to plain distance, which is what this did
+    before and remains the honest answer when a sensor was not there.
 
     TWO ODOMETERS, ON PURPOSE. `km_since_service` is the SERVICE clock and now
     carries the weighting — it is the number that decides when a job is due, and
@@ -120,13 +124,13 @@ async def accrue(
     if km <= 0:
         return False
 
+    load = bike_wear.RideLoad(distance_km=km, kj=kj, descent_m=descent_m)
     rows = await _rows(db, user_id)
     counted = False
     for cid, row in rows.items():
         if row.last_activity_id == activity_id:
             continue
-        factor = bike_wear.wear_factor(cid, facts) if facts is not None else 1.0
-        row.km_since_service += km * factor
+        row.km_since_service += bike_wear.equivalent_km(cid, load, facts)
         row.km_total += km
         row.last_activity_id = activity_id
         counted = True

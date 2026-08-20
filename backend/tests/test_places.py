@@ -170,3 +170,20 @@ def test_an_unavailable_dependency_degrades(monkeypatch):
 
     monkeypatch.setattr(cutout, "available", lambda: False)
     assert cutout.cut_out("data:image/webp;base64,AAAA") is None
+
+
+def test_the_place_stamper_can_actually_run():
+    """THE BUG THIS PINS. `ride_economy` lost its `places`, `ride_place` and
+    `RideGeo` imports to an import-organiser pass, and `_stamp_place` runs
+    inside a `try/except` that logs and continues — so every ride would have
+    failed to record where it was, silently, and the gallery would simply never
+    have grown. A NameError inside a swallowing handler is invisible; this makes
+    it loud."""
+    import inspect
+
+    from app.services import ride_economy
+
+    src = inspect.getsource(ride_economy._stamp_place)
+    for name in ("ride_place", "places", "RideGeo"):
+        assert name in src
+        assert getattr(ride_economy, name, None) is not None, f"{name} is not imported"
