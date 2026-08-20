@@ -78,31 +78,25 @@ const HANDLE_OVERLAP = -12
  * the same shape, so both need the same treatment.
  */
 const BIKE_ART = {
-  width: '100%',
-  height: '100%',
-  // CONTAIN, because the bike is now a CUT-OUT (`services/cutout.py`): a PNG
-  // with nothing behind it. There is no ground to crop away and no rectangle to
-  // hide, so the machine simply sits in the space at its true proportions and
-  // the stage's own floor shows through around it.
-  objectFit: 'contain' as const,
-  // ON THE FLOOR, NOT ABOVE IT. The room render puts its pool of light low in
-  // the frame, and a cut-out centred in the box hovered a good 15% of the stage
-  // above that pool — which is the "flying bike" all over again, just against a
-  // nicer background. Pushed down onto the light, where the wheels meet a floor
-  // that is actually drawn there.
-  objectPosition: 'center 82%',
-  // The cut-out is trimmed to the machine itself, so 100% of the box IS the
-  // bicycle rather than a bicycle with studio around it. It can finally be
-  // drawn at the size the stage was always offering.
-  padding: '0 10px 4%',
-  boxSizing: 'border-box' as const,
-  display: 'block' as const,
-  // NO SCREEN BLEND AND NO MASK. Both existed for one reason: the art arrived
-  // on a pale grey studio ground, and a bright rectangle on a near-black app has
-  // edges that must be dissolved. The blend also cost real contrast, lifting
-  // every dark part of the machine toward grey. With transparency there is
-  // nothing to dissolve.
+  // SIZED BY WIDTH, and that is the whole point of it.
   //
+  // Every earlier version constrained the HEIGHT — a square render in a box
+  // shorter than it is wide, with `objectFit: contain`, is limited by its
+  // height, so the machine drew at about half the width with empty floor either
+  // side. That was the letterbox, then it was the small bike, then it was the
+  // small bike one level down inside its own wrapper. A phone screen has width
+  // to fill and height to spare; the picture follows the width.
+  //
+  // It sits on its wrapper's bottom edge, which IS the floor line. The cut-out
+  // is trimmed to the machine (`services/cutout.py`), so the bottom of the
+  // picture is the bottom of the wheels: nothing to subtract, nothing to guess.
+  //
+  // No screen blend and no mask. Both existed to hide the pale studio ground the
+  // art used to arrive on, and the blend cost real contrast — it lifted every
+  // dark part of the machine toward grey. There is nothing left to hide.
+  width: '94%',
+  height: 'auto' as const,
+  display: 'block' as const,
 }
 
 /** The shadow the cut-out no longer carries.
@@ -386,7 +380,12 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
             <div style={{
               position: 'absolute', left: 0, right: 0,
               bottom: `${(1 - FLOOR) * 100}%`,
-              height: '52%',
+              // NO FIXED HEIGHT. A height here re-introduced the original bug
+              // one level down: `contain` inside a 52%-tall box is limited by
+              // the HEIGHT again, so the bike drew at ~45% of the width with
+              // floor either side. The wrapper now takes the height its picture
+              // needs, and the picture is sized by WIDTH — the one dimension
+              // this screen actually has to fill.
               display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
             }}>
               {/* ONE SHADOW PER TYRE. A single ellipse under the whole bike is a
