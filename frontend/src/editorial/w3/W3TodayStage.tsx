@@ -350,7 +350,13 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
         style={{
-          position: 'relative', zIndex: 1, width: '100%',
+          // NOT `relative`. This block used to establish a containing block,
+          // so the bike wrapper inside it resolved `bottom: 23.8%` against the
+          // LEFTOVER HEIGHT under the avatar rather than against the stage —
+          // measured live, that put the tyres 60px below the floor line. It is
+          // `static` now, and the wrapper is positioned against the stage,
+          // which is the only box whose height the floor fraction refers to.
+          zIndex: 1, width: '100%',
           // FILL THE SPACE, DO NOT FIT INTO IT.
           //
           // Two goes at this, and both were half right. `flex: 1 1 auto` with
