@@ -111,3 +111,34 @@ async def test_an_unknown_stage_falls_back_rather_than_failing(anyio_backend=Non
     """A stage removed in a deploy must not cost a rider their hero."""
     stage = await stages.stage_for(None, "no_such_stage")  # type: ignore[arg-type]
     assert stage.id == backdrops.DEFAULT_ID
+
+
+# ── how a bike is put in a place ────────────────────────────────────────────
+
+def test_a_world_swap_does_not_pin_the_bike_s_scale():
+    """THE FLOATING BIKE, PINNED.
+
+    `edit_prompt`'s preamble holds the camera, the position, the scale and the
+    background still — which is the whole reason an edit beats a redraw for a
+    PARTS swap, and a flat contradiction for a WORLD swap. Asked to keep its
+    frame-filling scale AND stand on a road in a landscape, the bike kept the
+    scale and floated above the road.
+    """
+    from app.services import bike_build
+
+    world = bike_build.edit_prompt(["gravel_tyres"], world="BACKGROUND: a mountain road.")
+    assert "same position in frame" not in world
+    assert "SIZE AND PLACEMENT IN THE FRAME ARE NEW" in world
+
+    # A parts swap still pins all four, because that is what makes it exact.
+    parts = bike_build.edit_prompt(["gravel_tyres"])
+    assert "same position in frame" in parts
+    assert "same scale" in parts
+
+
+def test_the_bike_is_stood_on_the_ground_it_is_given():
+    from app.services import bike_build
+
+    world = bike_build.edit_prompt([], world="BACKGROUND: a gravel track.")
+    assert "closes over the bottom of both tyres" in world
+    assert "nobody in the picture" in world

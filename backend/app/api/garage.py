@@ -457,13 +457,28 @@ async def render_today_stage(
         key = _bike_key(bike, equipped, stage_id)
         needs = not bike_build.is_stock(equipped) or stage.id != backdrops.DEFAULT_ID
         if needs and not await _cached_render(db, key):
+            # PROSE, NOT THE PLATE, and this was settled on the evidence rather
+            # than by preference. Handing the model the bike AND the place plate
+            # asks an image-conditioned EDIT to do a compositing job — rescale a
+            # frame-filling subject and stand it on a surface in a second
+            # photograph — and it anchors to the source framing regardless of
+            # what the words say. Three different wordings all produced the same
+            # picture: a beautifully lit bicycle hovering in mid-air above the
+            # road. Given the same place as PROSE and no second image, the model
+            # composes the whole frame coherently and the bike stands on real
+            # ground, with a contact shadow and gravel against the tyres.
+            #
+            # WHAT THIS COSTS. Two riders in the Dolomites no longer get a
+            # pixel-identical background. What they do get is the same PLACE —
+            # `Place.prose` is written once, when the place is discovered, and
+            # shared by everyone — so the terrain, the light and the character
+            # match while the photograph is their own. The shared plate is still
+            # rendered once and still earns its keep: it is the place's portrait
+            # in the gallery, which is where riders actually compare places.
             image = await cyclr_studio.edit_image(
                 bike.image_url,
-                bike_build.edit_prompt(
-                    equipped, world=stage.prose, has_plate=bool(stage.plate_url),
-                ),
+                bike_build.edit_prompt(equipped, world=stage.prose),
                 key,
-                extra_b64=stage.plate_url,
             )
             if image:
                 await _store_render(db, key, image)

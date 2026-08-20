@@ -149,12 +149,25 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -
         ground = (
             "SET THE BICYCLE INTO THE PLACE IN THE SECOND IMAGE. That photograph is the world "
             "this bike now stands in: keep its landforms, its vegetation, its ground surface, its "
-            "light, its weather and its colour exactly as they are, and stand the bicycle in the "
-            "clear middle of it, upright and side-on, with the ground closing over the bottom of "
-            "both tyres so it is planted in the terrain rather than pasted onto it. Relight the "
-            "bike to match that place — the same key direction, the same warmth, the same time of "
-            "day — and let the plate's own defocused foreground pass in front of the wheels where "
-            "it already sits. There is nobody in the picture: the bicycle stands alone."
+            "light, its weather and its colour exactly as they are.\n"
+            # WHERE THE BIKE GOES, and the reason this is spelled out at length.
+            # Measured on a real Dolomites plate: told to stand the bike "in the
+            # clear middle" of the picture, the model put it in the middle of the
+            # FRAME — which on a plate whose road runs across the lower third is
+            # empty valley air. The bike came back hovering, beautifully lit and
+            # floating a hundred metres above the tarmac. The anchor has to be
+            # the road surface, never the composition.
+            "STAND IT ON THE ROAD. Find the tarmac in that photograph — it runs across the lower "
+            "part of the frame, widest and nearest the camera — and place the bicycle upright and "
+            "side-on with BOTH TYRES RESTING ON THAT ROAD SURFACE, at the size a real bicycle "
+            "would be standing there. The contact points are the whole test: the bottom of each "
+            "tyre is touching tarmac, the road's own texture runs right up to the rubber, and the "
+            "bike casts a soft contact shadow onto the road directly beneath it. It is standing "
+            "on the ground, not hovering over it and not floating in the middle of the picture.\n"
+            "Relight the bike to match that place — the same key direction, the same warmth, the "
+            "same time of day — and let the plate's own defocused foreground pass in front of the "
+            "wheels where it already sits. There is nobody in the picture: the bicycle stands "
+            "alone."
         )
     elif world:
         ground = (
@@ -169,11 +182,35 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -
             "contact shadow directly beneath the wheels. The background must be plain — no props, "
             "no scenery, no text, no watermark."
         )
+    # THE PREAMBLE DEPENDS ON WHAT IS BEING CHANGED, and conflating the two cost
+    # two failed renders. A PARTS swap must hold the camera, the position, the
+    # scale and the background still — that is the whole reason an edit beats a
+    # redraw. A WORLD swap cannot: telling the model to keep "the same position
+    # in frame, the same scale and the same background" while also asking it to
+    # stand the bike on a road in a different photograph is a contradiction, and
+    # it resolved it the way the wording weighted it — the bike kept its
+    # frame-filling scale and its position, and floated in mid-air above the
+    # road. What must survive a world swap is the bike's IDENTITY, not its
+    # placement.
+    if world or has_plate:
+        keep = (
+            "Take the bicycle from the supplied photograph and put it somewhere new. Keep the "
+            "SAME BICYCLE — the same frame geometry and proportions, the same paint and finish, "
+            "the same decals and lettering, the same wheels, tyres and components, seen from the "
+            "same side. Its SIZE AND PLACEMENT IN THE FRAME ARE NEW, because it now has to stand "
+            "on real ground: scale it to a believable bicycle in that landscape, which is smaller "
+            "than it appears in the source photograph, and position it where the instructions "
+            "below say. Change ONLY the components listed below and leave "
+        )
+    else:
+        keep = (
+            "Edit the bicycle in the supplied photograph. Keep the SAME bicycle: the same frame "
+            "geometry, the same paint and finish, the same camera, the same position in frame, the "
+            "same scale and the same background. Change ONLY the components listed below and leave "
+        )
     return (
-        "Edit the bicycle in the supplied photograph. Keep the SAME bicycle: the same frame "
-        "geometry, the same paint and finish, the same camera, the same position in frame, the "
-        "same scale and the same background. Change ONLY the components listed below and leave "
-        "every other part of the bicycle exactly as it is.\n\n"
+        keep
+        + "every other part of the bicycle exactly as it is.\n\n"
         + "\n".join(f"- {c}" for c in changes)
         + "\n\nEVERY LISTED PART IS BRAND NEW AND MUST BE FITTED COMPLETELY: clean and uniform "
         "over its whole surface, with none of the old part's wear showing through it. A rider "
