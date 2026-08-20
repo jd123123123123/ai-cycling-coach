@@ -187,7 +187,9 @@ function SignalCard({ label, sig }: { label: string; sig: W3Signal | null }) {
 // The pen's repeating section header now lives inside each self-fetching
 // section (W3TodayStatus / W3TodayRank / W3TodayProgress), because only the
 // section itself knows what its acid pill should say.
-const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
+// Local copy of the shared helper, and transparent for the same reason: a band
+// that paints `T.bg` cuts off the ground colour the hero hands down the page.
+const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', padding: `0 20px ${padBottom}px` })
 
 /**
  * `onComposeScene` is GONE, and its absence is the point. The old hero offered

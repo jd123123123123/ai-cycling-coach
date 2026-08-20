@@ -38,7 +38,9 @@ import { S, lux, hairline, TNUM } from './w3surfaces'
  * whole card degrades to an honest "—" when there is no PMC at all.
  */
 
-const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px`, fontFamily: FONT })
+// Transparent: a band that paints `T.bg` cuts off the ground the hero hands
+// down the page. See `w3tokens.band`.
+const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', padding: `0 20px ${padBottom}px`, fontFamily: FONT })
 const ellipsis = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
 const num = (n: number, digits = 0) => n.toLocaleString('de-DE', { minimumFractionDigits: digits, maximumFractionDigits: digits })
 const signed = (n: number, digits = 0) => `${n > 0 ? '+' : n < 0 ? '−' : '±'}${num(Math.abs(n), digits)}`

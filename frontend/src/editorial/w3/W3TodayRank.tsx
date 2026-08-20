@@ -29,7 +29,9 @@ import { S, lux, hairline, TNUM } from './w3surfaces'
  * No crew → the honest empty state and a way in. Never a fabricated leaderboard.
  */
 
-const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px`, fontFamily: FONT })
+// Transparent: a band that paints `T.bg` cuts off the ground the hero hands
+// down the page. See `w3tokens.band`.
+const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', padding: `0 20px ${padBottom}px`, fontFamily: FONT })
 const ellipsis = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
 const cardBtn = { width: '100%', border: 0, background: T.surface, fontFamily: FONT, textAlign: 'left' as const, cursor: 'pointer' }
 const num = (n: number) => n.toLocaleString('de-DE')

@@ -356,8 +356,9 @@ export default function W3WeekRecapCard() {
   const hue = TONE_HUE[vm.tone]
   const t = vm.stats
 
+  // Transparent, like every other band: the ground comes from the page.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: '0 20px 26px', fontFamily: FONT }}>
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', padding: '0 20px 26px', fontFamily: FONT }}>
       <button
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"

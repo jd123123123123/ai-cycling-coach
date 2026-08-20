@@ -59,8 +59,19 @@ export const Kicker = ({ children }: { children: ReactNode }) => (
   <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{children}</span>
 )
 
-/** Full-width band on w-bg (the pen's section wrapper). */
-export const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px` })
+/**
+ * Full-width section wrapper.
+ *
+ * IT NO LONGER PAINTS A BACKGROUND, and that is the whole point. Every band
+ * repainted `T.bg` — which the frame already paints — so the page was a stack
+ * of opaque surfaces rather than one ground. Harmless while everything was the
+ * same black; fatal the moment the top of the page takes its colour from the
+ * stage, because each band then cut that colour off at its own top edge.
+ *
+ * Transparent, the ground runs the length of the page and the sections lie ON
+ * it, which is the hero's arrangement applied to the whole screen.
+ */
+export const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', padding: `0 20px ${padBottom}px` })
 
 /**
  * A section that arrives as you reach it.

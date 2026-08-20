@@ -38,7 +38,9 @@ import { S, lux, TNUM } from './w3surfaces'
  * tap MITMACHEN.
  */
 
-const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', background: T.bg, padding: `0 20px ${padBottom}px`, fontFamily: FONT })
+// Transparent: a band that paints `T.bg` cuts off the ground the hero hands
+// down the page. See `w3tokens.band`.
+const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' as const, width: '100%', padding: `0 20px ${padBottom}px`, fontFamily: FONT })
 const CH_UNIT: Record<ChallengeMetric, string> = { active_days: 'Tage', distance_km: 'km', tss: 'TSS', rides: 'Fahrten', hours: 'h', kj: 'kJ' }
 const nf = new Intl.NumberFormat('de-DE')
 const ellipsis = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
