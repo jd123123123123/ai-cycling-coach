@@ -1,5 +1,7 @@
 /// <reference types="vitest/config" />
-import { defineConfig } from 'vite'
+import { realpathSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { defineConfig, searchForWorkspaceRoot } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
@@ -57,6 +59,21 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    fs: {
+      // Git worktrees symlink `node_modules` back to the main checkout, so the
+      // real path of every dependency lies OUTSIDE the Vite root and the dev
+      // server answers 403 for it. That is invisible for ordinary imports —
+      // they are pre-bundled — but MapLibre fetches its worker at RUNTIME by
+      // URL, so the 403 lands as a map that draws no tiles and reports no
+      // error. It cost an hour of chasing the tile provider, which was serving
+      // 200s the whole time. Build output is unaffected; this is dev only.
+      // realpath, not the link: Vite resolves each request to its real path
+      // before testing it, so listing the symlink itself allows nothing.
+      allow: [
+        searchForWorkspaceRoot(process.cwd()),
+        realpathSync(fileURLToPath(new URL('./node_modules', import.meta.url))),
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8000',

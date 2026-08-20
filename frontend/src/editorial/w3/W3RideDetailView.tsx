@@ -1,9 +1,9 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type CSSProperties } from 'react'
-import { Share2, Zap, Timer, Gauge, HeartPulse, Sparkles, ChevronRight, type LucideIcon } from 'lucide-react'
+import { Zap, Timer, Gauge, HeartPulse, Sparkles, ChevronRight, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
-import W3TopBar from './W3TopBar'
+import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
 import './w3.css'
 
 /**
@@ -29,9 +29,12 @@ export interface W3RideVm {
   title: string
   bigStat: string; bigStatUnit: string; climb: string; avgSpeed: string
   power: number[]; powerNote: string
-  // The GPX of the route + the ride's intensity (IF) — the header is generated
-  // from these: the route shape, tinted by how hard the ride was.
+  // The GPX of the route + the ride's intensity (IF). Kept on the vm as well
+  // as inside `hero` because the sections further down read them too — the
+  // hero is a VIEW of this ride, not a second source of truth about it.
   polyline: [number, number][] | null; intensity: number
+  /** Everything the map-and-card hero renders. See `W3RideMapHero`. */
+  hero: W3RideHeroVm
   // "What it moved you toward" — real season totals + this ride's contribution.
   movedSub: string; moved: MovedRow[]; movedFoot: string
   stats: W3StatCard[]                // 4
@@ -80,6 +83,8 @@ export interface W3RideDetailProps {
   onOpenStudio?: (kind: 'rider' | 'bike') => void
   onBack?: () => void
   onShare?: () => void
+  /** Opens the route full-screen. Omitted when there is nothing to open. */
+  onExpandMap?: () => void
 }
 
 const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
@@ -105,17 +110,6 @@ function SegGauge({ fill, on, delay }: { fill: number; on: boolean; delay: numbe
   )
 }
 
-/** GPX [lat,lng] → an SVG path normalised into a 0..100 box (lat flipped). */
-function routePath(pts: [number, number][]): string {
-  const lats = pts.map((p) => p[0]), lngs = pts.map((p) => p[1])
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats), minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-  const sLat = Math.max(1e-6, maxLat - minLat), sLng = Math.max(1e-6, maxLng - minLng)
-  const s = Math.min(94 / sLng, 94 / sLat), ox = (100 - sLng * s) / 2, oy = (100 - sLat * s) / 2
-  return pts.map((p, i) => `${i ? 'L' : 'M'}${(ox + (p[1] - minLng) * s).toFixed(1)} ${(oy + (maxLat - p[0]) * s).toFixed(1)}`).join(' ')
-}
-/** Ride intensity (IF) → the hero's accent colour + a plain-word label. */
-const intensityColor = (iff: number): string => iff >= 1.02 ? '#FF6A3D' : iff >= 0.92 ? T.warn : iff >= 0.8 ? T.acid : T.training
-const intensityLabel = (iff: number): string => iff >= 1.02 ? 'VO2 · anaerob' : iff >= 0.92 ? 'Schwelle' : iff >= 0.8 ? 'Tempo' : iff >= 0.6 ? 'Ausdauer' : 'Erholung'
 
 // Icon per stat card, matched by its label keyword — supports the storytelling.
 const STAT_ICON = (label: string): LucideIcon => {
@@ -188,7 +182,7 @@ function SceneNote({ text, action, onClick }: { text: string; action?: string; o
     : <div style={box}>{body}</div>
 }
 
-export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare }: W3RideDetailProps) {
+export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap }: W3RideDetailProps) {
   const reduce = useReducedMotion()
   const pMax = Math.max(1, ...vm.power)
   const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
@@ -199,132 +193,82 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <W3StatusBar />
 
-        {/* Nav */}
-        <W3TopBar title="Fahrt im Detail" onBack={onBack}
-          extra={<button onClick={onShare} aria-label="Teilen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
+        {/* ── THE HERO: map, then the ride's own portrait, then the numbers ──
+             Rebuilt from pen frame `XqpcX`. The route is now a REAL basemap
+             rather than a bare SVG trace over a wash — a rider recognises the
+             roads they took, and recognising them is most of what a ride
+             summary is for. The scene render moved INSIDE the card and
+             dissolves into the numbers, so the picture is the card's material
+             rather than a photograph with a card under it.
 
-        {/* Cover — the rider's own avatar on their own bike, in a scene composed
-             from this ride's terrain, when one has been composed. Until then the
-             cover is GENERATED from the GPX route, tinted by the ride's
-             intensity: the route shape glows in the intensity accent, over an
-             intensity-lit wash. Falls back to the ride's power silhouette when
-             there's no GPS. The route trace is instant and real, so it also
-             stands in while the scene is being read or made. */}
-        {(() => {
-          const acc = intensityColor(vm.intensity)
-          const hasRoute = vm.polyline != null && vm.polyline.length > 1
-          const showScene = scene.status === 'ok' && !!scene.image && !scene.pending
-          const canCompose = scene.status === 'not_generated' && !scene.pending
-          const note: { text: string; action?: string; onClick?: () => void } | null = scene.pending ? null
-            : scene.failed ? { text: 'Das Bild kam nicht durch. Deine Straße ist noch da — versuch es nochmal.' }
-            : scene.status === 'needs_rider' ? { text: 'Digitalisiere deinen Fahrer einmal, und jede Fahrt bekommt ein Titelbild mit dir darauf.', action: 'Avatar erstellen', onClick: () => onOpenStudio?.('rider') }
-            : scene.status === 'needs_bike' ? { text: 'Stell dein Rad in die Garage, und diese Straße wird vom echten Rad gefahren.', action: 'Rad hinzufügen', onClick: () => onOpenStudio?.('bike') }
-            : scene.status === 'image_model_unavailable' ? { text: 'Das Studio ist gerade nicht verbunden. Deine Route hält das Titelbild.' }
-            : null
-          return (
-            <div style={{ height: showScene ? 264 : 210, margin: '8px 0 0', position: 'relative', overflow: 'hidden', background: `radial-gradient(120% 95% at 60% 12%, ${acc}2E, ${T.bg})` }}>
-              {/* The scene is a square render; the cover grows for it so the crop
-                  keeps the rider clear of the scrim and the overlapping card. */}
-              {showScene ? (
-                <motion.img src={scene.image!} alt="Du, auf deinem Rad, auf dieser Fahrt"
-                  initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7, ease: EASE }}
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 42%' }} />
-              ) : hasRoute ? (
-                <svg viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                  <defs>
-                    <linearGradient id="rdroute" x1="0" y1="0" x2="1" y2="1">
-                      <stop offset="0%" stopColor={acc} />
-                      <stop offset="100%" stopColor={T.acid} />
-                    </linearGradient>
-                  </defs>
-                  {/* soft glow underlay */}
-                  <path d={routePath(vm.polyline!)} fill="none" stroke={acc} strokeWidth={6} strokeOpacity={0.22} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" style={{ filter: 'blur(3px)' }} />
-                  <motion.path d={routePath(vm.polyline!)} fill="none" stroke="url(#rdroute)" strokeWidth={2.6} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
-                    initial={reduce ? false : { pathLength: 0, opacity: 0.3 }} animate={{ pathLength: 1, opacity: 1 }} transition={{ duration: 1.15, ease: EASE }} />
-                </svg>
-              ) : vm.power.length > 1 ? (() => {
-                const n = vm.power.length
-                const pts = vm.power.map((p, i) => `${(i / (n - 1)) * 100},${100 - Math.max(2, (p / pMax) * 92)}`).join(' ')
-                return (
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                    <defs>
-                      <linearGradient id="rdfill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={acc} stopOpacity="0.34" />
-                        <stop offset="100%" stopColor={acc} stopOpacity="0" />
-                      </linearGradient>
-                    </defs>
-                    <motion.polygon points={`0,100 ${pts} 100,100`} fill="url(#rdfill)"
-                      initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, ease: EASE }} />
-                    <polyline points={pts} fill="none" stroke={acc} strokeWidth={0.9} strokeOpacity={0.9} vectorEffect="non-scaling-stroke" />
-                  </svg>
-                )
-              })() : null}
-              {/* intensity chip — stays on top of the scene — and, opposite it,
-                  the single affordance that composes one. */}
-              <div style={{ position: 'absolute', top: 14, left: 20, right: 20, zIndex: 4, display: 'flex', gap: 10, alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '6px 12px 6px 10px', borderRadius: 100, background: '#000000A6' }}>
-                  <Zap size={12} color={acc} fill={acc} />
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.ink }}>{intensityLabel(vm.intensity)}</span>
-                  {vm.intensity > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: T.quiet }}>· IF {vm.intensity.toFixed(2)}</span>}
-                </div>
+             The old cover's intensity chip and the big distance figure are not
+             lost, they moved: intensity is now the beam at the bottom of the
+             card (a proportion of threshold, which is what IF actually is,
+             instead of a word in a pill), and distance is the first of the
+             three stats under the duration. See `W3RideMapHero`. ── */}
+        <W3RideMapHero
+          vm={vm.hero}
+          onBack={onBack}
+          onShare={onShare}
+          onExpandMap={onExpandMap}
+          sceneOverlay={(() => {
+            const canCompose = scene.status === 'not_generated' && !scene.pending
+            const note = scene.pending ? null
+              : scene.failed ? { text: 'Das Bild kam nicht durch. Deine Straße ist noch da — versuch es nochmal.' }
+              : scene.status === 'needs_rider' ? { text: 'Digitalisiere deinen Fahrer einmal, und jede Fahrt bekommt ein Titelbild mit dir darauf.', action: 'Avatar erstellen', onClick: () => onOpenStudio?.('rider') }
+              : scene.status === 'needs_bike' ? { text: 'Stell dein Rad in die Garage, und diese Straße wird vom echten Rad gefahren.', action: 'Rad hinzufügen', onClick: () => onOpenStudio?.('bike') }
+              : scene.status === 'image_model_unavailable' ? { text: 'Das Studio ist gerade nicht verbunden. Deine Route hält das Titelbild.' }
+              : null
+            if (!canCompose && !note && !scene.pending) return null
+            return (
+              // With a scene behind it the affordance tucks into the corner;
+              // without one it is the only thing in that space, so it takes the
+              // middle of it rather than hanging off one edge.
+              <div style={{
+                position: 'absolute', top: 18, left: 20, right: 20, zIndex: 4,
+                display: 'flex', justifyContent: vm.hero.sceneImage ? 'flex-end' : 'center',
+              }}>
                 {canCompose && <ScenePill label={scene.failed ? 'Nochmal versuchen' : 'Sieh dich hier'} onClick={onCompose} />}
+                {note && <SceneNote {...note} />}
+                {scene.pending && <SceneComposing />}
               </div>
-              {note && <SceneNote {...note} />}
-              {scene.pending && <SceneComposing />}
-              <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 96, zIndex: 2, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
-            </div>
-          )
-        })()}
+            )
+          })()}
+        />
 
-        {/* Hero card */}
-        <div style={{ ...band(20), marginTop: -54 }}>
-          <div style={{ padding: '16px 18px', borderRadius: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              {[vm.dateChip, vm.sportChip].map((c) => <span key={c} style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.mid, padding: '5px 9px', borderRadius: 100, background: T.rule }}>{c}</span>)}
-              {vm.recordChip && <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.bg, padding: '5px 9px', borderRadius: 100, background: T.acid }}>{vm.recordChip}</span>}
+
+        {/* ── Leistung · ganze Fahrt ────────────────────────────────────
+             This lived inside the old hero card. It is a section of its own
+             now, which is where it belonged: the hero answers "what was this
+             ride", and the trace answers "how did you ride it" — a different
+             question, and one worth the width. Interactive: a pointer over any
+             bar reads out its watts, and the Ø rule is the ride's own average
+             so a bar above it is above average BY EYE, with no legend. ── */}
+        {vm.power.length > 1 && (
+          <div style={{ ...band(26), gap: 6 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Kicker>Leistung · ganze Fahrt</Kicker>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>
+                {hov != null ? `${Math.round(vm.power[hov])} W` : vm.powerNote}
+              </span>
             </div>
-            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, color: T.ink }}>{vm.title}</span>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end' }}>
-                <span style={{ fontSize: 62, fontWeight: 700, letterSpacing: -3, lineHeight: 0.8, color: T.acid }}>{vm.bigStat}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingBottom: 6 }}>
-                  <Kicker>{vm.bigStatUnit}</Kicker>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{vm.climb}</span>
-                </div>
+            <div style={{ position: 'relative', height: 56, display: 'flex', gap: 2, alignItems: 'flex-end' }}
+              onPointerLeave={() => setHov(null)}>
+              <div style={{ position: 'absolute', left: 0, right: 0, bottom: Math.round((pAvg / pMax) * 56), height: 1, background: `${T.ink}55`, zIndex: 1, pointerEvents: 'none' }}>
+                <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 700, color: T.mid }}>Ø</span>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end', paddingBottom: 6 }}>
-                <Kicker>Ø Tempo</Kicker>
-                <span style={{ fontSize: 13, fontWeight: 700, color: T.ink }}>{vm.avgSpeed}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <Kicker>Leistung · ganze Fahrt</Kicker>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>
-                  {hov != null ? `${Math.round(vm.power[hov])} W` : vm.powerNote}
-                </span>
-              </div>
-              {/* Interactive power trace with an average trend line. Hover a bar
-                  to read its watts (touch-friendly: pointer events). */}
-              <div style={{ position: 'relative', height: 46, display: 'flex', gap: 2, alignItems: 'flex-end' }}
-                onPointerLeave={() => setHov(null)}>
-                {/* average trend line */}
-                <div style={{ position: 'absolute', left: 0, right: 0, bottom: Math.round((pAvg / pMax) * 46), height: 1, background: `${T.ink}55`, zIndex: 1, pointerEvents: 'none' }}>
-                  <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 700, color: T.mid }}>Ø</span>
-                </div>
-                {vm.power.map((p, i) => {
-                  const on = hov === i
-                  return (
-                    <motion.div key={i} onPointerEnter={() => setHov(i)}
-                      initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.012)}
-                      style={{ flex: 1, height: Math.max(3, Math.round((p / pMax) * 46)), transformOrigin: 'bottom', borderRadius: 1, cursor: 'pointer',
-                        background: on ? T.ink : p / pMax > 0.7 ? T.acid : '#FFFFFF33' }} />
-                  )
-                })}
-              </div>
+              {vm.power.map((p, i) => {
+                const on = hov === i
+                return (
+                  <motion.div key={i} onPointerEnter={() => setHov(i)}
+                    initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.012)}
+                    style={{ flex: 1, height: Math.max(3, Math.round((p / pMax) * 56)), transformOrigin: 'bottom', borderRadius: 1, cursor: 'pointer',
+                      background: on ? T.ink : p / pMax > 0.7 ? T.acid : T.d2 }} />
+                )
+              })}
             </div>
           </div>
-        </div>
+        )}
 
         {/* Hero stats */}
         <div style={{ ...band(26), gap: 8 }}>

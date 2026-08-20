@@ -6,6 +6,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
+import type { W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
 
@@ -33,6 +34,21 @@ const fmtDate = (iso: string | null | undefined): string => {
   return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 const fmtHms = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
+
+/** The hero's headline: hours, minutes AND seconds, zero-padded throughout.
+ *  Seconds matter here in a way they do not in a stat tile — this is the figure
+ *  a rider compares against the one on their head unit, and a truncated one
+ *  reads as the app disagreeing with the bike. */
+const fmtHmsFull = (s: number) => [Math.floor(s / 3600), Math.floor((s % 3600) / 60), Math.floor(s % 60)]
+  .map((n) => String(n).padStart(2, '0')).join(':')
+
+/** "20.08.2026 · 15:45" — the ride's own start, not today. */
+const fmtDateTime = (iso: string | null | undefined): string => {
+  if (!iso) return DASH
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return DASH
+  return `${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} · ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+}
 const ZONE_NAMES = ['Erholung', 'Ausdauer', 'Tempo', 'Schwelle', 'VO2max']
 const sgn = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`
 const durLabel = (s: number) => (s < 60 ? `${s} Sek` : `${Math.round(s / 60)} Min`)
@@ -116,9 +132,15 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   const v = d.verdict
   const eff = d.efficiency
 
-  // Intensity (IF) from the ride's real TSS × duration (Coggan) — colours the hero.
+  // Intensity Factor. The debrief SHIPS one (`header.if_`), computed server-side
+  // from normalised power against the athlete's real FTP, so that is the number
+  // to use. The TSS inversion below is only a fallback for rides whose FTP was
+  // unknown at the time — it is the same Coggan relation solved the other way,
+  // and it agrees with the direct figure whenever both exist.
   const hrs = h.moving_time_s / 3600
-  const intensity = h.tss > 0 && hrs > 0 ? Math.sqrt(h.tss / (hrs * 100)) : 0
+  const intensity = h.if_ != null && h.if_ > 0
+    ? h.if_
+    : h.tss > 0 && hrs > 0 ? Math.sqrt(h.tss / (hrs * 100)) : 0
 
   // "What it moved you toward" — real season totals + this ride's contribution.
   const cyc = season.filter((a) => a.sport === 'cycling')
@@ -172,7 +194,50 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     ? `In den letzten sieben Tagen: Fitness ${sgn(pmcT.ctlDelta)}, Form ${sgn(pmcT.tsbDelta)} — der Preis der Arbeit, und wo er dich jetzt hinstellt.`
     : (v.watch_out[0] ?? '')
 
+  // ── the hero ─────────────────────────────────────────────────────────
+  // Distance, average speed and elevation, in that order: what you covered,
+  // how fast, and how much of it was up. The pen's third slot is a max speed,
+  // which the debrief does not carry — inventing one would be worse than
+  // showing the climbing, which is the number a cyclist wants anyway.
+  const num = (n: number, d = 0) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
+  const heroStats: W3RideHeroVm['stats'] = [
+    { label: 'DISTANZ', value: h.distance_km != null ? num(h.distance_km, 1) : DASH, unit: 'km' },
+    { label: 'Ø TEMPO', value: h.avg_speed_kmh != null ? num(h.avg_speed_kmh, 1) : DASH, unit: 'km/h' },
+    { label: 'HÖHE', value: h.elevation_m != null ? num(h.elevation_m) : DASH, unit: 'hm' },
+  ]
+  // "82 % VON FTP · SCHWELLE" — the IF as a percentage, named by the zone it
+  // lands in. The boundaries are Coggan's own training-level bands, so the word
+  // beside the number is the one a cyclist already uses for that effort.
+  const ifPct = Math.round(intensity * 100)
+  const zoneWord = intensity >= 1.05 ? 'VO₂MAX'
+    : intensity >= 0.95 ? 'SCHWELLE'
+    : intensity >= 0.85 ? 'TEMPO'
+    : intensity >= 0.75 ? 'GRUNDLAGE'
+    : 'ERHOLUNG'
+  // The debrief computes this properly when it can. The fallback leans on the
+  // coincidence every cyclist's head unit already leans on: a kilojoule of
+  // MECHANICAL work costs roughly a kilocalorie of the rider, because human
+  // cycling efficiency is close to 1/4.184. It is an approximation, and it is
+  // the same approximation Garmin and Wahoo display.
+  const kcal = d.fueling?.total_kcal ?? (h.total_kj > 0 ? h.total_kj : null)
+  const hero: W3RideHeroVm = {
+    polyline: activity?.route_polyline ?? null,
+    sceneImage: null,
+    dateLine: fmtDateTime(h.date),
+    duration: fmtHmsFull(h.moving_time_s),
+    stats: heroStats,
+    watts: h.np_watts > 0 ? String(Math.round(h.np_watts)) : DASH,
+    bpm: eff?.avg_hr != null ? String(Math.round(eff.avg_hr)) : DASH,
+    ifValue: intensity > 0 ? intensity.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : DASH,
+    // Against 1.0, which IS threshold — so a threshold ride fills the beam and
+    // anything above it is capped rather than overflowing off the end.
+    ifFill: Math.min(1, intensity),
+    effortLabel: intensity > 0 ? `${ifPct} % VON FTP · ${zoneWord}` : 'INTENSITÄT UNBEKANNT',
+    energyLabel: kcal != null && kcal > 0 ? `${Math.round(kcal).toLocaleString('de-DE')} kcal` : DASH,
+  }
+
   return {
+    hero,
     dateChip: fmtDate(h.date), sportChip: h.sport?.toUpperCase() ?? 'FAHRT', recordChip: bestEffort?.is_pr ? 'NEUER REKORD' : null,
     title: h.title,
     bigStat: h.distance_km != null ? String(Math.round(h.distance_km)) : DASH, bigStatUnit: 'Kilometer',
@@ -234,15 +299,26 @@ export default function W3RideDetailPage() {
     }
   }, [sceneData, compose.isPending, compose.isError])
 
-  if (!vm) return <W3Loading label="Lade deine Fahrt…" />
+  // The scene arrives from its own hook, so it is merged in HERE rather than in
+  // `toVm` — `toVm` is a pure function of the debrief and must not start
+  // depending on a second request. Merged rather than passed as a sibling prop
+  // so the hero has one object to render and cannot show a picture that
+  // disagrees with the numbers beside it.
+  const heroVm = useMemo(
+    () => (vm ? { ...vm.hero, sceneImage: scene.status === 'ok' && !scene.pending ? scene.image : null } : null),
+    [vm, scene.status, scene.image, scene.pending],
+  )
+
+  if (!vm || !heroVm) return <W3Loading label="Lade deine Fahrt…" />
   return (
     <W3RideDetailView
-      vm={vm}
+      vm={{ ...vm, hero: heroVm }}
       scene={scene}
       onCompose={() => { if (activityId != null && !compose.isPending) compose.mutate(activityId) }}
       onOpenStudio={(kind) => navigate(kind === 'rider' ? '/e/w3-avatar-onboard' : '/e/w3-bike-studio')}
       onBack={() => navigate(-1)}
       onShare={() => id && navigate(`/e/w3-share/${id}`)}
+      onExpandMap={vm.hero.polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
     />
   )
 }

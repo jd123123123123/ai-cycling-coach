@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState } from './W3RideDetailView'
+import type { W3RideHeroVm } from './W3RideMapHero'
 
 /** TEMP preview — pen-exact fixture, no backend. /e/w3-ride-preview is
  *  unguarded; remove before merge. */
@@ -15,7 +16,33 @@ const polyline: [number, number][] = Array.from({ length: 44 }, (_, i) => {
   return [51.74 + 0.05 * Math.sin(t * 6.5) + t * 0.015, 10.6 + t * 0.11 + 0.03 * Math.cos(t * 5)]
 })
 
+/** The hero, with the numbers the pen frame `XqpcX` shows.
+ *
+ *  `sceneImage` points at a real render rather than being null, because the
+ *  COMPOSED state is both the common one and the hard one: it is the only way
+ *  to check that the dissolve finishes before the text begins and that the
+ *  crop keeps the bike clear of both. The empty state is a shorter card with an
+ *  accent wash and is easy to reason about without a route to look at. */
+const HERO: W3RideHeroVm = {
+  polyline,
+  sceneImage: '/w3/bike-build-example.webp',
+  dateLine: '06.08.2026 · 09:12',
+  duration: '01:47:32',
+  stats: [
+    { label: 'DISTANZ', value: '52,4', unit: 'km' },
+    { label: 'Ø TEMPO', value: '29,2', unit: 'km/h' },
+    { label: 'HÖHE', value: '1.240', unit: 'hm' },
+  ],
+  watts: '241',
+  bpm: '148',
+  ifValue: '0,86',
+  ifFill: 0.86,
+  effortLabel: '86 % VON FTP · TEMPO',
+  energyLabel: '1.184 kcal',
+}
+
 const FIXTURE: W3RideVm = {
+  hero: HERO,
   dateChip: 'Mi 06. Aug · 09:12', sportChip: 'Outdoor', recordChip: 'Neuer Rekord',
   title: 'Berg-Wiederholungen',
   bigStat: '62', bigStatUnit: 'Kilometer', climb: '1240 m hoch', avgSpeed: '30 km/h',
@@ -73,7 +100,11 @@ export default function W3RideDetailPreview() {
   // composing is one tap away. Tapping it plays the real waiting choreography —
   // and, since a preview has no backend behind it, lands honestly on the failed
   // state rather than pretending an image arrived.
-  const [scene, setScene] = useState<W3RideSceneState>({ status: 'not_generated', image: null, pending: false, failed: false })
+  // 'ok' with the fixture's own render, so the scene state and the hero agree.
+  // They disagreed before: the hero showed a composed picture while the scene
+  // said "not generated", so the compose pill floated over the very thing it
+  // offers to make.
+  const [scene, setScene] = useState<W3RideSceneState>({ status: 'ok', image: HERO.sceneImage, pending: false, failed: false })
   const compose = () => {
     setScene({ status: 'not_generated', image: null, pending: true, failed: false })
     setTimeout(() => setScene({ status: 'not_generated', image: null, pending: false, failed: true }), 2600)

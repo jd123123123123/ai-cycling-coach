@@ -88,6 +88,25 @@ export interface RouteMapProps {
    *  matches `polyline` in length, because a mismatched ramp would silently
    *  colour the wrong stretches of road. */
   lineColors?: string[]
+  /** The route's own colour, and how heavy it is drawn. Defaults to the crew
+   *  orange this component was born with. The ride page passes the W3 acid and
+   *  a heavier weight: a route is the SUBJECT of that screen rather than one
+   *  element on a planning map, so it carries the accent and the extra width
+   *  the design gives it. Ignored when `lineColors` supplies a gradient. */
+  lineColor?: string
+  lineWidth?: number
+  /** Endpoint markers. Defaults to green start / orange end. The ride page
+   *  overrides them because on a finished ride the two ends mean something
+   *  different than on a route being planned — one is where you set off, the
+   *  other is where you stopped, and neither is a status. */
+  startColor?: string
+  endColor?: string
+  /** How far up from the map's bottom edge the licence notice must sit, in px.
+   *  Defaults to the static hero's 58. The ride summary passes more, because a
+   *  card overlaps the bottom of its map — and a notice hidden behind a card is
+   *  not a visible notice, which is the one thing the licence actually asks
+   *  for. Anything that covers this map's lower edge must say by how much. */
+  attributionBottom?: number
   /** A dot that tracks the scrub. Moving it does NOT rebuild the map: the
    *  marker is created once with the route and repositioned in place, so
    *  dragging a finger across the profile stays cheap. `null` hides it. */
@@ -133,6 +152,8 @@ function boundsOf(poly: [number, number][]): [[number, number], [number, number]
 export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
   lineColors, markerLatLng = null,
+  lineColor = '#FF5A3C', lineWidth = 4, startColor = '#16E08A', endColor = '#FF5A3C',
+  attributionBottom,
 }: RouteMapProps) {
   const holder = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MlMap | null>(null)
@@ -229,14 +250,14 @@ export default function RouteMap({
           map.addLayer({
             id: 'route-casing', type: 'line', source: 'route',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
-            paint: { 'line-color': '#FFFFFF', 'line-width': 7, 'line-opacity': 0.9 },
+            paint: { 'line-color': '#FFFFFF', 'line-width': lineWidth + 3, 'line-opacity': 0.9 },
           })
           map.addLayer({
             id: 'route-line', type: 'line', source: 'route',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
             paint: ramp
               ? { 'line-gradient': ramp, 'line-width': 4 }
-              : { 'line-color': '#FF5A3C', 'line-width': 4 },
+              : { 'line-color': lineColor, 'line-width': lineWidth },
           } as Parameters<MlMap['addLayer']>[0])
 
           const [startLat, startLng] = polyline[0]
@@ -246,8 +267,8 @@ export default function RouteMap({
             el.style.cssText = `width:${size}px;height:${size}px;border-radius:999px;background:${color};border:2px solid #fff;box-shadow:0 0 10px ${color}99`
             return el
           }
-          new maplibre.Marker({ element: dot('#16E08A', 15) }).setLngLat([startLng, startLat]).addTo(map)
-          new maplibre.Marker({ element: dot('#FF5A3C', 15) }).setLngLat([endLng, endLat]).addTo(map)
+          new maplibre.Marker({ element: dot(startColor, 15) }).setLngLat([startLng, startLat]).addTo(map)
+          new maplibre.Marker({ element: dot(endColor, 15) }).setLngLat([endLng, endLat]).addTo(map)
 
           if (markerLatLng !== undefined) {
             // Bigger than the endpoint dots and ringed, so it reads as "you are
@@ -312,7 +333,10 @@ export default function RouteMap({
     }
     // `waypoints`/`onReady` are intentionally excluded: they arrive with the
     // same fetch as `polyline`, and including them would tear the map down and
-    // rebuild it on every parent render.
+    // rebuild it on every parent render. The colour props are excluded for a
+    // different reason — they are per-CALLER design constants, not state, so a
+    // change to one would mean a different screen rather than a new value on
+    // this one. Pass them as literals; animating them will not work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polyline, styleKey, interactive, failed])
 
@@ -357,7 +381,7 @@ export default function RouteMap({
   return (
     <>
       <div ref={holder} className={className} style={{ position: 'absolute', inset: 0 }} aria-hidden={!interactive} />
-      <MapAttribution lifted={!interactive} />
+      <MapAttribution bottom={attributionBottom ?? (interactive ? 6 : 58)} />
     </>
   )
 }
@@ -378,14 +402,15 @@ export default function RouteMap({
  * without turning the surrounding corner of a static hero into a dead zone
  * that swallows the tap meant to open the full-screen map.
  */
-function MapAttribution({ lifted }: { lifted: boolean }) {
+function MapAttribution({ bottom }: { bottom: number }) {
   return (
     <div
       style={{
         position: 'absolute',
         right: 6,
-        // Clear of the ride title / date line on a static hero.
-        bottom: lifted ? 58 : 6,
+        // Clear of whatever the caller puts over the map's lower edge — the
+        // ride title on a static hero, an overlapping card on the ride summary.
+        bottom,
         display: 'flex',
         gap: 4,
         padding: '2px 6px',

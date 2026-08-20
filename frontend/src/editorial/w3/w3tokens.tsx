@@ -18,6 +18,10 @@ export const T = {
   stageHi: '#E8E9E6', stageMid: '#C9CBC7', stageLo: '#A9ACA8',
   shadowSoft: '#00000059',
   acid: '#BFFF3C', acidDim: '#BFFF3C1F', acidDeep: '#8FBF00',
+  // The top of a LIT meter step. A single flat acid reads as a sticker at
+  // this size; lightening the top edge and deepening the bottom is what makes
+  // a 13 px bar look like a lit object rather than a coloured rectangle.
+  acidLite: '#EAFF8F',
   ink: '#FFFFFF', mid: '#9BA0A6', quiet: '#6E7379',
 
   // ── TODAY'S HERO (pen frames `YIU3g` / `qv4Aw`, read 2026-08-19) ─────────

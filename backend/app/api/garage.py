@@ -21,6 +21,7 @@ paid call, so it is cached and only ever generated on demand:
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 from datetime import UTC, date, datetime, time
 from types import SimpleNamespace
@@ -63,6 +64,8 @@ from app.services import (
 )
 from app.services import earn_modifiers as em
 from app.services.ride_scene import DAY_POSES, RideGeo, day_context
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/garage", tags=["garage"])
 
@@ -1528,24 +1531,40 @@ async def render_scene(
     #
     # The framing catalogue stays as the fallback for a ride with no usable GPS,
     # which is the one case where there is genuinely nowhere to put the bike.
+    #
+    # THE FALLBACK IS CHOSEN ONCE, AND IT IS CHOSEN ON EMPTINESS. A place row
+    # whose prose is blank used to reach the prompt builder through the `else`
+    # arm below with `framing_id` never assigned — a NameError, i.e. a 500, on
+    # the one tap this whole feature exists for. Deciding the world here, in one
+    # place, means "we have a place" and "we have prose to render it with" can
+    # never disagree again.
     place = await _place_of_activity(db, current_user.id, activity)
-    if place is not None:
-        world, ctx, key = place.prose, place.name, f"ride:{activity_id}:{place.slug}"
+    world = (place.prose or "").strip() if place is not None else ""
+    if world:
+        ctx, key = place.name, f"ride:{activity_id}:{place.slug}"
+        prompt = bike_build.edit_prompt([], world=world)
     else:
         framing_id = ride_framing.default_framing_for(geo)
         f = ride_framing.get(framing_id)
-        world, ctx, key = None, f.name_de, f"ride:{activity_id}:{framing_id}"
+        ctx, key = f.name_de, f"ride:{activity_id}:{framing_id}"
+        prompt = ride_framing.edit_prompt(framing_id)
 
     # EDIT, never redraw. The rider's own bike render goes back in as the input
     # image so the frame, the decals and the components stay pixel-identical
     # between two worlds — the measurement in `docs/w3-bike-customisation.md`.
     # `bike_build.edit_prompt` with a `world` is the SAME path that puts a bike
     # in the Dolomites and stands it on the road rather than floating it there.
-    prompt = (
-        bike_build.edit_prompt([], world=world) if world
-        else ride_framing.edit_prompt(framing_id)
-    )
-    image = await cyclr_studio.edit_image(bike.image_url, prompt, key)
+    # NEVER A 500. Composing takes a couple of minutes and costs a model call,
+    # so the one thing the rider must not meet at the end of it is a raw error
+    # page: they cannot tell a dead image model from a bug, and either way the
+    # only thing on screen is "Fehler". `edit_image` already degrades to None on
+    # its own known failures; this catches everything else and says the same
+    # honest thing the missing-model case says.
+    try:
+        image = await cyclr_studio.edit_image(bike.image_url, prompt, key)
+    except Exception:
+        logger.exception("ride scene compose failed for activity_id=%s", activity_id)
+        image = None
     render_status = "ok" if image else "image_model_unavailable"
     if image:
         if cached is None:

@@ -89,6 +89,7 @@ const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview')
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
 const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPreview'))
 const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
+const W3RideMapPage = lazyWithRetry(() => import('./editorial/w3/W3RideMapPage'))
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
@@ -430,6 +431,10 @@ function AppRoutes() {
           <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-preview" element={<W3RideDetailPreview />} />
+          {/* The route, full screen and pannable. Separate from the summary
+              because the summary's map is deliberately inert — see
+              `W3RideMapPage` on why an embedded map must not eat a scroll. */}
+          <Route path="/e/w3-ride-map/:id" element={<ProtectedRoute checkOnboarding><W3RideMapPage /></ProtectedRoute>} />
           <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />
