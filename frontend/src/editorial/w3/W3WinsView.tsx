@@ -7,6 +7,7 @@ import { T, FONT, grow, band } from './w3tokens'
 import W3TabBar from './W3TabBar'
 import W3StatusBar from './W3StatusBar'
 import W3NavMenu from './W3NavMenu'
+import W3ChallengeRow, { type ChallengeKind } from './W3ChallengeRow'
 import './w3.css'
 
 /**
@@ -30,7 +31,14 @@ export interface W3Hero {
   progressLabel: string
   reward: string
 }
-export interface W3Challenge { key: string; title: string; reward: string; sub: string; fill: number; custom?: boolean }
+export interface W3Challenge {
+  key: string; title: string; reward: string; sub: string; fill: number; custom?: boolean
+  /** The structured facts `W3ChallengeRow` draws. Optional so the preview
+   *  harnesses and any older caller still render — without them the row falls
+   *  back to the packed `sub` line it used to show. */
+  kind?: ChallengeKind; value?: number; target?: number; unit?: string
+  completed?: boolean; deadline?: string | null
+}
 export interface W3Record { key: string; label: string; value: string; note: string; past: number; best: boolean }
 export interface W3CommunityHero { title: string; pct: string; sub: string; foot: string; fill: number }
 export interface W3Community { key: string; title: string; pct: string; sub: string; you: string; fill: number }
@@ -164,20 +172,30 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
         {/* Personal challenges */}
         <div style={{ ...band(28), gap: 14 }}>
           <SectionHead title={vm.personalHeader} sub={vm.personalSub} />
-          <div style={{ padding: '4px 18px 8px', borderRadius: 24, background: T.surface, display: 'flex', flexDirection: 'column' }}>
-            {vm.challenges.map((c, i) => (
-              <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '16px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{c.title}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.acid }}>{c.reward}</span>
-                  {c.custom
-                    ? <button onClick={() => onEditChallenge?.(c.key)} aria-label="Challenge bearbeiten" style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><MoreHorizontal size={16} color={T.mid} /></button>
-                    : <MoreHorizontal size={16} color={T.quiet} />}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {vm.challenges.map((c, i) =>
+              c.kind && c.value != null && c.target != null ? (
+                <div key={c.key} style={{ padding: i === 0 ? '4px 0 8px' : '0 0 8px' }}>
+                  <W3ChallengeRow vm={{
+                    key: c.key, title: c.title, kind: c.kind, value: c.value,
+                    target: c.target, unit: c.unit ?? '', fill: c.fill, reward: c.reward,
+                    completed: !!c.completed, deadline: c.deadline,
+                    editable: !!c.custom, onEdit: () => onEditChallenge?.(c.key),
+                  }} />
                 </div>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{c.sub}</span>
-                <SegGauge lit={Math.round(c.fill * 20)} total={20} reduce={reduce} delay={i * 0.03} />
-              </div>
-            ))}
+              ) : (
+                <div key={c.key} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '16px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{c.title}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.acid }}>{c.reward}</span>
+                    {c.custom
+                      ? <button onClick={() => onEditChallenge?.(c.key)} aria-label="Challenge bearbeiten" style={{ background: 'transparent', border: 0, padding: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}><MoreHorizontal size={16} color={T.mid} /></button>
+                      : <MoreHorizontal size={16} color={T.quiet} />}
+                  </div>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{c.sub}</span>
+                  <SegGauge lit={Math.round(c.fill * 20)} total={20} reduce={reduce} delay={i * 0.03} />
+                </div>
+              ))}
             <button onClick={onNewChallenge} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 0 12px', borderTop: `1px solid ${T.rule}`, background: 'transparent', border: 0, borderTopWidth: 1, borderTopStyle: 'solid', borderTopColor: T.rule, fontFamily: FONT, cursor: 'pointer', color: T.acid, textAlign: 'left' }}>
               <Plus size={16} color={T.acid} strokeWidth={2.5} />
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.6, color: T.acid }}>{vm.newChallengeLabel}</span>

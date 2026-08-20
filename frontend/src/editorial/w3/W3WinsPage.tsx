@@ -40,10 +40,20 @@ function challengeCardFrom(c: RewardChallenge): W3Challenge {
   return {
     key: c.key,
     title: c.title,
-    reward: `${c.completed ? '✓ ' : '+'}${chNf.format(c.reward_rc)} RIDECOIN`,
+    reward: `${c.completed ? '✓ ' : '+'}${chNf.format(c.reward_rc)} RC`,
+    // Kept for the fallback row and for anything still reading a single line.
     sub: `${chNf.format(Math.round(c.value))} von ${chNf.format(c.target)} ${unit}`,
     fill: c.pct / 100,
     custom: !!c.custom && !c.completed,   // only an in-flight custom is editable
+    // THE SAME NUMBERS, UNPACKED. `W3ChallengeRow` draws the metric's own mark
+    // and puts the measurement at a size a rider can read at a glance, which a
+    // 10.5px line inside a shared grey card could never do.
+    kind: c.metric,
+    value: Math.round(c.value),
+    target: Math.round(c.target),
+    unit,
+    completed: !!c.completed,
+    deadline: c.detail || null,
   }
 }
 
