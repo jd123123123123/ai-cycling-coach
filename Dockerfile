@@ -17,6 +17,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.txt ./
 RUN pip install -r requirements.txt
+# The background-removal model, baked in at BUILD time. It is 179 MB and rembg
+# fetches it on first use — at runtime that would mean the first rider after
+# every deploy waits for a download, on a request that is already slow because
+# it is rendering. See `services/cutout.py`.
+RUN python -c "from rembg import new_session; new_session('isnet-general-use')"
+ENV NUMBA_CACHE_DIR=/tmp U2NET_HOME=/root/.u2net
 COPY backend/ .
 # built frontend served by the backend at the same origin
 COPY --from=frontend /fe/dist /app/frontend_dist

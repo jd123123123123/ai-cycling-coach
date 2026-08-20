@@ -4,7 +4,8 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Sparkles, Star } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, grow, Kicker, DASH, Reveal } from './w3tokens'
-import W3TodayStage from './W3TodayStage'
+import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
+import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -201,6 +202,12 @@ export default function W3TodayView({ vm, onAdapt }: {
   onAdapt?: OnAdapt
 }) {
   const navigate = useNavigate()
+  // The colour the stage picture ends in. Everything the hero touches — the
+  // first screen, the section under it, the frame behind both — continues in
+  // it, so the app reads as one room rather than as a picture pasted onto a
+  // page. Null until the sample lands, and null forever if a canvas read is
+  // refused; both cases fall back to the token.
+  const ground = useGroundColour(STAGE_PLATE)
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))
@@ -234,7 +241,13 @@ export default function W3TodayView({ vm, onAdapt }: {
         <div style={{
           position: 'relative',
           height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
-          display: 'flex', flexDirection: 'column', background: T.heroBg,
+          display: 'flex', flexDirection: 'column',
+          // ONE SYSTEM, NO SEAM. The page continues in exactly the colour the
+          // stage picture finishes with, read off its bottom edge rather than
+          // chosen — so there is no border to hide and nothing to blend. Change
+          // the stage and the whole screen follows it. Falls back to the token
+          // while the sample loads, which is what shipped before.
+          background: ground ?? T.heroBg,
         }}>
           <W3StatusBar />
 
@@ -298,7 +311,12 @@ export default function W3TodayView({ vm, onAdapt }: {
             under the first screen rather than on the readiness page, because
             scrolling is a cheaper question than a navigation: "why 88" should
             cost a thumb-flick, not a screen change and a way back. */}
-        <div style={{ padding: '0 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{
+          padding: '0 16px 20px', display: 'flex', flexDirection: 'column', gap: 12,
+          // Carries the stage's colour past the fold, so scrolling off the hero
+          // is a continuation rather than a step down onto a different surface.
+          background: ground ?? T.heroBg,
+        }}>
           <span style={{
             fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.heroMid,
           }}>ÜBER NACHT</span>

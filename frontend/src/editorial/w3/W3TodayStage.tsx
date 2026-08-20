@@ -57,6 +57,10 @@ import { W3CoachFab } from './W3CoachChat'
  */
 const FLOOR = 0.762
 
+/** The room. Exported so the screen around the stage can read the colour this
+ *  picture ends in and carry on in it — see `useGroundColour`. */
+export const STAGE_PLATE = '/w3/stage-studio.webp'
+
 const AVATAR = 130
 const GLOW = 178
 const HANDLE_OVERLAP = -12
@@ -236,7 +240,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
 
       {/* The room itself. Covers the stage, anchored to the bottom so the pool
           of light and the floor line land where the bike stands. */}
-      <img aria-hidden src="/w3/stage-studio.webp" alt=""
+      <img aria-hidden src={STAGE_PLATE} alt=""
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
           // `fill`, not `cover`: cover crops, and a cropped plate carries its
