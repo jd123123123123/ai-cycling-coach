@@ -282,7 +282,11 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
         )}
       </motion.div>
 
-      {/* ── the bike: standing on the floor, nothing behind it ── */}
+      {/* ── the bike: standing on the floor, nothing behind it ──
+          The art is a CUT-OUT, so there is no rectangle and no seam: the
+          stage's own floor sweep runs continuously behind and around the
+          machine, which is what the reference does and what the old
+          screen-blend was faking badly. */}
       <motion.div
         initial={reduce ? false : { opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
