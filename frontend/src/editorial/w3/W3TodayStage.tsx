@@ -46,7 +46,7 @@ import { W3CoachFab } from './W3CoachChat'
  *
  * MEASURED, NOT GUESSED. `stage-studio.webp` is a graphic set — a flat wall
  * meeting a flat floor — and the row where its mean brightness jumps IS the
- * horizon: 978 of 1536 px, 63.7%. Every attempt before this one placed the bike
+ * horizon: 1171 of 1536 px, 76.2%. Every attempt before this one placed the bike
  * by eye and it floated, because the plate was `cover`-cropped and its horizon
  * moved with the viewport. The plate is stretched to the stage now, which a
  * flat two-plane gradient takes without showing it, so this number holds on
@@ -55,7 +55,7 @@ import { W3CoachFab } from './W3CoachChat'
  * Re-measure if the plate is ever re-rendered: the row of the largest jump in
  * mean brightness, divided by the height.
  */
-const FLOOR = 0.637
+const FLOOR = 0.762
 
 const AVATAR = 130
 const GLOW = 178
@@ -204,7 +204,12 @@ function DiscChip({ icon, value }: { icon: React.ReactNode; value: string }) {
   )
 }
 
-export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
+export default function W3TodayStage({ vm, fullBleed = false }: {
+  vm: W3StageVm
+  /** Fill the whole first screen and let the panel float over the floor,
+   *  rather than occupying one band of a column above it. */
+  fullBleed?: boolean
+}) {
   const reduce = useReducedMotion()
 
   // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
@@ -219,7 +224,11 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
   const floor = `linear-gradient(180deg, ${T.heroFloor[0]} 0%, ${T.heroFloor[1]} 40%, ${T.heroFloor[2]} 76%, ${T.heroFloor[3]} 100%)`
 
   return (
-    <div style={{
+    <div style={fullBleed ? {
+      position: 'absolute', inset: 0, overflow: 'hidden', background: floor,
+      fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center',
+      paddingTop: 44,
+    } : {
       position: 'relative', width: '100%', flex: '1 1 auto', minHeight: 0,
       overflow: 'hidden', background: floor, fontFamily: FONT,
       display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -383,9 +392,14 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
               // NO FIXED HEIGHT. A height here re-introduced the original bug
               // one level down: `contain` inside a 52%-tall box is limited by
               // the HEIGHT again, so the bike drew at ~45% of the width with
-              // floor either side. The wrapper now takes the height its picture
+              // floor either side. The wrapper takes the height its picture
               // needs, and the picture is sized by WIDTH — the one dimension
               // this screen actually has to fill.
+              //
+              // The plate's horizon sits at 76% now (it was 64%, which left a
+              // third of the screen as empty floor and pushed the machine up
+              // into the block pill). Low horizon, shallow floor band: the way
+              // the reference sets are shot.
               display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
             }}>
               {/* ONE SHADOW PER TYRE. A single ellipse under the whole bike is a

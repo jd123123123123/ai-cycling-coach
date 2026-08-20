@@ -223,13 +223,23 @@ export default function W3TodayView({ vm, onAdapt }: {
              Sized to the viewport MINUS the fixed tab bar, so the dock lands
              exactly above it the way it does in the pen, on any device height
              rather than only at 844. ── */}
+        {/* THE ROOM IS THE WHOLE SCREEN.
+            The stage used to be one band in a column, so its floor stopped at
+            the readiness panel and the picture cut hard into flat black — the
+            seam the rider kept pointing at. The stage is absolute and full
+            bleed now; the status bar and the panel float over it. That is also
+            what puts the bike properly low: its floor line is measured against
+            the whole screen instead of against the leftover space above a
+            panel. */}
         <div style={{
+          position: 'relative',
           height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
           display: 'flex', flexDirection: 'column', background: T.heroBg,
         }}>
           <W3StatusBar />
 
           <W3TodayStage
+            fullBleed
             vm={{
               handle: vm.handle,
               role: vm.tierLine,
@@ -254,7 +264,10 @@ export default function W3TodayView({ vm, onAdapt }: {
               nothing under it, so the first screen ended on a hard edge and gave
               no sign that anything followed. The extra air is also the room the
               scroll cue needs. */}
-          <div style={{ padding: '16px 16px 28px', flex: 'none' }}>
+          <div style={{
+            position: 'relative', zIndex: 2, marginTop: 'auto',
+            padding: '16px 16px 28px', flex: 'none',
+          }}>
             <W3TodayDock
               vm={{
                 score: vm.readiness,
