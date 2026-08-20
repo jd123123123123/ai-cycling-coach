@@ -295,6 +295,12 @@ export default function W3TodayView({ vm, onAdapt }: {
             distance the two colours need to meet in. */}
         <div aria-hidden style={{
           height: 180, flex: 'none',
+          // The fade needs LENGTH to stay invisible, but length spent as empty
+          // space reads as a dead screen. Pulling the next section up into its
+          // tail keeps the full 180px of colour travel and gives back 70px of
+          // the gap: the content begins inside the transition rather than after
+          // it, which is also how the hero's own falloff meets the panel.
+          marginBottom: -70,
           background: `linear-gradient(180deg, ${ground ?? T.heroBg} 0%, ${T.bg} 100%)`,
         }} />
 
