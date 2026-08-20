@@ -1,9 +1,8 @@
 import { useEffect, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { motion, useReducedMotion } from 'motion/react'
-import { Sparkles, Star } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
-import { T, FONT, grow, Kicker, DASH, Reveal } from './w3tokens'
+import { T, FONT, DASH, Reveal } from './w3tokens'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
@@ -15,7 +14,6 @@ import W3TodayStatus from './W3TodayStatus'
 import W3TodayRank from './W3TodayRank'
 import W3WeekRecapCard from './W3WeekRecapCard'
 import W3WhyToday from './W3WhyToday'
-import W3ScoreCard from './W3ScoreCard'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Block, OnAdapt, AdaptResult } from './W3Sections'
@@ -134,53 +132,7 @@ export interface W3Vm {
 }
 
 // ── primitives ──
-function Spark({ spark, h = 22 }: { spark: W3Spark | null; h?: number }) {
-  const reduce = useReducedMotion()
-  // No real series for this metric — hold the height with an empty track
-  // rather than draw a shape the rider's data never made.
-  if (!spark || spark.bars.length === 0) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'flex-end', width: '100%', height: h }}>
-        <div style={{ width: '100%', height: 2, borderRadius: 1, background: T.d2, opacity: 0.5 }} />
-      </div>
-    )
-  }
-  return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', width: '100%', height: h }}>
-      {spark.bars.map((b, i) => {
-        const last = i === spark.bars.length - 1
-        const bh = Math.max(2, Math.round(b * h))
-        return (
-          <motion.div key={i}
-            initial={reduce ? false : { height: 0 }}
-            animate={{ height: bh }}
-            transition={grow(i * 0.04)}
-            style={{ flex: 1, height: bh, borderRadius: 1.5, background: last ? spark.hi : T.d2, boxShadow: last ? `0 0 8px ${spark.hi}66` : 'none' }} />
-        )
-      })}
-    </div>
-  )
-}
 
-function SignalCard({ label, sig }: { label: string; sig: W3Signal | null }) {
-  return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 13px', borderRadius: 18, background: T.surface }}>
-      <Kicker>{label}</Kicker>
-      {sig ? (
-        <>
-          <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end' }}>
-            <span style={{ fontSize: 32, fontWeight: 700, letterSpacing: -0.8, color: T.ink, lineHeight: 0.9 }}>{sig.value}</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, lineHeight: 2 }}>{sig.unit}</span>
-          </div>
-          <Spark spark={sig.spark} />
-          <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.25, color: sig.sub ? sig.subHue : T.quiet }}>{sig.sub ?? DASH}</span>
-        </>
-      ) : (
-        <span style={{ fontSize: 32, fontWeight: 700, color: T.quiet, lineHeight: 0.9 }}>{DASH}</span>
-      )}
-    </div>
-  )
-}
 
 
 // ── band scaffold: every section is a full-width vertical band on w-bg ──
@@ -308,9 +260,12 @@ export default function W3TodayView({ vm, onAdapt }: {
                 // so appending one here printed "1,4××".
                 bonus: vm.earnRate === DASH ? null : vm.earnRate,
                 stats: [
-                  { label: 'HRV', value: vm.hrv ? `${vm.hrv.value} ${vm.hrv.unit}`.trim() : null },
-                  { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null },
-                  { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null },
+                  { label: 'HRV', value: vm.hrv ? `${vm.hrv.value} ${vm.hrv.unit}`.trim() : null,
+                    note: vm.hrv?.sub ?? null, noteHue: vm.hrv?.subHue },
+                  { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null,
+                    note: vm.rhr?.sub ?? null, noteHue: vm.rhr?.subHue },
+                  { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null,
+                    note: vm.sleep?.sub ?? null, noteHue: vm.sleep?.subHue },
                 ],
                 // The first screen answers ONE question with one number and one
                 // meter. The overnight signals are the working behind it and
@@ -355,31 +310,31 @@ export default function W3TodayView({ vm, onAdapt }: {
              rest flag comes from `day.rest` (the plan's day TYPE), never from
              `status`, which is 'today' whatever kind of day it is. ── */}
         {/* band(26) — every content band on Today now shares one bottom gap. */}
-        <div style={{ ...band(26), paddingTop: 20, gap: 14 }}>
-          <W3ScoreCard
-            score={vm.readiness}
-            label="Bereitschaft"
-            word={vm.readinessWord}
-            // The day-over-day move: a small signed kicker, deliberately not a
-            // second big number next to the score. Absent — not zeroed — when
-            // there aren't two dated readings.
-            note={vm.readinessDelta}
-            aside={{
-              label: 'Multiplikator',
-              value: vm.earnRate,
-              caption: vm.earnRateWhy,
-              icon: <Star size={14} color={T.acid} fill={T.acid} />,
-            }}
-            context={todayIsRest && vm.readiness != null ? (
-              <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
-                Ruhetag — die {vm.readiness} beschreibt deinen Körper, nicht den Plan.
-                Heute wird die Erholung angelegt, nicht ausgegeben.
-              </span>
-            ) : null}
-            onClick={() => navigate('/e/w3-readiness')}
-            ariaLabel="Readiness-Details"
-          />
+        {/* ── What the number MEANS ───────────────────────────────────────
+             `W3ScoreCard` used to open this section with the readiness score, a
+             second time. The hero panel answers "how am I today" — a card
+             repeating it 300px later is the app saying the same thing twice and
+             trusting neither telling. It is gone from Today; it still grades a
+             finished ride's execution elsewhere, which is what it is for.
+             The delta and the multiplier caption it carried are not lost: they
+             belong to the score, so they live with the score, in the panel.
 
+             What follows the hero is the next question, not the same one: the
+             coach's own sentence about what that number is asking of today.
+
+             ONE THING FROM THAT CARD IS KEPT, because it resolves a real
+             contradiction rather than decorating one: on a rest day a high
+             readiness next to "Ruhetag" reads as the app arguing with itself.
+             Both are true — readiness measures the BODY, the plan decides the
+             DAY — so it is said out loud here instead of leaving the rider to
+             reconcile it. ── */}
+        <div style={{ ...band(26), paddingTop: 20, gap: 14 }}>
+          {todayIsRest && vm.readiness != null && (
+            <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
+              Ruhetag — die {vm.readiness} beschreibt deinen Körper, nicht den Plan.
+              Heute wird die Erholung angelegt, nicht ausgegeben.
+            </span>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px 6px 9px', borderRadius: 100, background: T.acidDim }}>
               <Sparkles size={12} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.acid }}>KI-COACH</span>
@@ -414,12 +369,12 @@ export default function W3TodayView({ vm, onAdapt }: {
              signal (HRV/sleep/RHR vs baseline), replacing the long coach text ── */}
         <W3RecoveryNudge />
 
-        {/* ── Signals ── */}
-        <div style={{ ...band(26), flexDirection: 'row', gap: 8 }}>
-          <SignalCard label="HRV" sig={vm.hrv} />
-          <SignalCard label="Ruhepuls" sig={vm.rhr} />
-          <SignalCard label="Schlaf" sig={vm.sleep} />
-        </div>
+        {/* ── The signals are IN the panel now ────────────────────────────
+             Three cards printed HRV, resting pulse and sleep here — the same
+             three numbers the hero panel reveals when the rider scrolls. Their
+             one advantage was the trend line under each value, so that line
+             moved INTO the panel rather than being deleted: opening it now
+             gives the evidence, not a repeat. Today asks its question once. ── */}
 
         {/* ── Deine Woche — ONE card: the day selector, the SELECTED day's
              training (plan / adapt / planned-vs-done), and that day's weather.

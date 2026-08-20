@@ -64,6 +64,11 @@ function useCountUp(target: number, reduce: boolean | null, ms = 720) {
 }
 
 export interface W3DockStat {
+  /** The trend line under the value — "+9 auf den Basiswert". Optional: it is
+   *  the evidence, and evidence we do not have is left out rather than dashed. */
+  note?: string | null
+  /** The colour that trend deserves. Falls back to quiet. */
+  noteHue?: string
   label: string
   /** Already formatted and localised, or null → an em dash. Never a padded 0. */
   value: string | null
@@ -191,17 +196,27 @@ export default function W3TodayDock({ vm, onOpen }: {
       {vm.showStats !== false && (
       <div style={{
         display: 'flex', gap: 12, width: '100%',
-        height: open * 44, opacity: open, overflow: 'hidden',
+        height: open * 60, opacity: open, overflow: 'hidden',
         marginTop: open * 2, pointerEvents: open > 0.6 ? 'auto' : 'none',
       }}>
         {vm.stats.map((s) => (
-          <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>{s.label}</span>
             <span style={{
               fontFamily: ARCHIVO, fontSize: 17, fontWeight: 700,
               color: s.value ? T.ink : T.heroOff, fontVariantNumeric: 'tabular-nums',
               minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>{s.value ?? DASH}</span>
+            {/* The trend, so opening the panel gives the EVIDENCE and not just
+                the same three numbers a second time. This is what the separate
+                signal cards further down used to be for. */}
+            {s.note && (
+              <span style={{
+                fontSize: 10, fontWeight: 600, lineHeight: 1.2,
+                color: s.noteHue ?? T.heroMid, minWidth: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{s.note}</span>
+            )}
           </div>
         ))}
       </div>
