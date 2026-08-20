@@ -208,7 +208,7 @@ function WeatherDay({ w }: { w: W3Weather }) {
             <span key={m.l}>
               {i > 0 && <span style={{ color: T.quiet }}> · </span>}
               <span style={{ color: m.v !== DASH ? T.ink : T.quiet }}>{m.v}</span>
-              <span style={{ color: T.quiet }}> {m.l.toLowerCase()}</span>
+              <span style={{ color: T.quiet }}> {asWord(m.l)}</span>
             </span>
           ))}
         </span>
@@ -335,6 +335,28 @@ interface DayStat { icon: LucideIcon; v: string; l: string; hue?: string }
 
 
 /**
+ * A caps kicker, as it should read INSIDE a sentence.
+ *
+ * The fact lines are prose, and prose has casing rules: German nouns are
+ * capitalised and acronyms stay upper. Lowercasing the kicker mechanically —
+ * which is what the first version of this did — produced "112 tss · 98% der
+ * ftp", which reads as a typo rather than as a quiet label.
+ */
+const SENTENCE_LABEL: Record<string, string> = {
+  DAUER: 'Dauer',
+  ZIEL: 'Ziel',
+  TSS: 'TSS',
+  'DER FTP': 'der FTP',
+  REGEN: 'Regen',
+  TEMP: 'Temp',
+  WIND: 'Wind',
+}
+
+/** Falls back to the label unchanged: a wind direction like "SW" is already
+ *  correct, and an unknown label is safer left alone than transformed. */
+const asWord = (label: string) => SENTENCE_LABEL[label] ?? label
+
+/**
  * The session's numbers, in the hero's grammar.
  *
  * WHAT THIS REPLACES. Four `StatCard`s in a 2x2 grid: four framed boxes, each
@@ -379,7 +401,7 @@ function SessionNumbers({ stats }: { stats: DayStat[] }) {
             <span key={s.l}>
               {i > 0 && <span style={{ color: T.quiet }}> · </span>}
               <span style={{ color: s.hue ?? T.ink }}>{s.v}</span>
-              <span style={{ color: T.quiet }}> {s.l.toLowerCase()}</span>
+              <span style={{ color: T.quiet }}> {asWord(s.l)}</span>
             </span>
           ))}
         </span>
