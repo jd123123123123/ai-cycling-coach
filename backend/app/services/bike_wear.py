@@ -54,6 +54,89 @@ OVERRUN_FACTOR = 2.0
 # the timing decision genuinely interesting instead of merely obligatory.
 
 
+# ── WHAT A KILOMETRE COSTS DEPENDS ON THE KILOMETRE ─────────────────────────
+#
+# Every interval above is quoted in kilometres because that is how the industry
+# quotes them, and every one of those figures assumes DRY ROAD. A cyclist knows
+# this in their hands: a chain that lasts 250 km through a British winter is the
+# same chain that lasts well past 400 in an Italian summer, and the difference is
+# not mileage — it is water, grit and load.
+#
+# Almost every maintenance app on the market counts raw kilometres, because
+# almost every one of them is fed by a distance number and nothing else. This
+# app is a TRAINING app: it already resolved whether the ride was wet, what
+# surface it was on, how much climbing it held and how hard it was ridden, in
+# order to settle the ride's earn. Those facts are already paid for, and they are
+# exactly the facts that decide wear. Using them is the difference between an
+# odometer and a service book.
+#
+# THE MULTIPLIERS ARE CONSERVATIVE ON PURPOSE. A wet ride is worth roughly three
+# chains' worth of grit in the literature; 2.2x is the low end of that, because
+# an interval that arrives too early trains a rider to ignore it, and a service
+# book nobody believes is worse than a plain odometer. Everything here rounds
+# TOWARD the rider.
+#
+# RULE 4 AGAIN, inherited from `earn_modifiers`: a fact we do not have never
+# moves the number. An unknown surface is dry road, not "probably gravel".
+
+#: How much harder each condition is on each component, as a multiplier on the
+#: kilometres that ride contributes. 1.0 means the condition does not touch it.
+_WEAR: dict[str, dict[str, float]] = {
+    # Water and grit are the chain's whole story, and gravel dust is the rest.
+    "chain": {"wet": 2.2, "gravel": 1.8, "cold": 1.15, "hard": 1.1},
+    # A cassette wears WITH the chain, more slowly and for the same reasons.
+    "cassette": {"wet": 1.7, "gravel": 1.5, "cold": 1.05, "hard": 1.1},
+    # Rim or disc, braking in the wet is what eats pads — and descending is when
+    # you brake, so climbing metres are the proxy that matters.
+    "brakes": {"wet": 2.5, "gravel": 1.3, "climb": 1.6},
+    # Tyres care about the surface and about nothing else here. Rain does not
+    # meaningfully wear rubber; sharp gravel does.
+    "tyres": {"gravel": 2.0},
+}
+
+
+def wear_factor(component_id: str, facts) -> float:
+    """How much one ride's kilometres count against this component.
+
+    `facts` is `earn_modifiers.RideFacts` — the same object the earn engine
+    already built for this ride. Typed loosely to keep this module free of a
+    circular import; it only ever reads attributes that may be None.
+
+    Multiplicative, not additive: a wet gravel ride is genuinely worse than
+    either alone, and adding the two would understate it. Capped, because no
+    single ride should consume a whole interval — a cap is what keeps one filthy
+    afternoon from telling a rider their tyres are finished.
+    """
+    table = _WEAR.get(component_id)
+    if table is None:
+        return 1.0
+
+    f = 1.0
+    if getattr(facts, "was_wet", None) is True:
+        f *= table.get("wet", 1.0)
+    if getattr(facts, "surface", None) in ("gravel", "mtb"):
+        f *= table.get("gravel", 1.0)
+    temp = getattr(facts, "temp_c", None)
+    if temp is not None and temp <= 5:
+        f *= table.get("cold", 1.0)
+    iff = getattr(facts, "intensity_factor", None)
+    if iff is not None and iff >= 0.85:
+        f *= table.get("hard", 1.0)
+    # Climbing is a stand-in for descending, which is where the braking is.
+    climb = getattr(facts, "elevation_gain_m", None) or 0
+    dist_km = (getattr(facts, "distance_m", None) or 0) / 1000
+    if dist_km > 0 and climb / dist_km >= 12:
+        f *= table.get("climb", 1.0)
+
+    return min(f, MAX_WEAR_FACTOR)
+
+
+#: No single ride may count for more than this many times its distance. Three
+#: hard conditions stacking is real; a ride costing five intervals is not, and a
+#: number a rider cannot recognise is a number they stop trusting.
+MAX_WEAR_FACTOR = 4.0
+
+
 @dataclass(frozen=True)
 class ComponentSpec:
     """One serviceable thing on the bike."""

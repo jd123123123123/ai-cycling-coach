@@ -101,7 +101,8 @@ async def _chain_km_since(db: AsyncSession, user_id: int) -> float:
 
 
 async def _pay_gear(
-    db: AsyncSession, user_id: int, activity: Activity, base_rc: int, chain_km: float
+    db: AsyncSession, user_id: int, activity: Activity, base_rc: int, chain_km: float,
+    facts: em.RideFacts | None = None,
 ) -> int:
     """Credit what the equipped loadout added. Returns the RideCoin paid.
 
@@ -112,7 +113,10 @@ async def _pay_gear(
     if base_rc <= 0:
         return 0
     equipped = await gear.equipped_ids(db, user_id)
-    facts = await _ride_facts(db, user_id, activity, chain_km)
+    # Passed in by `settle`, which builds them once for the whole settlement.
+    # Still resolved here when a caller has none, so this stays usable alone.
+    if facts is None:
+        facts = await _ride_facts(db, user_id, activity, chain_km)
     # The facts are already paid for here, weather included, so this is the one
     # place a stage gated on rain or cold can honestly be earned. Never fatal:
     # a rider must not lose the RideCoin their ride earned because a backdrop
@@ -309,14 +313,31 @@ async def settle(
         logger.warning("workshop read failed for user_id=%s", user_id, exc_info=True)
         chain_km = 0.0
 
+    # ONE FACT SET FOR THE WHOLE SETTLEMENT. Resolving a ride's weather, surface
+    # and crew costs a lookup each, and both the earn and the wear model need the
+    # same answers — building them twice would double that cost and, worse, let
+    # the two disagree about the same ride. Never fatal: a ride whose facts
+    # cannot be resolved still earns and still counts kilometres, just unweighted.
+    facts = None
     try:
-        gear_rc = await _pay_gear(db, user_id, activity, base_rc, chain_km)
+        facts = await _ride_facts(db, user_id, activity, chain_km)
+    except Exception:
+        logger.warning("ride facts failed for user_id=%s", user_id, exc_info=True)
+
+    try:
+        gear_rc = await _pay_gear(db, user_id, activity, base_rc, chain_km, facts)
         result["gear_rc"] = gear_rc
     except Exception:
         logger.warning("gear bonus failed for user_id=%s", user_id, exc_info=True)
 
     try:
-        if await workshop.accrue(db, user_id, activity.id, activity.distance_meters):
+        # Weighted by what this ride actually cost each component — see
+        # `bike_wear.wear_factor`. A wet gravel ride advances the chain's service
+        # clock four times as fast as a dry road ride of the same distance,
+        # which is what a cyclist already knows and what an odometer cannot say.
+        if await workshop.accrue(
+            db, user_id, activity.id, activity.distance_meters, facts,
+        ):
             result["km_accrued"] = km
     except Exception:
         logger.warning("odometer accrual failed for user_id=%s", user_id, exc_info=True)

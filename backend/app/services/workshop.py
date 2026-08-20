@@ -90,9 +90,26 @@ async def read(db: AsyncSession, user_id: int) -> WorkshopView:
 
 
 async def accrue(
-    db: AsyncSession, user_id: int, activity_id: int, distance_m: float | None
+    db: AsyncSession, user_id: int, activity_id: int, distance_m: float | None,
+    facts=None,
 ) -> bool:
-    """Fold one ride's distance into every odometer. True when it counted.
+    """Fold one ride into every odometer, weighted by what that ride cost. True
+    when it counted.
+
+    `facts` is the ride's `earn_modifiers.RideFacts` — already built to settle
+    the earn, so this is free. Given it, each component advances by the ride's
+    distance times ITS OWN wear factor: a wet ride is worth 2.2 chains to the
+    chain and 2.5 to the brake pads, while the tyres barely notice. Without it
+    every component advances by plain distance, which is exactly what this did
+    before and remains the honest fallback.
+
+    TWO ODOMETERS, ON PURPOSE. `km_since_service` is the SERVICE clock and now
+    carries the weighting — it is the number that decides when a job is due, and
+    it should read in "kilometres this component has felt". `km_total` stays the
+    lifetime distance the part has actually travelled, unweighted, because that
+    one is a fact about the world rather than a model of wear: a rider who reads
+    "4 000 km on this chain" means road, not a weighted figure only the app
+    understands.
 
     IDEMPOTENT ON `activity_id`. Ingestion replays, and an odometer that
     double-counts a ride would quietly inflate both the harvest and the rider's
@@ -105,10 +122,11 @@ async def accrue(
 
     rows = await _rows(db, user_id)
     counted = False
-    for row in rows.values():
+    for cid, row in rows.items():
         if row.last_activity_id == activity_id:
             continue
-        row.km_since_service += km
+        factor = bike_wear.wear_factor(cid, facts) if facts is not None else 1.0
+        row.km_since_service += km * factor
         row.km_total += km
         row.last_activity_id = activity_id
         counted = True
