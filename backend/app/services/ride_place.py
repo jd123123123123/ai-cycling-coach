@@ -44,17 +44,28 @@ UNKNOWN = "UNKNOWN"
 MAX_PLACE_CHARS = 60
 
 _PROMPT = (
-    "You are a geographer. These coordinates are the START of a real cycling ride.\n"
-    "Latitude: {lat}\nLongitude: {lng}\n\n"
-    "Name the region a cyclist would call this — a mountain range, a massif, a named "
-    "climb, a national park, a coastline, or failing all of those the nearest city or "
-    "province. Examples of the register: 'the Dolomites', 'Mont Ventoux', 'the Black "
-    "Forest', 'the Yorkshire Dales', 'coastal Mallorca', 'Munich'.\n\n"
+    "You are a geographer. These coordinates are points along a real cycling ride.\n"
+    "{points}\n\n"
+    # SPECIFIC BEATS CORRECT-BUT-USELESS. Asked for "the region", the model
+    # answered "Berlin" for a ride around the Müggelsee — true, and worthless to
+    # the person who rode it: a city of 3.7 million says nothing about the lake
+    # they went round, and it renders as generic city rather than as pine forest
+    # and water. A rider names their ride after the smallest place that still
+    # means something, and so should this.
+    "Name the SMALLEST place a local cyclist would use for this ride. Prefer, in this order: "
+    "a named lake, forest, climb, pass, valley or park the route touches; then the district, "
+    "suburb or village; then a named region; and only as a last resort the city or province.\n"
+    "Examples of the register, smallest first: 'Müggelsee', 'Köpenick', 'Grunewald', "
+    "'Mont Ventoux', 'the Dolomites', 'coastal Mallorca'. For a ride around a lake on the "
+    "eastern edge of Berlin the right answer is 'Müggelsee' — NOT 'Berlin'.\n\n"
     "RULES:\n"
     "- Answer with the place name ALONE. No sentence, no punctuation, no explanation.\n"
+    "- Use the local-language name as locals write it.\n"
     f"- If you cannot identify the location with confidence, answer exactly {UNKNOWN}.\n"
-    f"- Guessing is worse than {UNKNOWN}. A wrong region is shown to the rider who "
-    "actually rode there, and they will know."
+    f"- Guessing is worse than {UNKNOWN}. A wrong place is shown to the rider who "
+    "actually rode there, and they will know. A place that is merely VAGUE — the city when "
+    "the ride was clearly around one lake — is a worse answer than a precise one, but still "
+    "far better than an invented one."
 )
 
 
@@ -114,7 +125,28 @@ def _ready() -> bool:
     return importlib.util.find_spec("google.genai") is not None
 
 
-async def resolve(lat: float | None, lng: float | None) -> str | None:
+def _describe_points(
+    lat: float, lng: float, points: list[tuple[float, float]] | None,
+) -> str:
+    """The coordinates handed to the model, as lines it can reason over.
+
+    THE START ALONE IS NOT THE RIDE. A rider who lives in a suburb and rides to
+    a lake starts at their front door, so a single fix names the suburb and
+    misses the whole point of the ride. A handful of points spread along the
+    route lets the model see where it actually WENT — which is what makes
+    "Müggelsee" available as an answer instead of "Berlin".
+    """
+    picked = [p for p in (points or []) if _valid_coords(p[0], p[1])][:6]
+    if not picked:
+        picked = [(lat, lng)]
+    lines = [f"Latitude: {a:.5f}  Longitude: {b:.5f}" for a, b in picked]
+    head = "Point along the route:" if len(lines) == 1 else "Points along the route, in order:"
+    return head + "\n" + "\n".join(lines)
+
+
+async def resolve(
+    lat: float | None, lng: float | None, *, points: list[tuple[float, float]] | None = None,
+) -> str | None:
     """The region these coordinates sit in, or None.
 
     None is a perfectly good answer and every caller must handle it: no GPS, no
@@ -134,7 +166,7 @@ async def resolve(lat: float | None, lng: float | None) -> str | None:
         client = genai.Client(api_key=settings.GEMINI_API_KEY)
         resp = client.models.generate_content(
             model="gemini-flash-latest",
-            contents=[_PROMPT.format(lat=f"{lat:.5f}", lng=f"{lng:.5f}")],
+            contents=[_PROMPT.format(points=_describe_points(lat, lng, points))],
             config=types.GenerateContentConfig(temperature=0.0),
         )
     except Exception:

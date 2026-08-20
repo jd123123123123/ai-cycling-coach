@@ -249,8 +249,12 @@ export default function W3TodayView({ vm, onAdapt }: {
               rendering: vm.stageRendering,
             }} />
 
-          {/* The pen's bottom slot: padding 16, one panel, centred. */}
-          <div style={{ padding: 16, flex: 'none' }}>
+          {/* The pen's bottom slot: padding 16, one panel, centred.
+              `paddingBottom: 28` — the dock sat tight against the tab bar with
+              nothing under it, so the first screen ended on a hard edge and gave
+              no sign that anything followed. The extra air is also the room the
+              scroll cue needs. */}
+          <div style={{ padding: '16px 16px 28px', flex: 'none' }}>
             <W3TodayDock
               vm={{
                 score: vm.readiness,
@@ -267,8 +271,42 @@ export default function W3TodayView({ vm, onAdapt }: {
                   { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null },
                   { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null },
                 ],
+                // The first screen answers ONE question with one number and one
+                // meter. The overnight signals are the working behind it and
+                // live below the fold — see `W3DockVm.showStats`.
+                showStats: false,
               }}
               onOpen={() => navigate('/e/w3-readiness')} />
+          </div>
+        </div>
+
+        {/* ── below the fold ──────────────────────────────────────────────
+            THE SIGNALS THAT EXPLAIN THE SCORE, one scroll down. Kept directly
+            under the first screen rather than on the readiness page, because
+            scrolling is a cheaper question than a navigation: "why 88" should
+            cost a thumb-flick, not a screen change and a way back. */}
+        <div style={{ padding: '0 16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={{
+            fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.heroMid,
+          }}>ÜBER NACHT</span>
+          <div style={{
+            display: 'flex', gap: 10, width: '100%',
+            background: T.heroDock, borderRadius: 22, padding: '16px 18px',
+          }}>
+            {[
+              { label: 'HRV', value: vm.hrv ? `${vm.hrv.value} ${vm.hrv.unit}`.trim() : null },
+              { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null },
+              { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null },
+            ].map((s) => (
+              <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>{s.label}</span>
+                <span style={{
+                  fontSize: 18, fontWeight: 700, color: s.value ? T.ink : T.heroOff,
+                  fontVariantNumeric: 'tabular-nums', minWidth: 0,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>{s.value ?? DASH}</span>
+              </div>
+            ))}
           </div>
         </div>
 

@@ -81,6 +81,16 @@ export interface W3DockVm {
   bonus: string | null
   /** The three overnight signals. Always three, so the row never reflows. */
   stats: [W3DockStat, W3DockStat, W3DockStat]
+  /**
+   * Whether the three overnight signals are drawn here.
+   *
+   * FALSE ON FIRST SIGHT. Today opens on one question — how am I today — and
+   * the answer is a number and a meter. HRV, resting pulse and sleep are the
+   * WORKING behind that answer, and printing them under it on the first screen
+   * makes the rider read four numbers to learn one thing. They live just below
+   * the fold instead, where scrolling is the gesture that asks "why".
+   */
+  showStats?: boolean
 }
 
 export default function W3TodayDock({ vm, onOpen }: {
@@ -156,6 +166,7 @@ export default function W3TodayDock({ vm, onOpen }: {
       </div>
 
       {/* ── the three overnight signals ── */}
+      {vm.showStats !== false && (
       <div style={{ display: 'flex', gap: 12, width: '100%' }}>
         {vm.stats.map((s) => (
           <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -168,6 +179,7 @@ export default function W3TodayDock({ vm, onOpen }: {
           </div>
         ))}
       </div>
+      )}
     </button>
   )
 }

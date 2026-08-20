@@ -171,6 +171,23 @@ async def _open_backdrops(
     return fresh
 
 
+def _route_points(data: dict) -> list[tuple[float, float]]:
+    """Six points spread evenly along the track.
+
+    Evenly along the WHOLE ride, not the first six samples: a route's character
+    is where it went, and the opening kilometre is usually the rider's own
+    street. Six is enough for a resolver to see a lake circuit or a pass and
+    few enough to stay a cheap prompt.
+    """
+    lats = [v for v in (data.get("latitude") or []) if v]
+    lngs = [v for v in (data.get("longitude") or []) if v]
+    n = min(len(lats), len(lngs))
+    if n == 0:
+        return []
+    step = max(1, n // 6)
+    return [(float(lats[i]), float(lngs[i])) for i in range(0, n, step)][:6]
+
+
 async def _stamp_place(db: AsyncSession, user_id: int, activity: Activity) -> str | None:
     """Put this ride's place on the global map and stamp the rider's passport.
 
@@ -194,7 +211,9 @@ async def _stamp_place(db: AsyncSession, user_id: int, activity: Activity) -> st
     if not lats or not lngs:
         return None
 
-    name = await ride_place.resolve(float(lats[0]), float(lngs[0]))
+    name = await ride_place.resolve(
+        float(lats[0]), float(lngs[0]), points=_route_points(data),
+    )
     if not name:
         return None
 

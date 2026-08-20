@@ -44,10 +44,6 @@ import { W3CoachFab } from './W3CoachChat'
 const AVATAR = 130
 const GLOW = 178
 const HANDLE_OVERLAP = -12
-// The bike's minimum height, and the reason it is a floor rather than a size:
-// the stage is a flex column and the bike takes what the avatar block leaves.
-// At 268 that remainder was a letterbox in the middle of the screen.
-const BIKE_H = 300
 
 /**
  * The bike art is a RECTANGLE with a light studio ground baked into it —
@@ -195,6 +191,13 @@ function DiscChip({ icon, value }: { icon: React.ReactNode; value: string }) {
 export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
   const reduce = useReducedMotion()
 
+  // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
+  // which is flat by construction: no falloff in the corners, no grain, no light
+  // with a direction. `stage-studio.webp` is a 2K cyclorama — a seamless
+  // backdrop curving into a floor, one soft key throwing an elliptical pool, a
+  // cool rim along the curve. The gradient stays underneath as the ground the
+  // image is composited onto, so a slow or failed load degrades to exactly what
+  // shipped before rather than to a white box.
   const floor = `linear-gradient(180deg, ${T.heroFloor[0]} 0%, ${T.heroFloor[1]} 40%, ${T.heroFloor[2]} 76%, ${T.heroFloor[3]} 100%)`
 
   return (
@@ -204,13 +207,13 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
 
-      {/* The pool of light the bike stands in. Beyond the pen, and the reason
-          the sweep reads as a lit room rather than a gradient. */}
-      <div aria-hidden style={{
-        position: 'absolute', left: '50%', bottom: 0, transform: 'translateX(-50%)',
-        width: '135%', height: BIKE_H + 90, pointerEvents: 'none',
-        background: 'radial-gradient(52% 58% at 50% 76%, #FFFFFF16 0%, #FFFFFF08 42%, #FFFFFF00 74%)',
-      }} />
+      {/* The room itself. Covers the stage, anchored to the bottom so the pool
+          of light and the floor line land where the bike stands. */}
+      <img aria-hidden src="/w3/stage-studio.webp" alt=""
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          objectFit: 'cover', objectPosition: 'center bottom', pointerEvents: 'none',
+        }} />
 
       {/* ── the corner chips: real figures, floating on the floor ── */}
       <div style={{

@@ -277,8 +277,19 @@ DEFAULT_FRAMING = "studio"
 _TERRAIN_FRAMING = {
     "mountain": "alpine",
     "coastal": "coast",
-    "hilly": "studio",
-    "flat": "studio",
+    # FLAT AND HILLY USED TO EARN "studio", and that was the wrong default in
+    # the most common case there is. A rider who rode 40 km through Berlin got
+    # their bicycle photographed against an empty black backdrop and, quite
+    # reasonably, read it as the feature failing: they had just ridden
+    # SOMEWHERE, and the app showed them a void.
+    #
+    # The studio is a fine place to photograph a machine and a terrible way to
+    # remember a ride. Every ride now earns a WORLD — the garden for the flat
+    # and green rides most riders actually do, the autumn wood for rolling
+    # terrain — and the studio stays available as a framing a rider can choose,
+    # which is what a neutral backdrop should be: a decision, never a default.
+    "hilly": "autumn",
+    "flat": "garden",
 }
 
 

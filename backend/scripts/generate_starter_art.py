@@ -73,6 +73,29 @@ def _prompts() -> dict[str, str]:
             f"BACKGROUND: {stage.prose}.\n\n"
             f"{cyclr_studio.GENERAL_STYLE} {cyclr_studio.ISOLATED_BIKE_STYLE}"
         ),
+        # THE STAGE ITSELF. Today and the garage drew their floor as a CSS
+        # gradient — four stops of near-black, which is flat by construction:
+        # no falloff in the corners, no grain, no light with a direction. A
+        # rendered studio has all three, and a cut-out standing on it reads as
+        # an object in a room rather than a sticker on a gradient.
+        #
+        # It is also the one asset every rider sees on every screen, so it is
+        # worth 2K and worth being beautiful.
+        "stage-studio.webp": (
+            "An EMPTY premium photographic studio, shot at eye level: a seamless dark backdrop "
+            "curving into a floor with no visible join, in deep near-black charcoal.\n\n"
+            "There is NOTHING in the room — no furniture, no props, no objects, no people, no "
+            "text. The subject of this photograph is the light itself.\n"
+            "LIGHT: one soft overhead key throws an elliptical pool onto the floor slightly below "
+            "the middle of the frame, brightest at its centre and falling away smoothly in every "
+            "direction into pure black at the edges of frame. A faint cool rim of light catches "
+            "the curve where the floor turns up into the backdrop, so the room has a horizon "
+            "without having an edge.\n"
+            "SURFACE: the floor has a subtle sheen and the faintest fine grain — a real swept "
+            "cyclorama, not a gradient. A whisper of atmospheric haze sits in the air above it.\n"
+            "RENDER: ray-traced global illumination, physically-based materials, extremely smooth "
+            "tonal falloff with no banding whatsoever. Expensive, restrained and quiet."
+        ),
         # THE FIRST PICTURE IN THE APP. The welcome screen ran a stock
         # PHOTOGRAPH of a road cyclist, inlined as base64 — a different app's
         # art on the one screen that sets the expectation for everything after

@@ -14,6 +14,9 @@ SEASIDE = RideGeo(distance_m=40_000, elevation_gain_m=60,
                   min_altitude_m=2, max_altitude_m=18)
 ROLLING = RideGeo(distance_m=50_000, elevation_gain_m=400)
 NOTHING = RideGeo(distance_m=None, elevation_gain_m=None)
+#: A city ride — the commonest ride there is, and the one that used to be
+#: photographed against an empty black backdrop.
+CITY = RideGeo(distance_m=40_000, elevation_gain_m=120)
 
 
 def test_terrain_earns_its_framing_for_free():
@@ -26,9 +29,24 @@ def test_terrain_earns_its_framing_for_free():
 
 def test_no_gps_earns_no_landscape():
     """With nothing to read, the ride falls back to the studio rather than
-    being awarded scenery it cannot stand behind."""
+    being awarded scenery it cannot stand behind.
+
+    THE INVARIANT IS ABOUT ABSENCE, not about flat ground. This test used to
+    assert `ROLLING == "studio"` in the same breath, which quietly turned a
+    fallback into a default: a rider who rode 40 km through a city got their
+    bicycle against an empty black backdrop and read it — correctly — as the
+    feature failing, because they had just ridden SOMEWHERE. Terrain that we
+    CAN read now earns a world; only terrain we cannot read falls back.
+    """
     assert rf.default_framing_for(NOTHING) == "studio"
-    assert rf.default_framing_for(ROLLING) == "studio"
+
+
+def test_terrain_we_can_read_always_earns_a_world():
+    """Every ride with numbers behind it gets somewhere to be photographed. The
+    studio remains available to CHOOSE, which is what a neutral backdrop should
+    be — a decision, never a default."""
+    for geo in (ROLLING, CITY, MOUNTAIN, SEASIDE):
+        assert rf.default_framing_for(geo) != "studio"
 
 
 def test_unknown_framing_degrades_to_a_real_picture():

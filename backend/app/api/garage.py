@@ -33,6 +33,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
 from app.models.garage import (
     DayScene,
     GarageAsset,
@@ -1167,6 +1168,67 @@ async def select_backdrop(
     return await get_today_stage(current_user, db)
 
 
+def _route_points(data: dict) -> list[tuple[float, float]]:
+    """Six points spread evenly along the track.
+
+    Evenly along the WHOLE ride, not the first six samples: a route's character
+    is where it went, and the opening kilometre is usually the rider's own
+    street. Six is enough for a resolver to see a lake circuit or a pass and
+    few enough to stay a cheap prompt.
+    """
+    lats = [v for v in (data.get("latitude") or []) if v]
+    lngs = [v for v in (data.get("longitude") or []) if v]
+    n = min(len(lats), len(lngs))
+    if n == 0:
+        return []
+    step = max(1, n // 6)
+    return [(float(lats[i]), float(lngs[i])) for i in range(0, n, step)][:6]
+
+
+async def _place_of_activity(db: AsyncSession, user_id: int, activity: Activity) -> Place | None:
+    """The place this ride was in, from the row ingestion already wrote.
+
+    Falls back to resolving the GPS here, because a ride synced before places
+    existed — or one whose reverse-geocode failed the first time — should still
+    be able to earn its world the moment a rider asks for the picture.
+    """
+    row = (await db.execute(
+        select(Place)
+        .join(RiderPlaceStamp, RiderPlaceStamp.place_id == Place.id)
+        .where(
+            RiderPlaceStamp.user_id == user_id,
+            Place.discovered_by_activity_id == activity.id,
+        )
+    )).scalars().first()
+    if row is not None:
+        return row
+
+    stream = (await db.execute(
+        select(ActivityStream).where(ActivityStream.activity_id == activity.id)
+    )).scalar_one_or_none()
+    data = stream.streams if stream is not None else None
+    if not isinstance(data, dict):
+        return None
+    lats = [v for v in (data.get("latitude") or []) if v]
+    lngs = [v for v in (data.get("longitude") or []) if v]
+    if not lats or not lngs:
+        return None
+
+    name = await ride_place.resolve(
+        float(lats[0]), float(lngs[0]), points=_route_points(data),
+    )
+    if not name:
+        return None
+    geo = RideGeo(
+        distance_m=activity.distance_meters,
+        elevation_gain_m=activity.elevation_gain_m,
+        start_lat=float(lats[0]), start_lng=float(lngs[0]), place_name=name,
+    )
+    place = await places.ensure(db, name, geo, user_id=user_id, activity_id=activity.id)
+    await places.stamp(db, user_id, place)
+    return place
+
+
 @router.get("/scene/{activity_id}", response_model=SceneOut)
 async def get_scene(
     activity_id: int,
@@ -1242,15 +1304,39 @@ async def render_scene(
         distance_m=activity.distance_meters,
         elevation_gain_m=activity.elevation_gain_m,
     )
-    framing_id = ride_framing.default_framing_for(geo)
-    ctx = ride_framing.get(framing_id).name_de
+    # ── WHERE THE RIDE ACTUALLY WAS ─────────────────────────────────────────
+    # THE GPX DECIDES THE WORLD, not a terrain lookup. This endpoint used to
+    # pick a hand-written framing from a table keyed on how hilly the ride was,
+    # which meant a 40 km ride through Berlin resolved to "flat" and was
+    # photographed against an EMPTY BLACK STUDIO — the rider had just ridden
+    # somewhere real and the app showed them a void.
+    #
+    # The place is already known: ingestion resolves every ride's first GPS fix
+    # and stores it (`services.places`), together with prose written from THAT
+    # ride's own terrain — the resolved place leading, the terrain qualifying it
+    # (`ride_scene.scene_descriptor`). So the world is read from the row rather
+    # than guessed, and Berlin is rendered as Berlin.
+    #
+    # The framing catalogue stays as the fallback for a ride with no usable GPS,
+    # which is the one case where there is genuinely nowhere to put the bike.
+    place = await _place_of_activity(db, current_user.id, activity)
+    if place is not None:
+        world, ctx, key = place.prose, place.name, f"ride:{activity_id}:{place.slug}"
+    else:
+        framing_id = ride_framing.default_framing_for(geo)
+        f = ride_framing.get(framing_id)
+        world, ctx, key = None, f.name_de, f"ride:{activity_id}:{framing_id}"
+
     # EDIT, never redraw. The rider's own bike render goes back in as the input
     # image so the frame, the decals and the components stay pixel-identical
-    # between two framings — the measurement in `docs/w3-bike-customisation.md`.
-    image = await cyclr_studio.edit_image(
-        bike.image_url, ride_framing.edit_prompt(framing_id), f"ride:{activity_id}:{framing_id}",
+    # between two worlds — the measurement in `docs/w3-bike-customisation.md`.
+    # `bike_build.edit_prompt` with a `world` is the SAME path that puts a bike
+    # in the Dolomites and stands it on the road rather than floating it there.
+    prompt = (
+        bike_build.edit_prompt([], world=world) if world
+        else ride_framing.edit_prompt(framing_id)
     )
-    prompt = ride_framing.edit_prompt(framing_id)
+    image = await cyclr_studio.edit_image(bike.image_url, prompt, key)
     render_status = "ok" if image else "image_model_unavailable"
     if image:
         if cached is None:
