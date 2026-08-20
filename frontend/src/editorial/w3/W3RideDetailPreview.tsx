@@ -106,8 +106,8 @@ export default function W3RideDetailPreview() {
   // offers to make.
   const [scene, setScene] = useState<W3RideSceneState>({ status: 'ok', image: HERO.sceneImage, pending: false, failed: false })
   const compose = () => {
-    setScene({ status: 'not_generated', image: null, pending: true, failed: false })
-    setTimeout(() => setScene({ status: 'not_generated', image: null, pending: false, failed: true }), 2600)
+    setScene({ status: 'ok', image: HERO.sceneImage, pending: true, failed: false })
+    setTimeout(() => setScene({ status: 'ok', image: HERO.sceneImage, pending: false, failed: true }), 2600)
   }
   return (
     <W3RideDetailView
