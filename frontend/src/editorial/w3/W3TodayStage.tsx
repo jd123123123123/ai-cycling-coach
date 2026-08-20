@@ -72,6 +72,10 @@ const BIKE_ART = {
   // than the space it was given. Overdrawing puts the machine back at the size
   // of the stage and lets the mask dissolve only the empty ground around it.
   width: '118%',
+  // Bottom-aligned inside the square: the render has its own ground and light
+  // baked in near the bottom, so centring it left a band of empty studio under
+  // the wheels and pushed the machine up away from the floor it stands on.
+  alignSelf: 'flex-end' as const,
   maxHeight: '100%',
   height: '100%',
   display: 'block' as const,
@@ -280,12 +284,24 @@ export default function W3TodayStage({ vm }: { vm: W3StageVm }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
         style={{
-          position: 'relative', zIndex: 1, width: '100%', flex: '1 1 auto',
-          // `minHeight: BIKE_H` rather than 0: the bike is the subject of this
-          // screen and must never be squeezed below a readable size by whatever
-          // sits above it. `paddingTop: 8` (was 21) buys that space back.
-          minHeight: BIKE_H, display: 'flex', alignItems: 'flex-end',
-          justifyContent: 'center', paddingTop: 8,
+          position: 'relative', zIndex: 1, width: '100%',
+          // A SQUARE BOX AS WIDE AS THE SCREEN, and this is the whole fix.
+          //
+          // The renders are square. This box used to be `flex: 1 1 auto` — it
+          // took whatever height the avatar block left over, about 300px on a
+          // 844pt phone — and with `objectFit: contain` the limiting dimension
+          // of a square image in a 390x300 box is the HEIGHT. So the bike drew
+          // at 300x300, centred, with 45px of dead stage either side: the
+          // letterbox in the middle of the screen, no matter how wide the art
+          // was told to be. Widening the image could never fix it; the box had
+          // to stop being height-driven.
+          //
+          // `aspectRatio: 1` makes the box exactly as tall as the screen is
+          // wide, so the square render fills the full width every time, on any
+          // device. `flex: '0 0 auto'` keeps the column from shrinking it back.
+          aspectRatio: '1 / 1', flex: '0 0 auto',
+          display: 'flex', alignItems: 'flex-end',
+          justifyContent: 'center', paddingTop: 0,
         }}>
         {vm.bike ? (
           // ONE TREATMENT, NOT TWO. This was gated on `bikeInScene` — full

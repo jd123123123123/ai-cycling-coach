@@ -362,7 +362,9 @@ def _is_size_refusal(err: Exception) -> bool:
     return "image size" in m and "not supported" in m
 
 
-async def _render(contents: list, seed_src: str, size: str) -> str | None:
+async def _render(
+    contents: list, seed_src: str, size: str, aspect: str = "1:1",
+) -> str | None:
     """Ask the image model for one picture. Returns None rather than raising.
 
     THIS FUNCTION EXISTS BECAUSE OF A 500. `RENDER_SIZE` moved to 2K while the
@@ -403,7 +405,7 @@ async def _render(contents: list, seed_src: str, size: str) -> str | None:
                     response_modalities=["Image"],
                     seed=_seed(seed_src),
                     image_config=types.ImageConfig(
-                        aspect_ratio="1:1", image_size=attempt_size,
+                        aspect_ratio=aspect, image_size=attempt_size,
                     ),
                 ),
             )
@@ -432,9 +434,16 @@ async def _render(contents: list, seed_src: str, size: str) -> str | None:
     return None
 
 
-async def _generate(prompt: str, seed_src: str, size: str = "") -> str | None:
-    """Render one image at `size`, defaulting to `RENDER_SIZE`."""
-    return await _render([prompt], seed_src, size or RENDER_SIZE)
+async def _generate(
+    prompt: str, seed_src: str, size: str = "", aspect: str = "1:1",
+) -> str | None:
+    """Render one image at `size`, defaulting to `RENDER_SIZE`.
+
+    `aspect` is 1:1 for everything the garage shows — collectibles are shot on
+    one locked square camera so they read as a set — and only the full-screen
+    onboarding art asks for anything else.
+    """
+    return await _render([prompt], seed_src, size or RENDER_SIZE, aspect)
 
 
 def _to_data_url(png: bytes) -> str:

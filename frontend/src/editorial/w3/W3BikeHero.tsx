@@ -27,9 +27,15 @@ import type { DayPose, SceneStatus } from '../../api/garage'
  * fabricates a scene, a bike or a number.
  */
 
-/** Served from `frontend/public/w3/` rather than inlined as base64: it is 54 KB,
- *  every rider without a bike loads it, and as a static file it is cached by the
- *  browser instead of riding inside the JS bundle on every deploy. */
+/** Served from `frontend/public/w3/` rather than inlined as base64: every rider
+ *  without a bike loads it, and as a static file it is cached by the browser
+ *  instead of riding inside the JS bundle on every deploy.
+ *
+ *  RE-RENDERED 2026-08-20. It was a cut-out product photograph on WHITE, which
+ *  is why the treatment below has to grayscale it, brighten it and screen-blend
+ *  it onto the dark stage — a lot of CSS spent hiding that the art came from
+ *  somewhere else. It is now a house-style render on the black studio ground,
+ *  so it needs dimming and nothing more. */
 const EXAMPLE_BIKE = '/w3/example-bike.webp'
 
 /** The example bike shown in an empty garage slot — a real drive-side road bike
@@ -46,8 +52,10 @@ export function GhostBike({ opacity = 0.3 }: { opacity?: number }) {
     <img src={EXAMPLE_BIKE} alt="" aria-hidden
       style={{
         width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-        opacity, filter: 'grayscale(1) brightness(1.6) contrast(0.85)',
-        mixBlendMode: 'screen',
+        // Just dimmed now. The grayscale/brighten/screen stack existed to knock
+        // a white studio photograph back into a dark stage; the art already
+        // lives on that ground, and re-applying it washed the render out.
+        opacity,
       }} />
   )
 }

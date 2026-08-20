@@ -73,6 +73,24 @@ def _prompts() -> dict[str, str]:
             f"BACKGROUND: {stage.prose}.\n\n"
             f"{cyclr_studio.GENERAL_STYLE} {cyclr_studio.ISOLATED_BIKE_STYLE}"
         ),
+        # THE FIRST PICTURE IN THE APP. The welcome screen ran a stock
+        # PHOTOGRAPH of a road cyclist, inlined as base64 — a different app's
+        # art on the one screen that sets the expectation for everything after
+        # it. This is the house's own character on the house's own ground.
+        "onboard-hero.webp": (
+            "A premium 3D designer art-toy collectible character riding a bicycle, seen in a flat "
+            "side view from the bike's drive side, facing right, riding along at an easy relaxed "
+            "pace with both hands on the bar tops and a calm, open, happy expression.\n\n"
+            f"{cyclr_studio.CHARACTER_STYLE}\n\n{cyclr_studio.DEFAULT_KIT}\n\n"
+            "THE FIGURE IS SMALL IN A BIG FRAME: it sits low and slightly right of centre with a "
+            "great deal of open space above it, because a headline and a button are drawn over the "
+            "top half of this picture. Nothing important happens in the upper half.\n\n"
+            "BACKGROUND: an empty road at dawn running left to right, deep near-black surroundings "
+            "falling away into shadow, a low horizon with the faintest cold light on it and a thin "
+            "acid-lime edge of first sun catching the road. Atmospheric and restrained.\n"
+            "PORTRAIT FRAME, taller than it is wide.\n\n"
+            f"{cyclr_studio.GENERAL_STYLE}"
+        ),
         # The face-shaped absence on the avatar step, which until now was a
         # lucide BICYCLE icon — the wrong object entirely on a screen asking for
         # a photograph of a person.
@@ -110,7 +128,10 @@ async def main() -> int:
             continue
         # Seeded on the filename, not the prompt: this is shipped art, and it
         # should come back the same picture if regenerated from the same brief.
-        img = await cyclr_studio._generate(prompt, f"w3:{name}")
+        # The welcome hero fills a phone screen; everything else is a square
+        # collectible on the garage's own camera.
+        aspect = "3:4" if name == "onboard-hero.webp" else "1:1"
+        img = await cyclr_studio._generate(prompt, f"w3:{name}", aspect=aspect)
         if not img:
             print(f"{name}: no image returned (check the logs — model or quota)")
             continue

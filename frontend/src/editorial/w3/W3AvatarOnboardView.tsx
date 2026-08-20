@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, UserRound, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2, Check, ScanFace, Wand2 } from 'lucide-react'
+import { Camera, Sparkles, Mountain, Users, Trophy, ArrowRight, ArrowLeft, Bike, Loader2, Route as RouteIcon, Timer, Plus, BadgeCheck, Gauge, Flame, Share2, Check, ScanFace, Wand2 } from 'lucide-react'
 import { T, FONT, EASE, DASH, band } from './w3tokens'
 import { renderAvatarCard, sharePoster, shareTextOrCopy } from './w3share'
 import './w3.css'
@@ -550,10 +550,11 @@ function W3AvatarGenerating({ heroImageUrl }: { heroImageUrl: string | null }) {
                   // A PERSON, NOT A BICYCLE. This slot is the rider's own
                   // photograph being turned into their avatar, and it stood
                   // empty behind a bicycle icon — the wrong object entirely on
-                  // the one screen that is asking for a face.
-                  <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-                    <UserRound size={64} strokeWidth={1.2} color={T.heroOff} />
-                  </div>
+                  // the one screen that is asking for a face. It is now the
+                  // shipped mannequin: the same kit, the same ground, no face
+                  // yet. It shows what is about to happen instead of naming it.
+                  <img src="/w3/example-rider.webp" alt="" aria-hidden
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} />
                 )}
               {/* acid scan sweep — the transformation, running over their face */}
               {!reduce && (
