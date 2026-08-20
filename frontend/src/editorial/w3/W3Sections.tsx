@@ -193,19 +193,25 @@ function WeatherDay({ w }: { w: W3Weather }) {
           <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, fontVariantNumeric: 'tabular-nums', color: inBest ? T.acid : T.ink }}>{hhmm(cur.hour)}</span>
           <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: inBest ? T.acid : T.quiet }}>{inBest ? 'BESTES' : 'UHR'}</span>
         </div>
-        {metrics.map((m) => {
-          const Ic = m.icon
-          const has = m.v !== DASH
-          return (
-            <div key={m.l} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                <Ic size={12} color={T.mid} style={{ flex: 'none' }} />
-                <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, fontVariantNumeric: 'tabular-nums', color: has ? T.ink : T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.v}</span>
-              </div>
-              <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.l}</span>
-            </div>
-          )
-        })}
+        {/* ONE LINE, NO ICONS. This was three columns, each an icon beside a
+            value above a caps label — nine elements for three facts, directly
+            under a card that had already spent four boxes on four numbers. The
+            hero's rule is that supporting facts are a sentence, not a grid:
+            "8 km/h SW · 5 % Regen · 20°" says the same thing in one breath and
+            gives the row back to the hour strip above it, which is the part a
+            rider actually reads. */}
+        <span style={{
+          fontSize: 12.5, fontWeight: 600, color: T.mid, lineHeight: 1.4,
+          fontVariantNumeric: 'tabular-nums', minWidth: 0,
+        }}>
+          {metrics.map((m, i) => (
+            <span key={m.l}>
+              {i > 0 && <span style={{ color: T.quiet }}> · </span>}
+              <span style={{ color: m.v !== DASH ? T.ink : T.quiet }}>{m.v}</span>
+              <span style={{ color: T.quiet }}> {m.l.toLowerCase()}</span>
+            </span>
+          ))}
+        </span>
       </div>
     </div>
   )
@@ -280,11 +286,35 @@ export function IntervalBars({ blocks, ftpTag, h = 96 }: { blocks: W3Block[]; ft
             initial={reduce ? false : { height: 0 }} animate={{ height: bh }} transition={grow(i * 0.05)}
             // Work bars want 34px but MUST be allowed to shrink — a long session
             // (6 reps + recoveries) would otherwise overflow a 390px card.
-            style={{ flex: b.work ? '0 1 34px' : '1 1 18px', minWidth: 0, height: bh, borderRadius: '3px 3px 0 0', cursor: 'pointer',
-              background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : '#FFFFFF2B', outline: on ? `1px solid ${T.ink}` : 'none' }} />
+            style={{
+              flex: b.work ? '0 1 34px' : '1 1 18px', minWidth: 0, height: bh, cursor: 'pointer',
+              // ROUNDED AT THE TOP, FLAT ON THE BASELINE. A bar is a column
+              // standing on a floor, so only the end away from the floor is
+              // rounded — rounding the base would lift it off the line it is
+              // measured against. 4px per the mark spec, up from 3.
+              borderRadius: '4px 4px 0 0',
+              // LIT FROM ABOVE, like everything else in this app. The gradient
+              // runs light at the top into the deeper acid at the base, which is
+              // the same direction the stage's key light falls — so a bar reads
+              // as a solid with a lit face rather than as a filled rectangle.
+              background: b.work
+                ? `linear-gradient(180deg, ${T.acid} 0%, ${T.acid} 30%, ${T.acidDeep} 100%)`
+                : `linear-gradient(180deg, ${T.heroOff} 0%, ${T.heroDock} 100%)`,
+              // The contact shadow that made the bike stand, at bar scale: a
+              // dark pool where the column meets the floor, plus the thinnest
+              // specular along its top edge. Work bars only — a recovery block
+              // should sit BACK, and light is what puts it there.
+              boxShadow: b.work
+                ? `inset 0 1px 0 ${T.ink}59, 0 2px 6px ${T.acidDeep}4D`
+                : 'none',
+              outline: on ? `1px solid ${T.ink}` : 'none',
+            }} />
         )
       })}
-      <div style={{ position: 'absolute', top: Math.round(h * 0.19), left: 0, right: 0, height: 1, background: '#FFFFFF66' }} />
+      {/* THE FLOOR THE COLUMNS STAND ON. Recessive, per the mark spec: it is a
+          reference, not a mark, and it was competing with the data at 66%. */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, background: T.rule }} />
+      <div style={{ position: 'absolute', top: Math.round(h * 0.19), left: 0, right: 0, height: 1, background: T.stroke }} />
       <span style={{ position: 'absolute', top: 2, left: 0, fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.mid, maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {hov != null ? blocks[hov].label : ftpTag}
       </span>
@@ -303,35 +333,57 @@ export type OnAdapt = (kind: Exclude<Adapt, 'none'>) => Promise<AdaptResult | nu
 
 interface DayStat { icon: LucideIcon; v: string; l: string; hue?: string }
 
-/** One supporting number of the selected day's prescription, as its own mini
- *  card: icon chip left, number over kicker right.
+
+/**
+ * The session's numbers, in the hero's grammar.
  *
- *  Deliberately quiet — the session title and the CTA keep the card's only acid
- *  voices. `hue` is passed ONLY when the coach has just re-planned that number,
- *  and a missing value ("—") stays T.quiet and keeps the chip grey, so an
- *  adapted-but-unknown number can never look like a real one.
+ * WHAT THIS REPLACES. Four `StatCard`s in a 2x2 grid: four framed boxes, each
+ * with an icon in a rounded chip, a value and a caps label — sixteen elements
+ * to say four things. It is the "framed object" idiom, and the hero rejects it
+ * on purpose: up there the bike stands in a room and the readiness panel is one
+ * flat tone with no edge. A grid of bevelled tiles halfway down the same screen
+ * is a different app.
  *
- *  Width (390 viewport): 390 − 40 band − 36 card padding = 314 usable; two
- *  columns at gap 8 → 153 per card, minus 22 padding = 131 for chip (24) + gap
- *  (9) + text (98). "285 W" at 13.5/700 Inter Tight is ~37, "DER FTP" ~42 — both
- *  clear, and every child carries minWidth: 0 so nothing can push the row wide.
+ * THE HERO'S GRAMMAR IS: one number leads, the label is whispered, everything
+ * else is one quiet line. So the target power gets the size — it is the number
+ * you actually ride to — and duration, TSS and %FTP become a single sentence of
+ * facts under it. Four boxes and four icons become one number and one line, and
+ * the ~40px of height that buys goes to the interval profile, which is the
+ * thing you read to know what the ride IS.
  *
- *  Sizing is deliberately SMALL (13.5 px numbers, 24 px chips): these are the
- *  session's supporting numbers, and at 17 px they out-shouted the interval
- *  profile — which is the thing you actually read to know what the ride is. The
- *  ~17 px of row height this gives back goes straight into IntervalBars. */
-function StatCard({ icon: Ic, v, l, hue, span }: DayStat & { span?: boolean }) {
-  const has = v !== DASH
-  const on = has && hue != null
+ * `hue` still marks a number the coach has just re-planned, and a missing value
+ * still reads as an em dash in `T.quiet` — an adapted-but-unknown number can
+ * never look like a real one.
+ */
+function SessionNumbers({ stats }: { stats: DayStat[] }) {
+  if (!stats.length) return null
+  // The lead is the target if there is one, else whatever came first: the
+  // prescription's headline number, never an arbitrary slot.
+  const lead = stats.find((s) => s.l === 'ZIEL') ?? stats[0]
+  const rest = stats.filter((s) => s !== lead && s.v !== DASH)
+  const has = lead.v !== DASH
+
   return (
-    <div style={{ gridColumn: span ? '1 / -1' : undefined, minWidth: 0, display: 'flex', alignItems: 'center', gap: 9, padding: '9px 11px', borderRadius: 14, background: T.surface2 }}>
-      <div style={{ width: 24, height: 24, flex: 'none', borderRadius: 8, background: on ? T.acidDim : '#FFFFFF0F', display: 'grid', placeItems: 'center' }}>
-        <Ic size={13} color={on ? T.acid : T.mid} />
-      </div>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, fontVariantNumeric: 'tabular-nums', color: has ? (hue ?? T.ink) : T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
-        <Kicker>{l}</Kicker>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
+      <span style={{
+        fontSize: 40, fontWeight: 700, letterSpacing: -1.4, lineHeight: 0.95,
+        color: has ? (lead.hue ?? T.ink) : T.quiet, fontVariantNumeric: 'tabular-nums',
+      }}>{lead.v}</span>
+      <Kicker>{lead.l}</Kicker>
+      {rest.length > 0 && (
+        <span style={{
+          fontSize: 12.5, fontWeight: 600, color: T.mid, lineHeight: 1.45,
+          fontVariantNumeric: 'tabular-nums', minWidth: 0, marginTop: 2,
+        }}>
+          {rest.map((s, i) => (
+            <span key={s.l}>
+              {i > 0 && <span style={{ color: T.quiet }}> · </span>}
+              <span style={{ color: s.hue ?? T.ink }}>{s.v}</span>
+              <span style={{ color: T.quiet }}> {s.l.toLowerCase()}</span>
+            </span>
+          ))}
+        </span>
+      )}
     </div>
   )
 }
@@ -519,11 +571,7 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
       {/* Stats only when there's a real prescription (title + a number). A
           future day with no plan yet hides the empty dash row. */}
       {(day.title != null && (curTss > 0 || curT > 0)) && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 8 }}>
-          {stats.map((s, i) => (
-            <StatCard key={s.l} {...s} span={stats.length % 2 === 1 && i === stats.length - 1} />
-          ))}
-        </div>
+        <SessionNumbers stats={stats} />
       )}
 
       {/* the coach's own explanation of the re-plan (real AI rationale) */}

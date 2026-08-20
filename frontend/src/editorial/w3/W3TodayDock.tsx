@@ -181,8 +181,16 @@ export default function W3TodayDock({ vm, onOpen }: {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.3, ease: EASE, delay: i < filled ? i * 0.018 : 0 }}
             style={{
-              flex: 1, height: 10, borderRadius: 2,
-              background: i < filled ? hue : T.heroOff,
+              flex: 1, height: 10, borderRadius: 3,
+              // A LIT SEGMENT, not a filled rectangle. The same material move
+              // the interval bars and the stage make: light from above, so the
+              // top edge catches and the body falls away. An unlit segment gets
+              // neither — light is what separates "reached" from "not yet", so
+              // the meter reads at a glance without a second colour.
+              background: i < filled
+                ? `linear-gradient(180deg, ${hue} 0%, ${hue}D9 100%)`
+                : T.heroOff,
+              boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40` : 'none',
             }} />
         ))}
       </div>
