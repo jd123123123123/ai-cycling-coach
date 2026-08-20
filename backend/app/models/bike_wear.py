@@ -76,6 +76,11 @@ class BikeComponent(Base):
     last_service_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True,
     )
+    #: How this component is maintained, where that changes the job. Only the
+    #: chain uses it today: "oil" | "wax" | "dripwax", from
+    #: `bike_wear.CHAIN_METHODS`. NULL means the default (oil), which is what
+    #: most bicycles arrive with — not a judgement, just the common case.
+    method: Mapped[str | None] = mapped_column(String(16), nullable=True)
     #: Whether the bicycle HAS this part — three states, and the third one is
     #: the point. True: confirmed, the clock runs. False: told us they have rim
     #: brakes or inner tubes, so never mention it again. NULL: never asked, so

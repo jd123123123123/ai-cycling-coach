@@ -3,7 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Asterisk, Camera, Check, HelpCircle, Trophy, Wrench, Zap } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { WHEN_CHIPS, daysAgoISO, readPhoto } from './workshopPhoto'
-import type { ServiceResult, Workshop, WorkshopComponent } from '../../api/workshop'
+import type { MethodOption, ServiceResult, Workshop, WorkshopComponent } from '../../api/workshop'
 
 /**
  * W3 · GARAGE — the workshop. Where the bike economy is actually played.
@@ -172,12 +172,53 @@ const QUESTION_DE: Record<string, string> = {
   brakefluid: 'Hast du hydraulische Bremsen? Die Flüssigkeit zieht Wasser, unabhängig von den Kilometern.',
 }
 
-function ComponentRow({ c, busy, onService, onSeed, onDeclare }: {
+/** Oil, hot wax or drip wax — the same chain, three maintenance regimes.
+ *
+ *  Only shown for a component that HAS methods, which today is the chain alone.
+ *  The interval beside each one comes from the server, so the number on screen
+ *  is the number the harvest will grade against. Switching does not reset the
+ *  odometer: changing lube does not clean a chain, it changes the interval those
+ *  kilometres are measured against. */
+function MethodPicker({ c, options, busy, onPick }: {
+  c: WorkshopComponent
+  options: MethodOption[]
+  busy: boolean
+  onPick: (method: string) => void
+}) {
+  const active = c.method ?? options[0]?.id
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {options.map((m) => {
+        const on = m.id === active
+        return (
+          <button key={m.id} onClick={() => onPick(m.id)} disabled={busy || on} style={{
+            flex: 1, minWidth: 0, height: 30, borderRadius: 100, border: 0,
+            cursor: busy || on ? 'default' : 'pointer',
+            background: on ? T.heroChip : 'transparent',
+            color: on ? T.ink : T.quiet,
+            fontFamily: FONT, fontSize: 10.5, fontWeight: 700,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            opacity: busy && !on ? 0.5 : 1,
+          }}>
+            {/* No unit: the meter line right below says km, and "Tropfwachs ·
+                200 km" truncated at 390 px — losing the number, which is the
+                only part that makes the choice informative. */}
+            {m.name_de} · {Math.round(m.interval_km)}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function ComponentRow({ c, busy, methods, onService, onSeed, onDeclare, onMethod }: {
   c: WorkshopComponent
   busy: boolean
+  methods: MethodOption[]
   onService: (proofImage?: string | null) => void
   onSeed: (iso: string) => void
   onDeclare: (owned: boolean) => void
+  onMethod: (method: string) => void
 }) {
   const reduce = useReducedMotion()
   const file = useRef<HTMLInputElement>(null)
@@ -232,6 +273,10 @@ function ComponentRow({ c, busy, onService, onSeed, onDeclare }: {
                       onCancel={() => setAsking('later')} />
       ) : (
         <>
+          {methods.length > 1 && (
+            <MethodPicker c={c} options={methods} busy={busy} onPick={onMethod} />
+          )}
+
           <Meter progress={c.progress} tone={tone} reduce={reduce} />
 
           {/* THE META GETS ITS OWN LINE. It shared one with the action button
@@ -334,11 +379,15 @@ export interface W3WorkshopProps {
   onService: (componentId: string, proofImage?: string | null) => void
   onSeed: (componentId: string, lastServiceOn: string) => void
   onDeclare: (componentId: string, owned: boolean) => void
+  onMethod: (componentId: string, method: string) => void
+  /** Maintenance regimes per component id. Absent ids simply show no picker. */
+  methods: Record<string, MethodOption[]>
   onDismissResult: () => void
 }
 
 export default function W3Workshop({
-  workshop, loading, busyId, lastResult, onService, onSeed, onDeclare, onDismissResult,
+  workshop, loading, busyId, lastResult, methods,
+  onService, onSeed, onDeclare, onMethod, onDismissResult,
 }: W3WorkshopProps) {
   const reduce = useReducedMotion()
   const [seen, setSeen] = useState(false)
@@ -433,9 +482,11 @@ export default function W3Workshop({
         <ComponentRow
           key={c.id} c={c}
           busy={busyId === c.id}
+          methods={methods[c.id] ?? []}
           onService={(proof) => { setSeen(false); onService(c.id, proof) }}
           onSeed={(iso) => onSeed(c.id, iso)}
-          onDeclare={(owned) => onDeclare(c.id, owned)} />
+          onDeclare={(owned) => onDeclare(c.id, owned)}
+          onMethod={(m) => onMethod(c.id, m)} />
       ))}
 
       {/* ── the payday ── */}

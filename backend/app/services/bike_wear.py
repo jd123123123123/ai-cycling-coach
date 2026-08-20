@@ -23,7 +23,7 @@ a dirty drivetrain as a FACT rather than dressing an invented penalty as one.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 #: How far past its interval a component may go on banking bonus. Beyond this it
 #: STOPS ACCRUING — it does not lose what it has. The pile stops growing, which
@@ -301,6 +301,54 @@ COMPONENTS: dict[str, ComponentSpec] = {
     ),
 }
 
+# ── the same chain, two entirely different maintenance regimes ──────────────
+#
+# "Wann hast du zuletzt geölt ODER GEWACHST" is one question with two very
+# different answers behind it, and treating them as the same job gets both
+# wrong. A wet-lubed chain is degreased and re-oiled; a waxed one is dunked in
+# melted paraffin, which is a different action, on a different interval, that
+# leaves a different drivetrain behind.
+#
+# The intervals are the ones each method's own practice quotes. Wet lube on
+# road: clean and re-lube around 250 km, sooner in rain. Immersive wax: re-wax
+# around 300 km dry — the coating wears off rather than washing away, and the
+# tell is noise rather than grime. Drip wax sits between the two at roughly
+# 200 km, because a drip coat is thinner than a hot-melt one.
+#
+# The rider picks once and the chain's clock, action and copy follow. Defaulting
+# to oil is not a judgement — it is simply what most bicycles arrive with.
+@dataclass(frozen=True)
+class ChainMethod:
+    id: str
+    name_de: str
+    interval_km: float
+    action_de: str
+
+
+CHAIN_METHODS: dict[str, ChainMethod] = {
+    "oil": ChainMethod("oil", "Öl", 250, "Reinigen & ölen"),
+    "wax": ChainMethod("wax", "Heißwachs", 300, "Neu wachsen"),
+    "dripwax": ChainMethod("dripwax", "Tropfwachs", 200, "Nachwachsen"),
+}
+DEFAULT_CHAIN_METHOD = "oil"
+
+
+def spec_of(component_id: str, method: str | None = None) -> ComponentSpec:
+    """The component's spec, with the rider's own chain method applied.
+
+    Everything else in this module reads its spec through here rather than
+    indexing `COMPONENTS` directly, so a waxer's 300 km interval reaches the
+    status, the harvest and the earn bonus together. Getting one of those three
+    from the catalogue and the others from here is how a rider ends up being
+    told a job is due by a screen that then pays them for a different interval.
+    """
+    spec = COMPONENTS[component_id]
+    if component_id != DRIVETRAIN:
+        return spec
+    m = CHAIN_METHODS.get(method or DEFAULT_CHAIN_METHOD, CHAIN_METHODS[DEFAULT_CHAIN_METHOD])
+    return replace(spec, interval_km=m.interval_km, action_de=m.action_de)
+
+
 #: The drivetrain component whose freshness drives the earn bonus. One
 #: component, not an average: a rider must know exactly what to go and do.
 DRIVETRAIN = "chain"
@@ -444,8 +492,9 @@ def accrued_rc(km_since: float, spec: ComponentSpec, days_since: int | None = No
 def state_of(
     component_id: str, km_since: float, km_total: float,
     days_since: int | None = None, owned: bool | None = None,
+    method: str | None = None,
 ) -> ComponentState:
-    spec = COMPONENTS[component_id]
+    spec = spec_of(component_id, method)
     dormant = is_dormant(spec, owned)
     undated = is_undated(spec, days_since)
     f = elapsed(spec, km_since, days_since)
@@ -474,16 +523,16 @@ def state_of(
     )
 
 
-def drivetrain_fresh(km_since_chain: float) -> bool:
+def drivetrain_fresh(km_since_chain: float, method: str | None = None) -> bool:
     """Whether the earn bonus is live. Inside the chain's real interval, yes.
 
     This is the ONLY place maintenance touches earning, and it touches it as a
     bonus that switches on — never as a penalty that switches on.
     """
-    return km_since_chain < COMPONENTS[DRIVETRAIN].interval_km
+    return km_since_chain < spec_of(DRIVETRAIN, method).interval_km
 
 
-def efficiency_watts(km_since_chain: float) -> float | None:
+def efficiency_watts(km_since_chain: float, method: str | None = None) -> float | None:
     """The real drivetrain drag of a dirty chain, in watts at ~250 W output.
 
     Measured, not invented: a dirty road chain costs roughly 3-5 W. Returned so
@@ -493,7 +542,7 @@ def efficiency_watts(km_since_chain: float) -> float | None:
 
     Scales linearly from 0 W at the interval to 5 W at the overrun ceiling.
     """
-    spec = COMPONENTS[DRIVETRAIN]
+    spec = spec_of(DRIVETRAIN, method)
     if km_since_chain < spec.interval_km:
         return None
     span = spec.interval_km * (OVERRUN_FACTOR - 1)

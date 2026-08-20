@@ -3,6 +3,23 @@ FROM node:20-slim AS frontend
 WORKDIR /fe
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
+# WHY THIS ARG EXISTS. Buildkit keys `COPY` on the content of what it copies, so
+# changing the SPA source should always miss the cache — and on this project it
+# has repeatedly NOT. A whole afternoon of commits shipped a backend that was
+# current beside a bundle built hours earlier: the deploy said SUCCESS, the API
+# schema showed the new fields, and the browser loaded a bundle with none of the
+# new screens in it. The tell in the build log is `RUN npx vite build` printing
+# its step name and NO output at all — a replayed cache layer.
+#
+# BUMP THIS NUMBER whenever the deployed SPA is stale. Everything below it
+# rebuilds. It is above the COPY on purpose, so the copy re-runs too.
+#
+# HOW TO CHECK, and do check — "deployment SUCCESS" does not mean the SPA
+# shipped. Grep the served bundle for a string only the new code contains:
+#   H=$(curl -s $HOST/e/w3-today | grep -o 'assets/index-[A-Za-z0-9_-]*\.js' | head -1)
+#   curl -s "$HOST/$H" | grep -c "<a string from your new code>"
+ARG SPA_CACHE_EPOCH=2
+
 COPY frontend/ ./
 ENV VITE_API_URL=
 # skip tsc (pre-existing type-debt in untouched files); vite build is the gate

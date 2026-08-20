@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  declareComponent, fetchWorkshop, seedComponent, serviceComponent,
-  type SeedResult, type ServiceResult, type Workshop,
+  declareComponent, fetchMethods, fetchWorkshop, seedComponent, serviceComponent,
+  setMethod, type MethodOption, type SeedResult, type ServiceResult, type Workshop,
 } from '../api/workshop'
 
 /** `useWallet` declares this key inline; mirrored here rather than exported
@@ -73,6 +73,30 @@ export function useDeclareComponent() {
   const qc = useQueryClient()
   return useMutation<Workshop, Error, { componentId: string; owned: boolean }>({
     mutationFn: ({ componentId, owned }) => declareComponent(componentId, owned),
+    onSuccess: (workshop) => qc.setQueryData(WORKSHOP_KEY, workshop),
+  })
+}
+
+
+/** The maintenance regimes a component supports, with each one's real interval.
+ *
+ *  Cached for the session: the catalogue is a deployment constant, so refetching
+ *  it would be pure noise on a screen that is already doing three writes. */
+export function useComponentMethods(componentId: string, enabled = true) {
+  return useQuery<MethodOption[]>({
+    queryKey: ['workshop', 'methods', componentId],
+    queryFn: () => fetchMethods(componentId),
+    staleTime: Infinity,
+    enabled,
+  })
+}
+
+/** Switch how a component is maintained. No wallet invalidation: changing lube
+ *  pays nothing, it only rebases the clock. */
+export function useSetMethod() {
+  const qc = useQueryClient()
+  return useMutation<Workshop, Error, { componentId: string; method: string }>({
+    mutationFn: ({ componentId, method }) => setMethod(componentId, method),
     onSuccess: (workshop) => qc.setQueryData(WORKSHOP_KEY, workshop),
   })
 }

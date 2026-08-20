@@ -96,6 +96,7 @@ async def read(db: AsyncSession, user_id: int) -> WorkshopView:
             cid, rows[cid].km_since_service, rows[cid].km_total,
             days_since=_days_since(rows[cid].last_service_at, now),
             owned=rows[cid].owned,
+            method=rows[cid].method,
         )
         for cid in bike_wear.COMPONENTS
     ]
@@ -103,8 +104,8 @@ async def read(db: AsyncSession, user_id: int) -> WorkshopView:
     return WorkshopView(
         components=states,
         total_bonus_rc=sum(s.bonus_rc for s in states),
-        drivetrain_fresh=bike_wear.drivetrain_fresh(chain.km_since_service),
-        drivetrain_watts=bike_wear.efficiency_watts(chain.km_since_service),
+        drivetrain_fresh=bike_wear.drivetrain_fresh(chain.km_since_service, chain.method),
+        drivetrain_watts=bike_wear.efficiency_watts(chain.km_since_service, chain.method),
         chain_km_total=chain.km_total,
         chain_record_km=max(chain.longest_run_km, chain.km_since_service),
     )
@@ -205,9 +206,9 @@ async def service(
     if component_id not in bike_wear.COMPONENTS:
         raise UnknownComponentError(component_id)
 
-    spec = bike_wear.COMPONENTS[component_id]
     rows = await _rows(db, user_id)
     row = rows[component_id]
+    spec = bike_wear.spec_of(component_id, row.method)
 
     now = datetime.now(UTC)
     km = row.km_since_service
@@ -351,7 +352,7 @@ async def seed(
     days = _days_since(since, now) or 0
     return SeedResult(
         component_id=component_id,
-        name_de=bike_wear.COMPONENTS[component_id].name_de,
+        name_de=bike_wear.spec_of(component_id, row.method).name_de,
         km_since=round(km_since, 1),
         rides=counted,
         days_since=days,
@@ -393,3 +394,28 @@ def open_questions(view: WorkshopView) -> list[bike_wear.ComponentState]:
     conversation.
     """
     return [s for s in view.components if s.dormant]
+
+
+async def set_method(
+    db: AsyncSession, user_id: int, component_id: str, method: str,
+) -> bike_wear.ComponentState:
+    """Record how the rider maintains this component.
+
+    The clock is REBASED, not reset. Switching from oil to wax does not clean
+    the chain, so the kilometres on it stay exactly where they were — what
+    changes is the interval they are measured against, and therefore what the
+    screen says is due. Resetting here would hand out a free service every time
+    somebody tapped a segmented control.
+    """
+    if component_id not in bike_wear.COMPONENTS:
+        raise UnknownComponentError(component_id)
+    if component_id == bike_wear.DRIVETRAIN and method not in bike_wear.CHAIN_METHODS:
+        raise UnknownComponentError(f"{component_id}/{method}")
+
+    row = (await _rows(db, user_id))[component_id]
+    row.method = method
+    return bike_wear.state_of(
+        component_id, row.km_since_service, row.km_total,
+        days_since=_days_since(row.last_service_at, datetime.now(UTC)),
+        owned=row.owned, method=method,
+    )

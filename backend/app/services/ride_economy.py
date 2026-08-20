@@ -31,11 +31,18 @@ from app.models.activity_stream import ActivityStream
 from app.models.garage import RiderBackdrop
 from app.models.rewards import REASON_EDDINGTON, REASON_GEAR_BONUS
 from app.services import (
-    backdrops, bike_wear, eddington, gear, places, rewards, ride_facts, ride_place,
+    backdrops,
+    bike_wear,
+    eddington,
+    gear,
+    places,
+    rewards,
+    ride_facts,
+    ride_place,
     workshop,
 )
-from app.services.ride_scene import RideGeo
 from app.services import earn_modifiers as em
+from app.services.ride_scene import RideGeo
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +52,8 @@ MIN_KM = 1.0
 
 
 async def _ride_facts(
-    db: AsyncSession, user_id: int, activity: Activity, chain_km_since: float
+    db: AsyncSession, user_id: int, activity: Activity, chain_km_since: float,
+    drivetrain_fresh: bool = False
 ) -> em.RideFacts:
     """Translate one activity into the facts the modifiers ask about.
 
@@ -94,14 +102,24 @@ async def _ride_facts(
         with_crew=with_crew,
         honoured_easy_day=easy,
         has_power=activity.average_power is not None,
-        drivetrain_fresh=bike_wear.drivetrain_fresh(chain_km_since),
+        drivetrain_fresh=drivetrain_fresh,
     )
 
 
-async def _chain_km_since(db: AsyncSession, user_id: int) -> float:
+async def _drivetrain(db: AsyncSession, user_id: int) -> tuple[float, bool]:
+    """The chain's kilometres and whether the earn bonus is live.
+
+    BOTH FROM THE SAME READ, and that is the point. This used to return the
+    kilometres and let the caller re-derive freshness with
+    `bike_wear.drivetrain_fresh(km)` — a second copy of the threshold, in a file
+    that had no idea the rider's chain method could move it. A waxer on 300 km
+    intervals would have been told by the workshop that their drivetrain was
+    fresh and paid by the settlement as though it were not. One read, one
+    answer.
+    """
     view = await workshop.read(db, user_id)
     chain = next((c for c in view.components if c.id == bike_wear.DRIVETRAIN), None)
-    return chain.km_since if chain else 0.0
+    return (chain.km_since if chain else 0.0), view.drivetrain_fresh
 
 
 async def _pay_gear(
@@ -120,7 +138,11 @@ async def _pay_gear(
     # Passed in by `settle`, which builds them once for the whole settlement.
     # Still resolved here when a caller has none, so this stays usable alone.
     if facts is None:
-        facts = await _ride_facts(db, user_id, activity, chain_km)
+        # Freshness comes from the same read as the kilometres, never from a
+        # default. Letting it fall back to False here would silently withhold
+        # the fresh-drivetrain bonus from anyone reaching this path alone.
+        _, fresh = await _drivetrain(db, user_id)
+        facts = await _ride_facts(db, user_id, activity, chain_km, fresh)
     # The facts are already paid for here, weather included, so this is the one
     # place a stage gated on rain or cold can honestly be earned. Never fatal:
     # a rider must not lose the RideCoin their ride earned because a backdrop
@@ -342,10 +364,10 @@ async def settle(
     # Accruing first would let a ride push the chain past its interval and then
     # deny that same ride the bonus it was actually ridden with.
     try:
-        chain_km = await _chain_km_since(db, user_id)
+        chain_km, chain_fresh = await _drivetrain(db, user_id)
     except Exception:
         logger.warning("workshop read failed for user_id=%s", user_id, exc_info=True)
-        chain_km = 0.0
+        chain_km, chain_fresh = 0.0, False
 
     # ONE FACT SET FOR THE WHOLE SETTLEMENT. Resolving a ride's weather, surface
     # and crew costs a lookup each, and both the earn and the wear model need the
@@ -354,7 +376,7 @@ async def settle(
     # cannot be resolved still earns and still counts kilometres, just unweighted.
     facts = None
     try:
-        facts = await _ride_facts(db, user_id, activity, chain_km)
+        facts = await _ride_facts(db, user_id, activity, chain_km, chain_fresh)
     except Exception:
         logger.warning("ride facts failed for user_id=%s", user_id, exc_info=True)
 

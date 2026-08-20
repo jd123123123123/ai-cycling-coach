@@ -36,6 +36,9 @@ export interface WorkshopComponent {
   clock: 'km' | 'days'
   /** True while this is an optional part we have not asked about. Render a
    *  QUESTION, never a job. */
+  /** How the rider maintains it, where that changes the job — today only the
+   *  chain. Null means the default (oil). */
+  method: string | null
   dormant: boolean
   /** Confirmed, but we were never told its age — and it has no kilometre clock
    *  to fall back on. Zero is not a reading here, it is a MISSING reading, so
@@ -132,6 +135,32 @@ export async function seedComponent(
 
 /** Say whether the bike has an optional part. "No" is permanent until changed:
  *  a rim-brake rider is never asked about brake fluid again. */
+export interface MethodOption {
+  id: string
+  name_de: string
+  /** The interval this method actually carries. Served rather than hardcoded:
+   *  a client stating "alle 300 km" beside a server that grades on 250 is the
+   *  precise drift `bike_wear.spec_of` exists to prevent. */
+  interval_km: number
+  action_de: string
+}
+
+/** How this component can be maintained. Empty for everything but the chain. */
+export async function fetchMethods(componentId: string): Promise<MethodOption[]> {
+  const res = await apiClient.get<MethodOption[]>(`/garage/workshop/methods/${componentId}`)
+  return res.data
+}
+
+/** Switch between oiling and waxing. The kilometres do NOT reset — switching
+ *  lube does not clean a chain, it changes the interval they are measured
+ *  against. */
+export async function setMethod(componentId: string, method: string): Promise<Workshop> {
+  const res = await apiClient.post<Workshop>(
+    `/garage/workshop/method/${componentId}`, { method },
+  )
+  return res.data
+}
+
 export async function declareComponent(
   componentId: string, owned: boolean,
 ): Promise<Workshop> {

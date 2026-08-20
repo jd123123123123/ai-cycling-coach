@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
-  useDeclareComponent, useSeedComponent, useServiceComponent, useWorkshop,
+  useComponentMethods, useDeclareComponent, useSeedComponent, useServiceComponent,
+  useSetMethod, useWorkshop,
 } from '../../hooks/useWorkshop'
 import W3Workshop from './W3Workshop'
 import type { ServiceResult } from '../../api/workshop'
@@ -23,6 +24,11 @@ export default function W3WorkshopPanel() {
   const service = useServiceComponent()
   const seed = useSeedComponent()
   const declare = useDeclareComponent()
+  const method = useSetMethod()
+  // Only the chain has methods today. Asking per component would be six
+  // requests for five empty answers, so this asks about the one that has them
+  // and everything else simply renders no picker.
+  const { data: chainMethods } = useComponentMethods('chain')
   const [lastResult, setLastResult] = useState<ServiceResult | null>(null)
   const [busyId, setBusyId] = useState<string | null>(null)
 
@@ -48,6 +54,11 @@ export default function W3WorkshopPanel() {
     declare.mutate({ componentId, owned }, { onSettled: () => setBusyId(null) })
   }
 
+  const onMethod = (componentId: string, m: string) => {
+    setBusyId(componentId)
+    method.mutate({ componentId, method: m }, { onSettled: () => setBusyId(null) })
+  }
+
   return (
     <W3Workshop
       workshop={workshop ?? null}
@@ -57,6 +68,8 @@ export default function W3WorkshopPanel() {
       onService={onService}
       onSeed={onSeed}
       onDeclare={onDeclare}
+      onMethod={onMethod}
+      methods={{ chain: chainMethods ?? [] }}
       onDismissResult={() => setLastResult(null)} />
   )
 }

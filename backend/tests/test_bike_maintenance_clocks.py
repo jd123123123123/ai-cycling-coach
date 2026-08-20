@@ -176,3 +176,51 @@ def test_a_kilometre_part_is_never_undated():
     s = w.state_of("chain", 300, 300, days_since=None)
     assert s.undated is False
     assert s.status == "due"
+
+
+# ── oiling and waxing are not the same job ──────────────────────────────────
+
+def test_the_chain_follows_the_riders_own_method():
+    """"Wann hast du zuletzt geölt ODER GEWACHST" is one question with two very
+    different answers behind it. A wet-lubed chain is degreased and re-oiled; a
+    waxed one is dunked in melted paraffin — a different action, on a different
+    interval. Treating them as one job gets both wrong."""
+    oil = w.spec_of("chain", "oil")
+    wax = w.spec_of("chain", "wax")
+    assert wax.interval_km > oil.interval_km
+    assert "wachs" in wax.action_de.lower()
+    assert "öl" in oil.action_de.lower()
+
+
+def test_an_unset_or_nonsense_method_falls_back_to_oil():
+    """Every existing row has NULL here, and a stale value from an old client
+    must not blow up a garage read."""
+    base = w.spec_of("chain", None)
+    assert base.interval_km == w.CHAIN_METHODS[w.DEFAULT_CHAIN_METHOD].interval_km
+    assert w.spec_of("chain", "graphene-hype") == base
+
+
+def test_only_the_chain_has_methods():
+    """A method on any other component must be inert, not silently applied."""
+    for cid in w.COMPONENTS:
+        if cid == w.DRIVETRAIN:
+            continue
+        assert w.spec_of(cid, "wax") == w.COMPONENTS[cid]
+
+
+def test_status_harvest_and_earn_bonus_all_move_together():
+    """THE FAILURE THIS PREVENTS, and it is why every consumer reads through
+    `spec_of`. At 270 km a waxer is inside their interval: the screen must say
+    fresh, the earn bonus must be live, and the watts line must report nothing —
+    while the same 270 km on an oiled chain is due, unbonused, and costing real
+    watts. Take any ONE of those three from the catalogue instead and the rider
+    is told a job is due by a screen that pays them on a different interval."""
+    KM = 270.0
+    wax = w.state_of("chain", KM, KM, method="wax")
+    oil = w.state_of("chain", KM, KM, method="oil")
+
+    assert wax.status == "fresh" and oil.status == "due"
+    assert w.drivetrain_fresh(KM, "wax") is True
+    assert w.drivetrain_fresh(KM, "oil") is False
+    assert w.efficiency_watts(KM, "wax") is None
+    assert w.efficiency_watts(KM, "oil") is not None

@@ -48,6 +48,7 @@ from app.models.user import User
 from app.services import (
     backdrops,
     bike_build,
+    bike_wear,
     cyclr_studio,
     gear,
     places,
@@ -633,6 +634,9 @@ class ComponentOut(BaseModel):
     clock: str = "km"
     #: True while this is an optional part we have not asked about. The screen
     #: shows a QUESTION, never a job — see `bike_wear.is_dormant`.
+    #: How the rider maintains it, where that changes the job — today only the
+    #: chain ("oil" | "wax" | "dripwax"). Null means the default.
+    method: str | None = None
     dormant: bool = False
     #: True when the part is confirmed but its age was never given, and it has
     #: no kilometre clock to fall back on. The screen ASKS instead of reporting.
@@ -854,6 +858,64 @@ async def declare_component(
     except workshop.UnknownComponentError:
         raise HTTPException(
             http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}"
+        ) from None
+
+    view = await workshop.read(db, current_user.id)
+    balance = await rewards.balance_of(db, current_user.id)
+    await db.commit()
+    return _workshop_out(view, balance)
+
+
+class MethodRequest(BaseModel):
+    #: A key of `bike_wear.CHAIN_METHODS` for the chain.
+    method: str
+
+
+class MethodOption(BaseModel):
+    id: str
+    name_de: str
+    interval_km: float
+    action_de: str
+
+
+@router.get("/workshop/methods/{component_id}", response_model=list[MethodOption], summary="How this component can be maintained")
+async def component_methods(
+    component_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+) -> list[MethodOption]:
+    """The maintenance regimes this component supports, with the interval each
+    one actually carries. Empty for every component but the chain.
+
+    Served rather than hardcoded in the client so the intervals on screen are
+    the ones the server will grade against — the client stating "alle 300 km"
+    beside a server that thinks 250 is precisely the drift `spec_of` exists to
+    prevent.
+    """
+    if component_id != bike_wear.DRIVETRAIN:
+        return []
+    return [
+        MethodOption(id=m.id, name_de=m.name_de, interval_km=m.interval_km,
+                     action_de=m.action_de)
+        for m in bike_wear.CHAIN_METHODS.values()
+    ]
+
+
+@router.post("/workshop/method/{component_id}", response_model=WorkshopOut, summary="Set how a component is maintained")
+async def set_component_method(
+    component_id: str,
+    body: MethodRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> WorkshopOut:
+    """Switch between oiling and waxing. The kilometres on the chain do NOT
+    reset — switching lube does not clean a chain, it only changes the interval
+    those kilometres are measured against."""
+    try:
+        await workshop.set_method(db, current_user.id, component_id, body.method)
+    except workshop.UnknownComponentError:
+        raise HTTPException(
+            http_status.HTTP_404_NOT_FOUND,
+            f"No such component or method: {component_id}/{body.method}",
         ) from None
 
     view = await workshop.read(db, current_user.id)

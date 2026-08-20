@@ -11,7 +11,7 @@ const part = (over: Partial<WorkshopComponent>): WorkshopComponent => ({
   id: 'chain', name_de: 'Kette', action_de: 'Reinigen & ölen',
   km_since: 100, interval_km: 250, km_total: 100,
   days_since: null, interval_days: null, clock: 'km',
-  dormant: false, undated: false, optional: false,
+  method: null, dormant: false, undated: false, optional: false,
   bonus_rc: 0, status: 'fresh', progress: 0.4, accrual_stopped: false,
   ...over,
 })
