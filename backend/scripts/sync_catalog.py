@@ -26,6 +26,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BIKES_TS = ROOT / "frontend/src/editorial/w3/w3bikes.ts"
 PARTS_TS = ROOT / "frontend/src/editorial/w3/w3parts.ts"
 MIRROR = ROOT / "backend/app/services/w3catalog.py"
+TOKENS_TSX = ROOT / "frontend/src/editorial/w3/w3tokens.tsx"
 
 # A single-quoted TS string literal, tolerating \' escapes (German names such as
 # "Der Kopfsteinpflaster-König" are plain, but the ladder is authored prose and
@@ -43,7 +44,16 @@ _PART_RE = re.compile(
 # exactly one and they are written in sequence. The server needs these because
 # the composed bike render (`services/bike_render`) asks the image model for
 # "this bike, with these components" — and the prompt IS the component.
-_PROMPT_RE = re.compile(rf"\{{\s*id:\s*'({_STR})'.*?prompt:\s*'({_STR})'", re.S)
+# A prompt is authored either as a plain string or — once a colour has to agree
+# with the design tokens — as a template literal splicing `${T.<token>}` in. Both
+# spellings are read; the interpolation is resolved against `w3tokens.tsx` so the
+# mirror stores the literal colour the image model is actually asked for.
+_TEMPLATE_STR = r"(?:[^`\\]|\\.)*"
+_PROMPT_RE = re.compile(
+    rf"\{{\s*id:\s*'({_STR})'.*?prompt:\s*(?:'({_STR})'|`({_TEMPLATE_STR})`)", re.S
+)
+_TOKEN_PAIR_RE = re.compile(rf"(\w+):\s*'({_STR})'")
+_INTERP_RE = re.compile(r"\$\{\s*T\.(\w+)\s*\}")
 _STARTER_RE = re.compile(rf"STARTER_BIKE_ID\s*=\s*'({_STR})'")
 _STOCK_BLOCK_RE = re.compile(r"STOCK_PARTS:\s*Record<PartSlot,\s*string>\s*=\s*\{(.*?)\}", re.S)
 _STOCK_PAIR_RE = re.compile(rf"(\w+):\s*'({_STR})'")
@@ -54,6 +64,21 @@ def _unescape(raw: str) -> str:
     return raw.replace("\\'", "'").replace('\\"', '"').replace("\\\\", "\\")
 
 
+def _load_tokens() -> dict[str, str]:
+    """The `T` colour table, so `${T.acid}` in a prompt becomes the hex itself."""
+    return {k: _unescape(v) for k, v in _TOKEN_PAIR_RE.findall(TOKENS_TSX.read_text(encoding="utf-8"))}
+
+
+def _resolve(prompt: str, tokens: dict[str, str]) -> str:
+    def sub(m: re.Match[str]) -> str:
+        token = m.group(1)
+        if token not in tokens:
+            raise SystemExit(f"prompt references an unknown token: T.{token}")
+        return tokens[token]
+
+    return _INTERP_RE.sub(sub, prompt)
+
+
 def build_catalog() -> dict:
     """Parse both TS files into the plain-data shape the mirror encodes.
 
@@ -62,9 +87,11 @@ def build_catalog() -> dict:
     bikes_src = BIKES_TS.read_text(encoding="utf-8")
     parts_src = PARTS_TS.read_text(encoding="utf-8")
 
+    tokens = _load_tokens()
     prompts: dict[str, str] = {
-        _unescape(i): _unescape(p)
-        for i, p in _PROMPT_RE.findall(bikes_src) + _PROMPT_RE.findall(parts_src)
+        _unescape(i): _resolve(_unescape(quoted or templated), tokens)
+        for i, quoted, templated in _PROMPT_RE.findall(bikes_src)
+        + _PROMPT_RE.findall(parts_src)
     }
 
     items: dict[str, dict] = {}

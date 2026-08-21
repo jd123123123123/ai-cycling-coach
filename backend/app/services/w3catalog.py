@@ -206,7 +206,7 @@ CATALOG: dict[str, CatalogItem] = {
     "frame-lime": CatalogItem(
         id="frame-lime", name="W3-Lime", kind="part",
         tier=None, slot="frame", price=650,
-        prompt="a bicycle frameset in bright lime green (#C8FF00) with matte black panels on the down tube",
+        prompt="a bicycle frameset in bright lime green (#BFFF3C) with matte black panels on the down tube",
     ),
     "frame-oilslick": CatalogItem(
         id="frame-oilslick", name="Ölschimmer", kind="part",
@@ -256,7 +256,7 @@ CATALOG: dict[str, CatalogItem] = {
     "bars-lime": CatalogItem(
         id="bars-lime", name="Limeband", kind="part",
         tier=None, slot="bars", price=250,
-        prompt="a black drop handlebar wrapped in bright lime green (#C8FF00) bar tape",
+        prompt="a black drop handlebar wrapped in bright lime green (#BFFF3C) bar tape",
     ),
     "bars-leather": CatalogItem(
         id="bars-leather", name="Leder", kind="part",
@@ -296,7 +296,7 @@ CATALOG: dict[str, CatalogItem] = {
     "saddle-lime": CatalogItem(
         id="saddle-lime", name="Lime-Kante", kind="part",
         tier=None, slot="saddle", price=450,
-        prompt="a black bicycle racing saddle with a bright lime green (#C8FF00) accent stripe along its edge",
+        prompt="a black bicycle racing saddle with a bright lime green (#BFFF3C) accent stripe along its edge",
     ),
     "saddle-white": CatalogItem(
         id="saddle-white", name="Weißsattel", kind="part",
