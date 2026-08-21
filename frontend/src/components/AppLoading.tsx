@@ -26,11 +26,16 @@
  * is honoured by the stylesheet rather than by a hook.
  *
  * Colours are the W3 tokens (editorial/w3/w3tokens.tsx) written out, because
- * nothing outside editorial/ may import them.
+ * nothing outside editorial/ may import them. That copying is why the acid was
+ * wrong: this file said `#C8FF00`, which is the ORIGINAL editorial palette's
+ * acid (`--e-acid` in tokens.css), not W3's `#BFFF3C`. Every W3 screen — the
+ * whole sign-up journey included — bloomed in the previous design language's
+ * lime for as long as the chunk took to arrive, which is the first thing a new
+ * rider ever sees. If these drift again, `w3tokens.tsx` is the truth.
  */
 
 const BG = '#0B0B0B'
-const ACID = '#C8FF00'
+const ACID = '#BFFF3C'
 const RULE = '#FFFFFF14'
 const QUIET = '#6E7379'
 const FONT = '"Inter Tight", ui-sans-serif, system-ui, sans-serif'
