@@ -5,7 +5,7 @@ end-to-end design. This module ships Phase 1 (solo + pair).
 """
 
 import re
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from secrets import token_urlsafe
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -20,6 +20,7 @@ from app.models.athlete_profile import AthleteProfile
 from app.models.crew import Crew, CrewInvite, CrewMembership
 from app.models.crew_challenge import CrewChallenge
 from app.models.crew_nudge import CrewNudge
+from app.models.garage import GarageAsset
 from app.models.user import User
 from app.schemas.crew import (
     AcceptOptions,
@@ -41,13 +42,14 @@ from app.schemas.crew_challenge import (
     ChallengeParticipant,
     ChallengeRead,
 )
+from app.services import crew_avatars
 from app.services.crew_score import (
     CHALLENGE_OPT_IN_ROLE,
-    display_handle,
     _handle_from_email,
     challenge_value_for_user,
     crew_duel,
     crew_standings_window,
+    display_handle,
     member_in_challenge,
     personal_week_targets,
 )
@@ -403,7 +405,7 @@ async def create_invite(
         invitee_email=email,
         token=token_urlsafe(32),
         status="pending",
-        expires_at=datetime.now(timezone.utc) + timedelta(days=14),
+        expires_at=datetime.now(UTC) + timedelta(days=14),
     )
     db.add(invite)
     await db.commit()
@@ -443,8 +445,8 @@ async def accept_invite(
         )
     expires = invite.expires_at
     if expires.tzinfo is None:
-        expires = expires.replace(tzinfo=timezone.utc)
-    if expires < datetime.now(timezone.utc):
+        expires = expires.replace(tzinfo=UTC)
+    if expires < datetime.now(UTC):
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={"code": "invite_expired", "msg": "this invite has expired"},
@@ -475,7 +477,7 @@ async def accept_invite(
         CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role=role)
     )
     invite.status = "accepted"
-    invite.accepted_at = datetime.now(timezone.utc)
+    invite.accepted_at = datetime.now(UTC)
     await db.commit()
 
     # Echo the new crew shape back so the frontend can update without a
@@ -579,6 +581,31 @@ async def my_standings(
         db, membership.crew_id, start_on, end_on, current_user.id
     )
     payload["period"] = period_name
+
+    # ── THE FACES ────────────────────────────────────────────────────────
+    # A standings table of handles is a spreadsheet; the same table with the
+    # riders' own collectibles on it is a crew. Thumbnails, not the avatars:
+    # a rendered rider is 50-200 KB and eight of them would be a megabyte of
+    # base64 in front of the numbers this screen exists for.
+    #
+    # Scoped to this crew by construction — `crew_standings_window` only ever
+    # returns members of it — and someone who has not made an avatar simply has
+    # none rather than a placeholder wearing their name.
+    ids = [r["user_id"] for r in payload.get("rows", [])]
+    if ids:
+        avatars = {
+            uid: crew_avatars.thumbnail(url)
+            for uid, url in (
+                await db.execute(
+                    select(GarageAsset.user_id, GarageAsset.image_url).where(
+                        GarageAsset.user_id.in_(ids), GarageAsset.kind == "rider",
+                    )
+                )
+            ).all()
+        }
+        for row in payload["rows"]:
+            row["avatar"] = avatars.get(row["user_id"])
+
     return StandingsResponse(**payload)
 
 
@@ -692,10 +719,10 @@ async def incoming_invites(
             .order_by(CrewInvite.created_at.desc())
         )
     ).all()
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     out: list[IncomingInvite] = []
     for inv, crew, inviter in rows:
-        exp = inv.expires_at if inv.expires_at.tzinfo else inv.expires_at.replace(tzinfo=timezone.utc)
+        exp = inv.expires_at if inv.expires_at.tzinfo else inv.expires_at.replace(tzinfo=UTC)
         if exp < now:
             continue
         out.append(IncomingInvite(
@@ -733,8 +760,8 @@ async def accept_incoming(
     `options.join_challenges` (default false) — joining a crew never silently
     enters you into a scoreboard."""
     invite = await _resolve_incoming(db, invite_id, current_user)
-    exp = invite.expires_at if invite.expires_at.tzinfo else invite.expires_at.replace(tzinfo=timezone.utc)
-    if exp < datetime.now(timezone.utc):
+    exp = invite.expires_at if invite.expires_at.tzinfo else invite.expires_at.replace(tzinfo=UTC)
+    if exp < datetime.now(UTC):
         raise HTTPException(status_code=422, detail={"code": "invite_expired", "msg": "expired"})
     if await _user_membership(db, current_user.id) is not None:
         raise HTTPException(
@@ -748,7 +775,7 @@ async def accept_incoming(
     )
     db.add(CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role=role))
     invite.status = "accepted"
-    invite.accepted_at = datetime.now(timezone.utc)
+    invite.accepted_at = datetime.now(UTC)
     await db.commit()
     crew = (await db.execute(select(Crew).where(Crew.id == invite.crew_id))).scalar_one_or_none()
     members = await _crew_member_rows(db, invite.crew_id)
@@ -969,7 +996,7 @@ async def mark_nudge_read(
     if nudge is None:
         raise HTTPException(status_code=404, detail="nudge not found")
     if nudge.read_at is None:
-        nudge.read_at = datetime.now(timezone.utc)
+        nudge.read_at = datetime.now(UTC)
         await db.commit()
 
 

@@ -39,6 +39,10 @@ export interface StandingRow {
   user_id: number
   handle: string
   is_you: boolean
+  /** The rider's own collectible as a 96 px WebP data URL, or null when they
+   *  have not made one. A thumbnail, not the avatar: eight full renders would
+   *  be a megabyte of base64 in front of the numbers this screen is for. */
+  avatar?: string | null
   weekly_score: number  // sum of daily points over the window
   weekly_tss: number    // total TSS over the window
   daily_pct: number[]   // ≤14 summed buckets across the window

@@ -81,6 +81,13 @@ _LOW_CONFIDENCE_PENALTY = 0.85
 #: a confident answer to a question nobody asked. Demoted hard, never hidden.
 _VIRTUAL_PENALTY = 0.4
 
+#: AND THE PENALTY INVERTS WHEN THE SESSION IS INDOORS. Suggesting a mountain
+#: road for a 2x20 on the trainer is the same mistake in the other direction,
+#: and it is the more annoying one: the rider cannot act on it at all. When the
+#: plan says indoors, the virtual routes are the only rideable ones and the
+#: outdoor roads take the demotion instead.
+_OUTDOOR_PENALTY_WHEN_INDOORS = 0.35
+
 #: A road ridden in the last few days is a worse SUGGESTION than an equally
 #: good one the athlete has not seen lately, even though it is an equally good
 #: match. Mild and multiplicative: variety is a preference, not a correction,
@@ -225,6 +232,7 @@ def score_route(
     target_tss: float | None,
     category: str | None = None,
     today: date | None = None,
+    indoor: bool | None = None,
 ) -> RouteFit:
     """Fit of one route summary (from `route_library.summarize_route`) against
     one planned session's stated duration, TSS target and session category."""
@@ -263,7 +271,11 @@ def score_route(
     score = raw_fit
     if low_confidence:
         score *= _LOW_CONFIDENCE_PENALTY
-    if is_virtual:
+    if indoor is True:
+        # Indoors: the trainer routes are the rideable ones.
+        if not is_virtual:
+            score *= _OUTDOOR_PENALTY_WHEN_INDOORS
+    elif is_virtual:
         score *= _VIRTUAL_PENALTY
     if recently_ridden:
         score *= _RECENTLY_RIDDEN_PENALTY
@@ -289,6 +301,7 @@ def recommend_routes(
     target_tss: float | None,
     category: str | None = None,
     today: date | None = None,
+    indoor: bool | None = None,
 ) -> list[RouteFit] | None:
     """Ranked fits, best first, or None when there is nothing to score against.
 
@@ -310,6 +323,7 @@ def recommend_routes(
             target_tss=target_tss,
             category=category,
             today=today,
+            indoor=indoor,
         )
         for r in routes
     ]

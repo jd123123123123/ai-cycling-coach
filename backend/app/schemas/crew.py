@@ -5,7 +5,6 @@ from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
 
-
 # ──────────────────────────────────────────────────────────────────────
 # Read shapes
 # ──────────────────────────────────────────────────────────────────────
@@ -126,6 +125,10 @@ class CrewMemberRides(BaseModel):
 
 
 class StandingRow(BaseModel):
+    #: The rider's own collectible, as a 96 px WebP data URL, or None when they
+    #: have not made one. A thumbnail rather than the avatar: eight full renders
+    #: would be a megabyte of base64 in front of the numbers this screen is for.
+    avatar: str | None = None
     user_id: int
     handle: str
     is_you: bool

@@ -1,6 +1,5 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Sparkles } from 'lucide-react'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, Reveal } from './w3tokens'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
@@ -10,6 +9,7 @@ import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3WorkshopNudge from './W3WorkshopNudge'
+import W3CoachCard from './W3CoachCard'
 import W3RouteCard from './W3RouteCard'
 import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
@@ -142,7 +142,6 @@ export interface W3Vm {
 // section itself knows what its acid pill should say.
 // Local copy of the shared helper, and transparent for the same reason: a band
 // that paints `T.bg` cuts off the ground colour the hero hands down the page.
-const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', padding: `0 20px ${padBottom}px` })
 
 /**
  * `onComposeScene` is GONE, and its absence is the point. The old hero offered
@@ -376,42 +375,13 @@ export default function W3TodayView({ vm, onAdapt }: {
              Both are true — readiness measures the BODY, the plan decides the
              DAY — so it is said out loud here instead of leaving the rider to
              reconcile it. ── */}
-        <div style={{ ...band(26), paddingTop: 20, gap: 14 }}>
-          {todayIsRest && vm.readiness != null && (
-            <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
-              Ruhetag — die {vm.readiness} beschreibt deinen Körper, nicht den Plan.
-              Heute wird die Erholung angelegt, nicht ausgegeben.
-            </span>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px 6px 9px', borderRadius: 100, background: T.acidDim }}>
-              <Sparkles size={12} color={T.acid} /><span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.acid }}>KI-COACH</span>
-            </div>
-            <span style={{ fontSize: 10, fontWeight: 500, color: T.quiet }}>{vm.coachDate}</span>
-          </div>
-
-          {/* ── The coach's own verdict (pen frame `k4XB0`): the DAY-level call
-               in the coach's voice — headline, then the body that names the
-               evidence it read. REAL: GET /coach/brief → `verdict` / `rationale`
-               (via useTodayModel). Both nullable; an absent verdict renders
-               nothing rather than an empty block. The SESSION-level "why THIS
-               session" lives further down in `W3WhyToday`, structured, so the
-               two never narrate the same thing twice. ── */}
-          {(vm.coachLead || vm.coachWhy) && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-              {vm.coachLead && (
-                <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: -0.75, lineHeight: 1.18, color: T.ink, minWidth: 0 }}>
-                  {vm.coachLead}
-                </span>
-              )}
-              {vm.coachWhy && (
-                <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.6, color: T.mid, minWidth: 0 }}>
-                  {vm.coachWhy}
-                </span>
-              )}
-            </div>
-          )}
-        </div>
+        <W3CoachCard
+          headline={vm.coachLead}
+          body={vm.coachWhy}
+          date={vm.coachDate}
+          restNote={todayIsRest && vm.readiness != null
+            ? `Ruhetag — die ${vm.readiness} beschreibt deinen Körper, nicht den Plan. Heute wird die Erholung angelegt, nicht ausgegeben.`
+            : null} />
 
         {/* ── Recovery nudge: the real "Erholungssignal / Gute Erholung" morning
              signal (HRV/sleep/RHR vs baseline), replacing the long coach text ── */}
@@ -470,12 +440,6 @@ export default function W3TodayView({ vm, onAdapt }: {
         <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
           onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
 
-        {/* ── Letzte Woche — the weekly story as a tappable card, opening the
-             celebration popup. Shares ONE producer (`useWeekReviewVm`) with the
-             full /e/w3-week-review page, and renders nothing when last week
-             held no story. It sits here on purpose: the bridge from what you
-             did to where you now stand. ── */}
-        <Reveal><W3WeekRecapCard /></Reveal>
 
         {/* ── The lower half arrives as you reach it ─────────────────────────
              These four sections are the long tail of the scroll, and a long
@@ -506,6 +470,14 @@ export default function W3TodayView({ vm, onAdapt }: {
 
         {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
         <Reveal><W3TodayProgress /></Reveal>
+
+        {/* ── Letzte Woche — LAST, and that is the point. Today is a page about
+             today: what the body says, what the session is, where to ride it,
+             where the block has got you. Last week is the one section on it
+             that is about a week that has already ended, so it belongs after
+             everything still in play rather than in the middle interrupting
+             them. It renders nothing when last week held no story. ── */}
+        <Reveal><W3WeekRecapCard /></Reveal>
 
         <W3TabBar />
 

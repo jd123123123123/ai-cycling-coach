@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   fetchMyRoutes, fetchRecommendedRoutes,
-  type RouteLibrary, type RouteRecommendation,
+  type RouteLibrary, type RouteRecommendation, type RouteTarget,
 } from '../api/routeRecommendation'
 
 /**
@@ -12,10 +12,12 @@ import {
  * morning. Re-asking on every focus would cost a scoring pass to be told the
  * same road.
  */
-export function useRecommendedRoute(enabled = true) {
+export function useRecommendedRoute(target?: RouteTarget, enabled = true) {
+  // The target is part of the key, so each day of the week caches its own
+  // answer instead of the last-selected one being served for all of them.
   return useQuery<RouteRecommendation>({
-    queryKey: ['routes', 'recommended'],
-    queryFn: fetchRecommendedRoutes,
+    queryKey: ['routes', 'recommended', target ?? null],
+    queryFn: () => fetchRecommendedRoutes(target),
     staleTime: 60 * 60 * 1000,
     enabled,
   })

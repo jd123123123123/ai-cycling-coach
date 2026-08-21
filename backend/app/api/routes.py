@@ -13,7 +13,7 @@ RLS-protected via ``get_db_for_user``.
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
@@ -50,6 +50,10 @@ async def get_my_routes(
 async def get_recommended_routes(
     user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    duration_minutes: Annotated[float | None, Query(description="Override today's planned duration")] = None,
+    target_tss: Annotated[float | None, Query(description="Override today's planned TSS")] = None,
+    category: Annotated[str | None, Query(description="Override today's session category")] = None,
+    indoor: Annotated[bool | None, Query(description="Rank trainer routes first (true) or roads first (false)")] = None,
 ) -> dict:
     """Ranks the athlete's own routes against today's plan (duration + TSS
     target), so "ride this today" points at a real road they have ridden
@@ -60,10 +64,25 @@ async def get_recommended_routes(
     or no GPS route history yet — rather than guessing. The reason is a stable
     machine string (not translated copy); the frontend owns the wording.
     """
-    ctx = await load_today_context(db, user.id)
-    planned = ctx.planned
-    if not planned or planned.get("sport") != "cycling":
-        return {"available": False, "reason": "no_planned_ride_today"}
+    # ── ANY SESSION, NOT ONLY TODAY'S ────────────────────────────────────
+    # The plan card asks this question once per day of the week, so the target
+    # has to be a parameter. Without overrides it still answers about today,
+    # which is what every existing caller wants — the query params are an
+    # override, never a second mode.
+    overridden = duration_minutes is not None or target_tss is not None
+    if overridden:
+        planned = {
+            "sport": "cycling",
+            "title": None,
+            "duration_minutes": duration_minutes,
+            "target_tss": target_tss,
+            "category": category,
+        }
+    else:
+        ctx = await load_today_context(db, user.id)
+        planned = ctx.planned
+        if not planned or planned.get("sport") != "cycling":
+            return {"available": False, "reason": "no_planned_ride_today"}
 
     library = await load_route_library(db, user.id)
     if not library["available"]:
@@ -75,6 +94,10 @@ async def get_recommended_routes(
         target_tss=planned.get("target_tss"),
         category=planned.get("category"),
         today=date.today(),
+        # Indoors flips which routes are rideable at all: suggesting a mountain
+        # road for a 2x20 on the trainer is as useless as suggesting Watopia
+        # for a Sunday in the hills.
+        indoor=indoor,
     )
     if not ranked:
         return {"available": False, "reason": "no_target_to_match"}

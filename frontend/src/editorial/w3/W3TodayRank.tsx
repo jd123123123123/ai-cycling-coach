@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { Users, ChevronRight, Crown, Route as RouteIcon } from 'lucide-react'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
-import type { StandingRow } from '../../api/crew'
+import type { StandingRow, StandingsResponse } from '../../api/crew'
 import { T, FONT, EASE, grow, Kicker } from './w3tokens'
 import { S, lux, hairline, TNUM } from './w3surfaces'
 
@@ -76,7 +76,31 @@ function Row({ r, rank, hue, reduce, delay, leader }: {
       borderRadius: 14, padding: me ? '8px 10px' : '8px 0', margin: me ? '0 -10px' : 0,
     }}>
       <span style={{ ...TNUM, flex: 'none', width: 13, fontSize: podium ? 12 : 11, fontWeight: podium ? 800 : 700, color: me ? T.acid : podium ? T.mid : T.quiet }}>{rank}</span>
-      <span style={{ flex: 'none', width: 8, height: 8, borderRadius: 100, background: me ? T.acid : hue, boxShadow: me ? `0 0 9px ${T.acid}A6` : `0 0 6px ${hue}59` }} />
+      {/* THE FACE, WHERE A COLOURED DOT USED TO BE. A standings table of
+          handles is a spreadsheet; the same table with the riders' own
+          collectibles on it is a crew. The dot survives as the fallback,
+          because a member who has not made an avatar gets their colour rather
+          than a grey silhouette standing in for them. */}
+      {r.avatar ? (
+        <span style={{
+          flex: 'none', width: 30, height: 30, borderRadius: 100, overflow: 'hidden',
+          background: T.heroChip,
+          // The lit ring is the same signal the dot's glow carried: this row
+          // is you, or this rider is leading.
+          boxShadow: me ? `0 0 0 2px ${T.acid}` : leader ? `0 0 0 2px ${T.warn}99` : `0 0 0 1px ${T.rule}`,
+        }}>
+          <img src={r.avatar} alt="" aria-hidden
+               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        </span>
+      ) : (
+        <span style={{
+          flex: 'none', width: 30, height: 30, borderRadius: 100,
+          background: me ? T.acidDim : T.heroChip,
+          display: 'grid', placeItems: 'center',
+        }}>
+          <span style={{ width: 8, height: 8, borderRadius: 100, background: me ? T.acid : hue, boxShadow: `0 0 8px ${me ? T.acid : hue}80` }} />
+        </span>
+      )}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
           <span style={{ ...ellipsis, minWidth: 0, fontSize: 13, fontWeight: me ? 700 : 600, color: me ? T.acid : T.ink }}>
@@ -132,20 +156,32 @@ function Head({ tag }: { tag: string | null }) {
   )
 }
 
-export default function W3TodayRank() {
+/**
+ * The card as a pure function of a crew and its standings, so it can be
+ * rendered from a preview route with fixtures. `W3TodayRank` owns the fetch.
+ *
+ * Worth the ten-line split: this card is now mostly PICTURES of people, and a
+ * component that only renders against a live crew is one nobody looks at
+ * before shipping it.
+ */
+export function W3TodayRankView({ crewName, rows, standings }: {
+  crewName: string | null
+  rows: StandingRow[]
+  /** The window and the crew-wide fallbacks. Optional: every field it carries
+   *  has a per-row fallback or a sane default, so a preview can pass rows
+   *  alone. */
+  standings?: StandingsResponse | null
+}) {
   const reduce = useReducedMotion()
   const navigate = useNavigate()
-  const { data: crew } = useMyCrew()
-  const { data: standings } = useCrewStandings('week')
   const go = () => navigate('/e/w3-crew')
 
-  const rows = standings?.standings ?? []
   const meIdx = rows.findIndex((r) => r.is_you)
   const me = meIdx >= 0 ? rows[meIdx] : null
 
   // ── No crew (or none on the wire yet) → the honest way in, no fake rivals ──
   if (rows.length === 0 || me == null) {
-    const hasCrew = crew?.crew != null
+    const hasCrew = crewName != null
     return (
       <div style={{ ...band(26), gap: 14 }}>
         <Head tag={null} />
@@ -155,7 +191,7 @@ export default function W3TodayRank() {
               <Users size={16} color={T.mid} />
             </span>
             <span style={{ ...ellipsis, flex: 1, fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>
-              {hasCrew ? crew!.crew!.name : 'Noch keine Crew'}
+              {hasCrew ? crewName : 'Noch keine Crew'}
             </span>
             <ChevronRight size={16} color={T.quiet} style={{ flex: 'none' }} />
           </div>
@@ -200,7 +236,12 @@ export default function W3TodayRank() {
         : 'Gleichauf mit deiner Crew.'
 
   // Who to show: the top of the table, and always the rider themselves.
-  const VISIBLE = 5
+  //
+  // Eight rather than five. Five was chosen when every row was a line of text;
+  // with the riders' own faces on them the table has become the thing worth
+  // looking at, and cutting a crew of seven off at five hides people the rider
+  // actually knows. Beyond eight it stops being a glance.
+  const VISIBLE = 8
   const shown: StandingRow[] = meIdx < VISIBLE
     ? rows.slice(0, VISIBLE)
     : [...rows.slice(0, VISIBLE - 1), me]
@@ -230,7 +271,7 @@ export default function W3TodayRank() {
              share ONE baseline row, and the gap sentence spans the width under
              both — which is also the order they should be read in. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
-          <Kicker>Diese Woche{crew?.crew ? ` · ${crew.crew.name}` : ''}</Kicker>
+          <Kicker>Diese Woche{crewName ? ` · ${crewName}` : ''}</Kicker>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
             {/* Leading a crew of one is not a win — no acid for that. */}
@@ -305,5 +346,17 @@ export default function W3TodayRank() {
         </button>
       </div>
     </div>
+  )
+}
+
+
+export default function W3TodayRank() {
+  const { data: crew } = useMyCrew()
+  const { data: standings } = useCrewStandings('week')
+  return (
+    <W3TodayRankView
+      crewName={crew?.crew?.name ?? null}
+      rows={standings?.standings ?? []}
+      standings={standings ?? null} />
   )
 }

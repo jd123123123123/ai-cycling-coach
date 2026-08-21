@@ -32,6 +32,10 @@ export interface RidableRoute {
   start_lat: number
   start_lng: number
   polyline?: [number, number][] | null
+  /** A Zwift/Rouvy ride. Kept on the ROUTE as well as on the match, because
+   *  what to draw beside a name — a road or a screen — is a fact about the
+   *  route, not about how it scored today. */
+  is_virtual?: boolean
   longest_climb_m?: number | null
   max_gradient_pct?: number | null
   climb_share_pct?: number | null
@@ -66,8 +70,25 @@ export interface RouteRecommendation {
   alternatives?: RouteMatch[]
 }
 
-export async function fetchRecommendedRoutes(): Promise<RouteRecommendation> {
-  const res = await apiClient.get<RouteRecommendation>('/routes/recommended')
+/** What session to rank against. Omitted entirely, the server answers about
+ *  TODAY — which is what the Today card wants. The plan card asks once per day
+ *  of the week, so it states the target instead. */
+export interface RouteTarget {
+  duration_minutes?: number | null
+  target_tss?: number | null
+  category?: string | null
+  /** True ranks trainer routes first, false roads first. Undefined leaves the
+   *  standing preference for roads, which is right when nobody said. */
+  indoor?: boolean | null
+}
+
+export async function fetchRecommendedRoutes(target?: RouteTarget): Promise<RouteRecommendation> {
+  const params: Record<string, string | number | boolean> = {}
+  if (target?.duration_minutes != null) params.duration_minutes = target.duration_minutes
+  if (target?.target_tss != null) params.target_tss = target.target_tss
+  if (target?.category) params.category = target.category
+  if (target?.indoor != null) params.indoor = target.indoor
+  const res = await apiClient.get<RouteRecommendation>('/routes/recommended', { params })
   return res.data
 }
 

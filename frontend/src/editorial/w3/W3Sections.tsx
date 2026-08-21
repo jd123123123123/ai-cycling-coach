@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 import W3WhyButton from './W3WhyButton'
+import W3DayRoute from './W3DayRoute'
 
 // ────────────────────────────────────────────────────────────────────────
 // "Deine Woche" — ONE card: the week's day selector, the selected day's
@@ -518,6 +519,17 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
   const navigate = useNavigate()
   const reduce = useReducedMotion()
   const isToday = day.status === 'today'
+  // "1 Std. 15 min" / "45 min" → minutes. The session states its duration as
+  // display copy, which is the only place it exists on this card; a route
+  // matched on TSS alone would ignore whether the ride even fits the evening.
+  const durMinutes = (() => {
+    const s = result?.title ? null : session.dur
+    if (!s) return null
+    const h = /(\d+)\s*Std/.exec(s)
+    const m = /(\d+)\s*min/.exec(s)
+    const total = (h ? Number(h[1]) * 60 : 0) + (m ? Number(m[1]) : 0)
+    return total > 0 ? total : null
+  })()
   const isPast = day.status === 'hit' || day.status === 'over' || day.status === 'missed' || day.status === 'rest'
   const isFuture = day.status === 'upcoming'
   const st = STATUS[day.status]
@@ -668,6 +680,23 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
             Eine Woche im Voraus geplant — festgezurrt wird am Morgen, sobald deine Nachtwerte da sind.
           </span>
         </>
+      )}
+
+      {/* ── WHERE TO RIDE THIS ONE ────────────────────────────────────────
+           On today AND on every planned day, because "where do I ride this?"
+           is a question about a SESSION and the session is what this card is.
+           It follows the adaptation: take the session indoors and the answer
+           becomes a trainer route, because a mountain road for a 2x20 on the
+           rollers is not a worse suggestion, it is an unusable one.
+
+           Never on a rest day, and never before there is history to draw on —
+           see `W3DayRoute`, which renders nothing rather than guessing. ── */}
+      {(isToday || isFuture) && day.status !== 'rest' && (
+        <W3DayRoute
+          targetTss={result?.tss ?? day.planned}
+          durationMinutes={durMinutes}
+          indoor={adapt === 'indoor' || result?.title?.toLowerCase().includes('rolle') === true}
+          onOpen={() => navigate('/e/w3-rides')} />
       )}
 
       {isPast && day.status !== 'rest' && (
