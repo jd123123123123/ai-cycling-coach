@@ -9,6 +9,7 @@ import W3GarageLane from './W3GarageLane'
 import { useHeroPanel } from './W3HeroShell'
 import W3GearPanel from './W3GearPanel'
 import W3WorkshopPanel from './W3WorkshopPanel'
+import W3Shops from './W3Shops'
 import { useGear } from '../../hooks/useGear'
 import { useWorkshop } from '../../hooks/useWorkshop'
 import { useWallet } from '../../hooks/useWallet'
@@ -132,6 +133,18 @@ export function W3WorkshopScreen() {
   return (
     <Shell title="Werkstatt" back right={<Balance />}>
       <W3WorkshopPanel />
+    </Shell>
+  )
+}
+
+/** The other half of maintenance: the jobs the rider does not do themselves.
+ *  A screen rather than a panel inside the workshop, for the same reason the
+ *  shop is one — standing in a bike shop is a different activity from standing
+ *  at your own workbench, and stacking them makes both a scroll. */
+export function W3ShopsScreen() {
+  return (
+    <Shell title="In der Nähe" back>
+      <W3Shops />
     </Shell>
   )
 }

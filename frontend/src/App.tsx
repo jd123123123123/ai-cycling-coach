@@ -74,6 +74,8 @@ const W3GearScreen = lazyWithRetry(() =>
   import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3GearScreen })))
 const W3WorkshopScreen = lazyWithRetry(() =>
   import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3WorkshopScreen })))
+const W3ShopsScreen = lazyWithRetry(() =>
+  import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3ShopsScreen })))
 const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
 const W3PlacesPage = lazyWithRetry(() => import('./editorial/w3/W3PlacesPage'))
 const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview'))
@@ -441,6 +443,7 @@ function AppRoutes() {
           </Route>
           <Route path="/e/w3-gear" element={<ProtectedRoute checkOnboarding><W3Guard><W3GearScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-workshop" element={<ProtectedRoute checkOnboarding><W3Guard><W3WorkshopScreen /></W3Guard></ProtectedRoute>} />
+          <Route path="/e/w3-shops" element={<ProtectedRoute checkOnboarding><W3Guard><W3ShopsScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-old" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
           <Route path="/e/w3-workshop-preview" element={<W3WorkshopPreview />} />

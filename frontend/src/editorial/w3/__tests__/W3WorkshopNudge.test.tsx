@@ -20,6 +20,10 @@ const ws = (components: WorkshopComponent[], open: WorkshopComponent | null = nu
   components, total_bonus_rc: components.reduce((s, c) => s + c.bonus_rc, 0),
   drivetrain_fresh: true, drivetrain_watts: null,
   chain_km_total: 0, chain_record_km: 0, balance: 0, open_question: open,
+  chain_life: {
+    life_km: 0, limit_km: 2500, pct: 0, km_left: 2500, status: 'fresh',
+    progress: 0, measurements: 0, confidence: 0, calibrated: false,
+  },
 })
 
 const show = () => render(<MemoryRouter><W3WorkshopNudge /></MemoryRouter>)

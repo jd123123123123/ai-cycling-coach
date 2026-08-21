@@ -702,6 +702,34 @@ class ComponentOut(BaseModel):
     accrual_stopped: bool
 
 
+class ChainLifeOut(BaseModel):
+    """The chain's SECOND clock — how much of the part itself is left.
+
+    Separate from the component's service state on purpose: "needs cleaning"
+    and "is worn out" are different questions with different answers, and only
+    one of them costs a cassette when it is missed.
+    """
+
+    #: Weighted kilometres since this chain was fitted. A service does not
+    #: touch it; only a replacement does.
+    life_km: float
+    #: Where 0,5 % elongation falls for THIS rider — the industry prior until
+    #: they measure, their own number afterwards.
+    limit_km: float
+    #: Projected elongation in percent.
+    pct: float
+    #: Kilometres to the 0,5 % line. Negative once past it.
+    km_left: float
+    #: "fresh" | "due" | "ruinous". The third means the cassette is being cut.
+    status: str
+    progress: float
+    measurements: int
+    confidence: float
+    #: False while this is still an industry average rather than this rider's
+    #: own number. The screen must SAY "geschätzt" until it flips.
+    calibrated: bool
+
+
 class WorkshopOut(BaseModel):
     components: list[ComponentOut]
     total_bonus_rc: int
@@ -712,6 +740,7 @@ class WorkshopOut(BaseModel):
     drivetrain_watts: float | None
     chain_km_total: float
     chain_record_km: float
+    chain_life: ChainLifeOut
     balance: int
     #: The next part we still have to ask the rider about, or null. ONE at a
     #: time and only when the workshop is already open: six questions up front
@@ -761,6 +790,7 @@ def _workshop_out(view: workshop.WorkshopView, balance: int) -> WorkshopOut:
         drivetrain_watts=view.drivetrain_watts,
         chain_km_total=round(view.chain_km_total, 1),
         chain_record_km=round(view.chain_record_km, 1),
+        chain_life=ChainLifeOut(**vars(view.chain_life)),
         balance=balance,
     )
 
@@ -973,6 +1003,115 @@ async def set_component_method(
     balance = await rewards.balance_of(db, current_user.id)
     await db.commit()
     return _workshop_out(view, balance)
+
+
+class MeasureRequest(BaseModel):
+    """A chain-checker reading, in percent. 0,25 / 0,5 / 0,75 on a typical gauge."""
+
+    measured_pct: float = Field(ge=0, le=3)
+
+
+class MeasureOut(BaseModel):
+    component_id: str
+    measured_pct: float
+    life_km_at: float
+    #: True when the reading actually moved this rider's estimate — the payoff
+    #: for owning a €10 gauge, and the only thing worth celebrating here.
+    moved_estimate: bool
+    workshop: WorkshopOut
+
+
+class ReplaceRequest(BaseModel):
+    """When the new part went on. Absent means now."""
+
+    fitted_at: datetime | None = None
+
+
+class ReplaceOut(BaseModel):
+    component_id: str
+    name_de: str
+    #: What the retired part managed, weighted and in real road kilometres.
+    retired_life_km: float
+    retired_km_total: float
+    #: Rides replayed when the rider dated the fitting in the past.
+    rides_replayed: int
+    workshop: WorkshopOut
+
+
+@router.post("/workshop/measure/{component_id}", response_model=MeasureOut,
+             summary="Record a chain-checker reading and recalibrate the chain's life")
+async def measure_component(
+    component_id: str,
+    body: MeasureRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> MeasureOut:
+    """Two readings and the app stops quoting an industry average at the rider
+    and starts quoting their own drivetrain back to them.
+
+    Deliberately pays nothing. The moment a measurement earns RideCoin there is
+    a reason to lie to the gauge, and the whole point of this number is that it
+    is the one thing in the workshop that comes from outside the model.
+    """
+    try:
+        result = await workshop.measure(db, current_user.id, component_id, body.measured_pct)
+    except workshop.UnknownComponentError:
+        raise HTTPException(
+            http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}",
+        ) from None
+    except ValueError:
+        raise HTTPException(
+            http_status.HTTP_422_UNPROCESSABLE_CONTENT, "measured_pct out of range",
+        ) from None
+
+    view = await workshop.read(db, current_user.id)
+    balance = await rewards.balance_of(db, current_user.id)
+    await db.commit()
+    return MeasureOut(
+        component_id=result.component_id,
+        measured_pct=result.measured_pct,
+        life_km_at=result.life_km_at,
+        moved_estimate=result.moved_estimate,
+        workshop=_workshop_out(view, balance),
+    )
+
+
+@router.post("/workshop/replace/{component_id}", response_model=ReplaceOut,
+             summary="Fit a new part — every clock on it starts again")
+async def replace_component(
+    component_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    body: ReplaceRequest | None = None,
+) -> ReplaceOut:
+    """Replacing is not servicing. A service cleans what is there and pays its
+    banked bonus; this throws the part away, so it is the one operation allowed
+    to reset the lifetime odometers — and it pays nothing, because no
+    kilometres were ridden to earn it.
+
+    Dating the fitting in the past replays the rides since, so a chain fitted
+    three weeks ago lands on the kilometres it has really covered.
+    """
+    try:
+        result = await workshop.replace(
+            db, current_user.id, component_id, body.fitted_at if body else None,
+        )
+    except workshop.UnknownComponentError:
+        raise HTTPException(
+            http_status.HTTP_404_NOT_FOUND, f"No such component: {component_id}",
+        ) from None
+
+    view = await workshop.read(db, current_user.id)
+    balance = await rewards.balance_of(db, current_user.id)
+    await db.commit()
+    return ReplaceOut(
+        component_id=result.component_id,
+        name_de=result.name_de,
+        retired_life_km=result.retired_life_km,
+        retired_km_total=result.retired_km_total,
+        rides_replayed=result.rides_replayed,
+        workshop=_workshop_out(view, balance),
+    )
 
 
 @router.post("/asset/render", response_model=AssetRenderResponse)

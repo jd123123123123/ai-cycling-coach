@@ -28,6 +28,12 @@ const CHAIN_METHODS: MethodOption[] = [
 ]
 
 const FIXTURE: Workshop = {
+  // 2 640 weighted km on an oiled chain: past the 0,5 % line and still only an
+  // estimate, which is the state the card has the most to say about.
+  chain_life: {
+    life_km: 2640, limit_km: 2500, pct: 0.528, km_left: -140,
+    status: 'due', progress: 1, measurements: 0, confidence: 0, calibrated: false,
+  },
   components: [
     { id: 'chain', name_de: 'Kette', action_de: 'Reinigen & ölen',
       km_since: 372, interval_km: 250, km_total: 4820, bonus_rc: 223,
@@ -121,6 +127,22 @@ export default function W3WorkshopPreview() {
           // The real catalogue, so the preview exercises the picker with the
           // intervals the server actually grades against.
           methods={{ chain: CHAIN_METHODS }}
+          onMeasure={(_id, pct) => setWs((w) => ({
+            ...w,
+            chain_life: {
+              ...w.chain_life,
+              // The preview mirrors what the server would do: the reading moves
+              // the limit onto this rider and flips the card off "geschätzt".
+              limit_km: Math.round((w.chain_life.life_km / pct) * 0.5),
+              pct: Number((w.chain_life.life_km / (w.chain_life.life_km / pct)).toFixed(3)),
+              measurements: w.chain_life.measurements + 1,
+              confidence: 0.55, calibrated: true,
+            },
+          }))}
+          onReplace={() => setWs((w) => ({
+            ...w,
+            chain_life: { ...w.chain_life, life_km: 0, pct: 0, km_left: w.chain_life.limit_km, status: 'fresh', progress: 0 },
+          }))}
           onMethod={(id, m) => setWs((w) => ({
             ...w,
             // The server rebases interval and action together — the preview has

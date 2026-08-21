@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Asterisk, Camera, Check, HelpCircle, Trophy, Wrench, Zap } from 'lucide-react'
+import { Asterisk, Camera, Check, HelpCircle, MapPin, Ruler, Trophy, Wrench, Zap } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { WHEN_CHIPS, daysAgoISO, readPhoto } from './workshopPhoto'
-import type { MethodOption, ServiceResult, Workshop, WorkshopComponent } from '../../api/workshop'
+import type { ChainLife, MethodOption, ServiceResult, Workshop, WorkshopComponent } from '../../api/workshop'
 
 /**
  * W3 · GARAGE — the workshop. Where the bike economy is actually played.
@@ -369,6 +369,115 @@ function ComponentRow({ c, busy, methods, onService, onSeed, onDeclare, onMethod
   )
 }
 
+
+/** THE CHAIN'S SECOND CLOCK, and the only number on this screen that is about
+ *  money rather than points.
+ *
+ *  Everything else in the workshop answers "does it need cleaning?". This
+ *  answers "is it finished?" — and those are days and years apart. Past ~0,5 %
+ *  elongation the chain stops matching the cassette's tooth spacing and starts
+ *  cutting new spacing into it, so the rider who replaces on time buys a chain
+ *  and the one who does not buys a chain, a cassette and often chainrings.
+ *
+ *  Still no red and still no penalty: it states the two prices and lets the
+ *  rider decide, exactly as the watts line does. What it must never do is quote
+ *  an industry average as if it were this rider's — hence "geschätzt" until a
+ *  gauge has been used, and their own number the moment one has. */
+function ChainLifeCard({ life, busy, onMeasure, onReplace }: {
+  life: ChainLife
+  busy: boolean
+  onMeasure: (pct: number) => void
+  onReplace: () => void
+}) {
+  const reduce = useReducedMotion()
+  const [confirming, setConfirming] = useState(false)
+  const tone = life.status === 'fresh' ? T.acid : T.warn
+
+  const headline = life.status === 'fresh'
+    ? `noch ${km(Math.max(0, life.km_left))} bis 0,5 %`
+    : life.status === 'due'
+      ? 'Zeit für eine neue Kette'
+      : 'Die Kassette zahlt jetzt mit'
+
+  const detail = life.status === 'fresh'
+    ? (life.calibrated
+        ? `Aus ${life.measurements} Messung${life.measurements > 1 ? 'en' : ''} auf deinen Antrieb gerechnet: ${km(life.limit_km)} pro Kette.`
+        : `Geschätzt aus Erfahrungswerten — miss einmal mit der Kettenlehre, dann rechnet das hier mit deiner eigenen Zahl.`)
+    : life.status === 'due'
+      ? 'Jetzt kostet dich das eine Kette. Weiterfahren kostet dich irgendwann Kassette und Kettenblätter mit.'
+      : 'Über 0,75 % — die Kette schneidet der Kassette neue Zähne. Ein Satz statt eines Teils.'
+
+  return (
+    <div style={{
+      background: T.heroDock, borderRadius: 20, padding: 16,
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Ruler size={13} color={tone} />
+        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.3, color: tone }}>
+          KETTENLEBEN
+        </span>
+        <span style={{
+          marginLeft: 'auto', fontSize: 10.5, fontWeight: 600, color: T.quiet,
+          fontVariantNumeric: 'tabular-nums',
+        }}>
+          {life.calibrated ? 'gemessen' : 'geschätzt'}
+        </span>
+      </div>
+
+      <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{headline}</span>
+
+      <Meter progress={life.progress} tone={tone} reduce={reduce} />
+
+      <span style={{
+        fontSize: 10.5, fontWeight: 600, color: T.heroMid,
+        fontVariantNumeric: 'tabular-nums',
+      }}>
+        {km(life.life_km)} / {km(life.limit_km)} · {life.pct.toLocaleString('de-DE', {
+          minimumFractionDigits: 2, maximumFractionDigits: 2,
+        })} % Längung
+      </span>
+
+      <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>
+        {detail}
+      </span>
+
+      {/* The gauge reading. Three taps of a €10 tool and the estimate above
+          stops being somebody else's chain. Pays nothing on purpose: a
+          measurement that earned RideCoin would give a reason to lie to it. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center' }}>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, marginRight: 2 }}>
+          Lehre zeigt
+        </span>
+        {[0.25, 0.5, 0.75, 1].map((pct) => (
+          <Chip key={pct} label={`${pct.toLocaleString('de-DE')} %`} disabled={busy}
+                onClick={() => onMeasure(pct)} />
+        ))}
+      </div>
+
+      {/* Replacing is not servicing: it throws the part away, so it pays
+          nothing and resets the lifetime clocks. Confirmed once, because it is
+          the only irreversible button on this screen. */}
+      {confirming ? (
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Chip label="Ja, neue Kette dran" tone="on" disabled={busy}
+                onClick={() => { setConfirming(false); onReplace() }} />
+          <Chip label="Abbrechen" disabled={busy} onClick={() => setConfirming(false)} />
+        </div>
+      ) : (
+        <button onClick={() => setConfirming(true)} disabled={busy} style={{
+          alignSelf: 'flex-start', background: 'none', border: 0, padding: 0,
+          cursor: busy ? 'default' : 'pointer', fontFamily: FONT, fontSize: 10.5,
+          fontWeight: 600, color: T.quiet, textDecoration: 'underline',
+          textUnderlineOffset: 3,
+        }}>
+          Neue Kette montiert
+        </button>
+      )}
+    </div>
+  )
+}
+
 export interface W3WorkshopProps {
   workshop: Workshop | null
   loading: boolean
@@ -380,6 +489,12 @@ export interface W3WorkshopProps {
   onSeed: (componentId: string, lastServiceOn: string) => void
   onDeclare: (componentId: string, owned: boolean) => void
   onMethod: (componentId: string, method: string) => void
+  /** A chain-checker reading, in percent. Recalibrates this rider's chain life. */
+  onMeasure: (componentId: string, pct: number) => void
+  /** A new physical part: every clock on it starts again. */
+  onReplace: (componentId: string) => void
+  /** Take the bike to somebody. Absent in previews, which have no router. */
+  onFindShops?: () => void
   /** Maintenance regimes per component id. Absent ids simply show no picker. */
   methods: Record<string, MethodOption[]>
   onDismissResult: () => void
@@ -387,7 +502,8 @@ export interface W3WorkshopProps {
 
 export default function W3Workshop({
   workshop, loading, busyId, lastResult, methods,
-  onService, onSeed, onDeclare, onMethod, onDismissResult,
+  onService, onSeed, onDeclare, onMethod, onMeasure, onReplace, onFindShops,
+  onDismissResult,
 }: W3WorkshopProps) {
   const reduce = useReducedMotion()
   const [seen, setSeen] = useState(false)
@@ -477,6 +593,13 @@ export default function W3Workshop({
         </div>
       )}
 
+      {/* ── the chain's other clock ── */}
+      <ChainLifeCard
+        life={workshop.chain_life}
+        busy={busyId === 'chain'}
+        onMeasure={(pct) => onMeasure('chain', pct)}
+        onReplace={() => onReplace('chain')} />
+
       {/* ── the components ── */}
       {workshop.components.map((c) => (
         <ComponentRow
@@ -488,6 +611,20 @@ export default function W3Workshop({
           onDeclare={(owned) => onDeclare(c.id, owned)}
           onMethod={(m) => onMethod(c.id, m)} />
       ))}
+
+      {/* ── the jobs that are not yours ── */}
+      {onFindShops && (
+        <button onClick={onFindShops} style={{
+          display: 'flex', alignItems: 'center', gap: 10, padding: '13px 16px',
+          borderRadius: 20, background: T.heroDock, border: 0, cursor: 'pointer',
+          fontFamily: FONT, textAlign: 'left', width: '100%',
+        }}>
+          <MapPin size={15} color={T.mid} />
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, minWidth: 0 }}>
+            Nicht selbst machen? <span style={{ color: T.ink, fontWeight: 700 }}>Werkstatt in der Nähe</span>
+          </span>
+        </button>
+      )}
 
       {/* ── the payday ── */}
       {lastResult && !seen && (
