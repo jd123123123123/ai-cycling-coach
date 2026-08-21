@@ -20,7 +20,7 @@ import { forecastRideRc, formatMultiplier, nextStreakTier, streakMultiplier } fr
 import { DASH, T } from './w3tokens'
 import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan, IntervalBlockOut } from '../../api/weeks'
-import { BLOCK_DE } from './W3WhyToday'
+import { blockLine } from './w3block'
 import W3TodayView, { type W3Vm, type W3Signal, type W3Spark, type W3Block, type OnAdapt } from './W3TodayView'
 import type { W3Weather, W3WeatherHour } from './W3Sections'
 
@@ -79,13 +79,6 @@ function baselineOf(series: number[] | null | undefined): { mean: number; n: num
  *
  *  Reuses `BLOCK_DE` and the same "Woche n von 4" phrasing W3WhyToday already
  *  uses — one vocabulary for the block, not two that can drift apart. */
-function blockLine(meso: { block_position: string; block_index_in_meso: number } | null): string | null {
-  const block = meso ? BLOCK_DE[meso.block_position] : null
-  if (!block) return null
-  const weekNo = meso != null && meso.block_index_in_meso >= 0 ? meso.block_index_in_meso + 1 : null
-  if (weekNo == null) return block.name
-  return `${block.name} · ${weekNo <= 4 ? `Woche ${weekNo} von 4` : `Woche ${weekNo}`}`
-}
 
 /** Build a spark from a REAL series, or null when there isn't one (the card
  *  then draws an empty track — see `Spark` in W3TodayView).

@@ -4,16 +4,13 @@ import { T, FONT } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
-import W3GarageHero from './W3GarageHero'
+import W3PartsDock from './W3PartsDock'
+import { useHeroPanel } from './W3HeroShell'
 import W3GearPanel from './W3GearPanel'
 import W3WorkshopPanel from './W3WorkshopPanel'
 import { useGear } from '../../hooks/useGear'
-import { useBikeBuild } from '../../hooks/useGear'
 import { useWorkshop } from '../../hooks/useWorkshop'
-import { useGarage } from '../../hooks/useGarage'
 import { useWallet } from '../../hooks/useWallet'
-import { useStreak } from '../../hooks/useStreak'
-import { useAuth } from '../../contexts/AuthContext'
 
 /**
  * The three live screens of the bike economy, wired to real endpoints.
@@ -79,34 +76,38 @@ function Balance() {
 export function W3GarageHome() {
   const navigate = useNavigate()
   const { data: gear } = useGear()
-  const { data: build, isFetching: building } = useBikeBuild()
   const { data: workshop } = useWorkshop()
-  const { data: garage } = useGarage()
-  const { data: wallet } = useWallet()
-  const { data: streak } = useStreak()
-  const { user } = useAuth()
 
-  // No `Shell` here. The garage IS the stage now — full-bleed, its own status
-  // bar and tab bar — exactly as Today is, and a page title bar above a
-  // full-screen room would put a header on a photograph.
-  return (
-    <W3GarageHero
-      handle={user?.display_name ? `@${user.display_name}` : '@rider'}
-      role={null}
-      rider={garage?.rider?.image_base64 ?? null}
-      // The BUILT bike when one exists, the rider's plain render otherwise.
-      // Never a stock bike presented as theirs — `needs_bike` leaves this null
-      // and the stage shows its labelled example.
-      bike={build?.image_base64 ?? garage?.bike?.image_base64 ?? null}
-      bikeName={garage?.bike?.name ?? 'Dein Rad'}
-      coins={wallet?.balance != null ? wallet.balance.toLocaleString('de-DE') : null}
-      streak={streak?.streak ?? null}
-      bonus={null}
+  // NO STAGE OF ITS OWN. The garage is the same room as Today, and the room
+  // belongs to `W3HeroShell` — so this page contributes only the panel that
+  // floats over the floor. That is also the whole feature: switching to the
+  // garage changes the panel and nothing else, so the machine never flashes.
+  const dock = (
+    <W3PartsDock
       gear={gear ?? null}
-      building={building}
-      workshopBonus={workshop?.total_bonus_rc ?? null}
       onOpenSlot={() => navigate('/e/w3-gear')}
-      onOpenWorkshop={() => navigate('/e/w3-workshop')} />
+      onOpenWorkshop={() => navigate('/e/w3-workshop')}
+      workshopBonus={workshop?.total_bonus_rc ?? null} />
+  )
+  const { inShell, portal } = useHeroPanel(dock)
+
+  // Outside the shell — a deep link that skipped it — the garage still draws
+  // its own room rather than a bare panel on a black page.
+  if (inShell) return <>{portal}</>
+  return <W3GarageStandalone dock={dock} />
+}
+
+/** The garage with a room of its own, for the case above. Kept minimal on
+ *  purpose: it is a fallback, not a second design. */
+function W3GarageStandalone({ dock }: { dock: React.ReactNode }) {
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+        <W3StatusBar />
+        <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', padding: '10px 16px 18px' }}>{dock}</div>
+        <W3TabBar />
+      </div>
+    </div>
   )
 }
 

@@ -7,6 +7,7 @@ import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
+import { useHeroPanel } from './W3HeroShell'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3CoachCard from './W3CoachCard'
@@ -214,73 +215,19 @@ export default function W3TodayView({ vm, onAdapt }: {
   // 'today' for today whatever the day type is — so read the day's own `rest`.
   const todayIsRest = vm.weekDays[todayIdx]?.rest === true
 
-  return (
-    <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-
-        {/* ── THE PEN SCREEN ──────────────────────────────────────────────
-             Frames `YIU3g` / `qv4Aw`, rebuilt: one viewport that answers the
-             day on its own — the rider and their bike on a lit stage, and one
-             dock carrying readiness. Everything below this block is the scroll,
-             and a rider who never scrolls has already been answered.
-
-             Sized to the viewport MINUS the fixed tab bar, so the dock lands
-             exactly above it the way it does in the pen, on any device height
-             rather than only at 844. ── */}
-        {/* THE ROOM IS THE WHOLE SCREEN.
-            The stage used to be one band in a column, so its floor stopped at
-            the readiness panel and the picture cut hard into flat black — the
-            seam the rider kept pointing at. The stage is absolute and full
-            bleed now; the status bar and the panel float over it. That is also
-            what puts the bike properly low: its floor line is measured against
-            the whole screen instead of against the leftover space above a
-            panel. */}
-        <div style={{
-          position: 'relative',
-          height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
-          display: 'flex', flexDirection: 'column',
-          // ONE SYSTEM, NO SEAM. The page continues in exactly the colour the
-          // stage picture finishes with, read off its bottom edge rather than
-          // chosen — so there is no border to hide and nothing to blend. Change
-          // the stage and the whole screen follows it. Falls back to the token
-          // while the sample loads, which is what shipped before.
-          background: ground ?? T.heroBg,
-        }}>
-          <W3StatusBar />
-
-          <W3TodayStage
-            fullBleed
-            vm={{
-              handle: vm.handle,
-              role: vm.tierLine,
-              rider: vm.riderImage,
-              // The rider's own render first, their collectible second, and the
-              // labelled example only when neither exists. Never a stock bike
-              // presented as theirs.
-              bike: vm.bikeImage ?? vm.collectible,
-              bikeName: vm.bikeName,
-              bikeInScene: vm.bikeInScene,
-              coins: vm.coins,
-              streak: vm.streak,
-              bonus: vm.earnRate === DASH ? null : vm.earnRate,
-              stages: vm.stages,
-              stage: vm.stage,
-              onSelectStage: vm.onSelectStage,
-              rendering: vm.stageRendering,
-            }} />
-
-          {/* The pen's bottom slot: padding 16, one panel, centred.
-              `paddingBottom: 28` — the dock sat tight against the tab bar with
-              nothing under it, so the first screen ended on a hard edge and gave
-              no sign that anything followed. The extra air is also the room the
-              scroll cue needs. */}
-          <div style={{
-            position: 'relative', zIndex: 2, marginTop: 'auto',
-            // LOWER, so the closed panel clears the back wheel. The bike stands
-            // on a floor line at 76% of the stage; a panel that starts higher
-            // than that cuts across the machine it is standing next to.
-            padding: '10px 16px 18px', flex: 'none',
-          }}>
+  // ── THE ROOM IS THE SHELL'S, NOT THIS PAGE'S ────────────────────────
+  // The stage used to be rendered here, which meant navigating away tore it
+  // down and rebuilt it: the rider watched their own machine flash out and
+  // back in to answer a different question about it. `W3HeroShell` mounts it
+  // once and keeps it; this page contributes the PANEL that floats over the
+  // floor and the content beneath, which are the only two things actually
+  // about Today.
+  //
+  // `inShell` is false when this view is rendered outside the shell — a preview
+  // route, or a deep link that skips it — and then the hero below is drawn
+  // locally exactly as it always was. A page outside the room is a legitimate
+  // thing to be.
+  const dock = (
             <W3TodayDock
               vm={{
                 score: vm.readiness,
@@ -309,9 +256,11 @@ export default function W3TodayView({ vm, onAdapt }: {
                 expand: openness,
               }}
               onOpen={() => navigate('/e/w3-readiness')} />
-          </div>
-        </div>
+  )
+  const { inShell, portal } = useHeroPanel(dock)
 
+  const content = (
+    <>
         {/* The overnight signals used to live here as their own band. They are
             inside the readiness panel now, opened by scrolling — which removes
             a whole surface from the screen, and with it the second place where
@@ -479,8 +428,51 @@ export default function W3TodayView({ vm, onAdapt }: {
              them. It renders nothing when last week held no story. ── */}
         <Reveal><W3WeekRecapCard /></Reveal>
 
-        <W3TabBar />
 
+    </>
+  )
+
+  if (inShell) return <>{portal}{content}</>
+
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+        <div style={{
+          position: 'relative',
+          height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+          display: 'flex', flexDirection: 'column',
+          background: ground ?? T.heroBg,
+        }}>
+          <W3StatusBar />
+          <W3TodayStage
+            fullBleed
+            vm={{
+              handle: vm.handle,
+              role: vm.tierLine,
+              rider: vm.riderImage,
+              // The rider's own render first, their collectible second, and the
+              // labelled example only when neither exists. Never a stock bike
+              // presented as theirs.
+              bike: vm.bikeImage ?? vm.collectible,
+              bikeName: vm.bikeName,
+              bikeInScene: vm.bikeInScene,
+              coins: vm.coins,
+              streak: vm.streak,
+              bonus: vm.earnRate === DASH ? null : vm.earnRate,
+              stages: vm.stages,
+              stage: vm.stage,
+              onSelectStage: vm.onSelectStage,
+              rendering: vm.stageRendering,
+            }} />
+          <div style={{
+            position: 'relative', zIndex: 2, marginTop: 'auto',
+            padding: '10px 16px 18px', flex: 'none',
+          }}>
+            {dock}
+          </div>
+        </div>
+        {content}
+        <W3TabBar />
       </div>
     </div>
   )

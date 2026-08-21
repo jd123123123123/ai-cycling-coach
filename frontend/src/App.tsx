@@ -95,6 +95,8 @@ const W3NitroPreview = lazyWithRetry(() => import('./editorial/w3/W3NitroPreview
 const W3MatchPreview = lazyWithRetry(() => import('./editorial/w3/W3MatchPreview'))
 const W3RankPreview = lazyWithRetry(() => import('./editorial/w3/W3RankPreview'))
 const W3GarageHeroPreview = lazyWithRetry(() => import('./editorial/w3/W3GarageHeroPreview'))
+const W3HeroRoute = lazyWithRetry(() => import('./editorial/w3/W3HeroRoute'))
+const W3RoomPreview = lazyWithRetry(() => import('./editorial/w3/W3RoomPreview'))
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
@@ -194,6 +196,28 @@ function App() {
 // screen uses (editorial/w3/W3Loading re-exports it). The old light-themed
 // "Coach" splash is gone: it flashed white in a black app and was the only
 // place in the product that still introduced itself as "Coach".
+/**
+ * Which ROOM a path belongs to — the unit the app-level crossfade keys on.
+ *
+ * It used to key on the pathname, and that quietly made a persistent layout
+ * impossible anywhere in the app: a changed key unmounts the whole routed tree,
+ * so a layout route shared by two paths was rebuilt on every navigation along
+ * with everything under it. Screens that share a room share a key, so the tree
+ * survives and the room animates its own swap (`W3HeroShell`). Everything else
+ * still keys on its own path and fades exactly as before.
+ */
+const ROOMS: Record<string, string> = {
+  '/e/w3-today': 'w3-room',
+  '/e/w3-garage': 'w3-room',
+}
+function roomKey(pathname: string): string {
+  // The preview route nests its own screens, so it is a room by prefix rather
+  // than by table — and it has to be one, or the preview would test a
+  // different mechanism than the app ships.
+  if (pathname.startsWith('/e/w3-room-preview')) return 'w3-room-preview'
+  return ROOMS[pathname] ?? pathname
+}
+
 function AppRoutes() {
   const location = useLocation()
   return (
@@ -202,7 +226,7 @@ function AppRoutes() {
     <W3AvatarGate />
     <W3WeekReviewGate />
     <Suspense fallback={<AppLoading />}>
-      <PageTransition routeKey={location.pathname}>
+      <PageTransition routeKey={roomKey(location.pathname)}>
         <Routes location={location}>
           {/* Public routes */}
           <Route path="/login" element={<LoginPage />} />
@@ -406,7 +430,7 @@ function AppRoutes() {
 
           {/* EDITORIAL II — a second design system, mounted alongside the first. */}
           <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
-          <Route path="/e/w3-today" element={<ProtectedRoute checkOnboarding><W3Guard><W3TodayPage /></W3Guard></ProtectedRoute>} />
+
           <Route path="/e/w3-today-preview" element={<W3TodayPreview />} />
           <Route path="/e/w3-session" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
           <Route path="/e/w3-session/:id" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
@@ -421,7 +445,17 @@ function AppRoutes() {
               as their own screens. The old catalogue garage (`W3GaragePage`)
               still answers `/e/w3-garage-old` until the shop it depends on is
               removed — see docs/superpowers/specs/2026-08-19-own-bike-customisation-design.md */}
-          <Route path="/e/w3-garage" element={<ProtectedRoute checkOnboarding><W3Guard><W3GarageHome /></W3Guard></ProtectedRoute>} />
+          {/* ── ONE ROOM, TWO QUESTIONS ────────────────────────────────
+              Today and the garage are the same bike in the same room. Nested
+              under one layout they SHARE the mounted stage: navigating between
+              them swaps the panel over the floor and the content beneath, and
+              the machine itself never flashes out and back in. See
+              `W3HeroShell`. Adding a screen here means writing its panel, not
+              another copy of the room. ── */}
+          <Route element={<ProtectedRoute checkOnboarding><W3Guard><W3HeroRoute /></W3Guard></ProtectedRoute>}>
+            <Route path="/e/w3-today" element={<W3TodayPage />} />
+            <Route path="/e/w3-garage" element={<W3GarageHome />} />
+          </Route>
           <Route path="/e/w3-gear" element={<ProtectedRoute checkOnboarding><W3Guard><W3GearScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-workshop" element={<ProtectedRoute checkOnboarding><W3Guard><W3WorkshopScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-old" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
@@ -445,6 +479,7 @@ function AppRoutes() {
           <Route path="/e/w3-match-preview" element={<W3MatchPreview />} />
           <Route path="/e/w3-rank-preview" element={<W3RankPreview />} />
           <Route path="/e/w3-garage-hero-preview" element={<W3GarageHeroPreview />} />
+          <Route path="/e/w3-room-preview/*" element={<W3RoomPreview />} />
           <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />

@@ -1,3 +1,8 @@
+// The block words moved to `w3block` when the hero started wearing them too.
+// Re-exported here because this card was their home and other screens still
+// reach for them by this name.
+import { BLOCK_DE } from './w3block'
+export { BLOCK_DE }
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ChevronDown, Compass, Layers, Target, CalendarClock } from 'lucide-react'
@@ -44,14 +49,6 @@ const SEV_COLOR: Record<Severity, string> = {
 }
 
 const ARROW: Record<AdaptationChange['direction'], string> = { up: '↑', down: '↓', flat: '→' }
-
-/** Issurin block position → what that week is FOR, in plain German. */
-export const BLOCK_DE: Record<string, { name: string; means: string }> = {
-  accumulation: { name: 'Umfangsblock', means: 'Umfang vor Intensität — hier wird die aerobe Basis breit gemacht' },
-  transmutation: { name: 'Intensitätsblock', means: 'die Basis wird in wettkampfspezifische Schärfe umgesetzt' },
-  realization: { name: 'Formblock', means: 'Last runter, Schärfe rein — die Form wird scharf gestellt' },
-  recovery: { name: 'Entlastungswoche', means: 'die Last fällt bewusst ab, damit die Anpassung greift' },
-}
 
 /** Friel phase code → German label. Unknown codes print themselves. */
 const PHASE_DE: Record<string, string> = {
