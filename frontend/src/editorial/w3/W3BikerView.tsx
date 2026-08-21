@@ -64,19 +64,27 @@ const PRIMARY = [
   { key: 'totalRides' as const, icon: Bike, label: 'FAHRTEN GESAMT' },
   { key: 'saddleTime' as const, icon: Timer, label: 'SATTELZEIT' },
 ]
-const INSIGHT_META: Record<W3InsightKey, { icon: ComponentType<{ size?: number; color?: string }>; hue: string }> = {
-  elevation: { icon: Mountain, hue: T.evening },
-  longest: { icon: RouteIcon, hue: '#00E5FF' },
-  speed: { icon: Gauge, hue: T.training },
-  burned: { icon: Flame, hue: T.warn },
+// ONE ACCENT, NOT FOUR. Each tile used to carry its own hue — violet, cyan,
+// blue, amber — as a gradient wash plus a tinted border plus a coloured caption.
+// Four foreign colours in a 2×2 is not a palette, it is a fruit bowl, and it
+// fights the single-accent system every other screen keeps. The icon still
+// distinguishes them; the colour no longer has to.
+const INSIGHT_META: Record<W3InsightKey, { icon: ComponentType<{ size?: number; color?: string }> }> = {
+  elevation: { icon: Mountain },
+  longest: { icon: RouteIcon },
+  speed: { icon: Gauge },
+  burned: { icon: Flame },
 }
 const DASH = '—'
 const SEG = 24
+/** The level meter's steps. Twenty-two, the same as readiness and the season
+ *  meter — three screens showing a share three different ways was the problem. */
+const LVL_SEG = 22
 
 /** One value + kicker + caption, on surface. The page's whole rhythm. */
 function FactCell({ f, flex = 1 }: { f: W3Fact; flex?: number }) {
   return (
-    <div style={{ flex, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 18, background: T.surface, border: `1px solid ${T.rule}` }}>
+    <div style={{ flex, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 20, background: T.tile }}>
       <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.label}</span>
       <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.7, color: f.value === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.value}</span>
       <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: T.quiet, overflow: 'hidden' }}>{f.caption}</span>
@@ -92,86 +100,131 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
-        {/* ── Cover: the rider fills the top of the frame ── */}
-        <div style={{ position: 'relative', height: 306, background: '#141414', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: -20, left: '50%', transform: 'translateX(-50%)', width: 340, height: 280, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}26, transparent)` }} />
+        {/* ── THE RIDER STANDS IN A ROOM ──────────────────────────────────
+             This was a 306 px cover with the figure cropped at the shoulders,
+             then fourteen equally-weighted tiles stacked under it with no air
+             between them. Today's hero is the standard on this app and its
+             argument is simple: ONE subject, full height, with a single flat
+             panel floating over the floor carrying the answer. The rider gets
+             the same room the bike gets — they are the other thing this app is
+             about, and a profile that opens on a wall of boxes says the numbers
+             matter more than the person. ── */}
+        <div style={{
+          position: 'relative',
+          height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+          display: 'flex', flexDirection: 'column',
+          background: T.heroBg, overflow: 'hidden',
+        }}>
+          {/* The bloom the figure stands in — the same warm lift Today's stage
+              uses, so the two rooms are lit by one lamp. */}
+          <div aria-hidden style={{
+            position: 'absolute', top: '4%', left: '50%', transform: 'translateX(-50%)',
+            width: '92%', height: '58%', borderRadius: '50%',
+            background: `radial-gradient(closest-side, ${T.acid}1F, transparent)`,
+          }} />
+
           {vm.avatarUrl ? (
-            <img src={vm.avatarUrl} alt="Dein Fahrer" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 20%' }} />
+            <motion.img src={vm.avatarUrl} alt="Dein Fahrer"
+              initial={reduce ? false : { opacity: 0, scale: 1.04 }} animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.7, ease: EASE }}
+              style={{
+                position: 'absolute', inset: 0, width: '100%', height: '100%',
+                // Sits the figure ON the floor line rather than centring it in
+                // the box, which is what left it cropped at the shoulders.
+                objectFit: 'cover', objectPosition: 'center 22%',
+              }} />
           ) : (
             /* The empty seat. Never someone else's showcase rider on a page
                whose whole job is to say who YOU are. */
             <button onClick={onCreateRider} style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', background: 'transparent', border: 0, fontFamily: FONT, cursor: onCreateRider ? 'pointer' : 'default' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', paddingBottom: 34 }}>
-                <div style={{ width: 92, height: 92, borderRadius: 100, display: 'grid', placeItems: 'center', background: T.surface, border: `1.5px dashed ${T.acid}59` }}>
-                  <UserRound size={40} strokeWidth={1.5} color={T.acid} />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', paddingBottom: 120 }}>
+                <div style={{ width: 108, height: 108, borderRadius: 100, display: 'grid', placeItems: 'center', background: T.heroChip, border: `1.5px dashed ${T.acid}59` }}>
+                  <UserRound size={46} strokeWidth={1.5} color={T.acid} />
                 </div>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Noch kein Fahrer</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>Erstell deinen im Studio</span>
+                <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>Noch kein Fahrer</span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>Erstell deinen im Studio</span>
               </div>
             </button>
           )}
-          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 150, pointerEvents: 'none', background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
-          {/* No W3StatusBar spacer here: the cover is full-bleed to the top of
-              the frame by design (the reveal does the same) — only the header
-              row is pushed clear of the OS chrome. */}
-          <div style={{ position: 'absolute', top: 'max(14px, env(safe-area-inset-top))', left: 0, right: 0, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-            <span style={{ minWidth: 0, fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.ink, padding: '8px 13px', borderRadius: 100, background: '#00000066', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>BIKER</span>
+
+          {/* Floor scrim, so the dock has something to sit on. */}
+          <div aria-hidden style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 300, pointerEvents: 'none', background: `linear-gradient(180deg, ${T.heroBg}00, ${T.heroBg}CC 55%, ${T.heroBg})` }} />
+
+          <div style={{ position: 'relative', zIndex: 2, padding: 'max(14px, env(safe-area-inset-top)) 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span style={{ minWidth: 0, fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.ink, padding: '8px 13px', borderRadius: 100, background: T.heroChip, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>BIKER</span>
             <div style={{ flex: 'none' }}><W3NavMenu /></div>
           </div>
-        </div>
 
-        {/* ── Identity: acid pill on the seam, then who you are ── */}
-        <div style={{ ...band(24), paddingTop: 0, marginTop: -16, gap: 10, alignItems: 'center', position: 'relative', zIndex: 2 }}>
-          {vm.ready ? (
-            <motion.div
-              initial={reduce ? false : { scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.45, ease: EASE }}
-              style={{ maxWidth: '100%', display: 'flex', gap: 7, alignItems: 'center', padding: '7px 15px', borderRadius: 100, background: T.acid, boxShadow: `0 0 24px ${T.acid}66` }}>
-              <Sparkles size={13} color="#121212" style={{ flex: 'none' }} />
-              <span style={{ minWidth: 0, fontSize: 10.5, fontWeight: 800, letterSpacing: 1, color: '#121212', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                LVL {vm.level} · {vm.role.toUpperCase()}
-              </span>
-            </motion.div>
-          ) : (
-            /* Same shape, no claim: the level and the role are only true once
-               the rides and the wallet have answered. */
-            <div style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 15px', borderRadius: 100, background: T.surface2 }}>
-              <Sparkles size={13} color={T.quiet} style={{ flex: 'none' }} />
-              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 2, color: T.quiet }}>···</span>
+          {/* ── THE DOCK: who you are, in one panel ────────────────────────
+               Name, handle, level and the identity chips were four separate
+               devices stacked in sixty pixels — a pill, a heading, a chip row
+               and a progress bar, each announcing itself. One panel, the way
+               readiness is one panel. ── */}
+          <div style={{ position: 'relative', zIndex: 2, marginTop: 'auto', padding: '10px 16px 18px' }}>
+            <div style={{ width: '100%', background: T.heroDock, borderRadius: 28, padding: '15px 17px 16px', display: 'flex', flexDirection: 'column', gap: 12, fontFamily: FONT }}>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                  <span style={{ fontSize: 25, fontWeight: 700, letterSpacing: -1, lineHeight: 1.05, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.name}</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 600, color: T.heroMid, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.handle}</span>
+                </div>
+                {vm.ready ? (
+                  <motion.div
+                    initial={reduce ? false : { scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ duration: 0.4, ease: EASE }}
+                    style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '7px 13px', borderRadius: 100, background: T.acid }}>
+                    <Sparkles size={12} color={T.heroInk} style={{ flex: 'none' }} />
+                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.9, color: T.heroInk, whiteSpace: 'nowrap' }}>
+                      LVL {vm.level}
+                    </span>
+                  </motion.div>
+                ) : (
+                  /* Same shape, no claim: the level is only true once the rides
+                     and the wallet have answered. */
+                  <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '7px 13px', borderRadius: 100, background: T.heroChip }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 2, color: T.heroMid }}>···</span>
+                  </div>
+                )}
+              </div>
+
+              {/* The level meter, segmented — the same twenty-two steps as
+                  readiness and the season. Three screens, one way of showing a
+                  share. */}
+              <div style={{ display: 'flex', gap: 3, width: '100%', height: 9 }}>
+                {Array.from({ length: LVL_SEG }, (_, i) => {
+                  const lit = i < Math.round(Math.max(0, Math.min(1, vm.levelPct)) * LVL_SEG)
+                  return (
+                    <motion.span key={i}
+                      initial={reduce ? false : { opacity: 0, scaleY: 0.4 }}
+                      animate={{ opacity: 1, scaleY: 1 }}
+                      transition={{ duration: 0.3, delay: reduce ? 0 : 0.12 + i * 0.012 }}
+                      style={{
+                        flex: 1, borderRadius: 2, transformOrigin: 'bottom',
+                        background: lit
+                          ? `linear-gradient(180deg, ${T.acidLite} 0%, ${T.acid} 55%, ${T.acidDeep} 100%)`
+                          : T.heroOff,
+                      }} />
+                  )
+                })}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <span style={{ minWidth: 0, display: 'flex', gap: 6, overflow: 'hidden' }}>
+                  {vm.chips.slice(0, 3).map((c) => (
+                    <span key={c} style={{ flex: 'none', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.heroMid, padding: '5px 10px', borderRadius: 100, background: T.heroChip, whiteSpace: 'nowrap' }}>{c}</span>
+                  ))}
+                </span>
+                <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 600, color: T.heroMid, whiteSpace: 'nowrap' }}>{vm.levelNote}</span>
+              </div>
             </div>
-          )}
-
-          <div style={{ maxWidth: '100%', display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-            <span style={{ maxWidth: '100%', fontSize: 30, fontWeight: 700, letterSpacing: -1.1, lineHeight: 1.1, color: T.ink, textAlign: 'center', overflowWrap: 'anywhere' }}>{vm.name}</span>
-            <span style={{ maxWidth: '100%', fontSize: 12.5, fontWeight: 600, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.handle}</span>
-          </div>
-
-          {vm.chips.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-              {vm.chips.map((c) => (
-                <span key={c} style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.mid, padding: '6px 11px', borderRadius: 100, background: T.rule, whiteSpace: 'nowrap' }}>{c}</span>
-              ))}
-            </div>
-          )}
-
-          {/* Level bar — the only other acid on this screenful, and it belongs
-              to the pill above: one statement, not two. */}
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 5, marginTop: 2 }}>
-            <div style={{ height: 6, borderRadius: 100, background: T.surface2, overflow: 'hidden' }}>
-              <motion.div
-                initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(Math.max(0, Math.min(1, vm.levelPct)) * 100)}%` }}
-                transition={{ duration: 0.9, ease: EASE, delay: 0.15 }}
-                style={{ height: '100%', borderRadius: 100, background: `linear-gradient(90deg, ${T.acidDeep}, ${T.acid})` }} />
-            </div>
-            <span style={{ alignSelf: 'flex-end', fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{vm.levelNote}</span>
           </div>
         </div>
 
         {/* ── Lifetime ── */}
-        <div style={{ ...band(26), gap: 10 }}>
+        <div style={{ ...band(34), gap: 13 }}>
           <Kicker>Gesamt</Kicker>
 
           {/* The headline: the distance, made human. */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', borderRadius: 20, background: T.surface, border: `1px solid ${T.rule}` }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', borderRadius: 22, background: T.tile }}>
             {/* Quiet on purpose: the acid on this screenful belongs to the
                 level pill. This card speaks through the sentence, not colour. */}
             <div style={{ flex: 'none', width: 38, height: 38, borderRadius: 12, background: T.surface2, display: 'grid', placeItems: 'center' }}>
@@ -184,7 +237,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
           </div>
 
           {/* Primary — three cells, one strip */}
-          <div style={{ display: 'flex', width: '100%', borderRadius: 18, background: T.surface, border: `1px solid ${T.stroke}`, overflow: 'hidden' }}>
+          <div style={{ display: 'flex', width: '100%', borderRadius: 20, background: T.tile, overflow: 'hidden' }}>
             {PRIMARY.map((p, i) => {
               const Ic = p.icon
               const v = vm.primary[p.key]
@@ -199,19 +252,17 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
           </div>
 
           {/* Insight tiles — each raw number made meaningful */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, width: '100%' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%' }}>
             {vm.insights.map((t, i) => {
               const meta = INSIGHT_META[t.key]; const Ic = meta.icon
               return (
                 <motion.div key={t.key}
                   initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={grow(0.06 * i)}
-                  style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '11px 12px 12px', borderRadius: 16, background: `linear-gradient(180deg, ${meta.hue}14, ${T.surface})`, border: `1px solid ${meta.hue}2E` }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                    <div style={{ flex: 'none', width: 26, height: 26, borderRadius: 8, background: `${meta.hue}22`, display: 'grid', placeItems: 'center' }}><Ic size={14} color={meta.hue} /></div>
-                    <span style={{ minWidth: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.6, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
-                  </div>
-                  <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: t.value === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.value}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.25, color: meta.hue, overflow: 'hidden' }}>{t.caption}</span>
+                  style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 7, padding: '15px 15px 16px', borderRadius: 20, background: T.tile }}>
+                  <span style={{ flex: 'none', width: 28, height: 28, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Ic size={14} color={T.acid} /></span>
+                  <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.6, color: t.value === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.value}</span>
+                  <span style={{ minWidth: 0, fontSize: 8, fontWeight: 700, letterSpacing: 0.9, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: T.mid, overflow: 'hidden' }}>{t.caption}</span>
                 </motion.div>
               )
             })}
@@ -219,7 +270,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
         </div>
 
         {/* ── Engine ── */}
-        <div style={{ ...band(26), gap: 10 }}>
+        <div style={{ ...band(34), gap: 13 }}>
           <Kicker>Motor</Kicker>
           <div style={{ display: 'flex', gap: 8, width: '100%' }}>
             {vm.engine.map((f) => <FactCell key={f.label} f={f} />)}
@@ -227,10 +278,10 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
         </div>
 
         {/* ── Rhythm ── */}
-        <div style={{ ...band(26), gap: 10 }}>
+        <div style={{ ...band(34), gap: 13 }}>
           <Kicker>Rhythmus</Kicker>
           <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 18, background: T.surface, border: `1px solid ${T.rule}` }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 20, background: T.tile }}>
               <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
                 <Flame size={14} color={vm.streak.value === DASH ? T.quiet : T.acid} style={{ flex: 'none' }} />
                 <span style={{ minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.streak.label}</span>
@@ -238,7 +289,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
               <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.7, color: vm.streak.value === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.streak.value}</span>
               <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: T.quiet }}>{vm.streak.caption}</span>
             </div>
-            <button onClick={onBadges} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 18, background: T.surface, border: `1px solid ${T.rule}`, fontFamily: FONT, textAlign: 'left', cursor: onBadges ? 'pointer' : 'default' }}>
+            <button onClick={onBadges} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, padding: '13px 12px 14px', borderRadius: 20, background: T.tile, fontFamily: FONT, textAlign: 'left', cursor: onBadges ? 'pointer' : 'default' }}>
               <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
                 <Medal size={14} color={T.mid} style={{ flex: 'none' }} />
                 <span style={{ minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.badges.label}</span>
@@ -250,7 +301,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
         </div>
 
         {/* ── RideCoin: the real wallet + the next shop tier ── */}
-        <div style={{ ...band(26), gap: 10 }}>
+        <div style={{ ...band(34), gap: 13 }}>
           <Kicker>RideCoin</Kicker>
           <div style={{ ...card(), gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -276,7 +327,7 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
         {/* ── Referral: one quiet row, not a pitch ── */}
         {vm.referral && (
           <div style={{ ...band(26) }}>
-            <button onClick={onReferral} style={{ display: 'flex', gap: 12, alignItems: 'center', width: '100%', padding: '14px 16px', borderRadius: 18, background: T.surface, border: `1px solid ${T.rule}`, fontFamily: FONT, textAlign: 'left', cursor: onReferral ? 'pointer' : 'default' }}>
+            <button onClick={onReferral} style={{ display: 'flex', gap: 12, alignItems: 'center', width: '100%', padding: '14px 16px', borderRadius: 20, background: T.tile, fontFamily: FONT, textAlign: 'left', cursor: onReferral ? 'pointer' : 'default' }}>
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: 1.6, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.referral.code}</span>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.referral.note}</span>
