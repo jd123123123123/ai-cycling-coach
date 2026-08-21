@@ -26,6 +26,7 @@ from app.services.activity_stream_analysis import (
     ROUTE_DETAIL_POINTS,
     ROUTE_DETAIL_TOLERANCE_M,
     analyze_stream_blob,
+    route_grades,
     route_sketch_polyline,
 )
 from app.services.athlete_service import get_or_create_profile
@@ -206,6 +207,7 @@ async def get_activity(
                 ActivityStream.streams["latitude"],
                 ActivityStream.streams["longitude"],
                 ActivityStream.matched_polyline,
+                ActivityStream.streams["altitude"],
             ).where(ActivityStream.activity_id == activity_id)
         )
     ).first()
@@ -217,6 +219,7 @@ async def get_activity(
     # wandering trace a GPS recorded, so it is preferred whenever it exists.
     # It is still simplified: matched geometry is road detail, and a whole
     # Alpine loop comes back as 8 000 points.
+    raw = {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])}
     matched = row[2] if isinstance(row[2], list) and len(row[2]) > 1 else None
     if matched:
         out.route_polyline = route_sketch_polyline(
@@ -224,13 +227,18 @@ async def get_activity(
             max_points=ROUTE_DETAIL_POINTS,
             tolerance_m=ROUTE_DETAIL_TOLERANCE_M,
         )
-        return out
+    else:
+        out.route_polyline = route_sketch_polyline(
+            raw, max_points=ROUTE_DETAIL_POINTS, tolerance_m=ROUTE_DETAIL_TOLERANCE_M,
+        )
 
-    out.route_polyline = route_sketch_polyline(
-        {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])},
-        max_points=ROUTE_DETAIL_POINTS,
-        tolerance_m=ROUTE_DETAIL_TOLERANCE_M,
-    )
+    # Gradient always comes from the RECORDING, even when the line drawn is the
+    # matched road: the road graph carries no elevation, and the altimeter that
+    # was actually on the bike does. Sampled by distance along, so the two agree
+    # about where on the ride each point is. See `route_grades`.
+    alt = _as_points(row[3]) if len(row) > 3 else None
+    if alt and out.route_polyline:
+        out.route_grades = route_grades({**raw, "altitude": alt}, out.route_polyline)
     # Kick the match off in the background so the NEXT open shows the road.
     # Never awaited: matching is a dozen external requests and ~18 s, and this
     # response is what a rider is looking at right now.

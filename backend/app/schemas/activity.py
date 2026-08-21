@@ -63,6 +63,10 @@ class ActivityRead(BaseModel):
     # Populated only by the list endpoint, which never fetches a stream to
     # fill it: a list must not fan out one stream request per row.
     route_polyline: list[list[float]] | None = None
+    #: Percent gradient at each point of `route_polyline`, same length. Lets a
+    #: map colour the road by how steep it is, which is the one thing a cycling
+    #: map can say that a general-purpose one cannot. None without altitude.
+    route_grades: list[float] | None = None
 
 
 class ActivityListResponse(BaseModel):

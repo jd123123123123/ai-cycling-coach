@@ -21,5 +21,10 @@ export default function W3RideMapPage() {
   )
 
   if (isLoading) return <W3Loading label="Lade deine Route…" />
-  return <W3RideMapView polyline={activity?.route_polyline ?? null} onBack={() => navigate(-1)} />
+  return (
+    <W3RideMapView
+      polyline={activity?.route_polyline ?? null}
+      grades={activity?.route_grades ?? null}
+      onBack={() => navigate(-1)} />
+  )
 }

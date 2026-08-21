@@ -119,3 +119,68 @@ def test_longitude_is_scaled_so_a_metre_means_one_thing():
     ns, ew = zigzag("ns", 46.5), zigzag("ew", 46.5)
     # Same physical zigzag, so the same number of points should survive it.
     assert abs(ns - ew) <= max(4, 0.1 * max(ns, ew))
+
+
+# ── gradient, the one thing a cycling map can say ───────────────────────────
+
+def test_gradient_is_smoothed_hard_enough_to_survive_a_real_file():
+    """Gradient is a DERIVATIVE, so it amplifies whatever the altimeter did.
+    The Maratona export steps more than 5 m between adjacent points 620 times
+    over a median spacing of 18 m — single steps range −37 % to +36 % on roads
+    that never exceed about 12 %. Without a wide window and a ceiling, a map
+    paints 45 % walls across a Dolomites pass."""
+    from app.services.activity_stream_analysis import route_grades
+
+    n = 900
+    lat = [46.5 + i * 0.00009 for i in range(n)]          # ~10 m apart
+    lng = [11.9] * n
+    # A steady 6 % climb, with the kind of jitter a barometer actually produces.
+    alt = [1000 + i * 0.6 + (7.0 if i % 3 == 0 else -7.0) for i in range(n)]
+    poly = [[a, b] for a, b in zip(lat, lng)]
+    g = route_grades({"latitude": lat, "longitude": lng, "altitude": alt}, poly)
+
+    assert g is not None and len(g) == len(poly)
+    middle = g[len(g) // 4: -len(g) // 4]
+    # The real gradient is 6 %; the raw jitter alone is ±140 %.
+    assert all(2.0 < x < 11.0 for x in middle), (min(middle), max(middle))
+
+
+def test_gradient_is_capped_at_what_a_road_can_be():
+    from app.services.activity_stream_analysis import _GRADE_MAX_PCT, route_grades
+
+    n = 400
+    lat = [46.5 + i * 0.00009 for i in range(n)]
+    lng = [11.9] * n
+    alt = [1000 + i * 8.0 for i in range(n)]   # an absurd 80 %
+    g = route_grades({"latitude": lat, "longitude": lng, "altitude": alt},
+                     [[a, b] for a, b in zip(lat, lng)])
+    assert g is not None
+    assert max(g) <= _GRADE_MAX_PCT
+
+
+def test_gradient_lines_up_with_the_line_that_is_drawn():
+    """The polyline the client gets is simplified, and on a matched ride it is
+    the ROAD's geometry, which shares no points with the recording. One colour
+    per vertex is what MapLibre needs, so the lengths must agree however the
+    line was produced."""
+    from app.services.activity_stream_analysis import (
+        ROUTE_DETAIL_POINTS, ROUTE_DETAIL_TOLERANCE_M, route_grades, route_sketch_polyline,
+    )
+    n = 3000
+    lat = [46.5 + i * 0.00003 for i in range(n)]
+    lng = [11.9 + (0.0004 if (i // 50) % 2 else -0.0004) for i in range(n)]
+    alt = [1000 + i * 0.2 for i in range(n)]
+    s = {"latitude": lat, "longitude": lng, "altitude": alt}
+    poly = route_sketch_polyline(s, max_points=ROUTE_DETAIL_POINTS,
+                                 tolerance_m=ROUTE_DETAIL_TOLERANCE_M)
+    assert poly is not None and len(poly) < n
+    assert len(route_grades(s, poly)) == len(poly)
+
+
+def test_no_altitude_means_no_claim_about_terrain():
+    from app.services.activity_stream_analysis import route_grades
+
+    poly = [[46.5, 11.9], [46.6, 11.9], [46.7, 11.9], [46.8, 11.9]]
+    assert route_grades({"latitude": [46.5], "longitude": [11.9]}, poly) is None
+    assert route_grades({}, poly) is None
+    assert route_grades({"altitude": [1, 2, 3, 4]}, None) is None

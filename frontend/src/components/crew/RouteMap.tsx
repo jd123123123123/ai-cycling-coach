@@ -95,6 +95,11 @@ export interface RouteMapProps {
    *  the design gives it. Ignored when `lineColors` supplies a gradient. */
   lineColor?: string
   lineWidth?: number
+  /** Drape the map over real elevation and tilt the camera into it. Only for
+   *  a surface a rider has deliberately opened to LOOK at the terrain — a
+   *  tilted map is disorienting as a summary and costs DEM tiles that a flat
+   *  city ride gains nothing from. */
+  terrain?: boolean
   /** Repaint the basemap into the app's palette once it loads. Omitted leaves
    *  the provider's own cartography untouched, which is what the crew and
    *  rehearsal pages want. See `repaint`. */
@@ -117,10 +122,20 @@ export interface RouteMapProps {
   markerLatLng?: [number, number] | null
 }
 
-/** Up to this many `line-gradient` stops. A 138 km route bins to ~900 segments;
- *  MapLibre would take every one, but the ramp is read at a glance and the
- *  style expression is re-parsed on every style load, so it is sampled down. */
-const MAX_GRADIENT_STOPS = 48
+/** Up to this many `line-gradient` stops.
+ *
+ *  This was 48, chosen when the only caller was the rehearsal page's
+ *  target-watts ramp — a broad "harder here, easier there" read at a glance. A
+ *  ride coloured by GRADIENT is a different job: 48 stops over a 138 km Alpine
+ *  loop is one colour every 2.9 km, which averages a hairpin ramp together with
+ *  the valley it starts in and paints the whole pass one middling tone.
+ *
+ *  128 puts it near a kilometre, which resolves a pass without pretending to
+ *  resolve a single ramp — and it is worth being honest that a 300 m wall
+ *  inside a long climb will not show at any stop count this side of sending the
+ *  whole array. The expression is re-parsed on every style load, so this is not
+ *  free. */
+const MAX_GRADIENT_STOPS = 128
 
 /** Colour ramp as a `line-gradient` expression, or null when unusable. */
 function gradientExpression(colors: string[]): unknown[] | null {
@@ -176,6 +191,32 @@ function boundsOf(poly: [number, number][]): [[number, number], [number, number]
  * between releases, and none of that is worth a blank map — a slightly
  * off-palette basemap under the route is a far better failure than no basemap.
  */
+
+/**
+ * The DEM behind 3D terrain, and the one detail that silently ruins it.
+ *
+ * ENCODING IS NOT A DETAIL. Terrain-RGB tiles pack height into the colour
+ * channels, and there are three incompatible conventions — `mapbox`,
+ * `terrarium` and `mtk`. Declaring the wrong one does not fail: it produces
+ * heights that are simply wrong, and MapLibre renders them without complaint.
+ * Verified against a real Dolomites tile rather than trusted: read as
+ * `terrarium` its centre pixel is 1 277 m, which is a plausible valley floor;
+ * read as `mapbox` the same pixel is 861 554 m, which is twice the altitude of
+ * the ISS.
+ *
+ * `tileSize: 512` is likewise measured off the tile, not assumed. The basemap
+ * style declares this same DEM three more times at 2048/4096/8192 — those are
+ * deliberate over-declarations that BLUR it for soft hillshading, and reusing
+ * one of them for displacement would stretch the landscape by a factor of four.
+ */
+const TERRAIN_SOURCE = 'w3-dem'
+const TERRAIN_TILES = 'https://tiles.mapterhorn.com/{z}/{x}/{y}.webp'
+
+/** Enough to feel the mountain, not so much that a col becomes a spike. The
+ *  1.3-2.0 band is where relief reads as landscape rather than as a special
+ *  effect; a ride through a flat city is unchanged by any value in it. */
+const TERRAIN_EXAGGERATION = 1.45
+
 export interface MapPalette {
   land: string
   water: string
@@ -252,7 +293,7 @@ export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
   lineColors, markerLatLng = null,
   lineColor = '#FF5A3C', lineWidth = 4, startColor = '#16E08A', endColor = '#FF5A3C',
-  attributionBottom, palette,
+  attributionBottom, palette, terrain = false,
 }: RouteMapProps) {
   const holder = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MlMap | null>(null)
@@ -333,6 +374,48 @@ export default function RouteMap({
           // Repaint BEFORE the route goes on, so the route is never briefly
           // drawn over the provider's palette and then over ours.
           if (palette) repaint(map, palette)
+
+          // ── 3D ───────────────────────────────────────────────────────
+          // After the repaint, so the sky is coloured in our palette rather
+          // than the style's daylight blue, and before the route, so the line
+          // is added to a map that is already draped.
+          if (terrain) {
+            try {
+              if (!map.getSource(TERRAIN_SOURCE)) {
+                map.addSource(TERRAIN_SOURCE, {
+                  type: 'raster-dem',
+                  tiles: [TERRAIN_TILES],
+                  tileSize: 512,
+                  maxzoom: 15,
+                  encoding: 'terrarium',
+                  attribution: '',
+                } as Parameters<MlMap['addSource']>[1])
+              }
+              map.setTerrain({ source: TERRAIN_SOURCE, exaggeration: TERRAIN_EXAGGERATION })
+              // A tilted map with no sky shows the void behind the horizon,
+              // which reads as a rendering bug rather than as distance. In
+              // MapLibre v5+ the sky is a STYLE-ROOT property set through
+              // `setSky`, not a layer — the base style declares its own there
+              // in daylight blue, and this replaces it with ours.
+              if (palette) {
+                map.setSky({
+                  'sky-color': palette.water,
+                  'sky-horizon-blend': 0.6,
+                  'horizon-color': palette.roadMinor,
+                  'horizon-fog-blend': 0.7,
+                  'fog-color': palette.land,
+                  'fog-ground-blend': 0.9,
+                })
+              }
+              // Tilt only once the ground has somewhere to go. Pitching a flat
+              // map just squashes it.
+              map.easeTo({ pitch: 58, duration: 900 })
+            } catch (err) {
+              // A DEM that will not load is a flat map, which is the map we
+              // had. Never a blank one.
+              console.warn('3D terrain unavailable', err)
+            }
+          }
           const coords = polyline.map(([lat, lng]) => [lng, lat])
 
           const ramp = lineColors && lineColors.length === polyline.length
@@ -358,7 +441,7 @@ export default function RouteMap({
             id: 'route-line', type: 'line', source: 'route',
             layout: { 'line-join': 'round', 'line-cap': 'round' },
             paint: ramp
-              ? { 'line-gradient': ramp, 'line-width': 4 }
+              ? { 'line-gradient': ramp, 'line-width': lineWidth }
               : { 'line-color': lineColor, 'line-width': lineWidth },
           } as Parameters<MlMap['addLayer']>[0])
 
@@ -440,7 +523,7 @@ export default function RouteMap({
     // change to one would mean a different screen rather than a new value on
     // this one. Pass them as literals; animating them will not work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polyline, styleKey, interactive, failed, palette])
+  }, [polyline, styleKey, interactive, failed, palette, terrain])
 
   // Scrub position. Deliberately NOT part of the effect above: rebuilding a
   // MapLibre instance per pointer-move would be unusable on a phone.

@@ -3,6 +3,7 @@ import { ChevronLeft, Mountain, Moon } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import { W3_MAP } from './w3map'
+import { GRADE_LEGEND, gradeColours } from './gradeColours'
 import './w3.css'
 
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
@@ -26,13 +27,20 @@ const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
 export interface W3RideMapViewProps {
   /** The ride's own GPX. Null renders the honest empty state. */
   polyline: [number, number][] | null
+  /** Percent gradient per point. Paints the road by how steep it is — the one
+   *  thing a cycling map can say that a general-purpose one cannot. Absent
+   *  leaves the route in its plain accent. */
+  grades?: number[] | null
   onBack?: () => void
 }
 
-export default function W3RideMapView({ polyline, onBack }: W3RideMapViewProps) {
-  // Dark leads. Relief is the one you go and get when you want to read the
-  // shape of a climb; the app's own register is the resting state.
-  const [styleKey, setStyleKey] = useState<'dark' | 'cycling'>('dark')
+export default function W3RideMapView({ polyline, grades, onBack }: W3RideMapViewProps) {
+  // Two modes, two jobs. FLACH is the app's own register and the resting
+  // state; BERGE drapes the same dark map over real elevation and tilts into
+  // it. Contour lines and 3D answer the same question — what shape is this
+  // climb — so having both as separate styles was three modes doing two jobs.
+  const [threeD, setThreeD] = useState(false)
+  const ramp = gradeColours(grades, polyline?.length ?? 0)
 
   const hasRoute = polyline != null && polyline.length > 1
 
@@ -44,9 +52,14 @@ export default function W3RideMapView({ polyline, onBack }: W3RideMapViewProps) 
             <Suspense fallback={null}>
               <RouteMap
                 polyline={polyline}
-                styleKey={styleKey}
+                // The DARK basemap in both modes: switching the cartography as
+                // well as the projection made the toggle feel like two
+                // different maps rather than one map seen two ways.
+                styleKey="dark"
+                terrain={threeD}
                 interactive
                 palette={W3_MAP}
+                lineColors={ramp ?? undefined}
               lineColor={T.acid}
                 lineWidth={6}
                 startColor={T.ink}
@@ -73,6 +86,24 @@ export default function W3RideMapView({ polyline, onBack }: W3RideMapViewProps) 
           background: `linear-gradient(180deg, ${T.bg}F2 0%, ${T.bg}B3 45%, ${T.bg}00 100%)`,
         }} />
 
+        {/* The legend, and ONLY when the line is coloured. A key for a colour
+            scheme that is not on screen is furniture. */}
+        {ramp && (
+          <div style={{
+            position: 'absolute', bottom: 'calc(26px + env(safe-area-inset-bottom))',
+            left: 16, zIndex: 3, display: 'flex', alignItems: 'center', gap: 10,
+            padding: '8px 12px', borderRadius: 100, border: `1px solid ${T.stroke}`,
+            background: `${T.bg}A6`, backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+          }}>
+            {GRADE_LEGEND.map((g) => (
+              <span key={g.label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ width: 10, height: 4, borderRadius: 100, background: g.colour, flex: 'none' }} />
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.mid }}>{g.label}</span>
+              </span>
+            ))}
+          </div>
+        )}
+
         <div style={{ position: 'relative', zIndex: 2 }}><W3StatusBar /></div>
 
         <div style={{
@@ -91,10 +122,10 @@ export default function W3RideMapView({ polyline, onBack }: W3RideMapViewProps) 
               border: `1px solid ${T.stroke}`, background: `${T.bg}A6`,
               backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
             }}>
-              {([['cycling', 'Relief', Mountain], ['dark', 'Ruhig', Moon]] as const).map(([k, label, Icon]) => {
-                const on = styleKey === k
+              {([[true, 'Berge', Mountain], [false, 'Flach', Moon]] as const).map(([k, label, Icon]) => {
+                const on = threeD === k
                 return (
-                  <button key={k} onClick={() => setStyleKey(k)} style={{
+                  <button key={label} onClick={() => setThreeD(k)} style={{
                     display: 'flex', alignItems: 'center', gap: 5, height: 34, padding: '0 13px',
                     borderRadius: 100, border: 0, cursor: on ? 'default' : 'pointer',
                     background: on ? T.acid : 'transparent',

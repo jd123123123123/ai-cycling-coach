@@ -64,6 +64,9 @@ export interface ActivityRead {
    *  indoor rides and for rides whose stream was never stored — render the
    *  neutral placeholder, never a fake line. */
   route_polyline?: [number, number][] | null
+  /** Percent gradient at each polyline point, same length. Null without
+   *  altitude. Lets a map colour the road by how steep it is. */
+  route_grades?: number[] | null
 }
 
 export interface ActivityListResponse {
