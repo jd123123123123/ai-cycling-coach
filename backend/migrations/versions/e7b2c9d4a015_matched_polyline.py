@@ -12,15 +12,22 @@ external service and about eighteen seconds. NULL means not attempted, or
 attempted and refused — a trail that is not in OpenStreetMap gets its recorded
 trace, because a confidently wrong road is worse than an honest wobble.
 
+REBASED ONTO `cl1a2b3c4d5e`, WHICH IS NOT MINE. A parallel worktree deployed the
+chain-life migration while this one was being written, so both claimed
+`df2c6e0a71b4` as their parent. Two heads means `alembic upgrade head` cannot
+choose, the container dies on boot, and the API goes to 502 — which is exactly
+what happened. Its file is vendored into this tree so the history resolves; the
+owning branch keeps it.
+
 Revision ID: e7b2c9d4a015
-Revises: df2c6e0a71b4
+Revises: cl1a2b3c4d5e
 """
 import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "e7b2c9d4a015"
-down_revision = "df2c6e0a71b4"
+down_revision = "cl1a2b3c4d5e"
 branch_labels = None
 depends_on = None
 
