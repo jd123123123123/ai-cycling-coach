@@ -51,41 +51,46 @@ export default function W3ZoneLadder({ ftp }: { ftp: number | null }) {
         </span>
       </div>
 
-      <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', height: 86 }}>
+      {/* THE TEXT LIVES UNDER THE BARS, NOT INSIDE THEM. Inside, the short
+          low-zone bars clipped their own numbers — Z1 showed nothing at all —
+          and a chart that hides the very figures it exists to show is worse
+          than no chart. The bars carry the shape; the row beneath carries the
+          watts. */}
+      <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: 54 }}>
+        {ZONES.map(([z, , , , hue], i) => (
+          <motion.div key={z}
+            initial={reduce ? false : { scaleY: 0, opacity: 0 }}
+            animate={{ scaleY: 1, opacity: 1 }}
+            transition={{ duration: 0.45, delay: reduce ? 0 : 0.06 * i, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              flex: 1, minWidth: 0, transformOrigin: 'bottom',
+              // The ladder CLIMBS: each band taller than the last, so the shape
+              // says "harder" before a single number is read.
+              height: `${34 + i * 13}%`, borderRadius: 6,
+              background: ok ? `linear-gradient(180deg, ${hue}, ${hue}99)` : T.d1,
+              boxShadow: ok ? `0 0 12px ${hue}4D` : 'none',
+            }} />
+        ))}
+      </div>
+
+      <div style={{ display: 'flex', gap: 5 }}>
         {ZONES.map(([z, feel, lo, hi, hue], i) => {
           const from = ok ? Math.round(ftp! * (i === 0 ? 0 : lo)) : null
           const to = ok && hi != null ? Math.round(ftp! * hi) : null
           return (
-            <motion.div key={z}
-              initial={reduce ? false : { scaleY: 0, opacity: 0 }}
-              animate={{ scaleY: 1, opacity: 1 }}
-              transition={{ duration: 0.45, delay: reduce ? 0 : 0.06 * i, ease: [0.22, 1, 0.36, 1] }}
-              style={{
-                flex: 1, minWidth: 0, transformOrigin: 'bottom',
-                // The ladder CLIMBS: each band is taller than the last, so the
-                // shape says "harder" before a single number is read.
-                height: `${38 + i * 12}%`,
-                borderRadius: 7, padding: '7px 5px 6px',
-                display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', gap: 2,
-                background: ok
-                  ? `linear-gradient(180deg, ${hue}38, ${hue}14)`
-                  : T.d1,
-                boxShadow: ok ? `inset 0 1px 0 ${hue}55` : 'none',
-              }}>
-              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.4, color: ok ? hue : T.quiet, textAlign: 'center' }}>
-                {z}
-              </span>
+            <div key={z} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+              <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.4, color: ok ? hue : T.quiet }}>{z}</span>
               <span style={{
-                fontFamily: ARCHIVO, fontSize: 10.5, fontWeight: 700, textAlign: 'center',
-                color: ok ? T.ink : T.quiet, fontVariantNumeric: 'tabular-nums',
-                minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                fontFamily: ARCHIVO, fontSize: 11, fontWeight: 700, color: ok ? T.ink : T.quiet,
+                fontVariantNumeric: 'tabular-nums', minWidth: 0,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
                 {!ok ? '—' : to == null ? `${from}+` : `${to}`}
               </span>
-              <span aria-hidden style={{ fontSize: 7, fontWeight: 600, color: T.quiet, textAlign: 'center', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 7, fontWeight: 600, color: T.quiet, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {feel}
               </span>
-            </motion.div>
+            </div>
           )
         })}
       </div>

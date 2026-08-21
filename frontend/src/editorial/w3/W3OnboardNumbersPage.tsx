@@ -10,6 +10,7 @@ import { CONSENT_TYPES } from '../../types/consent'
 import { estimateFtp, starterFtp, type StarterFitness } from '../../utils/trainingScience'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3ZoneLadder from './W3ZoneLadder'
 import './w3.css'
 
 /**
@@ -203,6 +204,15 @@ export default function W3OnboardNumbersPage() {
                 {weight ? ` bei ${Math.round(Number(weight))} kg` : ''}
               </span>
             )}
+
+            {/* ── WHAT THE NUMBER BUYS ─────────────────────────────────────
+                 203 W means nothing on its own. Its entire job is to define the
+                 six efforts the rider will actually be asked for, so the figure
+                 is DRAWN as the ladder it creates — every band carrying the real
+                 watts it starts and ends at, computed from this rider's own
+                 number. Change the FTP by ten watts and every figure on the
+                 ladder moves. See `W3ZoneLadder`. */}
+            <W3ZoneLadder ftp={ftp} />
           </motion.div>
         </div>
 
