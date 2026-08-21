@@ -4,7 +4,7 @@ import { T, FONT } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
-import W3GarageStage from './W3GarageStage'
+import W3GarageHero from './W3GarageHero'
 import W3GearPanel from './W3GearPanel'
 import W3WorkshopPanel from './W3WorkshopPanel'
 import { useGear } from '../../hooks/useGear'
@@ -12,6 +12,8 @@ import { useBikeBuild } from '../../hooks/useGear'
 import { useWorkshop } from '../../hooks/useWorkshop'
 import { useGarage } from '../../hooks/useGarage'
 import { useWallet } from '../../hooks/useWallet'
+import { useStreak } from '../../hooks/useStreak'
+import { useAuth } from '../../contexts/AuthContext'
 
 /**
  * The three live screens of the bike economy, wired to real endpoints.
@@ -80,21 +82,31 @@ export function W3GarageHome() {
   const { data: build, isFetching: building } = useBikeBuild()
   const { data: workshop } = useWorkshop()
   const { data: garage } = useGarage()
+  const { data: wallet } = useWallet()
+  const { data: streak } = useStreak()
+  const { user } = useAuth()
 
+  // No `Shell` here. The garage IS the stage now — full-bleed, its own status
+  // bar and tab bar — exactly as Today is, and a page title bar above a
+  // full-screen room would put a header on a photograph.
   return (
-    <Shell title="Garage" right={<Balance />}>
-      <W3GarageStage
-        gear={gear ?? null}
-        // The BUILT bike when one exists, the rider's plain render otherwise.
-        // Never a stock bike presented as theirs — `needs_bike` leaves this
-        // null and the stage shows its labelled example.
-        bikeImage={build?.image_base64 ?? garage?.bike?.image_base64 ?? null}
-        bikeName={garage?.bike?.name ?? 'Dein Rad'}
-        building={building}
-        workshopBonus={workshop?.total_bonus_rc ?? null}
-        onOpenSlot={() => navigate('/e/w3-gear')}
-        onOpenWorkshop={() => navigate('/e/w3-workshop')} />
-    </Shell>
+    <W3GarageHero
+      handle={user?.display_name ? `@${user.display_name}` : '@rider'}
+      role={null}
+      rider={garage?.rider?.image_base64 ?? null}
+      // The BUILT bike when one exists, the rider's plain render otherwise.
+      // Never a stock bike presented as theirs — `needs_bike` leaves this null
+      // and the stage shows its labelled example.
+      bike={build?.image_base64 ?? garage?.bike?.image_base64 ?? null}
+      bikeName={garage?.bike?.name ?? 'Dein Rad'}
+      coins={wallet?.balance != null ? wallet.balance.toLocaleString('de-DE') : null}
+      streak={streak?.streak ?? null}
+      bonus={null}
+      gear={gear ?? null}
+      building={building}
+      workshopBonus={workshop?.total_bonus_rc ?? null}
+      onOpenSlot={() => navigate('/e/w3-gear')}
+      onOpenWorkshop={() => navigate('/e/w3-workshop')} />
   )
 }
 

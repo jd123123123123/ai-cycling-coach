@@ -94,6 +94,7 @@ const W3RideMapPreview = lazyWithRetry(() => import('./editorial/w3/W3RideMapPre
 const W3NitroPreview = lazyWithRetry(() => import('./editorial/w3/W3NitroPreview'))
 const W3MatchPreview = lazyWithRetry(() => import('./editorial/w3/W3MatchPreview'))
 const W3RankPreview = lazyWithRetry(() => import('./editorial/w3/W3RankPreview'))
+const W3GarageHeroPreview = lazyWithRetry(() => import('./editorial/w3/W3GarageHeroPreview'))
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
@@ -443,6 +444,7 @@ function AppRoutes() {
           <Route path="/e/w3-nitro-preview" element={<W3NitroPreview />} />
           <Route path="/e/w3-match-preview" element={<W3MatchPreview />} />
           <Route path="/e/w3-rank-preview" element={<W3RankPreview />} />
+          <Route path="/e/w3-garage-hero-preview" element={<W3GarageHeroPreview />} />
           <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />
