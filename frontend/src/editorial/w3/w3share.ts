@@ -515,114 +515,85 @@ export interface AvatarCardData {
   footer: string
 }
 
+/**
+ * The shareable reveal, rebuilt to the screen it comes from.
+ *
+ * THE OLD CARD HAD A SHADE ACROSS THE FACE, and it was structural rather than
+ * stylistic: the cover was a 760 px rectangle in one tone, the portrait was
+ * drawn past the bottom of it, and a 330 px gradient was laid over the overlap.
+ * So the top half of the rider sat on one ground and the bottom half sat under
+ * a wash, with a visible step across the chest. Below that, four hundred pixels
+ * of empty black — the content stopped at sixty per cent of the card.
+ *
+ * ONE GROUND, ONE PORTRAIT, CONTENT DOCKED AT THE BOTTOM — the same shape the
+ * reveal itself now has: the character fills the card, the handle rides on the
+ * seam, three facts, a footer. Nothing floats over the face.
+ */
 function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avatar: HTMLImageElement | null) {
-  const coverH = 760
   const px = 64
+  const DOCK = 430          // where the copy begins; the portrait runs behind it
 
-  // ── ground ──
+  // ── one ground for the whole card ──
   ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, 0, AW, AH)
 
-  // ── cover: the acid bloom + the rider ──
-  ctx.fillStyle = '#141414'; ctx.fillRect(0, 0, AW, coverH)
-  const halo = ctx.createRadialGradient(AW / 2, 250, 0, AW / 2, 250, 540)
-  halo.addColorStop(0, 'rgba(200,255,0,0.20)'); halo.addColorStop(1, 'rgba(200,255,0,0)')
-  ctx.fillStyle = halo; ctx.fillRect(0, 0, AW, coverH)
-
+  // ── the portrait, full bleed ──
   if (avatar && avatar.width > 0 && avatar.height > 0) {
-    // object-fit: cover, object-position: center 18% — same crop as the reveal.
-    const scale = Math.max(AW / avatar.width, coverH / avatar.height)
+    const scale = Math.max(AW / avatar.width, (AH - DOCK + 220) / avatar.height)
     const dw = avatar.width * scale, dh = avatar.height * scale
-    ctx.drawImage(avatar, (AW - dw) / 2, -(dh - coverH) * 0.18, dw, dh)
+    ctx.drawImage(avatar, (AW - dw) / 2, -(dh - (AH - DOCK + 220)) * 0.22, dw, dh)
   } else {
     ctx.save()
-    ctx.beginPath(); ctx.arc(AW / 2, coverH / 2 - 30, 168, 0, Math.PI * 2); ctx.closePath()
+    ctx.beginPath(); ctx.arc(AW / 2, (AH - DOCK) / 2, 190, 0, Math.PI * 2); ctx.closePath()
     ctx.fillStyle = '#202020'; ctx.fill()
     ctx.restore()
-    text(ctx, d.avatarInitial, AW / 2, coverH / 2 + 30, 150, '700', '#6E7379', 0, 'center')
+    text(ctx, d.avatarInitial, AW / 2, (AH - DOCK) / 2 + 60, 170, '700', '#6E7379', 0, 'center')
   }
 
-  // confetti — the reveal's falling ribbons, frozen
-  const CONF = ['#C8FF00', '#7B5CFF', '#00E5FF', '#FFB020', '#C8FF00', '#7B5CFF']
-  CONF.forEach((c, i) => {
-    ctx.save()
-    ctx.translate(AW * (0.12 + i * 0.14), 70 + ((i * 97) % 260))
-    ctx.rotate((i % 2 ? 0.5 : -0.35))
-    ctx.fillStyle = c
-    roundRect(ctx, -8, -18, 16, 36, 5); ctx.fill()
-    ctx.restore()
-  })
+  // The floor the copy stands on. One long gradient into the ground colour, so
+  // there is no step anywhere on the portrait.
+  const floor = ctx.createLinearGradient(0, AH - DOCK - 300, 0, AH - DOCK + 60)
+  floor.addColorStop(0, 'rgba(11,11,11,0)')
+  floor.addColorStop(0.6, 'rgba(11,11,11,0.82)')
+  floor.addColorStop(1, '#0B0B0B')
+  ctx.fillStyle = floor; ctx.fillRect(0, AH - DOCK - 300, AW, 360)
+  ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, AH - DOCK + 58, AW, DOCK)
 
-  // cover → panel fade
-  const fade = ctx.createLinearGradient(0, coverH - 330, 0, coverH)
-  fade.addColorStop(0, 'rgba(11,11,11,0)'); fade.addColorStop(1, '#0B0B0B')
-  ctx.fillStyle = fade; ctx.fillRect(0, coverH - 330, AW, 330)
+  // ── the handle, on the seam ──
+  const chipY = AH - DOCK - 6
+  ctx.font = `800 40px ${FONT}`
+  const chipW = ctx.measureText(d.handle).width + 132
+  const chipH = 84, chipX = (AW - chipW) / 2
+  roundRect(ctx, chipX, chipY - chipH / 2, chipW, chipH, chipH / 2)
+  ctx.fillStyle = '#1A1A1C'; ctx.fill()
+  star(ctx, chipX + 46, chipY, 15, ACID)
+  text(ctx, d.handle, chipX + 78, chipY + 14, 40, '800', '#FFFFFF')
 
-  // ── acid "AVATAR UNLOCKED" pill, straddling the seam ──
-  const pillLabel = 'AVATAR UNLOCKED'
-  ctx.font = `700 28px ${FONT}`
-  const labelW = ctx.measureText(pillLabel).width + 3 * (pillLabel.length - 1)
-  const pillW = labelW + 122, pillH = 72, pillX = (AW - pillW) / 2, pillY = coverH - 40
-  ctx.save()
-  ctx.shadowColor = 'rgba(200,255,0,0.55)'; ctx.shadowBlur = 44
-  roundRect(ctx, pillX, pillY, pillW, pillH, pillH / 2)
-  ctx.fillStyle = ACID; ctx.fill()
-  ctx.restore()
-  star(ctx, pillX + 44, pillY + pillH / 2, 15, '#121212')
-  text(ctx, pillLabel, pillX + 74, pillY + pillH / 2 + 10, 28, '700', '#121212', 3)
+  // role · LEVEL
+  const roleY = chipY + 74
+  ctx.font = `600 30px ${FONT}`
+  const roleW = ctx.measureText(d.role).width
+  const lvl = `LEVEL ${d.level}`
+  ctx.font = `700 30px ${FONT}`
+  const lvlW = ctx.measureText(lvl).width
+  const rowW = roleW + 34 + lvlW
+  text(ctx, d.role, (AW - rowW) / 2, roleY, 30, '600', '#9BA0A6')
+  text(ctx, lvl, (AW - rowW) / 2 + roleW + 34, roleY, 30, '700', ACID)
 
-  // ── handle chip + LVL badge (the reveal's identity row) ──
-  const rowY = pillY + pillH + 86
-  const av = 116
-  ctx.save()
-  ctx.beginPath(); ctx.arc(px + av / 2, rowY, av / 2, 0, Math.PI * 2); ctx.closePath()
-  ctx.fillStyle = '#202020'; ctx.fill(); ctx.clip()
-  if (avatar && avatar.width > 0) {
-    const s = Math.max(av / avatar.width, av / avatar.height)
-    ctx.drawImage(avatar, px + av / 2 - (avatar.width * s) / 2, rowY - (avatar.height * s) / 2, avatar.width * s, avatar.height * s)
-  } else {
-    text(ctx, d.avatarInitial, px + av / 2, rowY + 16, 46, '700', '#9BA0A6', 0, 'center')
-  }
-  ctx.restore()
-  ctx.save()
-  ctx.beginPath(); ctx.arc(px + av / 2, rowY, av / 2 - 3, 0, Math.PI * 2)
-  ctx.strokeStyle = ACID; ctx.lineWidth = 6; ctx.stroke()
-  ctx.restore()
-  text(ctx, d.handle, px + av + 30, rowY - 4, 44, '700', '#FFFFFF')
-  text(ctx, d.role, px + av + 30, rowY + 44, 30, '600', '#9BA0A6')
-
-  const lvl = `LVL ${d.level}`
-  ctx.font = `800 32px ${FONT}`
-  const lvlW = ctx.measureText(lvl).width + 60
-  roundRect(ctx, AW - px - lvlW, rowY - 32, lvlW, 64, 32)
-  ctx.fillStyle = ACID; ctx.fill()
-  text(ctx, lvl, AW - px - lvlW / 2, rowY + 11, 32, '800', '#121212', 0, 'center')
-
-  // ── headline stat ──
-  let y = rowY + 120
-  if (d.headline) {
-    for (const line of wrap(ctx, d.headline, 42, '600', AW - px * 2).slice(0, 2)) {
-      text(ctx, line, px, y, 42, '600', 'rgba(255,255,255,0.86)')
-      y += 56
-    }
-    y += 22
-  }
-
-  // ── three stat tiles (TOTAL DISTANCE / TOTAL RIDES / SADDLE TIME) ──
-  const gap = 20, tileW = (AW - px * 2 - gap * 2) / 3, tileH = 186
-  const tileY = Math.min(Math.max(y, coverH + 330), AH - tileH - 130)
+  // ── three facts, in the reveal's own order and labels ──
+  const gap = 20, tileW = (AW - px * 2 - gap * 2) / 3, tileH = 190
+  const tileY = roleY + 54
   d.stats.forEach((s, i) => {
     const x = px + i * (tileW + gap)
     ctx.save()
     roundRect(ctx, x, tileY, tileW, tileH, 26)
-    ctx.fillStyle = '#161616'; ctx.fill()
-    ctx.strokeStyle = 'rgba(255,255,255,0.10)'; ctx.lineWidth = 2; ctx.stroke()
+    ctx.fillStyle = '#1A1A1C'; ctx.fill()
     ctx.restore()
-    text(ctx, s.l, x + 28, tileY + 52, 22, '700', 'rgba(255,255,255,0.45)', 1)
-    text(ctx, s.v, x + 28, tileY + 128, 46, '700', s.v === '—' ? '#6E7379' : '#FFFFFF')
+    text(ctx, s.v, x + 28, tileY + 92, 46, '700', s.v === '—' ? '#6E7379' : '#FFFFFF')
+    text(ctx, s.l, x + 28, tileY + 142, 22, '700', 'rgba(255,255,255,0.45)', 1)
   })
 
   // ── footer ──
-  const fy = AH - 72
+  const fy = AH - 68
   if (d.footer) text(ctx, d.footer, px, fy, 26, '600', 'rgba(255,255,255,0.55)')
   star(ctx, AW - px - 150, fy - 8, 12, ACID)
   text(ctx, 'w3.ride', AW - px - 128, fy, 28, '700', '#FFFFFF')
