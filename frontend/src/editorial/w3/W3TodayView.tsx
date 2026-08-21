@@ -152,6 +152,35 @@ const band = (padBottom: number): CSSProperties => ({ display: 'flex', flexDirec
  * already owns instead, so Today composes nothing and can no longer fail on a
  * mangled limb. Scene composition still exists for RIDES, where it belongs.
  */
+/**
+ * How much vertical distance the transition below the hero actually needs.
+ *
+ * A colour that ENDS is an edge; a colour that RUNS OUT is not — but the runway
+ * only has to be as long as the step it is hiding. Linear in the perceived
+ * distance between the picture's last row and the page's own ground, capped at
+ * the 180 px the original hard-coded band used, and zero once the two are
+ * within a couple of levels of each other.
+ *
+ * Exported for its test: this is the number that decides whether the screen
+ * reads as one room or has a hole in it.
+ */
+export function fadeRunway(ground: string | null, page: string, max = 180): number {
+  if (!ground) return max
+  const lum = (hex: string) => {
+    const h = hex.replace('#', '')
+    if (h.length < 6) return null
+    const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16))
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b
+  }
+  const a = lum(ground), b = lum(page)
+  if (a == null || b == null) return max
+  // 26 levels of luminance is roughly where a step across a full-width seam
+  // stops being visible on a dark screen; below 2 there is nothing to hide.
+  const d = Math.abs(a - b)
+  if (d < 2) return 0
+  return Math.round(Math.min(1, d / 26) * max)
+}
+
 export default function W3TodayView({ vm, onAdapt }: {
   vm: W3Vm
   onAdapt?: OnAdapt
@@ -163,6 +192,10 @@ export default function W3TodayView({ vm, onAdapt }: {
   // page. Null until the sample lands, and null forever if a canvas read is
   // refused; both cases fall back to the token.
   const ground = useGroundColour(STAGE_PLATE)
+  // How far the picture's last colour is from the app's own, 0..1 over the
+  // range where a hard edge would actually be visible. Below ~2 levels nobody
+  // can see a step, so nothing is spent hiding one.
+  const fadeH = fadeRunway(ground, T.bg)
   // How far the readiness panel is open, from the page's own scroll. The first
   // 130px of travel opens it fully — far enough that a stray flick does not
   // trigger it, short enough that the answer is there before the hero leaves.
@@ -295,13 +328,21 @@ export default function W3TodayView({ vm, onAdapt }: {
             surfaces. It draws nothing and holds nothing — it is only the
             distance the two colours need to meet in. */}
         <div aria-hidden style={{
-          height: 180, flex: 'none',
-          // The fade needs LENGTH to stay invisible, but length spent as empty
-          // space reads as a dead screen. Pulling the next section up into its
-          // tail keeps the full 180px of colour travel and gives back 70px of
-          // the gap: the content begins inside the transition rather than after
-          // it, which is also how the hero's own falloff meets the panel.
-          marginBottom: -70,
+          // THE BAND IS AS LONG AS THE TWO COLOURS ARE APART, and no longer.
+          //
+          // It was a flat 180 px because the stage plate used to end far lighter
+          // than the app — #32353F against #0B0B0B — and a step that size needs
+          // real distance to run out in. The plate now ends at #080A0B, three
+          // levels off the app's own black, so that same 180 px was fading black
+          // into black: 110 px of dead screen between the hero and the first
+          // thing the coach says, guarding against a step that no longer exists.
+          //
+          // Measuring it means this cannot go stale in either direction. Re-render
+          // the plate lighter and the runway comes back on its own; keep it dark
+          // and the page closes up. `marginBottom` scales with it so the
+          // content still begins INSIDE the tail rather than after it.
+          height: fadeH, flex: 'none',
+          marginBottom: -Math.round(fadeH * 0.39),
           background: `linear-gradient(180deg, ${ground ?? T.heroBg} 0%, ${T.bg} 100%)`,
         }} />
 
