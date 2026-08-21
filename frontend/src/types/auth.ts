@@ -20,6 +20,10 @@ export interface TokenResponse {
 export interface RegisterRequest {
   email: string
   password: string
+  /** The invite that brought this rider, if one did. Sent to the server, which
+   *  opens the referral window — the code was previously stashed in
+   *  localStorage and never sent anywhere, so no referral was ever recorded. */
+  referral_code?: string
 }
 
 export interface LoginRequest {

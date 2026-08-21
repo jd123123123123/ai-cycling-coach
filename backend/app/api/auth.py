@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import defaultdict, deque
 from typing import Annotated
@@ -13,6 +14,7 @@ from app.database import get_db
 from app.dependencies import get_current_active_user
 from app.models.user import User
 from app.schemas.auth import RegisterRequest, TokenResponse, UserResponse
+from app.services import referral
 from app.services.auth_service import (
     authenticate_user,
     create_access_token,
@@ -20,6 +22,9 @@ from app.services.auth_service import (
     create_user,
     decode_refresh_token,
 )
+
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -118,6 +123,26 @@ async def register(
         )
 
     user = await create_user(db, request_body.email, request_body.password)
+
+    # ── THE INVITE, FINALLY CONNECTED ───────────────────────────────────────
+    # `referral.link_referral` has been complete and tested for a long time and
+    # its own docstring admitted it: "ready + tested, but not yet called from
+    # the auth signup flow". Nothing called it, so no Referral row was ever
+    # created, so every rider's referral overview was empty — not because they
+    # had invited nobody, but because inviting somebody could not be recorded.
+    # The link is opened HERE, at the one moment the two facts (a code, a brand
+    # new user id) exist together.
+    #
+    # NEVER FATAL. A sign-up that fails because of a mistyped invite would
+    # punish the rider for a string somebody else gave them, and the account is
+    # already created by this point — so the link is attempted and its outcome
+    # ignored. `link_referral` is itself idempotent and refuses codes that map
+    # to nobody, to a missing user, or to this same rider.
+    if request_body.referral_code:
+        try:
+            await referral.link_referral(request_body.referral_code.strip(), user.id)
+        except Exception:
+            logger.info("referral link failed at signup", exc_info=True)
 
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)

@@ -33,13 +33,25 @@ export default function W3ReferralsPage() {
     howItWorks: 'Dein gesamter Bonus steht dir am Ende der 30 Tage zum Einlösen bereit.',
   }), [data])
 
+  // ── A LINK, NOT A CODE ────────────────────────────────────────────────
+  // This shared the six characters and nothing else, which asks the person
+  // receiving it to find the app, find the sign-up screen, and remember a
+  // string on the way. The register screen has always read `?ref=` off the
+  // URL — nothing anywhere ever built that URL. Now it does, from the app's
+  // own origin, so the link works wherever the app is served from.
+  const inviteUrl = (code: string) =>
+    `${window.location.origin}/e/w3-register?ref=${encodeURIComponent(code)}`
+
   const share = async () => {
     const code = data?.code
     if (!code) return
-    const text = `Fahr mit mir — mit meinem Code ${code} geht's los.`
+    const url = inviteUrl(code)
+    const text = `Fahr mit mir — hier geht's los, mein Code ${code} ist schon drin.`
     try {
-      if (navigator.share) await navigator.share({ text })
-      else await navigator.clipboard.writeText(code)
+      // `url` as its own field, not glued into the text: share sheets render a
+      // real link preview for it and messengers make it tappable.
+      if (navigator.share) await navigator.share({ text, url })
+      else await navigator.clipboard.writeText(`${text} ${url}`)
     } catch { /* user dismissed share sheet — no-op */ }
   }
 

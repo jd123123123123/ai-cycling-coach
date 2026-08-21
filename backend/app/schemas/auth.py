@@ -6,6 +6,12 @@ from pydantic import BaseModel, EmailStr, field_validator
 class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
+    #: The invite that brought this rider, if one did. Optional and never
+    #: trusted: a code that maps to nobody, to a user who does not exist, or to
+    #: this very rider simply links nothing (`services.referral.link_referral`).
+    #: Signing up must never fail because an invite was wrong — the rider did
+    #: not choose the code they were handed.
+    referral_code: str | None = None
 
     @field_validator("password")
     @classmethod

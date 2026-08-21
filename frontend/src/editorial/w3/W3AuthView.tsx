@@ -19,13 +19,19 @@ export interface W3AuthVm { mode: 'login' | 'register'; inviteCode: string | nul
 export interface W3AuthActions {
   onSubmit?: (email: string, password: string) => void | Promise<void>
   onSwitch?: () => void
+  /** A code the rider TYPED, rather than one carried by the link. Null clears
+   *  it back to whatever the link said. */
+  onCodeChange?: (code: string | null) => void
 }
 
-export default function W3AuthView({ vm, onSubmit, onSwitch }: { vm: W3AuthVm } & W3AuthActions) {
+export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange }: { vm: W3AuthVm } & W3AuthActions) {
   const reduce = useReducedMotion()
   const [email, setEmail] = useState('')
   const [pw, setPw] = useState('')
   const [show, setShow] = useState(false)
+  // Open when the rider has no code from a link — somebody who was told one in
+  // a bike shop had nowhere to put it, which is the same as not being invited.
+  const [codeOpen, setCodeOpen] = useState(false)
   const isRegister = vm.mode === 'register'
   const valid = /.+@.+\..+/.test(email) && pw.length >= 6
 
@@ -56,16 +62,40 @@ export default function W3AuthView({ vm, onSubmit, onSwitch }: { vm: W3AuthVm } 
             </span>
           </div>
 
-          {/* Invite chip (register, from the referral link) */}
-          {isRegister && vm.inviteCode && (
+          {/* ── THE INVITE ──────────────────────────────────────────────
+               A code carried by the link shows as a confirmation; without one
+               there is now a way to TYPE it. Both paths end in the same place:
+               the code goes to the server with the sign-up, which is what
+               actually opens the referral window. */}
+          {isRegister && (vm.inviteCode ? (
             <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 14, background: T.acidDim, border: `1px solid ${T.acid}33` }}>
               <Ticket size={16} color={T.acid} />
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
                 <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Einladung aktiv · Code {vm.inviteCode}</span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>Dein Coach bekommt einen Anteil deiner ersten Wochen.</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>Wer dich eingeladen hat, bekommt einen Anteil deiner ersten Wochen.</span>
               </div>
+              <button type="button" onClick={() => { onCodeChange?.(null); setCodeOpen(true) }}
+                aria-label="Code ändern"
+                style={{ flex: 'none', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.mid }}>
+                ändern
+              </button>
             </div>
-          )}
+          ) : codeOpen ? (
+            <div style={fieldWrap}>
+              <Ticket size={17} color={T.mid} />
+              <input
+                style={{ ...field, textTransform: 'uppercase', letterSpacing: 1.5 }}
+                type="text" inputMode="text" autoCapitalize="characters" autoComplete="off"
+                placeholder="Einladungscode" maxLength={12}
+                onChange={(e) => onCodeChange?.(e.target.value.trim() || null)} />
+            </div>
+          ) : (
+            <button type="button" onClick={() => setCodeOpen(true)}
+              style={{ alignSelf: 'flex-start', display: 'flex', gap: 8, alignItems: 'center', padding: '8px 2px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT }}>
+              <Ticket size={14} color={T.mid} />
+              <span style={{ fontSize: 12, fontWeight: 700, color: T.mid }}>Ich habe einen Einladungscode</span>
+            </button>
+          ))}
 
           {/* Fields */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
