@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type CSSProperties } from 'react'
-import { Zap, Timer, Gauge, HeartPulse, Sparkles, ChevronRight, type LucideIcon } from 'lucide-react'
+import { ChevronRight, Flame, Gauge, HeartPulse, Sparkles, Timer, Waves, Zap, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
@@ -112,12 +112,17 @@ function SegGauge({ fill, on, delay }: { fill: number; on: boolean; delay: numbe
 
 
 // Icon per stat card, matched by its label keyword — supports the storytelling.
+// The tiles are German and this matched on English words, so three of the four
+// fell through to the same fallback icon and the grid read as one repeated
+// shape. Matched on what the tile IS about, in the language it is written in.
 const STAT_ICON = (label: string): LucideIcon => {
   const l = label.toLowerCase()
-  if (l.includes('power') || l.includes('watt')) return Zap
-  if (l.includes('time') || l.includes('moving') || l.includes('dur')) return Timer
-  if (l.includes('hr') || l.includes('heart') || l.includes('bpm')) return HeartPulse
-  return Gauge // load / TSS / everything else
+  if (l.includes('leistung') || l.includes('watt') || l.includes('power')) return Zap
+  if (l.includes('arbeit') || l.includes('kj')) return Flame
+  if (l.includes('hf') || l.includes('herz') || l.includes('bpm') || l.includes('heart')) return HeartPulse
+  if (l.includes('variab')) return Waves
+  if (l.includes('zeit') || l.includes('time') || l.includes('dauer')) return Timer
+  return Gauge // Belastung / TSS / everything else
 }
 
 /** The wait while the scene composes — W3Loading's language (acid bloom,

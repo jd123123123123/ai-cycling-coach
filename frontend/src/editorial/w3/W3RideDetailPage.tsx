@@ -34,7 +34,6 @@ const fmtDate = (iso: string | null | undefined): string => {
   const d = new Date(iso)
   return isNaN(d.getTime()) ? String(iso) : d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
-const fmtHms = (s: number) => `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
 
 /** The hero's headline: hours, minutes AND seconds, zero-padded throughout.
  *  Seconds matter here in a way they do not in a stat tile — this is the figure
@@ -248,11 +247,35 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     avgSpeed: h.avg_speed_kmh != null ? `${Math.round(h.avg_speed_kmh)} km/h` : DASH,
     power: d.story?.power?.filter((_, i) => i % Math.max(1, Math.floor((d.story?.power.length ?? 1) / 40)) === 0).slice(0, 40) ?? [],
     powerNote: rep.note,
+    // ── FOUR THINGS THE HERO CANNOT ALREADY SAY ────────────────────────
+    // This grid used to repeat the card above it almost exactly: average
+    // power, ride time and heart rate are all in the hero, so three of four
+    // tiles restated a figure the rider had read ninety pixels earlier. A
+    // number printed twice does not read as twice as important, it reads as a
+    // page that is not sure what it is for.
+    //
+    // So each tile now carries something the hero has no room for, and each
+    // says what it MEANS rather than only what it is: the load the ride put on
+    // the body, whether the body held together under it, how evenly the power
+    // was laid down, and the work actually done.
     stats: [
-      { v: `${Math.round(h.np_watts)} W`, l: 'Ø LEISTUNG', s: `${Math.round(h.np_watts)} W normalisiert` },
-      { v: fmtHms(h.moving_time_s), l: 'FAHRZEIT', s: h.avg_speed_kmh != null ? `${Math.round(h.distance_km)} km bei ${Math.round(h.avg_speed_kmh)}` : '' },
-      { v: String(Math.round(h.tss)), l: 'BELASTUNG · TSS', s: '' },
-      { v: eff?.avg_hr != null ? `${Math.round(eff.avg_hr)}` : DASH, l: 'Ø HF · BPM', s: eff?.decoupling_pct != null ? `${eff.decoupling_pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} % Drift` : '' },
+      { v: String(Math.round(h.tss)), l: 'BELASTUNG · TSS',
+        s: h.tss >= 150 ? 'harter Tag' : h.tss >= 80 ? 'solider Reiz' : 'leichte Einheit' },
+      { v: eff?.decoupling_pct != null
+          ? `${eff.decoupling_pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
+          : DASH,
+        l: 'HF-DRIFT',
+        // Coggan's rule of thumb: under 5 % the aerobic system held.
+        s: eff?.decoupling_pct == null ? 'ohne Herzfrequenz nicht messbar'
+          : eff.decoupling_pct < 5 ? 'aerob durchgehalten' : 'Ausdauer gab nach' },
+      { v: d.pacing?.variability_index != null
+          ? d.pacing.variability_index.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+          : DASH,
+        l: 'VARIABILITÄT',
+        s: d.pacing?.variability_index == null ? ''
+          : d.pacing.variability_index < 1.05 ? 'sehr gleichmäßig getreten' : 'viele Antritte' },
+      { v: h.total_kj > 0 ? `${Math.round(h.total_kj).toLocaleString('de-DE')}` : DASH, l: 'ARBEIT · KJ',
+        s: kcal != null && kcal > 0 ? `${Math.round(kcal).toLocaleString('de-DE')} kcal verbrannt` : '' },
     ],
     execScore: String(v.grade_score), execTotal: '100',
     verdictHeadline: v.went_well[0] ?? v.ai_verdict.split('.')[0] ?? '',

@@ -161,7 +161,20 @@ ROUTE_DETAIL_POINTS = 1200
 
 #: Metres of allowed deviation for each budget. These are the real lever —
 #: `max_points` is only a ceiling now.
-ROUTE_DETAIL_TOLERANCE_M = 10.0
+#
+# 3 m, NOT 10 — because at 10 the ceiling was never reached and the fidelity was
+# simply left on the table. Measured on two real matched rides:
+#
+#     road points   10 m    5 m    3 m    2 m
+#     2 082          145    244    353    446
+#     1 953          139    228    335    429
+#
+# A budget of 1 200 was spending 145. Worse, 10 m of allowed deviation is wider
+# than the road: one 5.5 km stretch of a Berlin ride came back as a single
+# straight segment because the real road stayed within 9 m of that chord — legal
+# by the tolerance, and visibly a ruler laid across a forest. 3 m is inside a
+# lane, costs about 350 points, and is still a quarter of the ceiling.
+ROUTE_DETAIL_TOLERANCE_M = 3.0
 ROUTE_SKETCH_TOLERANCE_M = 400.0
 
 #: Degrees of latitude per metre, near enough anywhere on Earth.
