@@ -8,12 +8,25 @@ import './w3.css'
  * W3 · 10 REFERRAL OVERVIEW — 1:1 with pen `w9U9bF`. Pure function of `vm`;
  * `W3ReferralsPage` wires it to /referrals/mine. The code + the referred
  * riders' stats + accrued RideCoin are REAL; a rider with no avatar gets a
- * tinted placeholder. "Violet is a promise": pending windows are violet,
- * a claimable window turns lime.
+ * plain placeholder carrying their initial.
+ *
+ * ── PENDING VERSUS CLAIMABLE, WITHOUT A FOREIGN HUE ──────────────────────
+ * The screen used to say "violet is a promise": a running window was violet
+ * and a claimable one turned lime. The DISTINCTION is right and worth keeping
+ * — a rider must be able to see at a glance which windows have money waiting —
+ * but it was carried by a colour this design system does not have, alongside
+ * five pastel avatar tints that meant nothing at all. Six foreign hues on a
+ * screen whose only real signal is binary.
+ *
+ * It is carried the way every other state in this app is carried: UNLIT versus
+ * LIT. A running window is quiet; a claimable one is acid and glows. Same
+ * meaning, one accent, and it now matches the meters, the tally and the
+ * monuments a rider sees everywhere else.
  */
 
-const VIOLET = T.evening
-const AVATAR_TINTS = ['#B9A7EE', '#A7D8EE', '#EEC7A7', '#A7EEC0', '#EEA7D2']
+/** A window still running. Deliberately recessive — it is not an alert. */
+const PENDING = T.mid
+const PLACEHOLDER = T.d1
 
 export interface W3ReferralRow {
   id: number
@@ -36,13 +49,12 @@ export interface W3ReferralsVm {
 }
 
 function AvatarCard({ row, i, onTap, reduce }: { row: W3ReferralRow; i: number; onTap: () => void; reduce: boolean | null }) {
-  const tint = AVATAR_TINTS[i % AVATAR_TINTS.length]
-  const accent = row.claimable ? T.acid : VIOLET
+  const accent = row.claimable ? T.acid : PENDING
   return (
     <motion.button
       onClick={onTap}
       initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: i * 0.06 }}
-      style={{ position: 'relative', flex: 1, minWidth: 0, aspectRatio: '0.86', borderRadius: 22, overflow: 'hidden', border: 0, padding: 0, cursor: 'pointer', background: `linear-gradient(160deg, ${tint}, #16131f)`, fontFamily: FONT }}
+      style={{ position: 'relative', flex: 1, minWidth: 0, aspectRatio: '0.86', borderRadius: 22, overflow: 'hidden', border: 0, padding: 0, cursor: 'pointer', background: `radial-gradient(120% 90% at 50% 10%, ${row.claimable ? `${T.acid}1F` : PLACEHOLDER}, ${T.tile} 68%)`, fontFamily: FONT }}
     >
       {row.avatarUrl
         ? <img src={row.avatarUrl} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -84,8 +96,11 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
         {/* Code + share */}
         <div style={{ ...band(28), gap: 16, alignItems: 'center' }}>
           <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: 6, color: T.ink }}>{vm.code}</span>
-          <button onClick={onShare} style={{ width: '100%', height: 60, borderRadius: 100, background: VIOLET, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-            <Users size={19} color="#fff" /><span style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>Code teilen</span>
+          <button onClick={onShare} style={{ width: '100%', height: 60, borderRadius: 100, background: T.acid, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
+            {/* Dark ink on acid, like every other primary action in the app.
+                White on lime is barely legible and was only ever legible on the
+                violet this button used to be. */}
+            <Users size={19} color={T.heroInk} /><span style={{ fontSize: 16, fontWeight: 700, color: T.heroInk }}>Code teilen</span>
           </button>
         </div>
 
@@ -93,7 +108,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
         {vm.active.length > 0 && (
           <div style={{ ...band(26), gap: 14 }}>
             <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              <span style={{ width: 30, height: 30, borderRadius: 100, background: VIOLET, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: '#fff' }}>{vm.activeCount}</span>
+              <span style={{ width: 30, height: 30, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: T.acid }}>{vm.activeCount}</span>
               <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Aktive Belohnungen</span>
             </div>
             {rows(vm.active).map((pair, ri) => (
