@@ -37,7 +37,8 @@ const OPEN_DELAY_MS = 900
 const BLOCKED_PREFIXES = [
   '/e/w3-avatar-onboard',   // the destination itself
   '/e/w3-onboard',          // mid-onboarding
-  '/e/w3-first-bike',       // the step right after the avatar step
+  '/e/w3-first-bike',
+  '/e/w3-bike-studio',      // the step that replaced it: their own bike, photographed
   '/e/w3-connected',
   '/e/w3-ride-celebrate',   // don't step on a celebration
   '/e/w3-share',

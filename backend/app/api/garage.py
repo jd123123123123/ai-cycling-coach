@@ -207,6 +207,46 @@ async def _get_asset(db: AsyncSession, user_id: int, kind: str) -> GarageAsset |
     )
     return result.scalar_one_or_none()
 
+class AssetNameRequest(BaseModel):
+    """What the rider decided to call their machine."""
+
+    name: str
+
+
+@router.patch("/asset/{kind}/name", response_model=AssetOut,
+              summary="Rename the rider's own bike or rider figure")
+async def rename_asset(
+    kind: str,
+    body: AssetNameRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> AssetOut:
+    """Name the thing the rider owns.
+
+    The vision pass reads a name off the frame ("Specialized Allez") and that is
+    a good default, but it is a GUESS about somebody's bicycle — and a bike is
+    the one object in this app that belongs to a person rather than to a
+    catalogue. They get to say what it is called.
+
+    Trimmed and capped rather than validated into a corner: a name is a name,
+    and refusing "Rocinante" because of a rule would be the app having an
+    opinion about something that is none of its business. Empty clears it back
+    to the detected name being absent, which the UI renders as the model's
+    guess or nothing at all.
+    """
+    if kind not in ("bike", "rider"):
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="unknown_kind")
+    asset = await _get_asset(db, current_user.id, kind)
+    if asset is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="no_asset")
+    asset.name = (body.name or "").strip()[:60] or None
+    await db.commit()
+    await db.refresh(asset)
+    out = _to_out(asset)
+    assert out is not None
+    return out
+
+
 
 # ── the garage ──────────────────────────────────────────────────────────────
 @router.get("", response_model=GarageOut, summary="The rider's digitalised rider figure and bike")

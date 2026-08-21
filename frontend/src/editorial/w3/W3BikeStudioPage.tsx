@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useGarage, useRenderAsset } from '../../hooks/useGarage'
+import { useGarage, useRenameAsset, useRenderAsset } from '../../hooks/useGarage'
+import { markW3OnboardingSeen } from './w3Onboarding'
 import { useGrantOnboarding } from '../../hooks/useWallet'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
 import { fileToDownscaledDataUrl } from './w3photo'
@@ -44,6 +45,7 @@ export default function W3BikeStudioPage() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null)
   const [description, setDescription] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
+  const rename = useRenameAsset()
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [renderStatus, setRenderStatus] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<string | null>(null)
@@ -101,6 +103,16 @@ export default function W3BikeStudioPage() {
       // the server refuses it anyway (`no_bike_yet`). Fired exactly once per
       // successful render, and never awaited into the reveal: the moment must
       // not wait on the wallet, and a failing grant must not cost the unlock.
+      // ── THIS IS NOW THE LAST STEP OF ONBOARDING ────────────────────────
+      // The chain used to end at `/e/w3-first-bike`, which marked onboarding
+      // seen when a catalogue bike was claimed. Nobody claims one any more —
+      // they photograph their own — so the mark belongs to the render that
+      // landed. Without it `W3Guard` would send them back to the welcome screen
+      // every single time they opened the app.
+      if (result.status === 'ok' && result.image_base64) {
+        markW3OnboardingSeen()
+      }
+
       if (result.status === 'ok' && result.image_base64) {
         setRewardPending(true)
         grant.mutateAsync('bike')
@@ -164,6 +176,15 @@ export default function W3BikeStudioPage() {
         onPick={() => fileRef.current?.click()}
         celebrate={celebrate}
         onReset={reset}
+        // Naming is optimistic: the field already shows what they typed, so
+        // waiting on the server would only make it feel slow. A failure leaves
+        // the detected name in place, which is what they had a second ago.
+        onRename={(next) => {
+          const clean = next.trim()
+          if (clean === (name ?? '').trim()) return
+          setName(clean || null)
+          rename.mutate({ kind: 'bike', name: clean })
+        }}
         onSave={onSave} />
     </>
   )

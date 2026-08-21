@@ -35,6 +35,8 @@ export interface W3BikeStudioProps {
   onReset: () => void
   onSave: () => void               // download the rendered collectible (image present only)
   bikeName?: string                // the collectible's real name, from the vision pass
+  /** Save a name the rider typed. Absent → the name is read-only prose. */
+  onRename?: (name: string) => void
   /** True only for a bike rendered JUST NOW. The unlock celebration is a
    *  one-time moment; walking into your own garage must not re-fire confetti
    *  and "BIKE UNLOCKED" for a bike you've owned for weeks. */
@@ -151,12 +153,18 @@ function RewardBlock({ reward, pending }: { reward?: { granted: number; balance:
 }
 
 // pastel gradient card grounds keyed off the description, à la w3:browser
-const GRADIENTS = [
-  'radial-gradient(120% 90% at 50% 32%, #E9D8C4, #BFA98F)',
-  'radial-gradient(120% 90% at 50% 32%, #D6E4DC, #9DB6AC)',
-  'radial-gradient(120% 90% at 50% 32%, #E7D2D6, #C09AA2)',
-  'radial-gradient(120% 90% at 50% 32%, #D3DEE8, #9FB1C2)',
-]
+// ── THE CARD IS A LIT ROOM, NOT A PASTEL SWATCH ────────────────────────────
+// This was four pale gradients — cream, sage, rose, blue-grey — picked by the
+// length of the description. They existed for a reason that has since gone
+// away: the render used to arrive with a pale studio ground baked into it, and
+// a light card hid the seam. The art is CUT OUT now (`services/cutout.py`), so
+// there is nothing left to hide, and what remained was a bright pastel panel in
+// the middle of a near-black app, in four hues the design system does not have.
+//
+// One treatment, the same one every other surface uses: the machine standing in
+// its own pool of accent on the app's own ground.
+const CARD_BG = `radial-gradient(120% 92% at 50% 96%, ${T.acid}1A, ${T.tile} 62%)`
+const GRADIENTS = [CARD_BG]
 
 function Card({ children, grad }: { children?: React.ReactNode; grad: string }) {
   return (
@@ -213,11 +221,32 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center', minWidth: 0 }}>
               <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE ENTSPERRT</span>
-              {/* The name is the vision pass's own read of the frame — never a
-                  stand-in. Unnamed bikes simply say what they are. */}
-              <span style={{ fontSize: 15, fontWeight: 500, color: T.mid, overflowWrap: 'anywhere' }}>
-                {p.bikeName ? `${p.bikeName} · dein W3-Collectible` : 'Dein W3-Collectible'}
-              </span>
+              {/* ── THE RIDER NAMES IT ──────────────────────────────────
+                  The vision pass reads a name off the frame and that is a good
+                  default — but it is a GUESS about somebody's own bicycle, and
+                  this is the one object in the app that belongs to a person
+                  rather than to a catalogue. So the name is a field, pre-filled
+                  with the guess, and it saves on blur. Nobody is made to name
+                  anything: leaving it alone keeps what was read. */}
+              {p.onRename ? (
+                <input
+                  defaultValue={p.bikeName ?? ''}
+                  placeholder="Gib deinem Rad einen Namen"
+                  maxLength={60}
+                  onBlur={(e) => p.onRename?.(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                  aria-label="Name deines Rads"
+                  style={{
+                    width: '100%', maxWidth: 300, height: 46, textAlign: 'center',
+                    background: T.tile, border: `1px solid ${T.acid}33`, borderRadius: 14,
+                    outline: 'none', color: T.ink, fontFamily: FONT,
+                    fontSize: 16, fontWeight: 700, letterSpacing: -0.2,
+                  }} />
+              ) : (
+                <span style={{ fontSize: 15, fontWeight: 500, color: T.mid, overflowWrap: 'anywhere' }}>
+                  {p.bikeName ? `${p.bikeName} · dein W3-Collectible` : 'Dein W3-Collectible'}
+                </span>
+              )}
               <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.4, color: T.quiet, maxWidth: 300 }}>Es steht in deiner Garage. Jede Fahrt, die du loggst, levelt es weiter.</span>
             </div>
 

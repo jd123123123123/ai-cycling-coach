@@ -44,6 +44,7 @@ const BLOCKED_PREFIXES = [
   '/e/w3-onboard',
   '/e/w3-avatar-onboard',
   '/e/w3-first-bike',
+  '/e/w3-bike-studio',   // the step that replaced it: their own bike, photographed
   '/e/w3-connected',
   '/e/w3-ride-celebrate',   // don't step on a celebration
   '/e/w3-session',          // never interrupt a ride

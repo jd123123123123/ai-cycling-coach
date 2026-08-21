@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import W3Loading from './W3Loading'
 import { hasSeenW3Onboarding } from './w3Onboarding'
 import { useGarageCollection } from '../../hooks/useShop'
+import { useGarage } from '../../hooks/useGarage'
 
 /**
  * W3 · The front door. Nothing in the app renders until the rider has been
@@ -28,6 +29,11 @@ import { useGarageCollection } from '../../hooks/useShop'
  */
 export default function W3Guard({ children }: { children: ReactNode }) {
   const { data, isLoading, isError } = useGarageCollection()
+  // THE RIDER'S OWN BIKE COUNTS. The gate used to accept only a claimed
+  // CATALOGUE bike, so somebody who had photographed their actual bicycle —
+  // the thing this app is about — was still bounced to a shop to pick a
+  // stand-in. A garage asset is the stronger claim of the two.
+  const { data: garage } = useGarage()
 
   // The intro first — it needs no network, so a cold start never waits on one.
   if (!hasSeenW3Onboarding()) {
@@ -38,8 +44,10 @@ export default function W3Guard({ children }: { children: ReactNode }) {
   // screen the rider is already looking at.
   if (isLoading && !data) return <W3Loading label="Einen Moment…" />
 
-  if (!isError && data && data.loadout.bike == null) {
-    return <Navigate to="/e/w3-first-bike" replace />
+  // Their own bike, or a claimed one. Either is a bike.
+  const ownsBike = garage?.bike?.image_base64 != null || (data?.loadout.bike ?? null) != null
+  if (!isError && data && !ownsBike) {
+    return <Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />
   }
 
   return <>{children}</>

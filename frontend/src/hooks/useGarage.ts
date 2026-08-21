@@ -1,9 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  buyPlace, fetchBackdrops, fetchDayScene, fetchGarage, fetchRideScene, fetchTodayStage,
-  renderAsset, renderDayScene, renderRideScene, renderTodayStage, selectBackdrop,
-  type Backdrops, type DayPose, type DayScene, type Garage, type GarageKind,
-  type RideScene, type TodayStage,
+  buyPlace, fetchBackdrops, fetchDayScene, fetchGarage, fetchRideScene, fetchTodayStage, renameAsset, renderAsset, renderDayScene, renderRideScene, renderTodayStage, selectBackdrop, type Backdrops, type DayPose, type DayScene, type Garage, type GarageKind, type RideScene, type TodayStage,
 } from '../api/garage'
 
 export const GARAGE_KEY = ['garage'] as const
@@ -51,6 +48,23 @@ export function useRenderAsset() {
       // rider's existing bike exactly where it was.
       if (result.saved) qc.invalidateQueries({ queryKey: GARAGE_KEY })
     },
+  })
+}
+
+/**
+ * Name the rider's own bike (or rider figure).
+ *
+ * The garage is invalidated on success so every surface that prints the name —
+ * the hero, the garage, the ride pages — picks it up without a reload. A
+ * failure is deliberately silent: the field already shows what they typed and
+ * the detected name is still there underneath, so there is nothing to warn
+ * about and nothing lost.
+ */
+export function useRenameAsset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ kind, name }: { kind: GarageKind; name: string }) => renameAsset(kind, name),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: GARAGE_KEY }) },
   })
 }
 

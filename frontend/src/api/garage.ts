@@ -99,6 +99,13 @@ export async function renderAsset(kind: GarageKind, photoBase64: string): Promis
   return res.data
 }
 
+/** Name the thing the rider owns. The vision pass guesses a name off the frame,
+ *  and a guess about somebody's own bicycle is a default, not a decision. */
+export async function renameAsset(kind: GarageKind, name: string): Promise<GarageAsset> {
+  const res = await apiClient.patch<GarageAsset>(`/garage/asset/${kind}/name`, { name })
+  return res.data
+}
+
 export async function deleteAsset(kind: GarageKind): Promise<void> {
   await apiClient.delete(`/garage/asset/${kind}`)
 }

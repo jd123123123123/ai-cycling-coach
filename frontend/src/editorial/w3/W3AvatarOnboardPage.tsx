@@ -34,7 +34,13 @@ import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarIn
 // dropped into the app half-set-up. It is asked ONCE, here, because it is a
 // step in a chain rather than a gate: `W3Guard` never forces it again, and the
 // menu's "Dein Bike" entry is where a rider changes it later.
-const NEXT = '/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-first-bike')
+// ── THE BIKE IS THEIRS, NOT THE CATALOGUE'S ────────────────────────────────
+// This used to hand off to `/e/w3-first-bike`, a shop where a new rider claimed
+// a free stock bicycle. But the app is about the machine somebody actually
+// owns: they photograph it, it is rendered, and they name it. A stand-in
+// handed out at the door is the opposite of that — and the garage already
+// refuses to present a stock bike as "yours" everywhere else.
+const NEXT = '/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-today')
 
 interface AssetRenderResponse { description: string | null; prompt: string; image_base64: string | null; status: string }
 
