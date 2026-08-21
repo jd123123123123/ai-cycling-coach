@@ -222,6 +222,7 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   const kcal = d.fueling?.total_kcal ?? (h.total_kj > 0 ? h.total_kj : null)
   const hero: W3RideHeroVm = {
     polyline: activity?.route_polyline ?? null,
+    grades: activity?.route_grades ?? null,
     sceneImage: null,
     dateLine: fmtDateTime(h.date),
     duration: fmtHmsFull(h.moving_time_s),

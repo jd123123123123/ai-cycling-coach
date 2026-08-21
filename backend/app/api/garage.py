@@ -21,6 +21,7 @@ paid call, so it is cached and only ever generated on demand:
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import math
 from datetime import UTC, date, datetime, time
@@ -57,6 +58,7 @@ from app.services import (
     ride_facts,
     ride_framing,
     ride_place,
+    ride_weather,
     rider_wear,
     service_proof,
     stages,
@@ -1540,14 +1542,33 @@ async def render_scene(
     # never disagree again.
     place = await _place_of_activity(db, current_user.id, activity)
     world = (place.prose or "").strip() if place is not None else ""
+
+    # ── THE WEATHER THAT DAY ────────────────────────────────────────────────
+    # Already stored for 168 of 183 rides and never once looked at by the hero,
+    # so a ride done in the rain and a ride done in August sun were photographed
+    # in identical light — the moment a rider stops believing the picture is
+    # about THEIR ride. Only what is actually recorded is said (temperature,
+    # precipitation, wind); a ride with no weather row gets no weather clause
+    # rather than invented sunshine. The cache key carries it, because two
+    # different days on the same road are two different pictures.
+    wx_row = (await db.execute(
+        select(ActivityStream.weather).where(ActivityStream.activity_id == activity_id)
+    )).scalar_one_or_none()
+    wx = ride_weather.summarise(
+        json.loads(wx_row) if isinstance(wx_row, str) else wx_row,
+        activity.started_at,
+    )
+    weather = ride_weather.clause(wx)
+    wet = "wet" if (wx and wx.wet) else "dry"
+
     if world:
-        ctx, key = place.name, f"ride:{activity_id}:{place.slug}"
-        prompt = bike_build.edit_prompt([], world=world)
+        ctx, key = place.name, f"ride:{activity_id}:{place.slug}:{wet}"
+        prompt = bike_build.edit_prompt([], world=world, weather=weather)
     else:
         framing_id = ride_framing.default_framing_for(geo)
         f = ride_framing.get(framing_id)
-        ctx, key = f.name_de, f"ride:{activity_id}:{framing_id}"
-        prompt = ride_framing.edit_prompt(framing_id)
+        ctx, key = f.name_de, f"ride:{activity_id}:{framing_id}:{wet}"
+        prompt = ride_framing.edit_prompt(framing_id, weather=weather)
 
     # EDIT, never redraw. The rider's own bike render goes back in as the input
     # image so the frame, the decals and the components stay pixel-identical

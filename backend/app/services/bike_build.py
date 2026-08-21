@@ -120,7 +120,8 @@ def describe(equipped: list[str]) -> list[str]:
     return [VISUALS[m.id] for m in em.catalogue() if m.id in worn]
 
 
-def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -> str:
+def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False,
+                weather: str = "") -> str:
     """The full instruction: this exact bicycle, wearing these parts, standing
     wherever the rider chose to stand it.
 
@@ -136,7 +137,9 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -
 
     `world` is the chosen stage's prose. `has_plate` says a picture of that place
     is being handed over alongside the bike, in which case the prose steps back
-    and the plate is the authority.
+    and the plate is the authority. `weather` is the ride's own recorded hour
+    (`ride_weather.clause`) — empty for a ride with no stored weather, and then
+    nothing is said rather than sunshine being invented.
     """
     from app.services.cyclr_studio import (
         BIKE_CAMERA,
@@ -171,11 +174,35 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False) -
         )
     elif world:
         ground = (
-            f"Stand the bicycle, upright and side-on, in this setting: {world} The ground closes "
-            "over the bottom of both tyres so the bike is planted in the terrain rather than "
-            "pasted onto it, and the light on the bike matches the light of the place. There is "
-            "nobody in the picture: the bicycle stands alone."
+            f"Stand the bicycle, upright and side-on, in this setting: {world}\n"
+            # THE SAME CONTACT RULE THE PLATE PATH GOT, and for the same reason.
+            # That arm learned it from a real failure — a bike beautifully lit
+            # and floating a hundred metres above a Dolomites road — and then
+            # this arm, which is the one every ride actually takes, was left
+            # with one soft sentence about the ground "closing over" the tyres.
+            # Floating is the default failure of an image model: it composes,
+            # it has no physics. So the contact is described as geometry.
+            "BOTH TYRES ARE ON THE GROUND AND BEARING THE WEIGHT. Each contact patch is visibly "
+            "flattened where the rubber meets the surface, and the surface reacts to it — grit "
+            "displaced, grass bent and splayed around the tyre, dust pressed down. Directly under "
+            "each contact patch the light is fully occluded: a tight, nearly black core no wider "
+            "than the tyre, spreading outward into a soft cast shadow thrown by the key light. "
+            "Loose material from the ground — blades of grass, grit, a fallen leaf — overlaps the "
+            "bottom edge of each tyre, so the bicycle is IN the scene rather than pasted over it. "
+            "There is NO gap, NO floating, and NO uniform grey smudge standing in for a shadow.\n"
+            # DARK GROUND, LIVING SUBJECT. The register was reading as bleak
+            # rather than premium: the falloff is what makes the bike the
+            # subject, but it was draining the colour out of everything inside
+            # the lit pool too.
+            "The light on the bike matches the light of the place. Everything within that lit "
+            "pool is ALIVE and deeply saturated — foliage a rich luminous green, real bounce "
+            "light picking colour off the ground and throwing it back onto the underside of the "
+            "frame and rims — while the world past it falls away into darkness. Abundant and "
+            "rewarding to look at, like a jewel lit in a dark room; never dim, flat, washed-out "
+            "or muddy. There is nobody in the picture: the bicycle stands alone."
         )
+        if weather:
+            ground += "\n" + weather
     else:
         # The same near-black ground the collectible itself is shot on, so a
         # build and a plain render are the same picture with different parts.

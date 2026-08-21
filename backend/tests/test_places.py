@@ -137,11 +137,51 @@ def test_a_world_swap_does_not_pin_the_bike_s_scale():
 
 
 def test_the_bike_is_stood_on_the_ground_it_is_given():
+    """Floating is the default failure of an image model — it composes, it has
+    no physics. This used to be pinned to one soft sentence about the ground
+    "closing over" the tyres, which is a phrase, not a rule. What has to survive
+    is the CONTACT described as geometry: the flattened patch, the occlusion
+    core under it, and the explicit refusal of a gap."""
     from app.services import bike_build
 
     world = bike_build.edit_prompt([], world="BACKGROUND: a gravel track.")
-    assert "closes over the bottom of both tyres" in world
+    assert "BOTH TYRES ARE ON THE GROUND" in world
+    assert "flattened" in world           # the rubber deforms under the weight
+    assert "occluded" in world            # and the light cannot get under it
+    assert "NO floating" in world
     assert "nobody in the picture" in world
+
+
+def test_a_ride_with_no_weather_row_is_not_given_invented_sunshine():
+    """Absence stays absence. A ride we have no weather for must read exactly as
+    it did before this feature existed."""
+    from app.services import bike_build, ride_weather
+
+    assert ride_weather.clause(None) == ""
+    bare = bike_build.edit_prompt([], world="BACKGROUND: a gravel track.")
+    assert "WEATHER ON THE DAY" not in bare
+
+
+def test_the_recorded_weather_reaches_the_picture():
+    """A ride in the rain and a ride in August sun must not be photographed in
+    the same light."""
+    from datetime import datetime, timezone
+
+    from app.services import bike_build, ride_weather
+
+    blob = {"hourly": {"time": ["2026-08-12T14:00"], "temperature_2m": [24.0],
+                       "precipitation": [0.6], "wind_speed_10m": [6.2]}}
+    wx = ride_weather.summarise(blob, datetime(2026, 8, 12, 14, 0, tzinfo=timezone.utc))
+    assert wx is not None and wx.wet
+    wet = bike_build.edit_prompt([], world="BACKGROUND: a gravel track.",
+                                 weather=ride_weather.clause(wx))
+    assert "WET from recent rain" in wet
+
+    dry = ride_weather.clause(ride_weather.summarise(
+        {"hourly": {"time": ["2026-01-04T08:00"], "temperature_2m": [1.0],
+                    "precipitation": [0.0], "wind_speed_10m": [0.4]}},
+        datetime(2026, 1, 4, 8, 0, tzinfo=timezone.utc)))
+    assert "dry" in dry and "near-freezing" in dry and "still" in dry
 
 
 # ── the cut-out ─────────────────────────────────────────────────────────────

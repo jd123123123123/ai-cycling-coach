@@ -68,10 +68,39 @@ SCENE_LIGHT = (
     "the edges of whatever surrounds it. "
     "THE AGGRESSIVE FALLOFF APPLIES TO THE SURROUNDINGS, NEVER TO THE BICYCLE: the world past it "
     "sinks quickly to near-black, while the bicycle stays bright — that contrast between a lit "
-    "subject and a dark world is the entire look. Do NOT render a dim, flat, underexposed or "
-    "evenly-lit scene. No fill on the bicycle's shadow side; its shadows stay deep and clean. "
-    "There is no sky and no horizon line in frame. A soft, believable contact shadow sits directly "
-    "beneath both wheels."
+    "subject and a dark world is the entire look. "
+    "DARK IS THE BACKGROUND, NOT THE MOOD. What surrounds the bicycle within the lit pool is "
+    "ALIVE and deeply saturated — foliage a rich, luminous green, real bounce light picking up "
+    "colour from the ground and throwing it back onto the underside of the frame and rims. The "
+    "picture should feel abundant and rewarding to look at, not bleak: think a jewel lit in a "
+    "dark room, never a grey object on a grey day. Do NOT render a dim, flat, desaturated, "
+    "washed-out, underexposed, muddy or evenly-lit scene, and do NOT drain the colour out of the "
+    "near field. No fill on the bicycle's shadow side; its shadows stay deep and clean. "
+    "There is no sky and no horizon line in frame."
+)
+
+# ── THE BIKE HAS TO BE STANDING ON SOMETHING ────────────────────────────────
+# A contact shadow was one trailing clause at the end of the lighting block, and
+# it lost: the bicycle came back hovering a hand's width above the road with a
+# vague grey smudge under it. Floating is the default failure of every image
+# model — it has no physics, only composition — so the fix is not to ask more
+# politely, it is to describe the CONTACT ITSELF as geometry: where the rubber
+# deforms, what the ground does back, and where the light cannot reach.
+#
+# The occlusion is the load-bearing part. A shadow with a soft edge everywhere
+# reads as a sticker's drop shadow; a shadow that goes almost black in the
+# millimetres either side of the contact patch is what the eye reads as weight.
+SCENE_CONTACT = (
+    "GROUND CONTACT — NON-NEGOTIABLE: both tyres are firmly ON the surface and bear the "
+    "bicycle's weight. Each contact patch is visibly flattened where the rubber meets the "
+    "ground, and the surface reacts to it — grit displaced, grass bent and splayed around the "
+    "tyre, dust or sand pressed down. Directly beneath each contact patch the light is fully "
+    "occluded: a tight, nearly black ambient-occlusion core no wider than the tyre, which "
+    "spreads outward into a soft directional cast shadow thrown by the key light. Loose material "
+    "from the ground — single blades of grass, grit, a fallen leaf — overlaps the bottom edge of "
+    "each tyre, so the bicycle is IN the scene rather than pasted over it. There is NO gap, NO "
+    "floating, NO uniform grey smudge standing in for a shadow, and the bicycle does not hover, "
+    "levitate or sit on an invisible plane."
 )
 
 SCENE_RENDER = (
@@ -311,13 +340,23 @@ def get(framing_id: str | None) -> Framing:
     return FRAMINGS.get(framing_id or "", FRAMINGS[DEFAULT_FRAMING])
 
 
-def scene_prompt(bike_description: str, framing_id: str | None) -> str:
+def scene_prompt(
+    bike_description: str,
+    framing_id: str | None,
+    weather: str = "",
+) -> str:
     """The full past-ride hero prompt: this exact bicycle, in this world.
 
     Composed in the order the model reads best — subject, then camera, then the
-    world in depth order (near band, ground, backdrop), then light, grade and
-    render. The bicycle's own description leads, because it is the one thing in
-    the frame that must not be reinterpreted.
+    world in depth order (near band, ground, backdrop), then contact, weather,
+    light, grade and render. The bicycle's own description leads, because it is
+    the one thing in the frame that must not be reinterpreted.
+
+    `weather` is the ride's OWN hour (`ride_weather.clause`) and lands between
+    the ground and the light, because that is what it changes: whether the
+    surface is wet, and what colour the air is. Empty when the ride has no
+    stored weather, and then the prompt is exactly what it was before — a ride
+    with no data must not be given invented sunshine.
     """
     f = get(framing_id)
     return (
@@ -327,13 +366,15 @@ def scene_prompt(bike_description: str, framing_id: str | None) -> str:
         f"FOREGROUND (nearest the lens, heavily out of focus): {f.foreground}. "
         f"GROUND: {f.ground}. "
         f"BACKDROP: {f.backdrop}. "
-        f"{SCENE_LIGHT} "
+        f"{SCENE_CONTACT} "
+        + (f"{weather} " if weather else "")
+        + f"{SCENE_LIGHT} "
         f"COLOUR: {f.palette}. "
         f"{SCENE_RENDER}"
     )
 
 
-def edit_prompt(framing_id: str | None) -> str:
+def edit_prompt(framing_id: str | None, weather: str = "") -> str:
     """The image-conditioned variant: re-shoot an EXISTING bike render in a new
     world, handing the rider's own bike image in as the input.
 
@@ -353,7 +394,9 @@ def edit_prompt(framing_id: str | None) -> str:
         f"FOREGROUND (nearest the lens, heavily out of focus): {f.foreground}. "
         f"GROUND: {f.ground}. "
         f"BACKDROP: {f.backdrop}. "
-        f"{SCENE_LIGHT} "
+        f"{SCENE_CONTACT} "
+        + (f"{weather} " if weather else "")
+        + f"{SCENE_LIGHT} "
         f"COLOUR: {f.palette}. "
         f"{SCENE_RENDER}"
     )

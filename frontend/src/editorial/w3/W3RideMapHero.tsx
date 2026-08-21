@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { ChevronLeft, Share2, CircleCheck, Gauge, Zap, HeartPulse, Maximize2 } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { W3_MAP } from './w3map'
+import { GRADE_LEGEND, gradeColours } from './gradeColours'
 import { S, lux } from './w3surfaces'
 
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
@@ -46,6 +47,12 @@ const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
 export interface W3RideHeroVm {
   /** [[lat, lng], …] from the ride's own GPX. Null when the ride has no GPS. */
   polyline: [number, number][] | null
+  /** Per-point gradient, same length as `polyline`. The hero drew the route in
+   *  flat acid while the full-screen map coloured it by how hard the road is —
+   *  so the one thing a cycling map can say that a general-purpose one cannot
+   *  was hidden one tap deep, on the screen nobody opened. Null → flat acid,
+   *  which is the honest fallback for a ride with no elevation. */
+  grades?: number[] | null
   /** The composed scene — bike and landscape — as a data URI, when one exists. */
   sceneImage: string | null
   /** True while we do not yet know whether this ride has a route. Distinct from
@@ -154,6 +161,7 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
   const reduce = useReducedMotion()
   const [mapReady, setMapReady] = useState(false)
   const hasRoute = vm.polyline != null && vm.polyline.length > 1
+  const ramp = gradeColours(vm.grades, vm.polyline?.length ?? 0)
   // The map region is held open while the route is still on its way, and only
   // collapses once we KNOW the ride has no GPS. Collapsing on "not yet" is what
   // made the page open as a black rectangle and then jump.
@@ -174,6 +182,7 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               interactive={false}
               onReady={() => setMapReady(true)}
               palette={W3_MAP}
+              lineColors={ramp ?? undefined}
               lineColor={T.acid}
               lineWidth={6}
               startColor={T.ink}
@@ -207,6 +216,24 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
             position: 'absolute', top: 0, left: 0, right: 0, height: 150, pointerEvents: 'none',
             background: `linear-gradient(180deg, ${T.bg}D9, ${T.bg}00)`,
           }} />
+
+          {/* THE KEY, and only when the line is coloured. A legend for a colour
+              that is not on screen is worse than no legend. It sits just above
+              the card's top edge so it reads as part of the map, not the card. */}
+          {ramp && (
+            <div style={{
+              position: 'absolute', left: 20, bottom: MAP_H - CARD_TOP + 34, zIndex: 3,
+              display: 'flex', gap: 10, alignItems: 'center',
+              padding: '6px 11px', borderRadius: 100, background: `${T.bg}CC`,
+            }}>
+              {GRADE_LEGEND.map((g) => (
+                <span key={g.label} style={{ display: 'inline-flex', gap: 5, alignItems: 'center' }}>
+                  <span style={{ width: 12, height: 3, borderRadius: 2, background: g.colour }} />
+                  <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.5, color: T.mid }}>{g.label}</span>
+                </span>
+              ))}
+            </div>
+          )}
 
           <div style={{
             position: 'absolute', top: 10, left: 16, right: 16,
