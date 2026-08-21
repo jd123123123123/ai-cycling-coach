@@ -18,17 +18,10 @@ import { W3BikerPage, W3GarageHome, W3RidesPage, W3TodayPage, W3WinsPage } from 
 import { resolveLandingPath } from './editorial/state/designSystem'
 
 // Auth entry points stay eager so first paint is instant.
-import LoginPage from './pages/LoginPage'
-import RegisterPage from './pages/RegisterPage'
 
 // Every other routed page is code-split into its own lazily-loaded chunk.
-const DashboardPage = lazyWithRetry(() => import('./pages/DashboardPage'))
-const ConsentPage = lazyWithRetry(() => import('./pages/ConsentPage'))
-const ProfileSetupPage = lazyWithRetry(() => import('./pages/ProfileSetupPage'))
 // V3 onboarding (pencil-new.pen · Connect / Your Numbers / Goal & Depth)
 // supersedes the legacy 8-step OnboardingWizard on /onboarding.
-const OnboardingWizard = lazyWithRetry(() => import('./components/onboarding/OnboardingV3'))
-const GarminConnectPage = lazyWithRetry(() => import('./pages/GarminConnectPage'))
 const CalendarPage = lazyWithRetry(() => import('./pages/CalendarPage'))
 const ActivitiesPage = lazyWithRetry(() => import('./pages/ActivitiesPage'))
 const CoachPage = lazyWithRetry(() => import('./pages/CoachPage'))
@@ -111,6 +104,7 @@ const W3OnboardWelcomePage = lazyWithRetry(() => import('./editorial/w3/W3Onboar
 const W3OnboardWelcomePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePreview'))
 const W3OnboardDevicesPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPage'))
 const W3OnboardNumbersPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardNumbersPage'))
+const GarminConnectPage = lazyWithRetry(() => import('./pages/GarminConnectPage'))
 const W3OnboardDevicesPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPreview'))
 const W3OnboardRewardsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPage'))
 const W3OnboardRewardsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPreview'))
@@ -216,6 +210,19 @@ function roomKey(pathname: string): string {
   return ROOMS[pathname] ?? pathname
 }
 
+/**
+ * A retired route, forwarded to the screen that replaced it.
+ *
+ * `replace` so the dead URL does not sit in history and send the rider back
+ * into it with one swipe. The SEARCH IS CARRIED OVER: `/register?ref=CODE` is
+ * the shape of link the referral feature asks riders to share, and dropping the
+ * query here would quietly un-invite everybody who followed an older one.
+ */
+function LegacyRedirect({ to }: { to: string }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
+}
+
 function AppRoutes() {
   const location = useLocation()
   return (
@@ -226,45 +233,22 @@ function AppRoutes() {
     <Suspense fallback={<AppLoading />}>
       <PageTransition routeKey={roomKey(location.pathname)}>
         <Routes location={location}>
-          {/* Public routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
-
-          {/* Onboarding routes (protected — require auth) */}
-          <Route
-            path="/consent"
-            element={
-              <ProtectedRoute>
-                <ConsentPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/profile-setup"
-            element={
-              <ProtectedRoute>
-                <ProfileSetupPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/onboarding"
-            element={
-              <ProtectedRoute>
-                <OnboardingWizard />
-              </ProtectedRoute>
-            }
-          />
-
-          {/* Main app routes (protected — require auth + completed onboarding) */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute checkOnboarding>
-                <DashboardPage />
-              </ProtectedRoute>
-            }
-          />
+          {/* ── THE OLD WAY IN IS CLOSED ────────────────────────────────────
+               Sign-up, consent, profile setup, the v4 wizard and the v4
+               dashboard all have W3 answers now, and a rider who reached one of
+               these by an old bookmark, an old share, or a stale service worker
+               was shown a different app than the one they signed up for.
+               They REDIRECT rather than 404, because these URLs are out in the
+               world and a dead link is worse than an old one. The query string
+               survives the hop — `/register?ref=CODE` is exactly the link the
+               referral feature asks people to share, and dropping the search
+               would silently un-invite them. ── */}
+          <Route path="/login" element={<LegacyRedirect to="/e/w3-login" />} />
+          <Route path="/register" element={<LegacyRedirect to="/e/w3-register" />} />
+          <Route path="/consent" element={<LegacyRedirect to="/e/w3-onboard-numbers" />} />
+          <Route path="/profile-setup" element={<LegacyRedirect to="/e/w3-onboard-numbers" />} />
+          <Route path="/onboarding" element={<LegacyRedirect to="/e/w3-onboard-welcome" />} />
+          <Route path="/dashboard" element={<LegacyRedirect to="/e/w3-today" />} />
           <Route
             path="/garmin/connect"
             element={

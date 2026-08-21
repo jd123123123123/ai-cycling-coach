@@ -21,7 +21,9 @@ export default function ProtectedRoute({ children, checkOnboarding = false }: Pr
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    // The W3 sign-in, not the retired one — this is the redirect every
+    // unauthenticated visit takes.
+    return <Navigate to="/e/w3-login" replace />
   }
 
   if (checkOnboarding) {
