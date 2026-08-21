@@ -11,7 +11,13 @@ import W3ConnectCelebrateView, { type W3ConnectVm, type W3CelebrateStat } from '
  * shared. Every figure is REAL, computed from the imported activities over a
  * wide window (`useActivitiesRange`). `?source=Garmin` names the provider.
  * Reaching this screen means a device is connected, so it fires the equal
- * 125 RC device grant (idempotent), then chains on to the avatar step.
+ * 125 RC device grant (idempotent), then chains on.
+ *
+ * WHERE IT CHAINS TO DEPENDS ON WHO SENT IT. `?next=` lets the onboarding
+ * device step borrow this screen and get its rider back afterwards; without it
+ * the destination stays the avatar step, which is what every older link expects.
+ * The CTA names the actual destination — a button reading "Lern deinen Rider
+ * kennen" that opens the numbers screen is a small lie the rider notices.
  */
 
 const fmtInt = (n: number) => Math.round(n).toLocaleString('de-DE')
@@ -20,6 +26,10 @@ export default function W3ConnectCelebratePage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
   const source = params.get('source') || 'Garmin'
+  // Same-app paths only: this value arrives in a URL, and forwarding it
+  // unchecked would turn the celebration into an open redirect.
+  const raw = params.get('next')
+  const next = raw && raw.startsWith('/e/') ? raw : '/e/w3-avatar-onboard'
 
   // The device is connected by the time this screen shows — award the one-time
   // device grant once on mount (server enforces once-ever; failures are silent
@@ -95,9 +105,9 @@ export default function W3ConnectCelebratePage() {
       everestLine,
       stats,
       standout,
-      ctaLabel: 'Lern deinen Rider kennen',
+      ctaLabel: next === '/e/w3-avatar-onboard' ? 'Lern deinen Rider kennen' : 'Weiter',
     }
-  }, [data, source])
+  }, [data, source, next])
 
-  return <W3ConnectCelebrateView vm={vm} onContinue={() => navigate('/e/w3-avatar-onboard')} />
+  return <W3ConnectCelebrateView vm={vm} onContinue={() => navigate(next, { replace: true })} />
 }

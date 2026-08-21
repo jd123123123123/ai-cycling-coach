@@ -459,7 +459,11 @@ function AppRoutes() {
           <Route path="/e/w3-rank-preview" element={<W3RankPreview />} />
           <Route path="/e/w3-garage-hero-preview" element={<W3GarageHeroPreview />} />
           <Route path="/e/w3-room-preview/*" element={<W3RoomPreview />} />
-          <Route path="/e/w3-connected" element={<ProtectedRoute checkOnboarding><W3ConnectCelebratePage /></ProtectedRoute>} />
+          {/* No `checkOnboarding`: this IS an onboarding step. The gate is satisfied
+              by the NUMBERS screen, which comes after this one — guarding it would
+              bounce every mid-onboarding rider back to the welcome screen the
+              moment they connected a device. */}
+          <Route path="/e/w3-connected" element={<ProtectedRoute><W3ConnectCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />
           <Route path="/e/w3-avatar-onboard-preview" element={<W3AvatarOnboardPreview />} />

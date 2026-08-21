@@ -23,6 +23,10 @@ import W3OnboardDevicesView from './W3OnboardDevicesView'
 
 type ProviderKey = 'garmin' | 'wahoo' | 'apple'
 
+// The connect celebration is a shared screen; `next` brings the rider back into
+// this chain instead of dropping them at the avatar step it defaults to.
+const CELEBRATE = '/e/w3-connected?source=Garmin&next=' + encodeURIComponent('/e/w3-onboard-numbers')
+
 export default function W3OnboardDevicesPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -55,7 +59,7 @@ export default function W3OnboardDevicesPage() {
       name: 'Garmin',
       sub: 'Jede Fahrt automatisch',
       connected: !!garmin?.connected,
-      panel: <GarminInline qc={qc} />,
+      panel: <GarminInline qc={qc} onConnected={() => navigate(CELEBRATE)} />,
     },
     {
       key: 'wahoo',
@@ -121,12 +125,11 @@ const smallBtn: React.CSSProperties = {
   fontFamily: FONT, fontSize: 12, fontWeight: 800, border: `1px solid ${T.stroke}`, cursor: 'pointer',
 }
 
-function GarminInline({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
+function GarminInline({ qc, onConnected }: { qc: ReturnType<typeof useQueryClient>; onConnected: () => void }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [done, setDone] = useState(false)
 
   async function connect() {
     setBusy(true); setErr(null)
@@ -134,7 +137,10 @@ function GarminInline({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
       await apiClient.post('/garmin/connect', { email, password })
       await qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
       await qc.invalidateQueries({ queryKey: ['activities'] })
-      setDone(true)
+      // The celebration screen is the payoff for this moment AND the only place
+      // the 125 RC device grant is fired. Ending at the inline pill below meant
+      // a rider handed over their whole riding history and got a line of text.
+      onConnected()
     } catch (e) {
       const status = (e as { response?: { status?: number } })?.response?.status
       setErr(status === 401 ? 'Zugangsdaten abgelehnt.' : 'Verbindung fehlgeschlagen.')
@@ -143,13 +149,6 @@ function GarminInline({ qc }: { qc: ReturnType<typeof useQueryClient> }) {
     }
   }
 
-  if (done) {
-    return (
-      <p style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 12, fontWeight: 700, color: T.acid, margin: 0 }}>
-        <Check size={14} strokeWidth={2.6} />Garmin verbunden — erste Synchronisation läuft.
-      </p>
-    )
-  }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Garmin-E-Mail" style={field} />
