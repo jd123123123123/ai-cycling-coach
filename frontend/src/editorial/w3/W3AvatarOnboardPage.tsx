@@ -10,7 +10,7 @@ import { apiClient } from '../../api/client'
 import { SHOWCASE_RIDER } from './showcaseRider'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
 import { fileToDownscaledDataUrl } from './w3photo'
-import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarInsight } from './W3AvatarOnboardView'
+import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarInsight, type AvatarFact } from './W3AvatarOnboardView'
 
 /**
  * W3 · Avatar onboarding, wired to the LLM pipeline. Route /e/w3-avatar-onboard.
@@ -116,15 +116,40 @@ export function W3RiderOnboarding({ next }: { next: string }) {
       ? `${garmin ? 'Garmin synchronisiert · ' : ''}${years} ${years === 1 ? 'Jahr' : 'Jahre'} im Sattel`
       : (garmin ? 'Garmin synchronisiert' : '')
 
+    // ── THREE FACTS, NOT SEVEN ─────────────────────────────────────────
+    // The pen's reveal (`Z2ryuL`) is one screen: the character, the name, three
+    // compact facts, one action. This page had grown to seven figures and a
+    // scroll, and a reward you have to page through stops being a reward.
+    // These three are the ones a rider says out loud — how far, how high, how
+    // many — each carrying the human translation as its caption. Everything
+    // else is on the profile, where there is room to draw it properly.
+    const nf = new Intl.NumberFormat('de-DE')
+    const earthLaps = distKm / 40075
+    const facts: [AvatarFact, AvatarFact, AvatarFact] = [
+      {
+        icon: 'distance', label: 'GESAMT',
+        value: rides ? `${nf.format(Math.round(distKm))} km` : '—',
+        caption: rides && earthLaps >= 0.01
+          ? `${earthLaps.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}× um die Erde`
+          : 'deine erste Fahrt zählt',
+      },
+      {
+        icon: 'climb', label: 'HÖHENMETER',
+        value: elevM > 0 ? `${(elevM / 1000).toFixed(1)} km` : '—',
+        caption: elevM > 0 ? `${everest.toFixed(everest < 10 ? 1 : 0)}× Everest` : 'noch offen',
+      },
+      {
+        icon: 'rides', label: 'FAHRTEN',
+        value: rides ? nf.format(rides) : '—',
+        caption: rides ? `${Math.round(saddleH)} h im Sattel` : 'noch offen',
+      },
+    ]
+
     return {
       avatarUrl: hero,
       handle,
       role, level, levelPct, xpNote, headline,
-      primary: {
-        totalDistance: rides ? `${Math.round(distKm).toLocaleString('de-DE')} km` : '—',
-        totalRides: rides ? String(rides) : '—',
-        saddleTime: rides ? `${Math.round(saddleH)} h` : '—',
-      },
+      facts,
       secondary,
       syncNote,
     }

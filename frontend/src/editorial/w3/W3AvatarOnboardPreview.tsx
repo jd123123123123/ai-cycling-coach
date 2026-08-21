@@ -1,5 +1,7 @@
 import W3AvatarOnboardView from './W3AvatarOnboardView'
-import { SHOWCASE_RIDER } from './showcaseRider'
+// The preview shows the SHIPPED character, not a legacy showcase bitmap: a
+// design review that looks at art nobody will ever see is reviewing nothing.
+const SHOWCASE_RIDER = '/w3/example-rider.webp'
 
 /** TEMP preview — the avatar onboarding, every stage.
  *  /e/w3-avatar-onboard-preview is unguarded.
@@ -25,7 +27,11 @@ export default function W3AvatarOnboardPreview() {
         levelPct: 0.25,
         xpNote: '375 RC bis Level 2',
         headline: '',
-        primary: { totalDistance: '4.812 km', totalRides: '318', saddleTime: '214 h' },
+  facts: [
+    { icon: 'distance', label: 'GESAMT', value: '4.812 km', caption: '0,1× um die Erde' },
+    { icon: 'climb', label: 'HÖHENMETER', value: '61,4 km', caption: '6,9× Everest' },
+    { icon: 'rides', label: 'FAHRTEN', value: '318', caption: '214 h im Sattel' },
+  ],
         secondary: [
           { key: 'elevation', label: 'HÖHENMETER', value: '61,4 km', caption: '≈ 7× Mount Everest' },
           { key: 'longest', label: 'LÄNGSTE', value: '187 km', caption: 'dein größter Tag im Sattel' },
