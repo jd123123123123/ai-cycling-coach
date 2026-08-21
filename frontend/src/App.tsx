@@ -110,6 +110,7 @@ const W3WeekReviewPreview = lazyWithRetry(() => import('./editorial/w3/W3WeekRev
 const W3OnboardWelcomePage = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePage'))
 const W3OnboardWelcomePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardWelcomePreview'))
 const W3OnboardDevicesPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPage'))
+const W3OnboardNumbersPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardNumbersPage'))
 const W3OnboardDevicesPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPreview'))
 const W3OnboardRewardsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPage'))
 const W3OnboardRewardsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPreview'))
@@ -494,6 +495,7 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-welcome" element={<ProtectedRoute><W3OnboardWelcomePage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-welcome-preview" element={<W3OnboardWelcomePreview />} />
           <Route path="/e/w3-onboard-devices" element={<ProtectedRoute><W3OnboardDevicesPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-numbers" element={<ProtectedRoute><W3OnboardNumbersPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-devices-preview" element={<W3OnboardDevicesPreview />} />
           <Route path="/e/w3-onboard-rewards" element={<ProtectedRoute><W3OnboardRewardsPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-rewards-preview" element={<W3OnboardRewardsPreview />} />

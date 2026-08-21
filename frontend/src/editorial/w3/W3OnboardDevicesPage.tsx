@@ -30,9 +30,15 @@ export default function W3OnboardDevicesPage() {
   const { data: wahoo } = useWahooStatus()
   const [open, setOpen] = useState<ProviderKey | null>(null)
 
+  // ── SKIP CANNOT MEAN "STRAIGHT TO TODAY" ANY MORE ────────────────────
+  // The gate is satisfied by a consent and a filled profile, and the screen
+  // that writes both is `/e/w3-onboard-numbers`. Skipping to Today from here
+  // would land on a guarded route, be bounced straight back to the welcome
+  // screen, and bounce forever. So skipping means "not the optional parts" —
+  // it jumps past them to the one screen that has to happen.
   const skip = () => {
     markW3OnboardingSeen()
-    navigate('/e/w3-today', { replace: true })
+    navigate('/e/w3-onboard-numbers', { replace: true })
   }
 
   const rows: Array<{
@@ -70,7 +76,7 @@ export default function W3OnboardDevicesPage() {
   ]
 
   return (
-    <W3OnboardDevicesView onNext={() => navigate('/e/w3-onboard-rider')} onSkip={skip}>
+    <W3OnboardDevicesView onNext={() => navigate('/e/w3-onboard-numbers')} onSkip={skip}>
       {rows.map((r) => (
         <div
           key={r.key}

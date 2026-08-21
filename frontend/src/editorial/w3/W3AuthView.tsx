@@ -2,7 +2,12 @@ import { useState, type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowRight, Mail, Lock, Eye, EyeOff, Ticket, Bike } from 'lucide-react'
 import { T, FONT, EASE, Kicker } from './w3tokens'
-import { STARTER_BIKE } from './starterBike'
+// The sign-up hero is its OWN picture, not the stock starter bike. That render
+// is the machine a rider is given on day one and it was doing double duty here
+// as the first thing anybody ever sees of this app — cropped, unlit and dull.
+// This one was made for the job: the bike on a lit plinth in a dark showroom,
+// one accent, real contact with the ground.
+const REGISTER_HERO = '/w3/register-hero.webp'
 import W3StatusBar from './W3StatusBar'
 import './w3.css'
 
@@ -43,12 +48,14 @@ export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange }: { v
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
         <W3StatusBar />
 
-        {/* Hero — bike + acid bloom */}
-        <div style={{ position: 'relative', height: 240, overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', bottom: 20, left: '50%', transform: 'translateX(-50%)', width: 300, height: 160, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}2E, transparent)` }} />
-          <motion.img src={STARTER_BIKE} alt="" initial={reduce ? false : { opacity: 0, scale: 1.06 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, ease: EASE }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 44%' }} />
-          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 140, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
+        {/* Hero — the bike on its plinth, given the room it deserves. It was
+             240 px of a cropped stock render with a flat gradient over it; the
+             picture IS the pitch on this screen, so it gets the top third. */}
+        <div style={{ position: 'relative', height: 320, overflow: 'hidden' }}>
+          <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', width: 340, height: 190, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}24, transparent)` }} />
+          <motion.img src={REGISTER_HERO} alt="" initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9, ease: EASE }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 52%' }} />
+          <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 130, background: `linear-gradient(180deg, ${T.bg}00, ${T.bg}CC 55%, ${T.bg})` }} />
           <div style={{ position: 'absolute', top: 16, left: 20, display: 'flex', gap: 7, alignItems: 'center', padding: '7px 12px 7px 10px', borderRadius: 100, background: '#000000A6' }}>
             <Bike size={13} color={T.acid} /><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.ink }}>w3.ride</span>
           </div>

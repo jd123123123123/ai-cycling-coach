@@ -9,9 +9,15 @@ import W3OnboardWelcomeView from './W3OnboardWelcomeView'
  */
 export default function W3OnboardWelcomePage() {
   const navigate = useNavigate()
+  // ── SKIP CANNOT MEAN "STRAIGHT TO TODAY" ANY MORE ────────────────────
+  // The gate is satisfied by a consent and a filled profile, and the screen
+  // that writes both is `/e/w3-onboard-numbers`. Skipping to Today from here
+  // would land on a guarded route, be bounced straight back to the welcome
+  // screen, and bounce forever. So skipping means "not the optional parts" —
+  // it jumps past them to the one screen that has to happen.
   const skip = () => {
     markW3OnboardingSeen()
-    navigate('/e/w3-today', { replace: true })
+    navigate('/e/w3-onboard-numbers', { replace: true })
   }
   return (
     <W3OnboardWelcomeView

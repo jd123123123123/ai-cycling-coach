@@ -28,10 +28,19 @@ export default function ProtectedRoute({ children, checkOnboarding = false }: Pr
     if (onboardingStatus === 'loading') {
       return <AppLoading />
     }
-    // Both incomplete-onboarding states route to the unified science-based
-    // wizard (which folds consent + Garmin + profile into one flow).
+    // ── ONE JOURNEY, AND IT IS THE W3 ONE ─────────────────────────────
+    // This sent every incomplete rider to `/onboarding`, the v4 wizard — so a
+    // rider who had just signed up on the W3 register screen was dropped into
+    // the OLD design, walked through three screens in another visual language,
+    // and finished on the v4 dashboard. They never saw the app they signed up
+    // for.
+    //
+    // The W3 chain answers the same two questions the gate asks about (a
+    // health-data consent and a filled profile): `W3OnboardNumbersPage` writes
+    // both. So the gate points at the W3 welcome, and the v4 wizard is no
+    // longer reachable by anybody who did not type its URL.
     if (onboardingStatus === 'needs-consent' || onboardingStatus === 'needs-profile') {
-      return <Navigate to="/onboarding" replace />
+      return <Navigate to="/e/w3-onboard-welcome" replace />
     }
   }
 
