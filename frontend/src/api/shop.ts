@@ -98,15 +98,6 @@ export async function buyItem(itemId: string): Promise<PurchaseResult> {
   return res.data
 }
 
-// POST /shop/claim/{item_id} — take the free first bike. This is the ONE bike
-// nobody pays for, and it can be claimed once ever: 409 once the rider owns any
-// bike, 400 if the id is not a free starter bike (the server checks the price,
-// so a client cannot claim its way to a 15,000 RC prototype), 404 if unknown.
-export async function claimFirstBike(itemId: string): Promise<PurchaseResult> {
-  const res = await apiClient.post<PurchaseResult>(`/shop/claim/${itemId}`)
-  return res.data
-}
-
 // POST /shop/equip/{item_id} — wear something already owned. 409 = not owned.
 export async function equipItem(itemId: string): Promise<{ loadout: Loadout }> {
   const res = await apiClient.post<{ loadout: Loadout }>(`/shop/equip/${itemId}`)

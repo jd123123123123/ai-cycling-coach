@@ -94,8 +94,6 @@ const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3C
 const W3AvatarOnboardPage = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPage'))
 const W3AvatarOnboardPreview = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPreview'))
 const W3BikerPreview = lazyWithRetry(() => import('./editorial/w3/W3BikerPreview'))
-const W3FirstBikePage = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePage'))
-const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
 const W3RideCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePage'))
 const W3RideCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3RideCelebratePreview'))
 const W3WeekReviewPage = lazyWithRetry(() => import('./editorial/w3/W3WeekReviewPage'))
@@ -108,8 +106,6 @@ const GarminConnectPage = lazyWithRetry(() => import('./pages/GarminConnectPage'
 const W3OnboardDevicesPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardDevicesPreview'))
 const W3OnboardRewardsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPage'))
 const W3OnboardRewardsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardRewardsPreview'))
-const W3OnboardGaragePage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGaragePage'))
-const W3OnboardGaragePreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGaragePreview'))
 const W3ReferralsPage = lazyWithRetry(() => import('./editorial/w3/W3ReferralsPage'))
 const W3ReferralsPreview = lazyWithRetry(() => import('./editorial/w3/W3ReferralsPreview'))
 const W3ReferralUserPage = lazyWithRetry(() => import('./editorial/w3/W3ReferralUserPage'))
@@ -469,8 +465,7 @@ function AppRoutes() {
           <Route path="/e/w3-avatar-onboard-preview" element={<W3AvatarOnboardPreview />} />
           <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3Guard><W3BikerPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
-          <Route path="/e/w3-first-bike" element={<ProtectedRoute checkOnboarding><W3FirstBikePage /></ProtectedRoute>} />
-          <Route path="/e/w3-first-bike-preview" element={<W3FirstBikePreview />} />
+          <Route path="/e/w3-first-bike" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />
           <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
           <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />
@@ -484,8 +479,7 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-devices-preview" element={<W3OnboardDevicesPreview />} />
           <Route path="/e/w3-onboard-rewards" element={<ProtectedRoute><W3OnboardRewardsPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-rewards-preview" element={<W3OnboardRewardsPreview />} />
-          <Route path="/e/w3-onboard-garage" element={<ProtectedRoute><W3OnboardGaragePage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-garage-preview" element={<W3OnboardGaragePreview />} />
+          <Route path="/e/w3-onboard-garage" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />
           {/* Referrals: recruit riders, earn 10% for 30 days, claim on close. */}
           <Route path="/e/w3-referrals" element={<ProtectedRoute checkOnboarding><W3ReferralsPage /></ProtectedRoute>} />
           <Route path="/e/w3-referrals-preview" element={<W3ReferralsPreview />} />

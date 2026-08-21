@@ -46,6 +46,28 @@ describe('the retired way in stays closed', () => {
     expect(guard).not.toContain('to="/login"')
   })
 
+  /**
+   * The free starter bike is gone: a rider's bike is the one they photograph and
+   * name. Two screens still told the older story — `/e/w3-first-bike` (a shop
+   * that CLAIMED a stock frame on the server) and `/e/w3-onboard-garage` (a
+   * stock photo captioned as theirs). Nothing linked to either any more, which
+   * is exactly why they could rot in place unnoticed while still answering.
+   */
+  it.each([['/e/w3-first-bike'], ['/e/w3-onboard-garage']])(
+    '%s sends the rider to photograph their own bike', (from) => {
+      expect(app).toContain(
+        `<Route path="${from}" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />`)
+    })
+
+  it('has no screen left that hands out a bike', () => {
+    for (const gone of ['<W3FirstBikePage', '<W3OnboardGaragePage',
+                        '<W3FirstBikePreview', '<W3OnboardGaragePreview']) {
+      expect(app, `${gone} is mounted again`).not.toContain(gone)
+    }
+    const shopApi = readFileSync(join(__dirname, '..', '..', 'api', 'shop.ts'), 'utf8')
+    expect(shopApi, 'the claim call is back').not.toContain('claimFirstBike')
+  })
+
   it('sends an incomplete rider into the W3 chain, never the v4 wizard', () => {
     expect(guard).toContain('<Navigate to="/e/w3-onboard-welcome" replace />')
     expect(guard).not.toContain('to="/onboarding"')

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { buyItem, claimFirstBike, equipItem, fetchGarage, renderBuild, type Garage } from '../api/shop'
+import { buyItem, equipItem, fetchGarage, renderBuild, type Garage } from '../api/shop'
 
 export const GARAGE_QUERY_KEY = ['shop', 'garage'] as const
 
@@ -99,34 +99,6 @@ export function useBuyItem() {
   })
 }
 
-/**
- * Claim the free first bike — the act onboarding will not let a rider past.
- *
- * Writes the returned garage straight into the cache like a purchase does, so
- * the gate that sent them here (`loadout.bike == null`) flips in the same tick
- * the server confirms; a refetch would leave a window where the rider has a
- * bike and the app still thinks they need onboarding. The wallet is invalidated
- * because claiming also pays the one-time onboarding grant.
- */
-export function useClaimFirstBike() {
-  const qc = useQueryClient()
-  return useMutation({
-    mutationFn: (itemId: string) => claimFirstBike(itemId),
-    onSuccess: (res) => {
-      qc.setQueryData<Garage>(GARAGE_QUERY_KEY, (prev) => ({
-        ...prev,
-        balance: res.balance, owned: res.owned, loadout: res.loadout,
-        bike_km: res.bike_km,
-        // Buying does not change what is WORN, so the current build's photo
-        // still stands; the response carries it rather than blanking the hero.
-        build_key: res.build_key,
-        render_status: res.render_status,
-        render: res.render,
-      }))
-      qc.invalidateQueries({ queryKey: ['rewards', 'wallet'] })
-    },
-  })
-}
 
 /**
  * Wear an owned item. Optimistic: swapping bar tape must feel instant, and the
