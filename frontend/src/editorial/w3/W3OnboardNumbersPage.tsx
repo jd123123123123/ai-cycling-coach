@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Check, Pencil, Zap } from 'lucide-react'
+import { Check, Pencil, Scale, Zap } from 'lucide-react'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateProfile } from '../../api/athletes'
@@ -228,6 +228,18 @@ export default function W3OnboardNumbersPage() {
               Sag uns ungefähr, wo du stehst — daraus rechnen wir einen vorsichtigen
               Startwert, und deine ersten Fahrten korrigieren ihn.
             </span>
+            {/* WHY THE BUTTON IS GREY. The starting estimate is a W/kg prior,
+                so without a weight there is nothing to multiply and the CTA
+                stays disabled — a rider who is not told that just sees a dead
+                button and no reason for it. */}
+            {!weight && (
+              <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 16, background: T.tile }}>
+                <Scale size={15} color={T.warn} style={{ flex: 'none', marginTop: 1 }} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: T.mid, lineHeight: 1.4 }}>
+                  Trag noch dein Gewicht ein — daraus rechnen wir den Startwert.
+                </span>
+              </div>
+            )}
             {FITNESS.map((f) => {
               const on = fitness === f.key
               return (

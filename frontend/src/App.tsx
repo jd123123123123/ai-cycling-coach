@@ -480,6 +480,7 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-welcome-preview" element={<W3OnboardWelcomePreview />} />
           <Route path="/e/w3-onboard-devices" element={<ProtectedRoute><W3OnboardDevicesPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-numbers" element={<ProtectedRoute><W3OnboardNumbersPage /></ProtectedRoute>} />
+          <Route path="/e/w3-onboard-numbers-preview" element={<W3OnboardNumbersPage />} />
           <Route path="/e/w3-onboard-devices-preview" element={<W3OnboardDevicesPreview />} />
           <Route path="/e/w3-onboard-rewards" element={<ProtectedRoute><W3OnboardRewardsPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-rewards-preview" element={<W3OnboardRewardsPreview />} />

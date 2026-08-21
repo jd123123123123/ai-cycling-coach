@@ -22,7 +22,11 @@ export default function W3OnboardWelcomeView({ heroImageUrl, onNext, onSkip }: W
     <div className="w3-root">
       <div style={{ position: 'relative', fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg, overflow: 'hidden' }}>
 
-        {/* Full-bleed rider */}
+        {/* Full-bleed hero. The art is a 9:16 poster now — the bike on its
+             plinth with its upgrades floating around it, which is the sentence
+             this screen makes — so it is anchored on its own centre rather than
+             cropped at 28 % and left as a dark half-bike at the bottom of an
+             empty frame. */}
         {heroImageUrl && (
           <motion.img
             src={heroImageUrl}
@@ -31,11 +35,11 @@ export default function W3OnboardWelcomeView({ heroImageUrl, onNext, onSkip }: W
             initial={reduce ? false : { scale: 1.06, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.9, ease: EASE }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 28%' }}
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 40%' }}
           />
         )}
         {/* Scrim → the copy reads cleanly over the photo */}
-        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${T.bg}66 0%, transparent 30%, ${T.bg}CC 66%, ${T.bg} 92%)` }} />
+        <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(180deg, ${T.bg}59 0%, transparent 26%, ${T.bg}59 52%, ${T.bg}E0 74%, ${T.bg} 90%)` }} />
 
         {/* Chrome */}
         <div style={{ position: 'relative', zIndex: 2 }}>
