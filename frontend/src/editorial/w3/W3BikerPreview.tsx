@@ -14,9 +14,14 @@ const FIXTURE: W3BikerVm = {
   levelPct: 0.62,
   levelNote: '190 RC bis Level 8',
   chips: ['CAT 2', '3,8 W/KG', '292 W FTP', 'SEIT 2021'],
-  headline: '1,2× um die Erde',
-  headlineCaption: 'jeder Kilometer, den du je gefahren bist',
-  primary: { totalDistance: '48.120 km', totalRides: '1.204', saddleTime: '1.760 h' },
+  milestones: [
+    { icon: 'route', label: 'GESAMTDISTANZ', value: '48.120', unit: 'km',
+      story: '1,2× um die Erde', pct: 0.2, nextNote: 'noch 32.030 km bis Runde 2' },
+    { icon: 'bike', label: 'FAHRTEN GESAMT', value: '1.204', unit: 'Fahrten',
+      story: '4,8 pro Woche, seit 2021', pct: 0.08, nextNote: 'noch 46 bis 1.250' },
+    { icon: 'timer', label: 'SATTELZEIT', value: '1.760', unit: 'Stunden',
+      story: '73 volle Tage im Sattel', pct: 0.04, nextNote: 'noch 240 h bis 2.000 h' },
+  ],
   insights: [
     { key: 'elevation', label: 'HÖHENMETER', value: '61,4 km', caption: '≈ 6,9× Mount Everest' },
     { key: 'longest', label: 'LÄNGSTE', value: '233 km', caption: 'dein größter Tag im Sattel' },

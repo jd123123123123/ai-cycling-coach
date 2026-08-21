@@ -12,7 +12,17 @@ import { useWahooStatus } from '../../hooks/useWahooStatus'
 import { useCorosStatus } from '../../hooks/useCorosStatus'
 import { useGarage } from '../../hooks/useGarage'
 import { compactNumber, useRiderLifetime } from './w3RiderStats'
-import W3BikerView, { type W3BikerVm, type W3Device, type W3Insight } from './W3BikerView'
+import W3BikerView, { type W3BikerVm, type W3Device, type W3Insight, type W3Milestone } from './W3BikerView'
+
+// The constants the milestones are measured against. Named, because a bare
+// 40075 in the middle of a template string is a number nobody can check.
+/** The equator, in kilometres — what "once around the Earth" actually is. */
+const EQUATOR_KM = 40_075
+/** Rides round up to the next fifty; hours to the next two-fifty. Chosen so the
+ *  bar is never nearly-empty for a year at a time, which is the failure mode of
+ *  a milestone that is too far away to feel like progress. */
+const RIDE_STEP = 50
+const HOUR_STEP = 250
 
 /**
  * W3 · 05 BIKER (profile), wired. Route /e/w3-biker.
@@ -180,11 +190,54 @@ export default function W3BikerPage() {
       chips,
       headline,
       headlineCaption,
-      primary: {
-        totalDistance: has ? `${nf.format(Math.round(life.distKm))} km` : DASH,
-        totalRides: has ? nf.format(life.rides) : DASH,
-        saddleTime: has ? `${nf.format(Math.round(life.saddleH))} h` : DASH,
-      },
+      // ── THE THREE LIFETIME NUMBERS, AS MILESTONES ──────────────────────
+      // These were three cells in a strip, set at 18 px — smaller than the
+      // insight tiles beneath them, which is backwards: they are the biggest
+      // numbers the rider owns. Each one now carries what it MEANS and how far
+      // it is from the next round thing, both computed from the same raw
+      // figures the strip was formatting. Nothing here is invented: the equator
+      // is 40 075 km, a day is 24 hours, and the next milestone is arithmetic.
+      milestones: [
+        {
+          icon: 'route' as const,
+          label: 'GESAMTDISTANZ',
+          value: has ? nf.format(Math.round(life.distKm)) : DASH,
+          unit: 'km',
+          story: has && life.earthLaps >= 0.01
+            ? `${life.earthLaps.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}× um die Erde`
+            : 'jeder Kilometer, den du je gefahren bist',
+          pct: has ? life.earthLaps % 1 : 0,
+          nextNote: has
+            ? `noch ${nf.format(Math.max(0, Math.round(EQUATOR_KM * (Math.floor(life.earthLaps) + 1) - life.distKm)))} km bis Runde ${Math.floor(life.earthLaps) + 1}`
+            : '',
+        },
+        {
+          icon: 'bike' as const,
+          label: 'FAHRTEN GESAMT',
+          value: has ? nf.format(life.rides) : DASH,
+          unit: life.rides === 1 ? 'Fahrt' : 'Fahrten',
+          story: has && life.years >= 1
+            ? `${(life.rides / Math.max(1, life.years * 52)).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pro Woche${life.firstYear ? `, seit ${life.firstYear}` : ''}`
+            : 'jedes Mal, das du losgefahren bist',
+          pct: has ? (life.rides % RIDE_STEP) / RIDE_STEP : 0,
+          nextNote: has
+            ? `noch ${nf.format(RIDE_STEP - (life.rides % RIDE_STEP))} bis ${nf.format(Math.ceil((life.rides + 1) / RIDE_STEP) * RIDE_STEP)}`
+            : '',
+        },
+        {
+          icon: 'timer' as const,
+          label: 'SATTELZEIT',
+          value: has ? nf.format(Math.round(life.saddleH)) : DASH,
+          unit: 'Stunden',
+          story: has && life.saddleH >= 24
+            ? `${nf.format(Math.floor(life.saddleH / 24))} volle Tage im Sattel`
+            : 'jede Stunde, die du gefahren bist',
+          pct: has ? (life.saddleH % HOUR_STEP) / HOUR_STEP : 0,
+          nextNote: has
+            ? `noch ${nf.format(Math.ceil(HOUR_STEP - (life.saddleH % HOUR_STEP)))} h bis ${nf.format(Math.ceil((life.saddleH + 1) / HOUR_STEP) * HOUR_STEP)} h`
+            : '',
+        },
+      ] as [W3Milestone, W3Milestone, W3Milestone],
       insights,
       engine,
       streak: rhythmStreak,

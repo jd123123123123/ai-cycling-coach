@@ -1,7 +1,7 @@
 import type { ComponentType } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  Watch, Activity as ActivityIcon, Zap, HeartPulse, Sparkles, Globe2,
+  Watch, Activity as ActivityIcon, Zap, HeartPulse, Sparkles,
   Route as RouteIcon, Bike, Timer, Mountain, Gauge, Flame, Medal,
   ChevronRight, UserRound,
 } from 'lucide-react'
@@ -29,6 +29,26 @@ import './w3.css'
 export type W3InsightKey = 'elevation' | 'longest' | 'speed' | 'burned'
 export interface W3Insight { key: W3InsightKey; label: string; value: string; caption: string }
 export interface W3Fact { label: string; value: string; caption: string }
+
+/**
+ * One lifetime number, given room to be one.
+ *
+ * `value`/`unit` are the figure. `story` is what it means in a unit a human
+ * owns — laps of the planet, rides a week, whole days in the saddle. `pct` and
+ * `nextNote` are the part that makes it move: a real proportion toward the next
+ * round milestone, so an already-huge number still has somewhere to go.
+ */
+export interface W3Milestone {
+  icon: 'route' | 'bike' | 'timer'
+  label: string
+  value: string
+  unit: string
+  story: string
+  /** 0..1 through the current milestone. */
+  pct: number
+  /** "noch 7.980 km bis Runde 2". Empty when there is nothing true to say. */
+  nextNote: string
+}
 export interface W3Device { name: string; sub: string; icon: 'watch' | 'activity' | 'zap' | 'heart'; on: boolean }
 
 export interface W3BikerVm {
@@ -44,9 +64,9 @@ export interface W3BikerVm {
   levelPct: number              // 0..1 through the current level
   levelNote: string             // "312 RC to Level 8"
   chips: string[]               // real identity chips (CAT, W/kg, FTP, since)
-  headline: string              // "12 % around the Earth" — the meaning, not the number
-  headlineCaption: string
-  primary: { totalDistance: string; totalRides: string; saddleTime: string }
+  /** The three lifetime figures, each with what it MEANS and how far it is
+   *  from the next round thing. See `W3Milestone`. */
+  milestones: [W3Milestone, W3Milestone, W3Milestone]
   insights: W3Insight[]         // 4 · the reveal's dopamine tiles
   engine: W3Fact[]              // FTP / W·kg / fitness
   streak: W3Fact
@@ -59,11 +79,12 @@ export interface W3BikerVm {
 const DEV_ICONS: Record<W3Device['icon'], ComponentType<{ size?: number; color?: string }>> = {
   watch: Watch, activity: ActivityIcon, zap: Zap, heart: HeartPulse,
 }
-const PRIMARY = [
-  { key: 'totalDistance' as const, icon: RouteIcon, label: 'GESAMTDISTANZ' },
-  { key: 'totalRides' as const, icon: Bike, label: 'FAHRTEN GESAMT' },
-  { key: 'saddleTime' as const, icon: Timer, label: 'SATTELZEIT' },
-]
+const MILESTONE_ICON: Record<W3Milestone['icon'], ComponentType<{ size?: number; color?: string }>> = {
+  route: RouteIcon, bike: Bike, timer: Timer,
+}
+/** The milestone meters' steps — the same twenty-two as readiness, the season
+ *  total and the level bar. One way of drawing a share, everywhere. */
+const MS_SEG = 22
 // ONE ACCENT, NOT FOUR. Each tile used to carry its own hue — violet, cyan,
 // blue, amber — as a gradient wash plus a tinted border plus a coloured caption.
 // Four foreign colours in a 2×2 is not a palette, it is a fruit bowl, and it
@@ -89,6 +110,75 @@ function FactCell({ f, flex = 1 }: { f: W3Fact; flex?: number }) {
       <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.7, color: f.value === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.value}</span>
       <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.3, color: T.quiet, overflow: 'hidden' }}>{f.caption}</span>
     </div>
+  )
+}
+
+/**
+ * One lifetime figure, at display size, with its meaning and its next rung.
+ *
+ * THE BAR IS THE DOPAMINE, and it is honest dopamine: it is a real proportion
+ * of a real distance to a real milestone, not a decorative flourish. A rider
+ * with 48 120 km has a number that can never go up in any way they can feel —
+ * unless something on screen says how far the next lap of the planet is.
+ */
+function MilestoneBlock({ m, index, reduce }: { m: W3Milestone; index: number; reduce: boolean | null }) {
+  const Icon = MILESTONE_ICON[m.icon]
+  const missing = m.value === DASH
+  const lit = Math.round(Math.max(0, Math.min(1, m.pct)) * MS_SEG)
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+      transition={grow(0.07 * index)}
+      style={{
+        width: '100%', borderRadius: 24, background: T.tile,
+        padding: '17px 18px 18px', display: 'flex', flexDirection: 'column', gap: 13,
+      }}>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 11, width: '100%', minWidth: 0 }}>
+        <span style={{ flex: 'none', width: 30, height: 30, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}>
+          <Icon size={15} color={T.acid} />
+        </span>
+        <span style={{ minWidth: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {m.label}
+        </span>
+      </div>
+
+      {/* The figure, at the size a lifetime deserves. */}
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+        <span style={{
+          fontSize: 40, fontWeight: 700, letterSpacing: -1.8, lineHeight: 0.9,
+          color: missing ? T.quiet : T.ink, fontVariantNumeric: 'tabular-nums',
+        }}>{m.value}</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: T.mid }}>{m.unit}</span>
+      </div>
+
+      {/* What it means, in a unit a person owns. */}
+      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: -0.2, color: T.acid, lineHeight: 1.25 }}>
+        {m.story}
+      </span>
+
+      {/* How far the next rung is. Same twenty-two steps as every other meter
+          in the app — readiness, the season, the level. */}
+      {!missing && m.nextNote && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7, width: '100%' }}>
+          <div style={{ display: 'flex', gap: 3, width: '100%', height: 8 }}>
+            {Array.from({ length: MS_SEG }, (_, i) => (
+              <motion.span key={i}
+                initial={reduce ? false : { opacity: 0, scaleY: 0.4 }}
+                animate={{ opacity: 1, scaleY: 1 }}
+                transition={{ duration: 0.3, delay: reduce ? 0 : 0.1 + i * 0.011 }}
+                style={{
+                  flex: 1, borderRadius: 2, transformOrigin: 'bottom',
+                  background: i < lit
+                    ? `linear-gradient(180deg, ${T.acidLite} 0%, ${T.acid} 55%, ${T.acidDeep} 100%)`
+                    : T.d1,
+                }} />
+            ))}
+          </div>
+          <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{m.nextNote}</span>
+        </div>
+      )}
+    </motion.div>
   )
 }
 
@@ -223,32 +313,21 @@ export default function W3BikerView({ vm, onReferral, onBadges, onCreateRider }:
         <div style={{ ...band(34), gap: 13 }}>
           <Kicker>Gesamt</Kicker>
 
-          {/* The headline: the distance, made human. */}
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '14px 16px', borderRadius: 22, background: T.tile }}>
-            {/* Quiet on purpose: the acid on this screenful belongs to the
-                level pill. This card speaks through the sentence, not colour. */}
-            <div style={{ flex: 'none', width: 38, height: 38, borderRadius: 12, background: T.surface2, display: 'grid', placeItems: 'center' }}>
-              <Globe2 size={19} color={T.mid} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: vm.headline === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.headline}</span>
-              <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.3, color: T.quiet }}>{vm.headlineCaption}</span>
-            </div>
-          </div>
+          {/* The globe card that used to sit here said "1,2× um die Erde" in
+              its own box. The distance milestone below says the same sentence,
+              in the place where the number it is about actually is — so the
+              card was the same fact twice, ninety pixels apart, and the first
+              one had no number next to it. */}
 
-          {/* Primary — three cells, one strip */}
-          <div style={{ display: 'flex', width: '100%', borderRadius: 20, background: T.tile, overflow: 'hidden' }}>
-            {PRIMARY.map((p, i) => {
-              const Ic = p.icon
-              const v = vm.primary[p.key]
-              return (
-                <div key={p.key} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5, padding: '12px 8px 13px', borderLeft: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                  <Ic size={17} color={T.mid} />
-                  <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.7, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.label}</span>
-                  <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.6, color: v === DASH ? T.quiet : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</span>
-                </div>
-              )
-            })}
+          {/* ── THE THREE BIG ONES, GIVEN ROOM ───────────────────────────
+               They were three cells in one strip at 18 px — set SMALLER than
+               the insight tiles below them, which is exactly backwards: these
+               are the biggest numbers the rider owns. Each gets its own block
+               now, with the figure at display size, what it MEANS underneath,
+               and a real bar toward the next round thing so a number that has
+               already been earned still has somewhere to go. ── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+            {vm.milestones.map((m, i) => <MilestoneBlock key={m.label} m={m} index={i} reduce={reduce} />)}
           </div>
 
           {/* Insight tiles — each raw number made meaningful */}
