@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Camera, Sparkles, Users, Trophy, ArrowRight, ArrowLeft, Loader2, Plus, BadgeCheck, Share2, Check, ScanFace, Wand2, Bike, Mountain, Route as RouteIcon } from 'lucide-react'
 import { T, FONT, EASE, DASH, band } from './w3tokens'
 import { renderAvatarCard, sharePoster, shareTextOrCopy } from './w3share'
@@ -48,6 +48,10 @@ export interface AvatarReveal {
   levelPct: number          // 0..1 progress to the next level
   xpNote: string            // "120 XP bis Level 13"
   headline: string          // "4.812 km — 12 % um die Erde"
+  /** What this upload just paid, in RideCoin. Null when nothing was granted —
+   *  a rider who re-renders their avatar does not earn it twice, and a fake
+   *  celebration is worse than none. */
+  photoBonusRc: number | null
   /** THREE facts, and only three. The pen's reveal (`Z2ryuL`) fits the whole
    *  moment above the fold, and a reward you have to scroll through stops being
    *  one. These are the three a rider says out loud — how far, how high, how
@@ -125,6 +129,85 @@ const TEASERS = [
 ]
 
 
+/** Counts a figure up on arrival. A number that simply appears was always
+ *  there; a number that counts is one the rider watched being paid. */
+function CountUp({ to, reduce }: { to: number; reduce: boolean | null }) {
+  const [n, setN] = useState(reduce ? to : 0)
+  useEffect(() => {
+    if (reduce) { setN(to); return }
+    let raf = 0
+    const t0 = performance.now()
+    const tick = (now: number) => {
+      const p = Math.min(1, (now - t0) / 900)
+      setN(Math.round(to * (1 - Math.pow(1 - p, 3))))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    const start = window.setTimeout(() => { raf = requestAnimationFrame(tick) }, 560)
+    return () => { window.clearTimeout(start); cancelAnimationFrame(raf) }
+  }, [to, reduce])
+  return <>{n}</>
+}
+
+/**
+ * The payout, as a moment rather than a row.
+ *
+ * The rider just handed over a photograph of their face — the largest ask in
+ * the whole flow — and the coins landed silently in a wallet nobody was looking
+ * at. Sitting the figure inline on the page made it another stat among stats;
+ * it has to INTERRUPT to read as a reward.
+ *
+ * So it arrives over the whole screen, is counted up rather than printed, and
+ * leaves on its own after three seconds. Nothing to dismiss: a celebration that
+ * asks for a tap is a task.
+ */
+function W3PayoutOverlay({ rc, onDone }: { rc: number; onDone: () => void }) {
+  const reduce = useReducedMotion()
+  useEffect(() => {
+    const t = window.setTimeout(onDone, 3000)
+    return () => window.clearTimeout(t)
+  }, [onDone])
+
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      transition={{ duration: 0.35 }}
+      aria-live="polite"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 60, display: 'grid', placeItems: 'center',
+        background: `radial-gradient(120% 90% at 50% 50%, ${T.bg}E6, ${T.bg}FA)`,
+        pointerEvents: 'none', fontFamily: FONT,
+      }}>
+      {/* the bloom behind it, so the coin arrives out of light */}
+      <motion.div aria-hidden
+        initial={reduce ? false : { scale: 0.4, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.7, ease: EASE }}
+        style={{ position: 'absolute', width: 460, height: 460, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}2E, transparent)` }} />
+
+      <motion.div
+        initial={reduce ? false : { scale: 0.5, opacity: 0, y: 18 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 380, damping: 17, delay: 0.1 }}
+        style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
+        <span style={{
+          width: 74, height: 74, borderRadius: 100, display: 'grid', placeItems: 'center',
+          background: T.acid, boxShadow: `0 0 46px ${T.acid}99`,
+        }}>
+          <Sparkles size={32} color={T.heroInk} />
+        </span>
+        <span style={{
+          fontFamily: 'Archivo, "Inter Tight", sans-serif', fontSize: 52, fontWeight: 800,
+          letterSpacing: -2, lineHeight: 1, color: T.acid,
+        }}>
+          +<CountUp to={rc} reduce={reduce} /> RC
+        </span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>fürs Foto von dir</span>
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>gutgeschrieben</span>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, failure, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
   const reduce = useReducedMotion()
 
@@ -138,18 +221,27 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
   const rRole = reveal?.role ?? ''
   const rLevel = reveal?.level ?? 1
   const rHeadline = reveal?.headline ?? ''
-  // The share card is stamped with the payload it was drawn from; the
-  // monuments' own figures are that payload now.
-  const rDistance = reveal?.facts[0]?.value ?? DASH
-  const rRides = reveal?.facts[2]?.value ?? DASH
-  const rSaddle = reveal?.facts[1]?.value ?? DASH
+  // ── VALUE AND LABEL TRAVEL TOGETHER ─────────────────────────────────────
+  // The card used to read its three figures out of one shape and its three
+  // labels out of a hand-written list, and when the reveal's facts changed the
+  // two drifted: the card printed the climbing metres under the heading
+  // SATTELZEIT. They come from the same objects now, so the card cannot label a
+  // number as something it is not.
+  const rFacts = reveal?.facts ?? null
+  const rStamp = rFacts ? rFacts.map((f) => `${f.label}:${f.value}`).join(',') : ''
   const rSync = reveal?.syncNote ?? ''
   // The rendered bitmap is stamped with the payload it was drawn from, so
   // "ready" is derived — no state reset inside the effect.
   // (the avatar is a fat data: URL — key off its length + tail, not the bytes)
   const avatarKey = rAvatar ? `${rAvatar.length}:${rAvatar.slice(-24)}` : ''
-  const cardKey = [avatarKey, rHandle, rRole, rLevel, rHeadline, rDistance, rRides, rSaddle, rSync].join('|')
+  const cardKey = [avatarKey, rHandle, rRole, rLevel, rHeadline, rStamp, rSync].join('|')
   const [card, setCard] = useState<{ key: string; blob: Blob | null } | null>(null)
+  // Opens once per payout. Keyed on the amount so a second render of the same
+  // reveal does not replay the celebration.
+  const payoutRc = reveal?.photoBonusRc ?? null
+  const [payoutSeen, setPayoutSeen] = useState<number | null>(null)
+  const payoutOpen = payoutRc != null && payoutRc > 0 && payoutSeen !== payoutRc
+  const setPayoutOpen = (open: boolean) => { if (!open && payoutRc != null) setPayoutSeen(payoutRc) }
   const [shareNote, setShareNote] = useState<string | null>(null)
   const cardReady = revealed && card?.key === cardKey
   const cardBlob = cardReady ? card.blob : null
@@ -164,17 +256,16 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
       role: rRole,
       level: rLevel,
       headline: rHeadline,
-      stats: [
-        { v: rDistance, l: 'GESAMTDISTANZ' },
-        { v: rRides, l: 'FAHRTEN GESAMT' },
-        { v: rSaddle, l: 'SATTELZEIT' },
-      ],
+      stats: (rFacts
+        ? rFacts.map((f) => ({ v: f.value, l: f.label }))
+        : [{ v: DASH, l: 'GESAMT' }, { v: DASH, l: 'HÖHENMETER' }, { v: DASH, l: 'FAHRTEN' }]
+      ) as [{ v: string; l: string }, { v: string; l: string }, { v: string; l: string }],
       footer: rSync,
     })
       .then((out) => { if (alive) setCard({ key: cardKey, blob: out.blob }) })
       .catch(() => { if (alive) setCard({ key: cardKey, blob: null }) })
     return () => { alive = false }
-  }, [revealed, cardKey, rAvatar, rHandle, rRole, rLevel, rHeadline, rDistance, rRides, rSaddle, rSync])
+  }, [revealed, cardKey, rAvatar, rHandle, rRole, rLevel, rHeadline, rFacts, rSync])
 
   const onShareCard = useCallback(() => {
     const who = rHandle || '@rider'
@@ -199,6 +290,12 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
     const r = reveal
     return (
       <div className="w3-root">
+        {/* The payout interrupts, counts, and leaves. See `W3PayoutOverlay`. */}
+        <AnimatePresence>
+          {payoutOpen && r.photoBonusRc != null && r.photoBonusRc > 0 && (
+            <W3PayoutOverlay rc={r.photoBonusRc} onDone={() => setPayoutOpen(false)} />
+          )}
+        </AnimatePresence>
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
           {/* ── THE CHARACTER GETS THE SCREEN ─────────────────────────────
@@ -301,8 +398,12 @@ export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', rev
                 <motion.div
                   initial={reduce ? false : { width: 0 }}
                   animate={{ width: `${Math.round(r.levelPct * 100)}%` }}
-                  transition={{ duration: 1.0, ease: EASE, delay: 0.45 }}
-                  style={{ height: '100%', borderRadius: 100, background: `linear-gradient(90deg, ${T.acidDeep}, ${T.acid})` }} />
+                  // Slow, and AFTER the coin: the bar is the consequence, so it
+                  // must not start before the cause has been shown.
+                  // After the overlay has had its three seconds, so the rider is
+                  // looking at the bar when it moves.
+                  transition={{ duration: 2.4, ease: EASE, delay: r.photoBonusRc ? 3.3 : 0.4 }}
+                  style={{ height: '100%', borderRadius: 100, background: `linear-gradient(90deg, ${T.acidDeep}, ${T.acid})`, boxShadow: `0 0 14px ${T.acid}66` }} />
               </div>
               <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet, alignSelf: 'center' }}>{r.xpNote}</span>
             </div>

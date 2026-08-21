@@ -27,6 +27,7 @@ export default function W3AvatarOnboardPreview() {
         levelPct: 0.25,
         xpNote: '375 RC bis Level 2',
         headline: '',
+  photoBonusRc: 125,
   facts: [
     { icon: 'distance', label: 'GESAMT', value: '4.812 km', caption: '0,1× um die Erde' },
     { icon: 'climb', label: 'HÖHENMETER', value: '61,4 km', caption: '6,9× Everest' },

@@ -51,6 +51,7 @@ export function W3RiderOnboarding({ next }: { next: string }) {
   const navigate = useNavigate()
   const { user, refreshUser } = useAuth()
   const grant = useGrantOnboarding()
+  const [photoBonus, setPhotoBonus] = useState<number | null>(null)
   const qc = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [stage, setStage] = useState<AvatarStage>('intro')
@@ -150,10 +151,11 @@ export function W3RiderOnboarding({ next }: { next: string }) {
       handle,
       role, level, levelPct, xpNote, headline,
       facts,
+      photoBonusRc: photoBonus,
       secondary,
       syncNote,
     }
-  }, [acts, hero, handle, wallet])
+  }, [acts, hero, handle, wallet, photoBonus])
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -184,7 +186,12 @@ export function W3RiderOnboarding({ next }: { next: string }) {
       // avatar cap, which is what made that rejection routine rather than rare.)
       await updateUser({ avatar_url: rendered }).catch(() => {})
       await refreshUser().catch(() => {})
-      await grant.mutateAsync('photo').catch(() => {})
+      // WHAT WAS ACTUALLY PAID, from the server. The grant is idempotent: a
+      // rider re-rendering their avatar earns nothing the second time, and a
+      // celebration for a payment that did not happen is a lie they can check
+      // against their own balance.
+      const paid = await grant.mutateAsync('photo').then((r) => r.granted).catch(() => 0)
+      setPhotoBonus(paid > 0 ? paid : null)
 
       qc.invalidateQueries({ queryKey: GARAGE_KEY })
       setHero(rendered)
