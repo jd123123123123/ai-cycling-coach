@@ -36,6 +36,15 @@ class ActivityStream(Base):
 
     streams: Mapped[dict] = mapped_column(JSON, nullable=False)
     mmp_curve: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    #: The ride's track snapped onto the OSM road graph — [[lat, lng], …].
+    #:
+    #: Cached because matching a 138 km ride is a dozen requests to an external
+    #: service and about eighteen seconds; nothing a page may wait on, and
+    #: nothing worth repeating for a ride that will never change. NULL means
+    #: either not attempted yet or attempted and honestly refused (a trail that
+    #: is not in OpenStreetMap), and both cases render the recorded trace. See
+    #: `services/route_match`.
+    matched_polyline: Mapped[list | None] = mapped_column(JSON, nullable=True)
     weather: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     has_gps: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 

@@ -1,5 +1,5 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Public default secrets that MUST NOT be used to sign tokens in production.
 _INSECURE_SECRET_DEFAULTS = {
@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     #   python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
     # Must be stored in .env; never commit the actual key.
     GARMIN_ENCRYPTION_KEY: str = ""
+    #: Map-matching service. The public FOSSGIS Valhalla by default — no key,
+    #: OpenStreetMap data, fair-use. Point this at a self-hosted instance when
+    #: the load stops being fair. See `services/route_match`.
+    VALHALLA_URL: str = "https://valhalla1.openstreetmap.de"
 
     # Web-push (morning brief, roadmap P1.5). Unset → push endpoints 503 and
     # the scheduler job no-ops; the app must boot without them.

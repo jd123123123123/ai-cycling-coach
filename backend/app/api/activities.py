@@ -4,12 +4,14 @@ All endpoints are RLS-protected via get_db_for_user which sets the PostgreSQL
 session variable app.current_user_id, enabling RLS policies on the activities
 hypertable to filter rows by the authenticated user.
 """
+import asyncio
 import json
+import logging
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import func, select, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,13 +21,16 @@ from app.models.ride_feedback import RideFeedback
 from app.models.user import User
 from app.schemas.activity import ActivityCreate, ActivityListResponse, ActivityRead
 from app.schemas.ride_feedback import RideFeedbackIn, RideFeedbackRead
-from app.services import activity_service
+from app.services import activity_service, route_match
 from app.services.activity_stream_analysis import (
     ROUTE_DETAIL_POINTS,
+    ROUTE_DETAIL_TOLERANCE_M,
     analyze_stream_blob,
     route_sketch_polyline,
 )
 from app.services.athlete_service import get_or_create_profile
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/activities", tags=["activities"])
 
@@ -165,6 +170,7 @@ async def get_activity(
     activity_id: int,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    background: BackgroundTasks,
 ) -> ActivityRead:
     """Return a single activity by ID.
 
@@ -199,15 +205,74 @@ async def get_activity(
             select(
                 ActivityStream.streams["latitude"],
                 ActivityStream.streams["longitude"],
+                ActivityStream.matched_polyline,
             ).where(ActivityStream.activity_id == activity_id)
         )
     ).first()
-    if row is not None:
+    if row is None:
+        return out
+
+    # ── THE ROAD, IF WE HAVE IT ──────────────────────────────────────────
+    # A cached match is the road this ride was ridden on rather than the
+    # wandering trace a GPS recorded, so it is preferred whenever it exists.
+    # It is still simplified: matched geometry is road detail, and a whole
+    # Alpine loop comes back as 8 000 points.
+    matched = row[2] if isinstance(row[2], list) and len(row[2]) > 1 else None
+    if matched:
         out.route_polyline = route_sketch_polyline(
-            {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])},
+            {"latitude": [p[0] for p in matched], "longitude": [p[1] for p in matched]},
             max_points=ROUTE_DETAIL_POINTS,
+            tolerance_m=ROUTE_DETAIL_TOLERANCE_M,
         )
+        return out
+
+    out.route_polyline = route_sketch_polyline(
+        {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])},
+        max_points=ROUTE_DETAIL_POINTS,
+        tolerance_m=ROUTE_DETAIL_TOLERANCE_M,
+    )
+    # Kick the match off in the background so the NEXT open shows the road.
+    # Never awaited: matching is a dozen external requests and ~18 s, and this
+    # response is what a rider is looking at right now.
+    background.add_task(_match_route_later, current_user.id, activity_id)
     return out
+
+
+async def _match_route_later(user_id: int, activity_id: int) -> None:
+    """Snap one ride to the road graph and cache it. Never raises.
+
+    Runs after the response, on its own session — the request's session is
+    closed by then, and holding one open for eighteen seconds of network would
+    tie up a connection for the whole match.
+    """
+    from app.database import async_session_maker
+
+    try:
+        async with async_session_maker() as db:
+            await db.execute(text("SELECT set_config('app.current_user_id', :uid, true)"),
+                             {"uid": str(user_id)})
+            row = (await db.execute(
+                select(ActivityStream).where(ActivityStream.activity_id == activity_id)
+            )).scalar_one_or_none()
+            if row is None or row.matched_polyline is not None:
+                return
+            s = row.streams or {}
+            poly = [
+                [float(a), float(b)]
+                for a, b in zip(s.get("latitude") or [], s.get("longitude") or [])
+                if a is not None and b is not None
+            ]
+            if len(poly) < 4:
+                return
+            matched = await asyncio.to_thread(route_match.match, poly)
+            if not matched:
+                return
+            row.matched_polyline = matched
+            await db.commit()
+            logger.info("matched activity %s onto %s road points", activity_id, len(matched))
+    except Exception:
+        # A cache that could not be filled is not an error the rider owns.
+        logger.info("route matching failed for activity %s", activity_id, exc_info=True)
 
 
 @router.delete(
