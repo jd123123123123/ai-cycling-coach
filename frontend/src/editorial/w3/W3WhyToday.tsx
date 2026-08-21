@@ -204,7 +204,14 @@ function ReasonRow({ r, open, onToggle }: { r: Reason; open: boolean; onToggle: 
   )
 }
 
-export default function W3WhyToday() {
+export interface W3WhyTodayProps {
+  /** 'section' keeps the page band and the card chrome. 'sheet' drops both,
+   *  because inside a modal the surrounding sheet IS the card and a second one
+   *  around it reads as a box in a box. */
+  variant?: 'section' | 'sheet'
+}
+
+export default function W3WhyToday({ variant = 'section' }: W3WhyTodayProps = {}) {
   const { data: brief } = useCoachBrief()
   const { data: week } = useCurrentWeek(0)
   const [open, setOpen] = useState<string | null>(null)
@@ -322,9 +329,14 @@ export default function W3WhyToday() {
     chips.push({ icon: CalendarClock, text: `${num(meso.days_to_event)} Tage bis zum Ziel` })
   }
 
+  const sheet = variant === 'sheet'
   return (
-    <div style={{ ...band(26), gap: 12, fontFamily: FONT }}>
-      <div style={{ borderRadius: 24, padding: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={sheet
+      ? { display: 'flex', flexDirection: 'column', fontFamily: FONT }
+      : { ...band(26), gap: 12, fontFamily: FONT }}>
+      <div style={sheet
+        ? { display: 'flex', flexDirection: 'column', gap: 16 }
+        : { borderRadius: 24, padding: 20, background: T.surface, border: `1px solid ${T.stroke}`, display: 'flex', flexDirection: 'column', gap: 16 }}>
 
         {/* Header — the question, then today's session by name. */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>

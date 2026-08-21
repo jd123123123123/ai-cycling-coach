@@ -103,25 +103,58 @@ const BIKE_ART = {
   display: 'block' as const,
 }
 
-/** The shadow the cut-out no longer carries.
+/**
+ * THE CONTACT SHADOWS — one per tyre, and the thing that makes the machine
+ * weigh something.
  *
- *  A `drop-shadow` filter traces the whole silhouette — every spoke gets its
- *  own halo, which reads as a glow rather than as weight on a floor. A real
- *  bike casts ONE soft ellipse under the two contact patches, so that is what
- *  this is: an elliptical pool on the ground, sized to the wheelbase, sitting
- *  behind the machine. */
-const BIKE_SHADOW = {
+ * A `drop-shadow` filter traces the whole silhouette, so every spoke gets its
+ * own halo and the result reads as a glow rather than as weight on a floor.
+ * A bicycle touches the ground in TWO SMALL PLACES and the floor between them
+ * stays clean, so that is what is drawn.
+ *
+ * MEASURED, AFTER GETTING IT WRONG. The previous version said "one per tyre" in
+ * a comment and then placed two copies of the single-plinth ellipse — 72 % wide
+ * each — at 19 % and 81 %. On a 390 px screen that is two 281 px smears running
+ * 66 px off BOTH edges of the frame and overlapping across the middle, sitting
+ * 11 px above the wheels. Not a shadow: a wash.
+ *
+ * TWO LAYERS PER WHEEL, because one ellipse cannot be both. A contact shadow is
+ * a tight, dark core exactly where the rubber meets the floor, plus a much
+ * wider and far softer pool of ambient occlusion around it. One gradient doing
+ * both jobs is either a hard smudge or a faint cloud; the pair is what product
+ * renders use and what the eye reads as contact.
+ *
+ * It is worth checking they can be SEEN. A black shadow on a black floor is
+ * nothing — measured at the contact line the plate is #353C47 (luminance 59),
+ * which is genuinely lit, so there is light here to take away. If the stage
+ * plate is ever re-rendered darker under the wheels, these stop reading and the
+ * alphas below are the wrong lever — the plate is.
+ */
+const SHADOW_CORE = {
   position: 'absolute' as const,
-  left: '50%',
-  // Sits with the contact patches, not with the bottom of the box.
-  bottom: '5%',
-  transform: 'translateX(-50%)',
-  width: '72%',
-  height: 22,
+  bottom: 0,
+  transform: 'translate(-50%, 42%)',
+  width: '9%',
+  height: 9,
   borderRadius: '50%',
-  background: 'radial-gradient(closest-side, rgba(0,0,0,0.62), rgba(0,0,0,0))',
+  background: 'radial-gradient(closest-side, rgba(0,0,0,0.78), rgba(0,0,0,0))',
   pointerEvents: 'none' as const,
 }
+const SHADOW_POOL = {
+  ...SHADOW_CORE,
+  width: '23%',
+  height: 20,
+  background: 'radial-gradient(closest-side, rgba(0,0,0,0.5), rgba(0,0,0,0))',
+}
+
+/** Where the wheels are, as a fraction of the bike's own box.
+ *
+ *  Not of the STAGE: the art is 94 % of the stage and centred, so a percentage
+ *  measured off the stage lands ~8 px inboard of the tyre — which is exactly
+ *  how the shadows and the machine drifted apart before. Road geometry puts the
+ *  hubs at about a fifth and four fifths of the overall length (a ~100 cm
+ *  wheelbase inside a ~172 cm machine on 68 cm wheels). */
+const TYRE_X = ['19%', '81%'] as const
 
 /**
  * A COMPOSED bike — wearing its parts, standing in the place the rider chose —
@@ -412,14 +445,18 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
               // the reference sets are shot.
               display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
             }}>
-              {/* ONE SHADOW PER TYRE. A single ellipse under the whole bike is a
-                  plinth, not a shadow: a bicycle touches the ground in two small
-                  places and the floor between them stays clean. The cut-out is
-                  trimmed to the machine, so the contact patches sit reliably near
-                  the outer edges of the frame. */}
-              <div aria-hidden style={{ ...BIKE_SHADOW, left: '19%' }} />
-              <div aria-hidden style={{ ...BIKE_SHADOW, left: '81%' }} />
-              <img src={vm.bike} alt={vm.bikeName} style={BIKE_ART} />
+              {/* The shadows live INSIDE the bike's own box, so their
+                  percentages are measured against the machine rather than
+                  against the stage — the two cannot drift apart again. */}
+              <div style={{ position: 'relative', width: BIKE_ART.width, display: 'flex' }}>
+                {TYRE_X.map((x) => (
+                  <div key={x} aria-hidden>
+                    <div style={{ ...SHADOW_POOL, left: x }} />
+                    <div style={{ ...SHADOW_CORE, left: x }} />
+                  </div>
+                ))}
+                <img src={vm.bike} alt={vm.bikeName} style={{ ...BIKE_ART, width: '100%' }} />
+              </div>
             </div>
           )
         ) : (

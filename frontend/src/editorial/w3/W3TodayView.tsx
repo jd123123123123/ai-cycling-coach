@@ -13,10 +13,8 @@ import W3WorkshopNudge from './W3WorkshopNudge'
 import W3RouteCard from './W3RouteCard'
 import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
-import W3TodayStatus from './W3TodayStatus'
 import W3TodayRank from './W3TodayRank'
 import W3WeekRecapCard from './W3WeekRecapCard'
-import W3WhyToday from './W3WhyToday'
 import './w3.css'
 
 export type { W3DayFull, W3Weather, W3Block, OnAdapt, AdaptResult } from './W3Sections'
@@ -403,10 +401,9 @@ export default function W3TodayView({ vm, onAdapt }: {
           weather={vm.weather}
           onAdapt={onAdapt} />
 
-        {/* ── "Warum diese Einheit?" — the session-level why, every day. Reads
-             the brief's adaptation explainer + the real mesocycle block, and
-             renders nothing when neither is on the wire. ── */}
-        <W3WhyToday />
+        {/* "Warum diese Einheit?" is no longer a section here. It moved to the
+             (i) ON the session header, several screens up — the answer now sits
+             beside the question instead of below the fold. See `W3WhyButton`. */}
 
         {/* ── Where to ride it. Directly under the week card, because that is
              where "what am I doing today" has just been answered and "where"
@@ -455,7 +452,11 @@ export default function W3TodayView({ vm, onAdapt }: {
              the 4-week move), the form band, and the server's own forward
              projection. Self-fetching (usePMC + /weeks + /coach/trajectory),
              like W3WhyToday and W3TodayProgress. ── */}
-        <Reveal><W3TodayStatus /></Reveal>
+        {/* `W3TodayStatus` used to draw the 90-day fitness/fatigue series here.
+             Its reading now lives INSIDE "Wo du stehst" — a CTL of 77 climbing
+             out of 60 and a CTL of 77 sliding down from 90 are opposite
+             situations wearing the same number, so the figure and the curve
+             belong to one card rather than to two places on one page. */}
 
         {/* ── Dein Rang — REAL crew standings (GET /crews/me/standings). The old
              fixture leaderboard and its invented "um die Welt" challenge are

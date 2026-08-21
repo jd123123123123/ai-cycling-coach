@@ -1,9 +1,9 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Route as RouteIcon, Mountain, TrendingUp, Trophy, ChevronRight } from 'lucide-react'
-import { useRecommendedRoute } from '../../hooks/useRecommendedRoute'
+import { useMyRoutes, useRecommendedRoute } from '../../hooks/useRecommendedRoute'
 import { T, EASE, band } from './w3tokens'
 import { S, lux } from './w3surfaces'
-import type { RouteMatch } from '../../api/routeRecommendation'
+import type { RidableRoute, RouteMatch } from '../../api/routeRecommendation'
 
 /**
  * W3 · TODAY — "Empfohlene Route", from pen frame `Vt2TQ` (`lrOUf`).
@@ -125,24 +125,36 @@ const fmtTime = (s: number) => `${Math.floor(s / 3600)}:${String(Math.round((s %
  * The card as a pure function of one ranked match, so it can be rendered from a
  * preview route. `W3RouteCard` owns the fetch.
  */
-export function W3RouteCardView({ top }: { top: RouteMatch | null | undefined }) {
+export function W3RouteCardView({ top, usual }: {
+  top: RouteMatch | null | undefined
+  /** The rider's most-ridden road, shown when nothing is ranked for today. */
+  usual?: RidableRoute | null
+}) {
   const reduce = useReducedMotion()
-  if (!top) return null
+  // A HABIT IS NOT A RECOMMENDATION, and the card says which one it is holding.
+  // Vanishing entirely on a rest day was defensible and still felt broken: the
+  // section a rider was told about simply was not there, with nothing to
+  // explain it. Falling back to their own most-ridden road answers the question
+  // they were going to ask anyway — "where would I go if I ride today" — and
+  // does it without claiming a fit that nothing computed.
+  const fallback = !top && usual ? usual : null
+  const r0 = top?.route ?? fallback
+  if (!r0) return null
 
-  const r = top.route
+  const r = r0
   return (
     <div style={band(26)}>
       <div style={{ ...lux(28), padding: S.xl, gap: S.lg }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>
-            EMPFOHLENE ROUTE
+            {top ? 'EMPFOHLENE ROUTE' : 'DEINE HAUSRUNDE'}
           </span>
           {/* The trust line. `times_ridden` is what separates a reminder from a
               recommendation, so it leads — and `is_low_confidence` is the
               server's own flag for "right shape, thin evidence", which the card
               says out loud rather than hiding behind a score. */}
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: T.acid }}>
-            {r.times_ridden}× GEFAHREN{top.is_low_confidence ? '' : ' · BESTE WAHL'}
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: top ? T.acid : T.mid }}>
+            {r.times_ridden}× GEFAHREN{top && !top.is_low_confidence ? ' · BESTE WAHL' : ''}
           </span>
         </div>
 
@@ -159,7 +171,7 @@ export function W3RouteCardView({ top }: { top: RouteMatch | null | undefined })
               {r.avg_time_s != null && <Fact Icon={TrendingUp}>{fmtTime(r.avg_time_s)}</Fact>}
             </div>
             <span style={{ fontSize: 12, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>
-              {why(top)}
+              {top ? why(top) : 'Heute steht nichts im Plan — das hier ist die Strecke, die du am häufigsten fährst.'}
             </span>
           </div>
         </div>
@@ -186,6 +198,12 @@ export function W3RouteCardView({ top }: { top: RouteMatch | null | undefined })
 
 
 export default function W3RouteCard() {
-  const { data } = useRecommendedRoute()
-  return <W3RouteCardView top={data?.available ? data.top : null} />
+  const { data, isSuccess } = useRecommendedRoute()
+  const ranked = data?.available ? data.top : null
+  // The library is only asked for once the ranking has actually come back with
+  // nothing, so the ordinary path still costs one request.
+  const { data: mine } = useMyRoutes(isSuccess && !ranked)
+  const usual = [...(mine?.routes ?? [])]
+    .sort((a, b) => b.times_ridden - a.times_ridden)[0] ?? null
+  return <W3RouteCardView top={ranked} usual={usual} />
 }

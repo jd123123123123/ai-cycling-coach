@@ -70,3 +70,23 @@ export async function fetchRecommendedRoutes(): Promise<RouteRecommendation> {
   const res = await apiClient.get<RouteRecommendation>('/routes/recommended')
   return res.data
 }
+
+export interface RouteLibrary {
+  available: boolean
+  n_gps_rides: number
+  routes: RidableRoute[]
+}
+
+/**
+ * Every road the rider has ridden, most-ridden first once sorted.
+ *
+ * Asked for ONLY when the ranked recommendation has nothing to say — a rest day,
+ * or a plan with no target to match against. The card then falls back to the
+ * road they ride most, which is a different and weaker claim ("your usual
+ * loop") and is worded as one. A recommendation and a habit must not be dressed
+ * the same way.
+ */
+export async function fetchMyRoutes(): Promise<RouteLibrary> {
+  const res = await apiClient.get<RouteLibrary>('/routes/mine')
+  return res.data
+}

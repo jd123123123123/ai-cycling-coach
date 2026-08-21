@@ -73,6 +73,55 @@ function Level({ pct, tone, reduce }: { pct: number; tone: string; reduce: boole
   )
 }
 
+
+/**
+ * The six weeks behind the three numbers.
+ *
+ * A CTL of 77 is meaningless on its own — 77 climbing out of 60 and 77 sliding
+ * down from 90 are opposite situations wearing the same figure. This is why the
+ * fitness reading and the fitness CHART belonged on one card rather than in two
+ * places on the same page: the number is the reading and the curve is what
+ * makes it one.
+ *
+ * Fitness is the filled area (the thing being built), fatigue the line over it
+ * (the cost). Where the line sits ABOVE the fill, form is negative — the rider
+ * can see the deficit as a shape rather than having to subtract two numbers.
+ * That crossing is the entire model, drawn once.
+ */
+function Trajectory({ entries: e, reduce }: { entries: FormPoint[]; reduce: boolean | null }) {
+  const W = 300, H = 62
+  const lo = Math.min(...e.map((p) => Math.min(p.ctl, p.atl)))
+  const hi = Math.max(...e.map((p) => Math.max(p.ctl, p.atl)))
+  // A floor under the span: a quiet six weeks would otherwise be amplified into
+  // dramatic peaks by auto-scaling a range of two points.
+  const span = Math.max(12, hi - lo)
+  const x = (i: number) => (i / Math.max(1, e.length - 1)) * W
+  const y = (v: number) => H - ((v - lo) / span) * (H - 6) - 3
+  const line = (key: 'ctl' | 'atl') =>
+    e.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ')
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" aria-hidden
+         style={{ display: 'block', overflow: 'visible' }}>
+      <defs>
+        <linearGradient id="w3ctlfill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={T.acid} stopOpacity="0.34" />
+          <stop offset="100%" stopColor={T.acid} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <motion.path d={`${line('ctl')} L${W} ${H} L0 ${H} Z`} fill="url(#w3ctlfill)"
+        initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
+        transition={{ duration: 0.6, ease: EASE }} />
+      <motion.path d={line('ctl')} fill="none" stroke={T.acid} strokeWidth={2}
+        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+        initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }}
+        transition={{ duration: 0.9, ease: EASE }} />
+      <path d={line('atl')} fill="none" stroke={T.mid} strokeWidth={1.4} strokeDasharray="3 3"
+        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={0.9} />
+    </svg>
+  )
+}
+
 function Row({ label, value, note, pct, tone, reduce }: {
   label: string; value: string; note: string; pct: number; tone: string; reduce: boolean | null
 }) {
@@ -183,6 +232,23 @@ export function W3FormCardView({ entries: e }: { entries: FormPoint[] }) {
               pct={ctl / peak} tone={T.acid} reduce={reduce} />
             <Row label="ERMÜDUNG" value={String(atl)} note={prev ? trend(atlD) : ''}
               pct={atl / peak} tone={T.mid} reduce={reduce} />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <Trajectory entries={e} reduce={reduce} />
+          <div style={{ display: 'flex', gap: 14 }}>
+            {([['Fitness', T.acid, false], ['Ermüdung', T.mid, true]] as const).map(([label, hue, dashed]) => (
+              <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{
+                  width: 12, height: 0, flex: 'none',
+                  borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${hue}`,
+                }} />
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>
+                  {label.toUpperCase()}
+                </span>
+              </span>
+            ))}
           </div>
         </div>
 

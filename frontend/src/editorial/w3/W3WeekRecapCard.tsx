@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  X, ArrowRight, ChevronRight, Trophy, Bike, Timer, Route as RouteIcon,
+  X, ArrowRight, ChevronRight, CalendarCheck, Trophy, Bike, Timer, Route as RouteIcon,
   Mountain, TrendingUp, TrendingDown, Minus, Sparkles,
 } from 'lucide-react'
 import { useWeekReviewVm, recapHasStory } from './useWeekReviewVm'
@@ -345,10 +345,22 @@ function Compare({ label, value, max, hue, reduce }: { label: string; value: num
 }
 
 // ── the Today card ──────────────────────────────────────────────────────────
+/** Mon–Wed, in the rider's own timezone. `getDay()` is 0 for Sunday, which is
+ *  the classic off-by-one here: Sunday belongs to the week that is ENDING, not
+ *  to the one starting, so it must not count. */
+export function isWeekStart(now = new Date()): boolean {
+  const d = now.getDay()
+  return d >= 1 && d <= 3
+}
+
 export default function W3WeekRecapCard() {
   const reduce = useReducedMotion()
   const [open, setOpen] = useState(false)
+  const navigate = useNavigate()
   const { vm, recap } = useWeekReviewVm()
+  // Monday through Wednesday: the days a rider is still thinking about the week
+  // that just ended rather than the one they are in.
+  const weekStart = isWeekStart()
 
   // No story last week → no card. Nothing is invented to fill the slot.
   if (!vm || !recapHasStory(recap)) return null
@@ -395,6 +407,38 @@ export default function W3WeekRecapCard() {
 
         {/* The week itself, at full card width — the shape IS the story. */}
         <WeekShape vm={vm} h={46} reduce={reduce} />
+      </button>
+
+      {/* THE WAY OUT TO THE FULL REVIEW, and it needed to be its own control.
+          The card opened a modal, and the modal had a button to the review — so
+          the review was two taps deep behind a surface that never said the word
+          "Rückblick" anywhere on it. A rider who wants last week has to be able
+          to see that this is last week and get there in one tap.
+
+          It leads at the START of the week and goes quiet after, rather than
+          disappearing: a summary that vanishes on Thursday is one a rider
+          cannot go back to, and hiding it would be a worse answer than making
+          it calm. See `isWeekStart`. */}
+      <button
+        onClick={() => navigate('/e/w3-week-review')}
+        // DISTINCT FROM THE CARD ABOVE IT, whose kicker is already "LETZTE
+        // WOCHE". Two controls a few pixels apart, both named "letzte Woche"
+        // and going to different places, are one control as far as assistive
+        // tech is concerned — and ambiguous for everyone else too. The card is
+        // the story; this is the full review.
+        aria-label="Ganzen Wochenrückblick öffnen"
+        style={{
+          marginTop: S.sm, display: 'flex', alignItems: 'center', gap: 10,
+          padding: '13px 16px', borderRadius: 18, border: 0, cursor: 'pointer',
+          background: weekStart ? T.acid : T.heroChip,
+          color: weekStart ? T.heroInk : T.mid,
+          fontFamily: FONT, textAlign: 'left', width: '100%',
+        }}>
+        <CalendarCheck size={16} color={weekStart ? T.heroInk : T.acid} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: 700 }}>
+          Ganzer Wochenrückblick
+        </span>
+        <ChevronRight size={16} color={weekStart ? T.heroInk : T.quiet} />
       </button>
 
       {open && <RecapModal vm={vm} onClose={() => setOpen(false)} />}

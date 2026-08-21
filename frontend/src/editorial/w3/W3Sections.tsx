@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
+import W3WhyButton from './W3WhyButton'
 
 // ────────────────────────────────────────────────────────────────────────
 // "Deine Woche" — ONE card: the week's day selector, the selected day's
@@ -573,9 +574,15 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
   const header = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {isToday ? 'Heutige Einheit' : day.weekday}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <span style={{ minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {isToday ? 'Heutige Einheit' : day.weekday}
+          </span>
+          {/* The explanation, where the doubt is. Only on TODAY: the reasoning
+              is about this morning's signals, and offering it beside Thursday
+              would promise an answer nothing computed. */}
+          {isToday && <W3WhyButton />}
+        </div>
         <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.dateLabel}</span>
       </div>
       <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: chipBg }}>
