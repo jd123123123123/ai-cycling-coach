@@ -98,12 +98,22 @@ CHARACTER_STYLE = (
     "A warm, instantly likeable stylised 3D collectible character. The look is one contrast: a "
     "simple, clean, beautifully designed face against a hyper-detailed outfit.\n\n"
 
-    "THE FACE follows the attached face reference for its eye size, head proportions and "
-    "expression. One flawless smooth matte surface, very few features, an openly happy smile with "
-    "a clean line of upper teeth and both corners lifted evenly. The eyes are the largest feature "
-    "on the face — each about a fifth of its width, round and wide-set, with bright white sclera "
-    "clearly visible around a large coloured iris, a dark pupil and one crisp catchlight, looking "
-    "straight down the lens. Small dark dots are far too small: open them up. "
+    # ── THE REGISTER IS COMPOSED, NOT BEAMING ──────────────────────────────
+    # This asked for "an openly happy smile with a clean line of upper teeth"
+    # and eyes "a fifth of the face width", and it delivered exactly that: a
+    # wide-eyed, grinning character. Against this app — near-black, one acid
+    # accent, a machine photographed like a product — that reads as a children's
+    # film mascot rather than as the designer collectible the rest of the
+    # product is. The likeness machinery below is untouched; only the MOOD
+    # changes. A rider should look like somebody who rides, not somebody
+    # delighted to be photographed.
+    "THE FACE follows the attached face reference for its head proportions and its calm, "
+    "composed expression. One flawless smooth matte surface with very few features: the mouth is "
+    "closed and relaxed in a level line with the faintest lift at one corner — self-possessed and "
+    "cool rather than cheerful, and never a grin, never visible teeth. The eyes are neat, "
+    "confident almonds — about an eighth of the face's width, evenly set, with a dark iris, a "
+    "clear catchlight and a calm, level gaze straight down the lens. The brows are two clean "
+    "defined strokes and carry most of the expression. "
     "THE HEAD PROPORTIONS ARE ALWAYS THE STYLE'S, never the description's: whatever face shape "
     "the person is described as having — oval, long, narrow — it is compressed into this style's "
     "short wide head. The described shape survives only as a light character cue. The head "
@@ -553,8 +563,18 @@ def _isolated_prompt(description: str, kind: str, wear: str = "") -> str:
             # Stated explicitly, because without it the render invents a setting:
             # a blurred living room turned up behind the bust the first time the
             # style asked for a richly modelled world.
-            f"BACKGROUND: a clean, plain, softly-lit studio ground in a single muted colour with a "
-            f"gentle vignette. NO room, NO furniture, NO scenery, NO props, NO text. "
+            # THE GROUND IS THE APP'S GROUND. "A single muted colour" was
+            # rendering a light grey backdrop, so every rider figure arrived as
+            # a bright card in a near-black app and had to be dimmed to sit
+            # anywhere. The room this character lives in is dark and the light
+            # is theirs.
+            f"BACKGROUND: a seamless near-black studio, a soft charcoal gradient behind the "
+            f"shoulders falling to pure black at every frame edge, with faint volumetric haze. "
+            f"The character is the brightest thing in frame and fully, richly exposed: a large "
+            f"soft key from the front-left shapes the face, a cooler rim light from behind-right "
+            f"cuts the silhouette out of the dark, and one small lime-green practical low and "
+            f"behind kicks accent light onto a shoulder. NO room, NO furniture, NO scenery, "
+            f"NO props, NO text. "
             f"{GENERAL_STYLE} {CHARACTER_STYLE}"
         )
     return (
