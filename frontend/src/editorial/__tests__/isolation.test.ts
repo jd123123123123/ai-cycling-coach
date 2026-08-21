@@ -82,6 +82,19 @@ describe('editorial isolation', () => {
       // the components were. A gate that can never be green teaches everyone
       // to scroll past a red test, which costs more than the rule earns.
       if (f.endsWith(`${path.sep}w3${path.sep}w3tokens.tsx`)) return false
+      // `w3/w3map.ts` is a palette source too, for the BASEMAP — land, water,
+      // parks, road weights. Those have no token equivalents and should not
+      // get them: nothing else in this app is a lake or a national park, and
+      // inventing `T.water` to satisfy a lint rule would put a colour in the
+      // design system that no component may use. Same exemption as the file
+      // above, for the same reason.
+      if (f.endsWith(`${path.sep}w3${path.sep}w3map.ts`)) return false
+      // Test files that COMPARE hex are the class `tokens.test.ts` above is
+      // already excused for: the literals are expected values, not styles being
+      // written into a component. `fadeRunway` measures the distance between
+      // two colours, so hex IS its input — expressing it in tokens would make
+      // the test assert nothing about the numbers it exists to pin.
+      if (f.endsWith(`${path.sep}__tests__${path.sep}fadeRunway.test.ts`)) return false
       const src = stripComments(readFileSync(f, 'utf8'))
       return /#[0-9a-fA-F]{6}\b/.test(src)
     })

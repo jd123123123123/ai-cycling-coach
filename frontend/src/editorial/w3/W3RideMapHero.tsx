@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ChevronLeft, Share2, CircleCheck, Gauge, Zap, HeartPulse, Maximize2 } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
+import { W3_MAP } from './w3map'
 import { S, lux } from './w3surfaces'
 
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
@@ -172,6 +173,7 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               styleKey="dark"
               interactive={false}
               onReady={() => setMapReady(true)}
+              palette={W3_MAP}
               lineColor={T.acid}
               lineWidth={6}
               startColor={T.ink}

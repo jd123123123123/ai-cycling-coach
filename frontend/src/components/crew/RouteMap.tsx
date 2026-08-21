@@ -95,6 +95,10 @@ export interface RouteMapProps {
    *  the design gives it. Ignored when `lineColors` supplies a gradient. */
   lineColor?: string
   lineWidth?: number
+  /** Repaint the basemap into the app's palette once it loads. Omitted leaves
+   *  the provider's own cartography untouched, which is what the crew and
+   *  rehearsal pages want. See `repaint`. */
+  palette?: MapPalette
   /** Endpoint markers. Defaults to green start / orange end. The ride page
    *  overrides them because on a finished ride the two ends mean something
    *  different than on a route being planned — one is where you set off, the
@@ -149,11 +153,106 @@ function boundsOf(poly: [number, number][]): [[number, number], [number, number]
   ]
 }
 
+
+/**
+ * Repaint a real basemap in the app's own palette.
+ *
+ * WHY REPAINT RATHER THAN RESTYLE OR REPLACE. Maptoolkit's `dark` style is a
+ * pure GREYSCALE map — every colour in it is 0 % saturation — which is why it
+ * reads as muddy and generic next to a screen built on cool blue-black and one
+ * acid accent. Authoring a whole style JSON would mean owning a basemap
+ * (labels, zoom ramps, 92 layers) forever; hand-picking a coloured provider
+ * would mean taking whatever palette they chose. Recolouring the layers we can
+ * name gets the app's own map out of somebody else's cartography, and every
+ * road, label and coastline stays theirs — correct and maintained.
+ *
+ * The ids are semantic and stable (`water_*`, `nature_*`, `road_*`, `*_label_*`,
+ * `relief_*`), so the classification is by NAME rather than by guessing at
+ * paint values. Anything unrecognised is left exactly as the provider drew it:
+ * a map that half-follows a palette still looks like a map, where a map with a
+ * missing layer looks broken.
+ *
+ * Every set is guarded. A style can drop a layer or rename a paint property
+ * between releases, and none of that is worth a blank map — a slightly
+ * off-palette basemap under the route is a far better failure than no basemap.
+ */
+export interface MapPalette {
+  land: string
+  water: string
+  nature: string
+  roadMinor: string
+  roadMajor: string
+  border: string
+  label: string
+  labelHalo: string
+}
+
+function repaint(map: MlMap, p: MapPalette): void {
+  let layers: { id: string; type: string }[]
+  try {
+    layers = map.getStyle().layers as { id: string; type: string }[]
+  } catch { return }
+
+  // The cast is deliberate. MapLibre types `setPaintProperty` against a union
+  // of every paint key, which cannot be satisfied when the key is chosen at
+  // runtime from the layer's own type — and the runtime guard below is the real
+  // safety net anyway, since a style can drop a layer between releases whatever
+  // the compiler believes.
+  const set = (id: string, prop: string, value: string | number) => {
+    try {
+      (map.setPaintProperty as (i: string, p: string, v: unknown) => void)(id, prop, value)
+    } catch { /* the provider moved on; the provider's own colour stands */ }
+  }
+
+  for (const { id, type } of layers) {
+    // Water first: `water_*` also contains the bathymetry relief and the lake
+    // labels, and each takes a different property.
+    if (id.startsWith('water')) {
+      if (type === 'fill') set(id, 'fill-color', p.water)
+      else if (type === 'line') set(id, 'line-color', p.water)
+      else if (type === 'symbol') { set(id, 'text-color', p.label); set(id, 'text-halo-color', p.labelHalo) }
+      continue
+    }
+    if (id.startsWith('nature') || id.startsWith('building')) {
+      if (type === 'fill') set(id, 'fill-color', id.includes('landuse') ? p.nature : p.land)
+      continue
+    }
+    if (id.startsWith('road')) {
+      if (type === 'line') {
+        // Casings are drawn under their road and share the prefix; painting
+        // them the same as the road removes the outline that keeps a junction
+        // legible, so they go one step darker instead.
+        set(id, 'line-color', /casing|outline/.test(id) ? p.land : /motorway|trunk|primary/.test(id) ? p.roadMajor : p.roadMinor)
+      } else if (type === 'fill') set(id, 'fill-color', p.roadMinor)
+      else if (type === 'symbol') { set(id, 'text-color', p.label); set(id, 'text-halo-color', p.labelHalo) }
+      continue
+    }
+    if (id.startsWith('border')) { set(id, 'line-color', p.border); continue }
+    if (id.startsWith('place') || id.startsWith('poi')) {
+      set(id, 'text-color', p.label)
+      set(id, 'text-halo-color', p.labelHalo)
+      continue
+    }
+    if (type === 'background') set(id, 'background-color', p.land)
+  }
+
+  // THE RELIEF IS THE POINT, and it is the one thing a flat recolour would
+  // flatten further. Hillshading is what makes a mountain route look like it
+  // crosses mountains — in the Dolomites it is the difference between a line on
+  // paper and a ride. Lifted, not invented: the data is the provider's own DEM.
+  for (const { id, type } of layers) {
+    if (type !== 'hillshade') continue
+    set(id, 'hillshade-exaggeration', 0.55)
+    set(id, 'hillshade-shadow-color', p.labelHalo)
+    set(id, 'hillshade-highlight-color', p.roadMinor)
+  }
+}
+
 export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
   lineColors, markerLatLng = null,
   lineColor = '#FF5A3C', lineWidth = 4, startColor = '#16E08A', endColor = '#FF5A3C',
-  attributionBottom,
+  attributionBottom, palette,
 }: RouteMapProps) {
   const holder = useRef<HTMLDivElement | null>(null)
   const mapRef = useRef<MlMap | null>(null)
@@ -231,6 +330,9 @@ export default function RouteMap({
         const decorate = () => {
           if (decorated || cancelled || !map) return
           decorated = true
+          // Repaint BEFORE the route goes on, so the route is never briefly
+          // drawn over the provider's palette and then over ours.
+          if (palette) repaint(map, palette)
           const coords = polyline.map(([lat, lng]) => [lng, lat])
 
           const ramp = lineColors && lineColors.length === polyline.length
@@ -338,7 +440,7 @@ export default function RouteMap({
     // change to one would mean a different screen rather than a new value on
     // this one. Pass them as literals; animating them will not work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polyline, styleKey, interactive, failed])
+  }, [polyline, styleKey, interactive, failed, palette])
 
   // Scrub position. Deliberately NOT part of the effect above: rebuilding a
   // MapLibre instance per pointer-move would be unusable on a phone.

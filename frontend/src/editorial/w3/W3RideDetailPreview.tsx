@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState } from './W3RideDetailView'
 import type { W3RideHeroVm } from './W3RideMapHero'
+import { MARATONA } from './maratonaFixture'
 
 /** TEMP preview — pen-exact fixture, no backend. /e/w3-ride-preview is
  *  unguarded; remove before merge. */
@@ -10,11 +11,11 @@ const power = Array.from({ length: 40 }, (_, i) => {
   return inRep ? 0.85 + Math.random() * 0.12 : 0.28 + Math.random() * 0.12
 })
 
-// A synthetic winding GPX track (lat/lng) for the generated hero.
-const polyline: [number, number][] = Array.from({ length: 44 }, (_, i) => {
-  const t = i / 43
-  return [51.74 + 0.05 * Math.sin(t * 6.5) + t * 0.015, 10.6 + t * 0.11 + 0.03 * Math.cos(t * 5)]
-})
+// The real Maratona dles Dolomites course — 138.6 km and seven passes.
+// A synthetic wiggle cannot show whether the route drawing is honest; a
+// switchback-heavy Alpine loop can, and this one is measured: see
+// `maratonaFixture`.
+const polyline = MARATONA
 
 /** The hero, with the numbers the pen frame `XqpcX` shows.
  *
@@ -27,18 +28,18 @@ const HERO: W3RideHeroVm = {
   polyline,
   sceneImage: '/w3/bike-build-example.webp',
   dateLine: '06.08.2026 · 09:12',
-  duration: '01:47:32',
+  duration: '04:44:48',
   stats: [
-    { label: 'DISTANZ', value: '52,4', unit: 'km' },
+    { label: 'DISTANZ', value: '138,6', unit: 'km' },
     { label: 'Ø TEMPO', value: '29,2', unit: 'km/h' },
-    { label: 'HÖHE', value: '1.240', unit: 'hm' },
+    { label: 'HÖHE', value: '5.639', unit: 'hm' },
   ],
   watts: '241',
   bpm: '148',
   ifValue: '0,86',
   ifFill: 0.86,
   effortLabel: '86 % VON FTP · TEMPO',
-  energyLabel: '1.184 kcal',
+  energyLabel: '3.640 kcal',
 }
 
 const FIXTURE: W3RideVm = {

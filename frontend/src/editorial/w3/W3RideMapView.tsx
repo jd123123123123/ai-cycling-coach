@@ -2,6 +2,7 @@ import { Suspense, lazy, useState } from 'react'
 import { ChevronLeft, Mountain, Moon } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import { W3_MAP } from './w3map'
 import './w3.css'
 
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
@@ -29,7 +30,9 @@ export interface W3RideMapViewProps {
 }
 
 export default function W3RideMapView({ polyline, onBack }: W3RideMapViewProps) {
-  const [styleKey, setStyleKey] = useState<'dark' | 'cycling'>('cycling')
+  // Dark leads. Relief is the one you go and get when you want to read the
+  // shape of a climb; the app's own register is the resting state.
+  const [styleKey, setStyleKey] = useState<'dark' | 'cycling'>('dark')
 
   const hasRoute = polyline != null && polyline.length > 1
 
@@ -43,7 +46,8 @@ export default function W3RideMapView({ polyline, onBack }: W3RideMapViewProps) 
                 polyline={polyline}
                 styleKey={styleKey}
                 interactive
-                lineColor={T.acid}
+                palette={W3_MAP}
+              lineColor={T.acid}
                 lineWidth={6}
                 startColor={T.ink}
                 endColor={T.acid} />
