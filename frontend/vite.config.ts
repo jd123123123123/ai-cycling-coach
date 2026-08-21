@@ -1,4 +1,5 @@
 /// <reference types="vitest/config" />
+import { execSync } from 'node:child_process'
 import { readFileSync, realpathSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, searchForWorkspaceRoot } from 'vite'
@@ -44,8 +45,33 @@ function maplibreWorker() {
   }
 }
 
+/** Short commit sha + build time, in whichever way is available.
+ *
+ *  The image build has no `.git` — it is in `.dockerignore`, and rightly so —
+ *  so an env var takes precedence and the date stands alone when neither
+ *  exists. The DATE is the part that answers the question anyway: "is this
+ *  today's build" needs a clock, not a hash. */
+function buildStamp(): string {
+  const date = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const fromEnv = process.env.BUILD_SHA || process.env.RAILWAY_GIT_COMMIT_SHA
+  if (fromEnv) return `${fromEnv.slice(0, 7)} · ${date}`
+  try {
+    return `${execSync('git rev-parse --short HEAD', { encoding: 'utf8' }).trim()} · ${date}`
+  } catch {
+    return date
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
+  // WHICH BUILD AM I LOOKING AT. "I can't see the changes on my phone" is
+  // otherwise unanswerable without a laptop: every surface in this app is
+  // conditional on data, so a screen that looks unchanged proves nothing about
+  // which bundle produced it. Stamped at build time and shown in the nav menu,
+  // the question takes one look.
+  define: {
+    __BUILD_STAMP__: JSON.stringify(buildStamp()),
+  },
   plugins: [react(), tailwindcss(), maplibreWorker()],
   // MapLibre GL must not go through esbuild dep pre-bundling. It spawns a web
   // worker for tile parsing, and the pre-bundled copy resolves that worker's

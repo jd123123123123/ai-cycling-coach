@@ -95,6 +95,19 @@ export default function W3NavMenu({
                   </button>
                 ))}
               </div>
+
+              {/* WHICH BUILD AM I LOOKING AT. Every surface in this app is
+                  conditional on data, so a screen that looks unchanged proves
+                  nothing about which bundle drew it — "I can't see the changes
+                  on my phone" was otherwise unanswerable without a laptop.
+                  Stamped at build time; one look settles it. */}
+              <span style={{
+                marginTop: 14, paddingTop: 12, borderTop: `1px solid ${T.rule}`,
+                fontSize: 9.5, fontWeight: 600, letterSpacing: 0.6, color: T.quiet,
+                fontVariantNumeric: 'tabular-nums',
+              }}>
+                BUILD {__BUILD_STAMP__}
+              </span>
             </motion.div>
           </motion.div>
         )}
