@@ -591,7 +591,13 @@ async def my_standings(
     # Scoped to this crew by construction — `crew_standings_window` only ever
     # returns members of it — and someone who has not made an avatar simply has
     # none rather than a placeholder wearing their name.
-    ids = [r["user_id"] for r in payload.get("rows", [])]
+    # THE KEY IS `standings`, NOT `rows`. The first cut wrote to `rows`, which
+    # this payload does not have, so `.get("rows", [])` quietly returned nothing
+    # and every rider — including the caller, looking at their OWN avatar —
+    # fell through to the placeholder dot. A silent no-op behind a `.get`
+    # default is the failure mode with no error to notice.
+    members = payload.get("standings") or []
+    ids = [r["user_id"] for r in members]
     if ids:
         avatars = {
             uid: crew_avatars.thumbnail(url)
@@ -603,7 +609,7 @@ async def my_standings(
                 )
             ).all()
         }
-        for row in payload["rows"]:
+        for row in members:
             row["avatar"] = avatars.get(row["user_id"])
 
     return StandingsResponse(**payload)
