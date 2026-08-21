@@ -52,8 +52,15 @@ export default function W3HeroRoute() {
         // otherwise. Never a stock bike presented as theirs.
         bike: stage?.bike_image ?? garage?.bike?.image_base64
           ?? collection?.render ?? itemById(collection?.loadout.bike)?.art ?? null,
-        bikeInScene: stage?.bike_image != null,
-        bikeName: stage?.bike_name ?? garage?.bike?.name ?? 'Dein Rad',
+        // A COMPOSED render is one the Today endpoint returned that ISN'T the
+        // plain garage collectible. The distinction decides the treatment, and
+        // the two treatments are different SIZES: a scene reaches its own frame
+        // and goes full bleed, a studio cut-out stands on the floor line at its
+        // own scale. `bike_image != null` looked equivalent and is not — every
+        // rider without a composed build has a bike_image, and calling it a
+        // scene blew the machine up to fill the stage.
+        bikeInScene: Boolean(stage?.bike_image && stage.bike_image !== garage?.bike?.image_base64),
+        bikeName: stage?.bike_name ?? garage?.bike?.name ?? 'Dein Bike',
         stages: stage?.stages,
         stage: stage?.stage,
         onSelectStage: selectStage.mutate,
