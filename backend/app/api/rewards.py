@@ -122,3 +122,110 @@ async def grant_onboarding(
     await db.commit()
     wallet = await rewards.get_wallet(db, current_user.id)
     return {"granted": granted, "reason": reason, **wallet}
+
+
+# ── the sealed chest ────────────────────────────────────────────────────────
+
+
+def _ride_headline(activity) -> dict:
+    """The four numbers the chest shows before it is opened. Deliberately the
+    ride's own facts and nothing else: the coins are the surprise."""
+    return {
+        "title": activity.title,
+        "started_at": activity.started_at.isoformat() if activity.started_at else None,
+        "distance_km": round((activity.distance_meters or 0) / 1000, 1) or None,
+        "elevation_m": round(activity.elevation_gain_m) if activity.elevation_gain_m else None,
+        "duration_s": activity.duration_seconds,
+        "tss": round(activity.tss) if activity.tss else None,
+    }
+
+
+async def _unlocks_for(db: AsyncSession, user_id: int, activity_id: int, lang: str) -> list[dict]:
+    """What this ride BEAT, as reveal cards.
+
+    Only real breakthroughs against the athlete's own 90-day bests — see
+    `breakthrough_detector`. A chest with nothing to reveal simply has no cards;
+    inventing an "achievement" for an ordinary Tuesday is how a reward screen
+    teaches a rider to skip it.
+    """
+    from app.services.breakthrough_detector import detect_breakthroughs
+
+    try:
+        found = await detect_breakthroughs(db, user_id, recent_days=3, lang=lang)
+    except Exception:  # a reveal is never worth failing the chest for
+        return []
+    return [
+        {
+            "kind": b.get("kind"),
+            "headline": b.get("headline"),
+            "detail": b.get("detail"),
+            "value_w": b.get("value_w"),
+            "prior_best_w": b.get("prior_best_w"),
+            "gain_pct": b.get("gain_pct"),
+        }
+        for b in found
+        if b.get("activity_id") == activity_id
+    ]
+
+
+@router.get("/chest", summary="The rider's newest unopened ride, and what it is holding")
+async def get_chest(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    lang: Literal["de", "en"] = "de",
+) -> dict:
+    """Drives the Today screen's locked bar.
+
+    `sealed: false` is the normal state and the screen shows nothing — this is
+    the one place in the app allowed to interrupt the day, so it only does it
+    when there is genuinely a ride waiting.
+    """
+    chest = await rewards.sealed_chest(db, current_user.id)
+    if chest is None:
+        return {"sealed": False}
+
+    from app.models.activity import Activity
+
+    activity = (
+        await db.execute(
+            select(Activity).where(
+                Activity.id == chest["activity_id"], Activity.user_id == current_user.id,
+            )
+        )
+    ).scalars().first()
+    if activity is None:
+        # The ledger has coins for a ride this rider can no longer see (deleted
+        # activity). Nothing to celebrate, and nothing to strand: report it
+        # unsealed so the claim path can still bank it from the ride list.
+        return {"sealed": False}
+
+    unlocks = await _unlocks_for(db, current_user.id, chest["activity_id"], lang)
+    return {
+        "sealed": True,
+        **chest,
+        "ride": _ride_headline(activity),
+        "unlocks": unlocks,
+        "unlock_count": len(unlocks),
+    }
+
+
+@router.post(
+    "/ride/{activity_id}/claim",
+    summary="Open one ride's chest — the moment its coins reach the wallet",
+)
+async def claim_ride(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Banks every unclaimed line of one ride and returns the new balance.
+
+    Idempotent: a second tap claims 0 and returns the same balance rather than
+    an error. A rider who taps twice has done nothing wrong.
+    """
+    result = await rewards.claim_ride(db, current_user.id, activity_id)
+    await db.commit()
+    return {
+        **result,
+        "tier": rewards.tier_progress(result["balance"]),
+    }

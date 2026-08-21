@@ -27,7 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
 from app.models.activity_stream import ActivityStream
-from app.models.bike_wear import BikeComponent
+from app.models.bike_wear import BikeComponent, ComponentMeasurement
 from app.models.rewards import REASON_SERVICE_BONUS
 from app.services import bike_wear, rewards, service_proof
 
@@ -47,6 +47,9 @@ class WorkshopView:
     chain_km_total: float
     #: The best run this rider has ever got out of a chain.
     chain_record_km: float
+    #: The chain's OTHER clock: how much of it is left before 0,5 % elongation
+    #: starts cutting the cassette. Cleaning does not touch this one.
+    chain_life: bike_wear.ChainLife
 
 
 async def _rows(db: AsyncSession, user_id: int) -> dict[str, BikeComponent]:
@@ -86,6 +89,29 @@ def _days_since(when: datetime | None, now: datetime) -> int | None:
     return max(0, (now - when).days)
 
 
+async def _readings(
+    db: AsyncSession, user_id: int, component_id: str
+) -> list[tuple[float, float]]:
+    """This rider's chain-checker readings as `(life_km_at, pct)` pairs.
+
+    Readings survive a chain replacement on purpose: they are evidence about
+    THIS RIDER'S drivetrain — their power, their gearing, their winter — not
+    about the individual chain that happened to be fitted. The second chain
+    starts its own odometer but inherits everything the first one taught us.
+    """
+    rows = (
+        await db.execute(
+            select(ComponentMeasurement)
+            .where(
+                ComponentMeasurement.user_id == user_id,
+                ComponentMeasurement.component_id == component_id,
+            )
+            .order_by(ComponentMeasurement.created_at.asc())
+        )
+    ).scalars().all()
+    return [(r.life_km_at, r.measured_pct) for r in rows]
+
+
 async def read(db: AsyncSession, user_id: int) -> WorkshopView:
     """The bike's condition right now. A writer, because of lazy row creation —
     the caller must commit, exactly as `/garage` already does for its grant."""
@@ -101,6 +127,9 @@ async def read(db: AsyncSession, user_id: int) -> WorkshopView:
         for cid in bike_wear.COMPONENTS
     ]
     chain = rows[bike_wear.DRIVETRAIN]
+    life = bike_wear.chain_life(
+        chain.life_km, chain.method, await _readings(db, user_id, bike_wear.DRIVETRAIN),
+    )
     return WorkshopView(
         components=states,
         total_bonus_rc=sum(s.bonus_rc for s in states),
@@ -108,6 +137,7 @@ async def read(db: AsyncSession, user_id: int) -> WorkshopView:
         drivetrain_watts=bike_wear.efficiency_watts(chain.km_since_service, chain.method),
         chain_km_total=chain.km_total,
         chain_record_km=max(chain.longest_run_km, chain.km_since_service),
+        chain_life=life,
     )
 
 
@@ -152,7 +182,12 @@ async def accrue(
     for cid, row in rows.items():
         if row.last_activity_id == activity_id:
             continue
-        row.km_since_service += bike_wear.equivalent_km(cid, load, facts)
+        weighted = bike_wear.equivalent_km(cid, load, facts)
+        row.km_since_service += weighted
+        # The SAME weighted kilometres, on the clock a service never resets.
+        # Elongation and dirt come from the same ride: the difference between
+        # the two odometers is only what clears them.
+        row.life_km += weighted
         row.km_total += km
         row.last_activity_id = activity_id
         counted = True
@@ -278,6 +313,48 @@ async def service(
 # on a number that is as true as if the app had been installed all along.
 
 
+async def _replay_since(
+    db: AsyncSession, user_id: int, component_id: str, since: datetime,
+) -> tuple[float, int]:
+    """Weighted kilometres this component has covered since a date, and how many
+    rides that was.
+
+    Shared by `seed` (the rider tells us when they last serviced) and `replace`
+    (they tell us when they fitted the part). Same replay, same approximation
+    stated in `seed`'s docstring: recorded elevation gain stands in for descent,
+    and per-ride conditions are not re-derived — so the answer errs LOW, which
+    can only make the app ask later rather than earlier.
+    """
+    rides = (
+        await db.execute(
+            select(
+                Activity.distance_meters,
+                Activity.elevation_gain_m,
+                ActivityStream.total_kj,
+            )
+            .outerjoin(ActivityStream, ActivityStream.activity_id == Activity.id)
+            .where(
+                Activity.user_id == user_id,
+                Activity.sport == "cycling",
+                Activity.started_at >= since,
+            )
+        )
+    ).all()
+
+    total = 0.0
+    counted = 0
+    for distance_m, gain_m, kj in rides:
+        km = (distance_m or 0) / 1000
+        if km <= 0:
+            continue
+        counted += 1
+        total += bike_wear.equivalent_km(
+            component_id,
+            bike_wear.RideLoad(distance_km=km, kj=kj, descent_m=gain_m),
+        )
+    return total, counted
+
+
 @dataclass(frozen=True)
 class SeedResult:
     component_id: str
@@ -316,33 +393,7 @@ async def seed(
     now = datetime.now(UTC)
     since = min(since, now)
 
-    rides = (
-        await db.execute(
-            select(
-                Activity.distance_meters,
-                Activity.elevation_gain_m,
-                ActivityStream.total_kj,
-            )
-            .outerjoin(ActivityStream, ActivityStream.activity_id == Activity.id)
-            .where(
-                Activity.user_id == user_id,
-                Activity.sport == "cycling",
-                Activity.started_at >= since,
-            )
-        )
-    ).all()
-
-    km_since = 0.0
-    counted = 0
-    for distance_m, gain_m, kj in rides:
-        km = (distance_m or 0) / 1000
-        if km <= 0:
-            continue
-        counted += 1
-        km_since += bike_wear.equivalent_km(
-            component_id,
-            bike_wear.RideLoad(distance_km=km, kj=kj, descent_m=gain_m),
-        )
+    km_since, counted = await _replay_since(db, user_id, component_id, since)
 
     row = (await _rows(db, user_id))[component_id]
     row.km_since_service = km_since
@@ -418,4 +469,131 @@ async def set_method(
         component_id, row.km_since_service, row.km_total,
         days_since=_days_since(row.last_service_at, datetime.now(UTC)),
         owned=row.owned, method=method,
+    )
+
+
+# ── the two operations the life clock needs ─────────────────────────────────
+
+
+@dataclass(frozen=True)
+class MeasureResult:
+    component_id: str
+    measured_pct: float
+    #: The odometer the reading was taken at, snapshotted with it.
+    life_km_at: float
+    life: bike_wear.ChainLife
+    #: True when this reading changed the estimate by more than a rounding
+    #: error — the screen says so, because "your chain wears faster than
+    #: average" is the entire payoff for owning a €10 gauge.
+    moved_estimate: bool
+
+
+async def measure(
+    db: AsyncSession, user_id: int, component_id: str, pct: float,
+) -> MeasureResult:
+    """Record a chain-checker reading and recalibrate this rider's chain life.
+
+    The reading is stored WITH the odometer it was taken at, because neither
+    number means anything alone. From two such pairs the app stops quoting an
+    industry average at somebody and starts quoting their own drivetrain back
+    to them — see `bike_wear.calibrate_life`.
+
+    Nothing here pays or charges. A measurement is information, and the moment
+    it becomes a currency there is a reason to lie to the gauge.
+    """
+    if component_id not in bike_wear.COMPONENTS:
+        raise UnknownComponentError(component_id)
+    if pct < 0 or pct > 3:
+        # A checker cannot read outside this, and a fat-fingered 50 would
+        # rewrite the rider's constant for good.
+        raise ValueError("measured_pct out of range")
+
+    row = (await _rows(db, user_id))[component_id]
+    before = bike_wear.chain_life(
+        row.life_km, row.method, await _readings(db, user_id, component_id),
+    )
+
+    db.add(
+        ComponentMeasurement(
+            user_id=user_id,
+            component_id=component_id,
+            measured_pct=pct,
+            life_km_at=row.life_km,
+        )
+    )
+    await db.flush()
+
+    after = bike_wear.chain_life(
+        row.life_km, row.method, await _readings(db, user_id, component_id),
+    )
+    return MeasureResult(
+        component_id=component_id,
+        measured_pct=pct,
+        life_km_at=round(row.life_km, 1),
+        life=after,
+        moved_estimate=abs(after.limit_km - before.limit_km) > 25,
+    )
+
+
+@dataclass(frozen=True)
+class ReplaceResult:
+    component_id: str
+    name_de: str
+    #: What the retired part managed, in weighted kilometres.
+    retired_life_km: float
+    #: And in real road kilometres — the number worth putting on the wall.
+    retired_km_total: float
+    rides_replayed: int
+    life: bike_wear.ChainLife
+
+
+async def replace(
+    db: AsyncSession, user_id: int, component_id: str,
+    fitted_at: datetime | None = None,
+) -> ReplaceResult:
+    """A NEW physical part. Every clock on it starts again.
+
+    Distinct from `service` in the only way that matters: servicing cleans what
+    is there, replacing throws it away. So this is the one operation allowed to
+    reset `life_km` and `km_total` — and it resets the service clock too,
+    because a new chain arrives clean.
+
+    `fitted_at` exists for the rider who fitted the chain three weeks ago and is
+    only telling us now. The backlog is REPLAYED rather than estimated, exactly
+    as `seed` does it, so the new chain lands on the kilometres it has genuinely
+    covered instead of a zero everyone knows is wrong.
+
+    Readings are deliberately NOT deleted: they describe the rider, not the
+    chain, and the new chain deserves the benefit of what the old one taught us.
+    """
+    if component_id not in bike_wear.COMPONENTS:
+        raise UnknownComponentError(component_id)
+
+    now = datetime.now(UTC)
+    if fitted_at is not None and fitted_at.tzinfo is None:
+        fitted_at = fitted_at.replace(tzinfo=UTC)
+    fitted_at = min(fitted_at or now, now)
+
+    row = (await _rows(db, user_id))[component_id]
+    retired_life, retired_total = row.life_km, row.km_total
+    if row.km_since_service > row.longest_run_km:
+        row.longest_run_km = row.km_since_service
+
+    replayed_km, rides = await _replay_since(db, user_id, component_id, fitted_at)
+
+    row.life_km = replayed_km
+    row.km_since_service = replayed_km
+    row.km_total = replayed_km
+    row.last_service_at = fitted_at
+    row.owned = True
+
+    return ReplaceResult(
+        component_id=component_id,
+        name_de=bike_wear.spec_of(component_id, row.method).name_de,
+        retired_life_km=round(retired_life, 1),
+        retired_km_total=round(retired_total, 1),
+        rides_replayed=rides,
+        life=bike_wear.chain_life(
+            row.life_km, row.method, await _readings(db, user_id, component_id),
+        ),
     )

@@ -23,6 +23,7 @@ a dirty drivetrain as a FACT rather than dressing an invented penalty as one.
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, replace
 
 #: How far past its interval a component may go on banking bonus. Beyond this it
@@ -548,3 +549,145 @@ def efficiency_watts(km_since_chain: float, method: str | None = None) -> float 
     span = spec.interval_km * (OVERRUN_FACTOR - 1)
     over = min(km_since_chain - spec.interval_km, span)
     return round(3.0 + 2.0 * (over / span), 1) if span else 5.0
+
+
+# ── THE SECOND CLOCK: WHEN THE CHAIN IS FINISHED, NOT WHEN IT IS DIRTY ──────
+#
+# Everything above answers one question — "does this need cleaning?" — and the
+# chain has a second, entirely different one behind it: "is it worn out?".
+# Cleaning is due every few hundred kilometres; the chain itself is finished
+# after a few thousand, and MISSING THAT SECOND DEADLINE IS THE EXPENSIVE ONE.
+#
+# A roller chain elongates as the pin/bush interface wears. Past roughly 0.5 %
+# the pitch no longer matches the cassette's tooth spacing, and from there the
+# chain starts machining new spacing into the sprockets: a rider who replaces at
+# 0.5 % buys a chain, one who rides to 0.75 % buys a chain AND a cassette, often
+# chainrings too. Same rider, same drivetrain, six times the bill — decided
+# purely by which side of a line nobody was measuring they happened to be on.
+#
+# WHY THIS IS MEASURED IN THE SAME WEIGHTED KILOMETRES as the service clock.
+# Elongation comes from work under tension carrying grit — kilojoules and
+# contamination, which is exactly what `equivalent_km` already converts a ride
+# into. A wet gravel ride ages the chain far faster than the same distance on a
+# dry road, and the service clock already knows that. Both clocks therefore run
+# on the same odometer arithmetic and differ only in what resets them: cleaning
+# resets the service clock, and only a NEW CHAIN resets the life clock.
+#
+# THE NUMBERS ARE PRIORS, NOT CLAIMS. Chain life varies more between riders than
+# almost any other figure in this file — power, gearing, terrain and, above all,
+# lubrication method. So the catalogue value is a starting point that the rider
+# can replace with a measurement: a €10 chain checker reads 0.25 / 0.5 / 0.75,
+# and two readings move the estimate onto THIS rider's drivetrain. See
+# `calibrate_life`.
+
+#: Weighted reference kilometres to 0.5 % elongation, by maintenance method.
+#: Oil at 2 500 is the middle of the range quoted for a wet-lubed road chain in
+#: mixed conditions. Immersive wax roughly doubles it — the one drivetrain claim
+#: every controlled longevity test agrees on, because a waxed chain carries no
+#: sticky film for grit to stick to. Drip wax sits between the two.
+CHAIN_LIFE_KM: dict[str, float] = {"oil": 2_500.0, "wax": 4_800.0, "dripwax": 3_200.0}
+
+#: Replace here. Below it the cassette is untouched; above it, it is being cut.
+CHAIN_REPLACE_PCT = 0.5
+#: Past this the cassette is going with the chain — the six-times-the-bill line.
+CHAIN_RUIN_PCT = 0.75
+
+#: Bayesian update on the rider's own "kilometres per 1 % elongation", in log
+#: space because the quantity is positive and multiplicative. The prior is
+#: deliberately wide (±65 %) — chain life genuinely varies that much — and a
+#: chain checker is a blunt gauge, so its readings are not trusted absolutely
+#: either. Two honest readings still move the estimate most of the way.
+LIFE_PRIOR_LOG_SIGMA = 0.5
+LIFE_OBS_LOG_SIGMA = 0.25
+
+
+@dataclass(frozen=True)
+class ChainLife:
+    """How much chain is left, and how sure we are of it."""
+
+    #: Weighted kilometres on this chain since it was fitted.
+    life_km: float
+    #: Kilometres this rider's chain reaches 0.5 % at, prior or calibrated.
+    limit_km: float
+    #: Projected elongation right now, in percent.
+    pct: float
+    #: Kilometres before the 0.5 % line. Negative once it is past.
+    km_left: float
+    #: 'fresh' | 'due' | 'ruinous' — the third one means the cassette is at risk.
+    status: str
+    progress: float
+    #: How many chain-checker readings back this estimate.
+    measurements: int
+    #: 0…1 — how far the estimate has moved off the generic prior.
+    confidence: float
+    #: True once a reading exists. Until then the screen must say "geschätzt".
+    calibrated: bool
+
+
+def calibrate_life(
+    prior_km_per_pct: float, readings: list[tuple[float, float]]
+) -> tuple[float, int, float]:
+    """(km per 1 % elongation, readings used, confidence) from chain-checker data.
+
+    `readings` are `(life_km_at_reading, measured_pct)` pairs. Each implies
+    km/% = life_km / pct; the posterior is the precision-weighted mean of the
+    prior and those observations in log space. Readings at 0 % carry no
+    information — a brand-new chain measuring 0.00 says nothing about how long
+    it will last — and are dropped rather than dividing by zero.
+    """
+    usable = [(km, pct) for km, pct in readings if pct and pct > 0 and km and km > 0]
+    if not usable:
+        return prior_km_per_pct, 0, 0.0
+
+    prior_precision = 1.0 / (LIFE_PRIOR_LOG_SIGMA ** 2)
+    obs_precision = 1.0 / (LIFE_OBS_LOG_SIGMA ** 2)
+    numerator = math.log(prior_km_per_pct) * prior_precision
+    precision = prior_precision
+    for km, pct in usable:
+        numerator += math.log(km / pct) * obs_precision
+        precision += obs_precision
+
+    posterior = math.exp(numerator / precision)
+    sigma = math.sqrt(1.0 / precision)
+    confidence = max(0.0, min(1.0, 1.0 - sigma / LIFE_PRIOR_LOG_SIGMA))
+    return posterior, len(usable), round(confidence, 2)
+
+
+def chain_life(
+    life_km: float, method: str | None = None,
+    readings: list[tuple[float, float]] | None = None,
+) -> ChainLife:
+    """The chain's remaining life, from its weighted kilometres and any readings.
+
+    Note what this never does: it does not stop the rider, cost RideCoin, or
+    mark the bike unusable. It is a number and a price, which is all the rider
+    needs to make the decision themselves — the same rule as everything else in
+    this module.
+    """
+    m = (method or DEFAULT_CHAIN_METHOD).lower()
+    prior_limit = CHAIN_LIFE_KM.get(m, CHAIN_LIFE_KM[DEFAULT_CHAIN_METHOD])
+    prior_per_pct = prior_limit / CHAIN_REPLACE_PCT
+
+    per_pct, used, confidence = calibrate_life(prior_per_pct, readings or [])
+    limit_km = per_pct * CHAIN_REPLACE_PCT
+    km = max(0.0, life_km)
+    pct = km / per_pct if per_pct > 0 else 0.0
+
+    if pct >= CHAIN_RUIN_PCT:
+        status = "ruinous"
+    elif pct >= CHAIN_REPLACE_PCT:
+        status = "due"
+    else:
+        status = "fresh"
+
+    return ChainLife(
+        life_km=round(km, 1),
+        limit_km=round(limit_km, 1),
+        pct=round(pct, 3),
+        km_left=round(limit_km - km, 1),
+        status=status,
+        progress=min(1.0, pct / CHAIN_REPLACE_PCT if CHAIN_REPLACE_PCT else 0.0),
+        measurements=used,
+        confidence=confidence,
+        calibrated=used > 0,
+    )

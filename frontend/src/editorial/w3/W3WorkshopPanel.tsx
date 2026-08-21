@@ -1,7 +1,8 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
-  useComponentMethods, useDeclareComponent, useSeedComponent, useServiceComponent,
-  useSetMethod, useWorkshop,
+  useComponentMethods, useDeclareComponent, useMeasureComponent, useReplaceComponent,
+  useSeedComponent, useServiceComponent, useSetMethod, useWorkshop,
 } from '../../hooks/useWorkshop'
 import W3Workshop from './W3Workshop'
 import type { ServiceResult } from '../../api/workshop'
@@ -20,11 +21,14 @@ import type { ServiceResult } from '../../api/workshop'
  * likely to be tapping.
  */
 export default function W3WorkshopPanel() {
+  const navigate = useNavigate()
   const { data: workshop, isLoading } = useWorkshop()
   const service = useServiceComponent()
   const seed = useSeedComponent()
   const declare = useDeclareComponent()
   const method = useSetMethod()
+  const measure = useMeasureComponent()
+  const replace = useReplaceComponent()
   // Only the chain has methods today. Asking per component would be six
   // requests for five empty answers, so this asks about the one that has them
   // and everything else simply renders no picker.
@@ -59,6 +63,18 @@ export default function W3WorkshopPanel() {
     method.mutate({ componentId, method: m }, { onSettled: () => setBusyId(null) })
   }
 
+  // The chain's life clock. Same busy contract as the four writes above: the
+  // row is answering, and `onSettled` clears it whether or not the write stuck.
+  const onMeasure = (componentId: string, measuredPct: number) => {
+    setBusyId(componentId)
+    measure.mutate({ componentId, measuredPct }, { onSettled: () => setBusyId(null) })
+  }
+
+  const onReplace = (componentId: string) => {
+    setBusyId(componentId)
+    replace.mutate({ componentId }, { onSettled: () => setBusyId(null) })
+  }
+
   return (
     <W3Workshop
       workshop={workshop ?? null}
@@ -69,6 +85,9 @@ export default function W3WorkshopPanel() {
       onSeed={onSeed}
       onDeclare={onDeclare}
       onMethod={onMethod}
+      onMeasure={onMeasure}
+      onReplace={onReplace}
+      onFindShops={() => navigate('/e/w3-shops')}
       methods={{ chain: chainMethods ?? [] }}
       onDismissResult={() => setLastResult(null)} />
   )

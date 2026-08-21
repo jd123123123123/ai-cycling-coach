@@ -17,6 +17,7 @@ Guardrails baked in here, from the spec's evidence base:
 from __future__ import annotations
 
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +28,8 @@ from app.models.rewards import (
     REASON_ONBOARDING_BIKE,
     REASON_ONBOARDING_DEVICE,
     REASON_ONBOARDING_PHOTO,
+    REASON_EDDINGTON,
+    REASON_GEAR_BONUS,
     REASON_RIDE_EARN,
     REASON_STREAK_BONUS,
     PointsLedger,
@@ -184,6 +187,39 @@ def challenge_bonus(base_rc_in_window: int, tier: str) -> int:
 # --------------------------------------------------------------------------- #
 # Persistence.
 # --------------------------------------------------------------------------- #
+# ── THE SEALED CHEST ────────────────────────────────────────────────────────
+#
+# A ride's coins are EARNED at ingestion and BANKED when the rider opens the
+# ride. Both halves matter. Earning at ingestion keeps the arithmetic honest and
+# idempotent — the ledger records what the ride was worth, computed once, from
+# the ride's own numbers. Banking on open is what makes the number land while
+# the rider is looking at it, which is the whole difference between a receipt
+# and a reward.
+#
+# WHY A COLUMN AND NOT A SECOND TABLE. The chest IS the set of unbanked ledger
+# lines for one activity. Storing the amount a second time would create two
+# numbers that can disagree, and the one thing a currency must never do is
+# disagree with itself.
+#
+# Nothing here can lose a rider coins: an unopened chest keeps its lines
+# forever, they never expire, and a rider who ignores the mechanic entirely
+# banks everything the moment they finally open the ride.
+CHEST_REASONS = frozenset({
+    REASON_RIDE_EARN, REASON_STREAK_BONUS, REASON_GEAR_BONUS, REASON_EDDINGTON,
+})
+
+
+def _waits_in_chest(reason: str, activity_id: int | None, amount: int) -> bool:
+    """Whether this credit belongs to a ride's chest rather than the wallet.
+
+    Only positive, ride-attached earnings wait. A spend (negative) or anything
+    without a ride behind it — an onboarding grant, a service bonus, a referral
+    cut — moves the balance immediately, because there is no moment to save it
+    for.
+    """
+    return amount > 0 and activity_id is not None and reason in CHEST_REASONS
+
+
 async def _credit(
     db: AsyncSession,
     user_id: int,
@@ -200,6 +236,7 @@ async def _credit(
     The caller owns the transaction (commit/rollback) — this only flushes so the
     row is visible for follow-up reads. Wallet is created lazily on first credit.
     """
+    held = _waits_in_chest(reason, activity_id, amount)
     row = PointsLedger(
         user_id=user_id,
         reason=reason,
@@ -208,15 +245,19 @@ async def _credit(
         base_tss=base_tss,
         multiplier=multiplier,
         context=context,
+        # Stamped now for everything that moves the balance now; left NULL for
+        # a ride's coins, which is what marks them as still in the chest.
+        claimed_at=None if held else datetime.now(UTC),
     )
     db.add(row)
 
-    wallet = await db.get(Wallet, user_id)
-    if wallet is None:
-        wallet = Wallet(user_id=user_id, balance=0)
-        db.add(wallet)
-    wallet.balance = int(wallet.balance) + amount
-    wallet.updated_at = func.now()
+    if not held:
+        wallet = await db.get(Wallet, user_id)
+        if wallet is None:
+            wallet = Wallet(user_id=user_id, balance=0)
+            db.add(wallet)
+        wallet.balance = int(wallet.balance) + amount
+        wallet.updated_at = func.now()
 
     await db.flush()
     return row
@@ -376,7 +417,21 @@ async def ride_breakdown(
         "multiplier": float(streak.multiplier) if streak and streak.multiplier else 1.0,
         "base_tss": base.base_tss if base else None,
         "total": base_rc + streak_rc,
+        # Everything this ride paid, including the bonuses that are not part of
+        # the base+streak pair: the equipped gear's conditional cut and an
+        # Eddington milestone the ride happened to set. The celebration counts
+        # up THIS number, because it is what the swipe actually banks.
+        "total_all": sum(int(e.amount) for e in entries),
+        "lines": [
+            {"reason": e.reason, "amount": int(e.amount)}
+            for e in sorted(entries, key=lambda e: -int(e.amount))
+        ],
         "banked": base is not None,
+        # Whether these coins have reached the wallet yet. The celebration
+        # screen opens SEALED on a fresh ride and settled on one already
+        # collected, and this is the single flag that decides which.
+        "claimed": bool(entries) and all(e.claimed_at is not None for e in entries),
+        "pending": sum(int(e.amount) for e in entries if e.claimed_at is None),
         "at": (base.created_at.isoformat() if base and base.created_at else None),
     }
 
@@ -404,3 +459,85 @@ async def get_wallet(db: AsyncSession, user_id: int, ledger_limit: int = 25) -> 
         for r in rows.scalars().all()
     ]
     return {"balance": balance, "ledger": ledger}
+
+
+# ── opening the chest ───────────────────────────────────────────────────────
+
+
+async def sealed_chest(db: AsyncSession, user_id: int) -> dict | None:
+    """The rider's newest unopened ride chest, or None when there is nothing
+    waiting.
+
+    ONE CHEST AT A TIME, and the newest one. A rider back from a training camp
+    with four unopened rides does not want a queue to clear — they want the ride
+    they just did. The older ones stay sealed and are opened from the ride list;
+    nothing expires, so nothing is lost by showing only the top of the pile.
+    """
+    rows = (
+        await db.execute(
+            select(PointsLedger)
+            .where(
+                PointsLedger.user_id == user_id,
+                PointsLedger.claimed_at.is_(None),
+                PointsLedger.activity_id.is_not(None),
+            )
+            .order_by(PointsLedger.created_at.desc(), PointsLedger.id.desc())
+        )
+    ).scalars().all()
+    if not rows:
+        return None
+
+    activity_id = rows[0].activity_id
+    mine = [r for r in rows if r.activity_id == activity_id]
+    return {
+        "activity_id": activity_id,
+        "total": sum(int(r.amount) for r in mine),
+        "lines": [
+            {"reason": r.reason, "amount": int(r.amount), "multiplier": r.multiplier}
+            for r in sorted(mine, key=lambda r: -int(r.amount))
+        ],
+        "sealed_since": rows[0].created_at.isoformat() if rows[0].created_at else None,
+        "waiting": len({r.activity_id for r in rows}),
+    }
+
+
+async def claim_ride(db: AsyncSession, user_id: int, activity_id: int) -> dict:
+    """Bank one ride's chest. The moment the coins actually arrive.
+
+    Idempotent by construction: claiming stamps the lines, and a stamped line is
+    no longer part of any chest, so a double-tap (or a retried request, or a
+    second tab) pays exactly once and the second call returns ``claimed: 0``
+    rather than an error — a rider who taps twice has not done anything wrong.
+
+    The caller commits.
+    """
+    rows = (
+        await db.execute(
+            select(PointsLedger)
+            .where(
+                PointsLedger.user_id == user_id,
+                PointsLedger.activity_id == activity_id,
+                PointsLedger.claimed_at.is_(None),
+            )
+            .with_for_update()
+        )
+    ).scalars().all()
+
+    total = sum(int(r.amount) for r in rows)
+    now = datetime.now(UTC)
+    for row in rows:
+        row.claimed_at = now
+
+    if total:
+        wallet = (
+            await db.execute(select(Wallet).where(Wallet.user_id == user_id).with_for_update())
+        ).scalar_one_or_none()
+        if wallet is None:
+            wallet = Wallet(user_id=user_id, balance=0)
+            db.add(wallet)
+        wallet.balance = int(wallet.balance) + total
+        wallet.updated_at = func.now()
+
+    await db.flush()
+    balance = await balance_of(db, user_id)
+    return {"activity_id": activity_id, "claimed": total, "balance": balance}

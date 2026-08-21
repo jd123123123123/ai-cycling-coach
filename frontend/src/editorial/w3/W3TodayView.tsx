@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, Reveal } from './w3tokens'
+import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
+import W3RideChest from './W3RideChest'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { useHeroPanel } from './W3HeroShell'
@@ -92,6 +94,10 @@ export interface W3Vm {
   coins: string | null
   streak: number | null
 
+  /** A ride waiting to be opened. While this is set the readiness dock's slot
+   *  belongs to the chest — see `W3RideChest` for why one screen answers one
+   *  question at a time. */
+  chest: Chest | null
   readiness: number | null
   readinessWord: string | null
   /** Readiness against the previous day that has a real reading — a small
@@ -182,9 +188,11 @@ export function fadeRunway(ground: string | null, page: string, max = 180): numb
   return Math.round(Math.min(1, d / 26) * max)
 }
 
-export default function W3TodayView({ vm, onAdapt }: {
+export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
   vm: W3Vm
   onAdapt?: OnAdapt
+  /** Fired when the rider swipes the sealed chest open. */
+  onOpenChest?: () => void
 }) {
   const navigate = useNavigate()
   // The colour the stage picture ends in. Everything the hero touches — the
@@ -220,7 +228,13 @@ export default function W3TodayView({ vm, onAdapt }: {
   // route, or a deep link that skips it — and then the hero below is drawn
   // locally exactly as it always was. A page outside the room is a legitimate
   // thing to be.
-  const dock = (
+  // A sealed chest takes the dock's slot outright, for exactly as long as it is
+  // sealed. Not a banner above it: the morning after a ride, "what did that
+  // give me" IS the question, and stacking it over readiness would make the
+  // screen ask two.
+  const dock = vm.chest?.sealed ? (
+    <W3RideChest chest={vm.chest} onOpen={onOpenChest ?? (() => {})} />
+  ) : (
             <W3TodayDock
               vm={{
                 score: vm.readiness,

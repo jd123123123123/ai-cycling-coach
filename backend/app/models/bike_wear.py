@@ -81,6 +81,17 @@ class BikeComponent(Base):
     #: `bike_wear.CHAIN_METHODS`. NULL means the default (oil), which is what
     #: most bicycles arrive with — not a judgement, just the common case.
     method: Mapped[str | None] = mapped_column(String(16), nullable=True)
+
+    #: THE THIRD ODOMETER, and the one that decides money rather than points.
+    #: Weighted kilometres since this PHYSICAL part was fitted — it survives
+    #: every service and resets only on replacement. `km_since_service` answers
+    #: "does it need cleaning", `km_total` is the rider's brag number in real
+    #: road kilometres, and this one answers "is it worn out": a chain past
+    #: 0,5 % elongation starts cutting the cassette, which is the single most
+    #: expensive thing a maintenance app can fail to warn about.
+    life_km: Mapped[float] = mapped_column(
+        Float, nullable=False, default=0.0, server_default="0",
+    )
     #: Whether the bicycle HAS this part — three states, and the third one is
     #: the point. True: confirmed, the clock runs. False: told us they have rim
     #: brakes or inner tubes, so never mention it again. NULL: never asked, so
@@ -96,4 +107,38 @@ class BikeComponent(Base):
     )
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), onupdate=func.now(), nullable=True,
+    )
+
+
+class ComponentMeasurement(Base):
+    """One chain-checker reading, and the odometer it was taken at.
+
+    THE PAIRING IS THE DATA. A reading of "0,5 %" alone says nothing; "0,5 %
+    after 1 800 weighted kilometres" says this rider gets 3 600 km per percent,
+    and two such pairs move the estimate off the generic prior onto their own
+    drivetrain (see `bike_wear.calibrate_life`).
+
+    The odometer is SNAPSHOTTED at the moment of the reading rather than
+    recomputed later, so improving the wear model can never silently rewrite
+    what a past measurement meant.
+
+    RLS-protected via ``user_id``, the same policy shape as ``bike_components``.
+    """
+
+    __tablename__ = "component_measurements"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    #: Matches a key of `services.bike_wear.COMPONENTS`.
+    component_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+
+    #: The gauge reading in percent — 0.25 / 0.5 / 0.75 on a typical checker.
+    measured_pct: Mapped[float] = mapped_column(Float, nullable=False)
+    #: `bike_components.life_km` at the moment of the reading.
+    life_km_at: Mapped[float] = mapped_column(Float, nullable=False)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False,
     )

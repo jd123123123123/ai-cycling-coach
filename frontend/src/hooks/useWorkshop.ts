@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  declareComponent, fetchMethods, fetchWorkshop, seedComponent, serviceComponent,
-  setMethod, type MethodOption, type SeedResult, type ServiceResult, type Workshop,
+  declareComponent, fetchMethods, fetchWorkshop, measureComponent, replaceComponent,
+  seedComponent, serviceComponent, setMethod, type MeasureResult, type MethodOption,
+  type ReplaceResult, type SeedResult, type ServiceResult, type Workshop,
 } from '../api/workshop'
 
 /** `useWallet` declares this key inline; mirrored here rather than exported
@@ -98,5 +99,41 @@ export function useSetMethod() {
   return useMutation<Workshop, Error, { componentId: string; method: string }>({
     mutationFn: ({ componentId, method }) => setMethod(componentId, method),
     onSuccess: (workshop) => qc.setQueryData(WORKSHOP_KEY, workshop),
+  })
+}
+
+/**
+ * Record a chain-checker reading.
+ *
+ * No wallet invalidation, for the same reason as the seed and a stronger one:
+ * this pays nothing at all. A measurement that earned RideCoin would give the
+ * rider a reason to lie to the gauge, and the whole value of this number is
+ * that it is the one thing in the workshop that comes from outside the model.
+ *
+ * The response carries the recalibrated workshop, so the chain-life card
+ * redraws with the rider's own limit without a second round trip.
+ */
+export function useMeasureComponent() {
+  const qc = useQueryClient()
+  return useMutation<MeasureResult, Error, { componentId: string; measuredPct: number }>({
+    mutationFn: ({ componentId, measuredPct }) => measureComponent(componentId, measuredPct),
+    onSuccess: (result) => qc.setQueryData(WORKSHOP_KEY, result.workshop),
+  })
+}
+
+/**
+ * Fit a new part: every clock on it starts again.
+ *
+ * Also pays nothing — no kilometres were ridden to earn it, and paying for a
+ * purchase would make "neue Kette" a button worth pressing dishonestly. The
+ * banked Service Bonus on the old part is NOT swept up either: a rider who
+ * wants it collects it by servicing before they replace, which is the correct
+ * order of operations anyway.
+ */
+export function useReplaceComponent() {
+  const qc = useQueryClient()
+  return useMutation<ReplaceResult, Error, { componentId: string; fittedAt?: string }>({
+    mutationFn: ({ componentId, fittedAt }) => replaceComponent(componentId, fittedAt),
+    onSuccess: (result) => qc.setQueryData(WORKSHOP_KEY, result.workshop),
   })
 }

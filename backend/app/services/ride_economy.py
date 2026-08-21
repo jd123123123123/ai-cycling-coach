@@ -291,7 +291,7 @@ async def _stamp_place(db: AsyncSession, user_id: int, activity: Activity) -> st
     return place.slug
 
 
-async def _pay_eddington(db: AsyncSession, user_id: int) -> int:
+async def _pay_eddington(db: AsyncSession, user_id: int, activity_id: int | None = None) -> int:
     """Pay a milestone if this ride pushed the rider onto one.
 
     Recomputed from the full ride history rather than tracked incrementally,
@@ -335,7 +335,7 @@ async def _pay_eddington(db: AsyncSession, user_id: int) -> int:
         return 0
 
     await rewards._credit(
-        db, user_id, REASON_EDDINGTON, payout, context={"e": e},
+        db, user_id, REASON_EDDINGTON, payout, activity_id=activity_id, context={"e": e},
     )
     return payout
 
@@ -408,7 +408,7 @@ async def settle(
         logger.warning("odometer accrual failed for user_id=%s", user_id, exc_info=True)
 
     try:
-        result["eddington_rc"] = await _pay_eddington(db, user_id)
+        result["eddington_rc"] = await _pay_eddington(db, user_id, activity.id)
     except Exception:
         logger.warning("eddington payout failed for user_id=%s", user_id, exc_info=True)
 

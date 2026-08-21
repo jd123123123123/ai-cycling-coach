@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
-import { useRideEarning } from '../../hooks/useWallet'
+import { useClaimRide, useRideEarning } from '../../hooks/useWallet'
 import type { RaceDebrief } from '../../api/debrief'
 import type { RideEarning } from '../../api/rewards'
 import W3RideCelebrateView, {
@@ -22,10 +22,20 @@ import W3Loading from './W3Loading'
 const fmtHms = (s: number) => `${Math.floor(s / 3600)}h${String(Math.floor((s % 3600) / 60)).padStart(2, '0')}`
 const ZONE_NAMES = ['Recovery', 'Endurance', 'Tempo', 'Threshold', 'VO2', 'Anaerobic']
 
+const REASON_DE: Record<string, string> = {
+  ride_earn: 'FAHRT',
+  streak_bonus: 'STREAK',
+  gear_bonus: 'AUSRÜSTUNG',
+  eddington: 'EDDINGTON',
+}
+
 function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
   const h = d.header
   const tss = Math.round(h.tss)
-  const total = earn?.total ?? 0
+  // What the swipe will actually bank: every line the ride paid, not just the
+  // base+streak pair. A screen that counts up 84 and credits 96 is a screen
+  // the rider stops believing.
+  const total = earn?.total_all ?? earn?.total ?? 0
 
   const stats: W3CelebStat[] = [
     { icon: 'route', label: 'DISTANZ', value: h.distance_km != null ? String(Math.round(h.distance_km)) : '—', unit: 'km' },
@@ -51,13 +61,15 @@ function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
     sub: 'BESTWERT',
   }))
 
-  // Real earning breakdown from the ledger: base (ride) + streak bonus.
-  const breakdown = []
-  if (earn && earn.base > 0) breakdown.push({ label: 'FAHRT', value: String(earn.base) })
-  if (earn && earn.streak_bonus > 0) {
-    const mult = earn.multiplier && earn.multiplier > 1 ? ` ×${earn.multiplier.toFixed(2).replace(/0$/, '')}` : ''
-    breakdown.push({ label: `STREAK${mult}`, value: `+${earn.streak_bonus}` })
-  }
+  // Real earning breakdown, straight off the ledger — every line, in the order
+  // the server sent them (largest first), so the receipt adds up to the number
+  // that just landed.
+  const mult = earn?.multiplier && earn.multiplier > 1
+    ? ` ×${earn.multiplier.toFixed(2).replace(/0$/, '')}` : ''
+  const breakdown = (earn?.lines ?? []).map((l, i) => ({
+    label: `${REASON_DE[l.reason] ?? l.reason.toUpperCase()}${l.reason === 'streak_bonus' ? mult : ''}`,
+    value: i === 0 ? String(l.amount) : `+${l.amount}`,
+  }))
 
   return {
     provider: null,   // sync provider isn't on the debrief header
@@ -78,7 +90,8 @@ function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
     breakMeta: `${fmtHms(h.moving_time_s)} · ${h.distance_km != null ? Math.round(h.distance_km) : '—'} KM · ${h.np_watts != null ? Math.round(h.np_watts) : '—'} W`,
     breakdown,
     bankedNote: 'AUFS KONTO GEBUCHT',
-    alreadyClaimed: false,
+    // A ride already collected opens settled — the ritual happens once.
+    alreadyClaimed: earn?.claimed ?? false,
   }
 }
 
@@ -88,6 +101,7 @@ export default function W3RideCelebratePage() {
   const activityId = id ? Number(id) : undefined
   const { data: debrief } = useRaceDebrief(activityId)
   const { data: earn } = useRideEarning(activityId)
+  const claim = useClaimRide()
 
   const vm = useMemo(() => (debrief ? toVm(debrief, earn) : null), [debrief, earn])
   if (!vm) return <W3Loading label="Zähle deine Punkte…" />
@@ -97,6 +111,9 @@ export default function W3RideCelebratePage() {
       onClose={() => navigate('/e/w3-today')}
       onShare={() => id && navigate(`/e/w3-share/${id}`)}
       onFullDetail={() => navigate(`/e/w3-ride/${id}`)}
+      // THE moment the coins move. The view flips first and awaits this, so a
+      // slow network delays the receipt line and never the celebration.
+      onClaim={activityId ? () => claim.mutateAsync(activityId) : undefined}
     />
   )
 }

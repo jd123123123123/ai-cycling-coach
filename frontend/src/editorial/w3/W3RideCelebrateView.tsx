@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import {
-  Check, Share2, X, Route as RouteIcon, Timer, Zap, Mountain, Flame, TrendingUp, ChevronsRight,
+  Check, Share2, X, Route as RouteIcon, Timer, Zap, Mountain, Flame, TrendingUp,
 } from 'lucide-react'
 import { T, FONT, EASE, grow, band, useInView } from './w3tokens'
+import W3Swipe from './W3Swipe'
+import W3CoinBurst from './W3CoinBurst'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 
@@ -19,9 +21,14 @@ import W3StatusBar from './W3StatusBar'
  *                       (real base + streak from the ledger), banked to the
  *                       ledger, CLAIMED ✓.
  *
- * Because RideCoin is awarded at ingestion and balances never expire, claiming
- * is the reveal ritual (banking already-earned coins into view), not a
- * forfeiture gate. One-shot: a claimed ride opens straight in the settled state.
+ * THE COINS ACTUALLY LAND HERE. A ride's earnings are computed when it syncs
+ * and sit unbanked in the ledger until this swipe — `POST /rewards/ride/:id/claim`
+ * is what moves them into the wallet. So the number that counts up is not a
+ * replay of something that already happened offscreen; it is the thing itself,
+ * happening because the rider pulled the knob. Nothing expires and nothing is
+ * lost by waiting: an unopened ride keeps its coins forever.
+ *
+ * One-shot: a ride already collected opens straight in the settled state.
  */
 
 const VIOLET = T.evening
@@ -98,18 +105,83 @@ function ZoneBars({ zones, reduce }: { zones: W3CelebZone[]; reduce: boolean | n
   )
 }
 
+/** One record that fell, revealed as its own event.
+ *
+ *  Slides in from the left as it enters the viewport rather than fading with
+ *  its siblings: a record is a thing that ARRIVES. The lock-open lettering does
+ *  the talking, so the card carries no other ornament. */
+function UnlockCard({ first, index, reduce }: {
+  first: W3CelebFirst
+  index: number
+  reduce: boolean | null
+}) {
+  const { ref, inView, instant } = useInView()
+  const Ic = FIRST_ICON[first.icon]
+  return (
+    <motion.div
+      ref={ref}
+      initial={reduce || instant ? false : { opacity: 0, x: -18, scale: 0.97 }}
+      animate={inView || instant ? { opacity: 1, x: 0, scale: 1 } : undefined}
+      transition={{ duration: 0.45, delay: index * 0.08, ease: EASE }}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 13, padding: '14px 16px',
+        borderRadius: 20, background: T.surface, border: `1px solid ${T.acid}38`,
+      }}>
+      <span style={{
+        width: 40, height: 40, borderRadius: 14, flex: 'none',
+        background: `${T.acid}1F`, display: 'grid', placeItems: 'center',
+      }}>
+        <Ic size={19} color={T.acid} />
+      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, flex: 1 }}>
+        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 1.2, color: T.acid }}>
+          FREIGESCHALTET
+        </span>
+        <span style={{
+          fontSize: 15, fontWeight: 700, letterSpacing: -0.2, color: T.ink,
+          lineHeight: 1.15, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{first.title}</span>
+        <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}>
+          {first.sub}
+        </span>
+      </div>
+    </motion.div>
+  )
+}
+
 export default function W3RideCelebrateView({
-  vm, onClose, onShare, onFullDetail,
-}: { vm: W3CelebrateVm; onClose?: () => void; onShare?: () => void; onFullDetail?: () => void }) {
+  vm, onClose, onShare, onFullDetail, onClaim,
+}: {
+  vm: W3CelebrateVm
+  onClose?: () => void
+  onShare?: () => void
+  onFullDetail?: () => void
+  /** Banks the ride. Resolves when the server has actually paid. */
+  onClaim?: () => Promise<unknown>
+}) {
   const reduce = useReducedMotion()
   const [claimed, setClaimed] = useState(vm.alreadyClaimed)
+  const [bursting, setBursting] = useState(false)
   const accent = claimed ? T.acid : VIOLET
-  const count = useCountUp(vm.total, true, reduce)
+  // The count-up only runs once the coins are real. Rolling the number up
+  // while they are still sealed would spend the payoff before the swipe.
+  const count = useCountUp(vm.total, claimed, reduce)
   const nf = (x: number) => x.toLocaleString('de-DE')
+
+  const claim = async () => {
+    // Flip first, then confirm. The rider pulled the knob; the screen owes them
+    // an answer in the same frame, and a failed request only means the coins
+    // stay in the chest for the next attempt — never a number taken back.
+    setBursting(true)
+    setClaimed(true)
+    try { await onClaim?.() } catch { /* stays claimable; the chest survives */ }
+  }
 
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
+
+        <W3CoinBurst active={bursting} />
 
         {/* StatusBar */}
         <W3StatusBar />
@@ -153,13 +225,20 @@ export default function W3RideCelebrateView({
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: 6 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <motion.span animate={{ color: accent }} transition={{ duration: 0.5 }} style={{ fontSize: 30, fontWeight: 800 }}>{claimed ? '✦' : '✱'}</motion.span>
-                <span style={{ fontSize: 76, fontWeight: 800, letterSpacing: -3, color: T.ink, lineHeight: 0.9, fontVariantNumeric: 'tabular-nums' }}>{nf(count)}</span>
+                {/* SEALED SHOWS NOTHING. The chest on Today refused to print
+                    its contents on the lid, and printing them here before the
+                    swipe would spend the same moment twice — the rider would
+                    read the number, and the gesture would become paperwork.
+                    The mark holds the exact slot the digits land in. */}
+                <span style={{ fontSize: 76, fontWeight: 800, letterSpacing: -3, color: claimed ? T.ink : T.quiet, lineHeight: 0.9, fontVariantNumeric: 'tabular-nums' }}>
+                  {claimed ? nf(count) : '?'}
+                </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, paddingBottom: 6 }}>
                 <span style={{ display: 'flex', gap: 7, alignItems: 'center', padding: '7px 13px', borderRadius: 100, border: `1px solid ${accent}`, fontSize: 11, fontWeight: 800, letterSpacing: 1, color: accent }}>
                   <span style={{ width: 6, height: 6, borderRadius: 100, background: accent }} />{claimed ? 'GEBUCHT' : 'OFFEN'}
                 </span>
-                <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{claimed ? vm.coinsSettled : vm.coinsPending}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{claimed ? vm.coinsSettled : 'Wisch unten, um sie einzulösen'}</span>
               </div>
             </div>
           </div>
@@ -255,35 +334,36 @@ export default function W3RideCelebrateView({
               </div>
             )}
 
-            {/* firsts & bests */}
+            {/* ── FREIGESCHALTET ──
+                The reveal the chest promised and refused to spell out. Each
+                card lands on its own as it scrolls into view, because three
+                records appearing at once is one event and three records
+                arriving in sequence is three. Only real breakthroughs against
+                the rider's own 90-day bests ever reach this list. */}
             {vm.firsts.length > 0 && (
               <div style={{ ...band(26), gap: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Premieren und Bestwerte</span>
+                  <span style={{ fontSize: 18, fontWeight: 700, color: T.ink }}>Freigeschaltet</span>
                   <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: 0.5, color: T.acid }}>{vm.firstsCount} NEU</span>
                 </div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {vm.firsts.map((f, i) => {
-                    const Ic = FIRST_ICON[f.icon]
-                    return (
-                      <div key={i} style={{ flex: 1, padding: '14px 13px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <Ic size={16} color={T.acid} />
-                        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink, lineHeight: 1.1 }}>{f.title}</span>
-                        <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>{f.sub}</span>
-                      </div>
-                    )
-                  })}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {vm.firsts.map((f, i) => <UnlockCard key={i} first={f} index={i} reduce={reduce} />)}
                 </div>
               </div>
             )}
 
-            {/* slide to claim */}
+            {/* ── the swipe that pays ──
+                At the FOOT of the screen on purpose: everything above it is
+                what the ride did, and the coins are the last thing to arrive.
+                Scrolling past the records to reach it is the sequence. */}
             <div style={{ ...band(30), gap: 14 }}>
-              <button onClick={() => setClaimed(true)}
-                style={{ position: 'relative', height: 62, borderRadius: 100, background: VIOLET_DIM, border: `1px solid ${VIOLET}`, cursor: 'pointer', fontFamily: FONT, display: 'flex', alignItems: 'center', padding: '0 8px', overflow: 'hidden' }}>
-                <span style={{ width: 46, height: 46, borderRadius: 100, background: VIOLET, display: 'grid', placeItems: 'center', flex: 'none' }}><ChevronsRight size={22} color="#fff" strokeWidth={2.5} /></span>
-                <span style={{ flex: 1, textAlign: 'center', fontSize: 15, fontWeight: 800, letterSpacing: 1, color: '#fff' }}>JETZT EINLÖSEN ✱ {nf(vm.total)}</span>
-              </button>
+              <W3Swipe
+                label="ZUM EINLÖSEN WISCHEN"
+                onComplete={() => { void claim() }}
+                tone={VIOLET}
+                knobInk={T.ink}
+                track={VIOLET_DIM}
+                height={62} />
               <button onClick={onFullDetail} style={{ height: 20, background: 'transparent', border: 0, fontFamily: FONT, fontSize: 13, fontWeight: 700, letterSpacing: 0.5, color: T.mid, cursor: 'pointer', display: 'flex', gap: 6, justifyContent: 'center', alignItems: 'center' }}>
                 ALLE FAHRTDETAILS <TrendingUp size={13} />
               </button>
