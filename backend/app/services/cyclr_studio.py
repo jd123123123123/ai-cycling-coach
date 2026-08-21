@@ -262,9 +262,40 @@ _ANALYSIS = {
         "colors). 2. Cockpit (handlebar type, tape/grip color). 3. Wheels (rim depth, rim color, "
         "tire wall color). 4. Components (saddle color, pedals). Be extremely literal. The "
         "description must ensure the generated bike maintains physically accurate double-triangle "
-        "geometry and matching colors."
+        "geometry and matching colors.\n\n"
+        # ── AND THEN, THE PART THE RIDER READS ──────────────────────────────
+        # The description above is an IMAGE PROMPT and stays English on purpose:
+        # it is scaffolded by English instructions and mixing languages inside
+        # one prompt costs render quality. But the app showed that same English
+        # paragraph to the rider as a spec sheet, in a German interface — which
+        # is the single most obvious "unfinished" signal a product can give.
+        # So the pass writes the read-out too, in the rider's language, and the
+        # two are kept apart by a marker rather than by a new column.
+        "FINALLY, output a line containing exactly '---DE---', and after it a SHORT GERMAN "
+        "spec sheet for the owner to read — three lines, each 'Label: Wert', using exactly these "
+        "labels in this order: 'Rahmen', 'Cockpit', 'Laufräder'. Plain German, no English words, "
+        "no marketing, at most twelve words per line. Describe only what is visible."
     ),
 }
+
+#: Separates the English image prompt from the German read-out inside one
+#: stored description. Chosen to be something no vision pass would ever emit.
+DESC_SPLIT = "---DE---"
+
+
+def split_description(description: str | None) -> tuple[str, str]:
+    """(prompt text, rider-facing text) out of one stored description.
+
+    Older assets were stored before the pass wrote a German half, so they have
+    no marker: their English text is returned for both, which is exactly what
+    the app showed before — no backfill, and nothing gets worse.
+    """
+    if not description:
+        return "", ""
+    if DESC_SPLIT not in description:
+        return description.strip(), description.strip()
+    prompt, _, human = description.partition(DESC_SPLIT)
+    return prompt.strip(), (human.strip() or prompt.strip())
 
 # The bike collectible's locked camera. Every bike in the garage is shot the
 # same way — drive-side profile, eye level, whole bike in frame — so a rider's
@@ -896,7 +927,10 @@ async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
         return {"name": name, "description": None, "image": None,
                 "prompt": _isolated_prompt("", kind), "status": "image_model_unavailable"}
     # The photo is the stable identity here; the description is not.
-    img, prompt, status = await render_isolated(description, kind, seed_src=photo_b64)
+    # ONLY THE PROMPT HALF REACHES THE IMAGE MODEL. Handing it the German
+    # read-out as well would put two languages in one prompt for no gain.
+    prompt_text, _ = split_description(description)
+    img, prompt, status = await render_isolated(prompt_text, kind, seed_src=photo_b64)
     if img and kind == "bike":
         img = _cut_out(img)
     return {"name": name, "description": description, "image": img, "prompt": prompt, "status": status}

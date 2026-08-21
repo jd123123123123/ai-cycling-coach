@@ -188,9 +188,14 @@ class PlaceOut(BaseModel):
 def _to_out(asset: GarageAsset | None) -> AssetOut | None:
     if asset is None:
         return None
+    # THE RIDER-FACING HALF, never the image prompt. One stored description
+    # carries both (see `cyclr_studio.split_description`); the English half is
+    # scaffolding for the renderer and was being printed to a German audience as
+    # a spec sheet.
+    _, human = cyclr_studio.split_description(asset.description)
     return AssetOut(
         kind=asset.kind, name=asset.name,
-        description=asset.description, image_base64=asset.image_url,
+        description=human or None, image_base64=asset.image_url,
     )
 
 
@@ -968,7 +973,10 @@ async def render_asset(
         saved = True
 
     return AssetRenderResponse(
-        name=out["name"], description=out["description"], prompt=out["prompt"],
+        # Same split as `_to_out`: the response the studio screen reads its spec
+        # sheet from must carry the German half, not the image prompt.
+        name=out["name"], description=cyclr_studio.split_description(out["description"])[1] or None,
+        prompt=out["prompt"],
         image_base64=out["image"], status=out["status"], saved=saved,
     )
 
