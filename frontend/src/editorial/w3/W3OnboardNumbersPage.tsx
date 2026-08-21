@@ -85,6 +85,12 @@ export default function W3OnboardNumbersPage() {
   const [ftpInput, setFtpInput] = useState('')
   const [weightInput, setWeightInput] = useState('')
   const [fitness, setFitness] = useState<StarterFitness>('returning')
+  // ── THE FIELD DOES NOT CLOSE ITSELF ─────────────────────────────────────
+  // It used to collapse back into a row on blur. Tapping the CTA blurs the
+  // input, the row is shorter than the input, the page reflows UNDER the
+  // finger, and the tap lands on nothing: the rider types their weight, taps
+  // continue, and the app does nothing. Caught by walking the flow on a real
+  // sign-up, not by any typecheck. Once opened, a field stays open.
   const [editing, setEditing] = useState<null | 'ftp' | 'weight'>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -205,7 +211,6 @@ export default function W3OnboardNumbersPage() {
           {editing === 'ftp' ? (
             <input autoFocus type="number" inputMode="numeric" placeholder="FTP in Watt"
               value={ftpInput} onChange={(e) => setFtpInput(e.target.value)}
-              onBlur={() => setEditing(null)}
               style={{ width: '100%', height: 62, padding: '0 16px', borderRadius: 20, background: T.tile, border: `1px solid ${T.acid}55`, outline: 'none', color: T.ink, fontFamily: ARCHIVO, fontSize: 26, fontWeight: 700 }} />
           ) : (
             <Row label="FTP" value={ftp == null ? '' : String(Math.round(ftp))} unit="Watt" onEdit={() => setEditing('ftp')} />
@@ -213,7 +218,6 @@ export default function W3OnboardNumbersPage() {
           {editing === 'weight' ? (
             <input autoFocus type="number" inputMode="decimal" placeholder="Gewicht in kg"
               value={weightInput} onChange={(e) => setWeightInput(e.target.value)}
-              onBlur={() => setEditing(null)}
               style={{ width: '100%', height: 62, padding: '0 16px', borderRadius: 20, background: T.tile, border: `1px solid ${T.acid}55`, outline: 'none', color: T.ink, fontFamily: ARCHIVO, fontSize: 26, fontWeight: 700 }} />
           ) : (
             <Row label="Gewicht" value={weight ? String(Math.round(Number(weight))) : ''} unit="kg" onEdit={() => setEditing('weight')} />

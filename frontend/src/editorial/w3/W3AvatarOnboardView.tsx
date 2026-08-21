@@ -551,10 +551,13 @@ function W3AvatarGenerating({ heroImageUrl }: { heroImageUrl: string | null }) {
                   // photograph being turned into their avatar, and it stood
                   // empty behind a bicycle icon — the wrong object entirely on
                   // the one screen that is asking for a face. It is now the
-                  // shipped mannequin: the same kit, the same ground, no face
-                  // yet. It shows what is about to happen instead of naming it.
+                  // shipped character: a W3 collectible in the kit, on the
+                  // studio ground, deadpan. It shows what is about to happen
+                  // instead of naming it — and at 0.5 opacity it read as a grey
+                  // smudge, which sells nothing. It is the promise of the
+                  // screen, so it is allowed to be seen.
                   <img src="/w3/example-rider.webp" alt="" aria-hidden
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', opacity: 0.5 }} />
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 22%', opacity: 0.92 }} />
                 )}
               {/* acid scan sweep — the transformation, running over their face */}
               {!reduce && (
