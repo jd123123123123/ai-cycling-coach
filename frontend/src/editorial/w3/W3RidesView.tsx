@@ -51,6 +51,8 @@ export interface W3RidesVm {
   totalUnit: string
   ofGoalLabel: string
   bars: number[]                    // real, normalised 0..1 monthly distance
+  /** The same twelve months, in the units a tapped bar has to speak. */
+  barMonths: { km: number; label: string; year: number }[]
   barsAccentFrom: number            // index from which bars render acid
   avgSpeed: string                  // real | "—"
   avgPower: string                  // real | "—"
@@ -242,7 +244,6 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
 
   const recent = shown.filter((r) => r.recent)
   const earlier = shown.filter((r) => !r.recent)
-  const maxBar = Math.max(...vm.bars, 0.001)
 
   // ── THE PANEL ─────────────────────────────────────────────────────────────
   // The season's distance, over the same floor the bike stands on. The season
@@ -258,6 +259,9 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
       toGoLabel: vm.toGoLabel,
       paceLabel: vm.paceLabel,
       paceAhead: vm.paceAhead,
+      bars: vm.bars,
+      barMonths: vm.barMonths,
+      barsAccentFrom: vm.barsAccentFrom,
       stats: [
         { label: 'Ø TEMPO', value: vm.avgSpeed === DASH ? null : vm.avgSpeed, unit: 'km/h' },
         { label: 'Ø LEISTUNG', value: vm.avgPower === DASH ? null : vm.avgPower, unit: 'W' },
@@ -297,26 +301,10 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
         })}
       </div>
 
-      {/* Monthly distance bars (real). The season card's numbers are in the
-          panel above; what stays here is the SHAPE of the season, which is the
-          one thing that needs room to be read. */}
-      <div style={{ ...band(30) }}>
-        <div style={{ borderRadius: 24, background: T.surface, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.quiet }}>{vm.seasonLabel}</span>
-          <div style={{ display: 'flex', gap: 6, height: 70, alignItems: 'flex-end' }}>
-            {vm.bars.map((b, i) => {
-              const on = i >= vm.barsAccentFrom
-              return (
-                <motion.div key={i}
-                  initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }}
-                  transition={grow(i * 0.03)}
-                  style={{ flex: 1, height: `${Math.max(8, Math.round((b / maxBar) * 100))}%`, transformOrigin: 'bottom', borderRadius: 4,
-                    background: on ? T.acid : T.surface2, boxShadow: on ? `0 0 12px ${T.acid}40` : 'none' }} />
-              )
-            })}
-          </div>
-        </div>
-      </div>
+      {/* The monthly bars used to live here as a card of their own. They are IN
+          the panel now, opened by the same scroll that opens everything else —
+          they are not a second subject, they are the season figure spread over
+          twelve months, and up there they can be tapped. */}
 
       {/* Ride groups (real) */}
       {shown.length === 0 && (

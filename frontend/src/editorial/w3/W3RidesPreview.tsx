@@ -21,6 +21,9 @@ const FIXTURE: W3RidesVm = {
   totalUnit: 'km',
   ofGoalLabel: 'VOM ZIEL',
   bars: [0.42, 0.5, 0.4, 0.55, 0.48, 0.62, 0.44, 0.66, 0.72, 0.52, 0.9, 0.86],
+  barMonths: ['Sep', 'Okt', 'Nov', 'Dez', 'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug']
+    .map((label, i) => ({ label, year: i < 4 ? 2025 : 2026,
+      km: Math.round([0.42, 0.5, 0.4, 0.55, 0.48, 0.62, 0.44, 0.66, 0.72, 0.52, 0.9, 0.86][i] * 620) })),
   barsAccentFrom: 7,
   avgSpeed: '29.4',
   avgPower: '214',

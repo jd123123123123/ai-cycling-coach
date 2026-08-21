@@ -71,6 +71,17 @@ export default function W3RidesPage() {
     }
     const maxBar = Math.max(1, ...buckets)
     const bars = buckets.map((b) => b / maxBar)
+    // The bars are normalised for drawing, but a bar you can TAP has to be able
+    // to say what it is. Its real kilometres and its own month name ride along
+    // rather than being reverse-engineered from a 0..1 height at the call site.
+    const barMonths = buckets.map((km, i) => {
+      const d = new Date(now.getFullYear(), now.getMonth() - (11 - i), 1)
+      return {
+        km,
+        label: d.toLocaleDateString('de-DE', { month: 'short' }).replace('.', ''),
+        year: d.getFullYear(),
+      }
+    })
 
     // ── Goal-tracking block (FIXTURE: derived vs placeholder GOAL_KM) ─────────
     const progress = Math.min(1, totalKm / GOAL_KM)
@@ -117,6 +128,7 @@ export default function W3RidesPage() {
       totalUnit: 'km',
       ofGoalLabel: 'VOM ZIEL',
       bars,
+      barMonths,
       barsAccentFrom: 7, // trailing 5 months render acid, matching the pen
       avgSpeed,
       avgPower,
