@@ -24,14 +24,14 @@ import hashlib
 import json
 import logging
 import math
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from types import SimpleNamespace
 from typing import Annotated, Literal, get_args
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi import status as http_status
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
@@ -59,6 +59,7 @@ from app.services import (
     ride_framing,
     ride_place,
     ride_weather,
+    weather_client,
     rider_wear,
     service_proof,
     stages,
@@ -1247,11 +1248,35 @@ async def _compose_day_scene(db: AsyncSession, user_id: int, pose: str) -> DaySc
 # Earned by riding, never bought. The garage already has a shop; a picture you
 # paid for says nothing about you, and a picture you opened by climbing a
 # thousand metres says exactly one thing. See `services.backdrops`.
+async def _render_plate_later(user_id: int, slug: str) -> None:
+    """Render one place's shared plate, on its own session. Never raises.
+
+    Its own session because the request's is closed by the time this runs, and
+    holding one open across a model render would tie up a connection for
+    minutes. `places.ensure_plate` is already idempotent and already silent on
+    failure, so a second request that races this one costs nothing.
+    """
+    from app.database import async_session_maker
+
+    try:
+        async with async_session_maker() as db:
+            await db.execute(text("SELECT set_config('app.current_user_id', :uid, true)"),
+                             {"uid": str(user_id)})
+            row = (await db.execute(select(Place).where(Place.slug == slug))).scalar_one_or_none()
+            if row is None:
+                return
+            url = await places.ensure_plate(db, row)
+            logger.info("plate for %s: %s", slug, "rendered" if url else "not available")
+    except Exception:
+        logger.info("plate render failed for %s", slug, exc_info=True)
+
+
 @router.get("/backdrops", response_model=BackdropsOut,
             summary="The stages, which ones this rider has opened, and which is in use")
 async def get_backdrops(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    background: BackgroundTasks = None,  # noqa: RUF013 — FastAPI injects it
 ) -> BackdropsOut:
     """Every stage in the catalogue, locked ones included.
 
@@ -1273,6 +1298,22 @@ async def get_backdrops(
     owned = set((await db.execute(
         select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == current_user.id)
     )).scalars().all())
+
+    # ── THE PLACES HAD NO PICTURES, AND NOTHING WAS EVER GOING TO MAKE THEM ──
+    # `places.ensure_plate` is complete, documented, and says of itself "safe to
+    # call on every read of a place" — and it was called from nowhere at all.
+    # So every entry in this gallery has been showing NOCH KEIN BILD since the
+    # feature shipped: a rider is asked to spend 2 000 RC on a place they cannot
+    # see. The view was right; the picture was simply never made.
+    #
+    # In the BACKGROUND, never inline: a plate is a model render of a couple of
+    # minutes, and this response is a gallery someone is looking at right now.
+    # One place per request, oldest first, so opening the screen a few times
+    # fills it in rather than firing every render at once.
+    if background is not None:
+        pending = [p for p in all_places if not p.plate_url]
+        if pending:
+            background.add_task(_render_plate_later, current_user.id, pending[0].slug)
 
     return BackdropsOut(
         selected=selected,
@@ -1443,6 +1484,40 @@ async def _place_of_activity(db: AsyncSession, user_id: int, activity: Activity)
     return place
 
 
+async def _refetch_ride_weather(db: AsyncSession, activity: Activity) -> ride_weather.RideWeather | None:
+    """Fetch the weather this ride was missing, cache it, and return it.
+
+    Returns None — silently — whenever it cannot: no GPS to ask about, no start
+    time, the archive unreachable. The picture is then composed exactly as it
+    would have been, which is the whole contract: this can only ever add.
+    """
+    try:
+        if activity.started_at is None:
+            return None
+        row = (await db.execute(
+            select(ActivityStream).where(ActivityStream.activity_id == activity.id)
+        )).scalar_one_or_none()
+        if row is None:
+            return None
+        s = row.streams if isinstance(row.streams, dict) else json.loads(row.streams or "{}")
+        lats = [v for v in (s.get("latitude") or []) if v is not None]
+        lngs = [v for v in (s.get("longitude") or []) if v is not None]
+        if not lats or not lngs:
+            return None
+        end = activity.started_at + timedelta(seconds=int(activity.duration_seconds or 3600))
+        blob = await weather_client.fetch_ride_weather(
+            float(lats[0]), float(lngs[0]), activity.started_at, end,
+        )
+        if not isinstance(blob, dict):
+            return None
+        row.weather = blob
+        await db.commit()
+        return ride_weather.summarise(blob, activity.started_at)
+    except Exception:
+        logger.info("weather refetch failed for activity %s", activity.id, exc_info=True)
+        return None
+
+
 @router.get("/scene/{activity_id}", response_model=SceneOut)
 async def get_scene(
     activity_id: int,
@@ -1554,10 +1629,22 @@ async def render_scene(
     wx_row = (await db.execute(
         select(ActivityStream.weather).where(ActivityStream.activity_id == activity_id)
     )).scalar_one_or_none()
-    wx = ride_weather.summarise(
-        json.loads(wx_row) if isinstance(wx_row, str) else wx_row,
-        activity.started_at,
-    )
+    blob = json.loads(wx_row) if isinstance(wx_row, str) else wx_row
+    wx = ride_weather.summarise(blob, activity.started_at)
+    if wx is None:
+        # ── A FAILED FETCH IS NOT AN ANSWER ─────────────────────────────────
+        # 62 of 183 stored streams hold a literal JSON `null` here: the weather
+        # call failed once at ingestion and the failure was persisted as though
+        # it were the result. Those rides then get no weather clause forever,
+        # which is exactly the case the rider notices — a bright summer ride
+        # rendered under a sky nobody measured.
+        #
+        # Open-Meteo's archive still has that day, so a compose (already a
+        # minutes-long, model-backed operation) can afford one HTTP call to go
+        # and get it, and writes it back so it is fetched once and not again.
+        # Never fatal: a second failure leaves the picture exactly as it would
+        # have been.
+        wx = await _refetch_ride_weather(db, activity)
     weather = ride_weather.clause(wx)
     wet = "wet" if (wx and wx.wet) else "dry"
 
