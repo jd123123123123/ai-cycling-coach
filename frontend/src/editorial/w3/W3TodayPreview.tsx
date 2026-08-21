@@ -24,6 +24,9 @@ export const FIXTURE: W3Vm = {
   // The preview has no garage, so the stage demos its empty states: the empty
   // seat where the rider bust goes, and the labelled example bike.
   riderImage: null,
+  // No sealed chest in the preview fixture — the readiness dock is what this
+  // route exists to show. `W3RideChestPreview` covers the other state.
+  chest: null,
   coins: '1.448',
   weekDoneLabel: '4 von 6 erledigt',
   avatarUrl: null,

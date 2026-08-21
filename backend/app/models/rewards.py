@@ -100,6 +100,20 @@ class PointsLedger(Base):
     base_tss: Mapped[int | None] = mapped_column(Integer, nullable=True)
     multiplier: Mapped[float | None] = mapped_column(Float, nullable=True)
     context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    #: WHEN THIS LINE ACTUALLY REACHED THE WALLET.
+    #:
+    #: A ride's earnings are written the moment the ride lands, but they do not
+    #: move the balance until the rider opens the ride — the sealed-chest
+    #: mechanic. NULL therefore means "earned, sitting in the chest"; a stamp
+    #: means "banked, counted in `wallets.balance`".
+    #:
+    #: Every line that is not part of a ride's chest (a purchase, a service
+    #: bonus, an onboarding grant) is stamped the instant it is written, so this
+    #: column is only ever NULL for coins the rider has not collected yet.
+    claimed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True,
     )

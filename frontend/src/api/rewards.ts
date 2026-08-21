@@ -79,6 +79,69 @@ export interface RideEarning {
   multiplier: number
   base_tss?: number | null
   at?: string | null
+  /** Whether these coins have reached the wallet yet. False = still sealed. */
+  claimed?: boolean
+  /** What is still sitting in the chest, unbanked. */
+  pending?: number
+  /** Everything the ride paid — base, streak, gear bonus, Eddington. This is
+   *  the number the swipe banks, so it is the number the screen counts up. */
+  total_all?: number
+  lines?: { reason: string; amount: number }[]
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// THE SEALED CHEST — a ride's coins are earned when it syncs and BANKED
+// when the rider opens it. `GET /rewards/chest` is what the Today screen
+// asks to know whether there is a ride waiting; it is the only thing in
+// the app allowed to interrupt the day, so `sealed: false` is normal and
+// the screen shows nothing at all.
+// ──────────────────────────────────────────────────────────────────────
+
+export interface ChestLine {
+  reason: string
+  amount: number
+  multiplier?: number | null
+}
+
+/** A real breakthrough this ride made against the rider's own 90-day bests.
+ *  Never invented: an ordinary Tuesday has none, and the screen says nothing. */
+export interface ChestUnlock {
+  kind: string
+  headline: string
+  detail: string
+  value_w?: number | null
+  prior_best_w?: number | null
+  gain_pct?: number | null
+}
+
+export interface ChestRide {
+  title: string | null
+  started_at: string | null
+  distance_km: number | null
+  elevation_m: number | null
+  duration_s: number | null
+  tss: number | null
+}
+
+export interface Chest {
+  sealed: boolean
+  activity_id?: number
+  total?: number
+  lines?: ChestLine[]
+  sealed_since?: string | null
+  /** How many rides are unopened in total — the newest is the one shown. */
+  waiting?: number
+  ride?: ChestRide
+  unlocks?: ChestUnlock[]
+  unlock_count?: number
+}
+
+export interface ClaimResult {
+  activity_id: number
+  /** What just landed. Zero on a second tap, which is not an error. */
+  claimed: number
+  balance: number
+  tier?: TierProgress
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -182,5 +245,18 @@ export async function grantOnboarding(
   const res = await apiClient.post<OnboardingGrantResult>(
     `/rewards/onboarding/${kind}`,
   )
+  return res.data
+}
+
+
+// GET /rewards/chest — the newest unopened ride, and what it is holding.
+export async function fetchChest(): Promise<Chest> {
+  const res = await apiClient.get<Chest>('/rewards/chest')
+  return res.data
+}
+
+// POST /rewards/ride/{id}/claim — open the chest. THE moment the coins land.
+export async function claimRide(activityId: number): Promise<ClaimResult> {
+  const res = await apiClient.post<ClaimResult>(`/rewards/ride/${activityId}/claim`)
   return res.data
 }

@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { useTodayModel } from '../data/useTodayModel'
@@ -7,7 +8,7 @@ import { useStreak } from '../../hooks/useStreak'
 import { useGarage, useSelectStage, useTodayStage } from '../../hooks/useGarage'
 import { useGarageCollection } from '../../hooks/useShop'
 import { itemById } from './w3shop'
-import { useWallet } from '../../hooks/useWallet'
+import { useChest, useWallet } from '../../hooks/useWallet'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
@@ -257,6 +258,7 @@ function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
 }
 
 export default function W3TodayPage() {
+  const navigate = useNavigate()
   const { state } = useDayState()
   const model = useTodayModel(state)
   const { user } = useAuth()
@@ -285,6 +287,8 @@ export default function W3TodayPage() {
   )
   // REAL RideCoin balance for the hero's identity card.
   const { data: wallet } = useWallet()
+  // A ride waiting to be opened takes over the readiness slot until it is.
+  const { data: chest } = useChest()
   // The avatar and the bike exactly as the rider has them configured, plus the
   // stages they can swipe between. A cheap cached read — it never renders.
   const { data: today } = useTodayStage()
@@ -695,6 +699,8 @@ export default function W3TodayPage() {
       avatarInitial: (user?.display_name || user?.email || '?').charAt(0).toUpperCase(),
       streak: isPresent(model.streakDays) ? model.streakDays.value : null,
 
+      // A sealed chest hides the readiness dock entirely — see `W3RideChest`.
+      chest: chest ?? null,
       readiness,
       // A one-word readiness read from the score (not the session name, which
       // is redundant with Today's Training below).
@@ -753,7 +759,7 @@ export default function W3TodayPage() {
     }
   }, [
     model, user, streak, adaptive, week, ftp, todayWeather, weekActs,
-    garage, garageLoading, wallet,
+    garage, garageLoading, wallet, chest,
     // Without these the memo never re-runs when the collection query lands, and
     // the hero would keep showing the empty state to a rider who owns a bike.
     collectibleArt, collectibleBike,
@@ -795,5 +801,12 @@ export default function W3TodayPage() {
   // it also has to enforce owning a bike — and that check needs the garage
   // query, which does not belong on Today's critical path.
 
-  return <W3TodayView vm={vm} onAdapt={onAdapt} />
+  return (
+    <W3TodayView
+      vm={vm}
+      onAdapt={onAdapt}
+      // The swipe hands over to the celebration, which is where the coins
+      // actually land. Today's job ends at the gesture.
+      onOpenChest={() => chest?.activity_id && navigate(`/e/w3-ride-celebrate/${chest.activity_id}`)} />
+  )
 }
