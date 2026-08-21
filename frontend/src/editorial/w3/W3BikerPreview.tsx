@@ -17,7 +17,7 @@ const FIXTURE: W3BikerVm = {
   monuments: [
     { kind: 'orbit', label: 'GESAMTDISTANZ', value: '48.120', unit: 'km',
       story: '1,2× um die Erde', note: 'noch 32.030 km bis Runde 2', laps: 1.2 },
-    { kind: 'column', label: 'HÖHENMETER', value: '61,4', unit: 'km hoch',
+    { kind: 'column', label: 'HÖHENMETER', value: '61,4', unit: 'km',
       story: '6,9× Mount Everest', note: 'vom Meeresspiegel aus gerechnet', everest: 6.9 },
     { kind: 'dial', label: 'Ø TEMPO', value: '27,4', unit: 'km/h',
       story: 'über alle deine Fahrten', note: '', kmh: 27.4 },
@@ -28,7 +28,7 @@ const FIXTURE: W3BikerVm = {
     { kind: 'rules', label: 'LÄNGSTE FAHRT', value: '233', unit: 'km',
       story: '5,8× eine normale Fahrt', note: 'dein Schnitt liegt bei 40 km', longestKm: 233, avgKm: 40 },
     { kind: 'ration', label: 'VERBRANNT', value: '184,2K', unit: 'kcal',
-      story: '216 Pizzen', note: 'eine Scheibe ist zehn Pizzen', pizzas: 216 },
+      story: '216 Pizzen', note: 'eine Scheibe sind 25 Pizzen', pizzas: 216 },
   ],
   engine: [
     { label: 'FTP', value: '292 W', caption: 'Watt an der Schwelle' },

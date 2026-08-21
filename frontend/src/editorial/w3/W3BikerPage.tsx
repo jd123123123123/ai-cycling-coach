@@ -12,7 +12,7 @@ import { useWahooStatus } from '../../hooks/useWahooStatus'
 import { useCorosStatus } from '../../hooks/useCorosStatus'
 import { useGarage } from '../../hooks/useGarage'
 import { compactNumber, useRiderLifetime } from './w3RiderStats'
-import type { W3Monument } from './W3Monument'
+import { PIZZAS_PER_DISC, type W3Monument } from './W3Monument'
 import W3BikerView, { type W3BikerVm, type W3Device } from './W3BikerView'
 
 // The constants the milestones are measured against. Named, because a bare
@@ -134,7 +134,7 @@ export default function W3BikerPage() {
         kind: 'column',
         label: 'HÖHENMETER',
         value: life.elevM > 0 ? (life.elevM / 1000).toFixed(1) : DASH,
-        unit: 'km hoch',
+        unit: 'km',
         story: life.elevM > 0
           ? `${life.everest.toFixed(life.everest < 10 ? 1 : 0)}× Mount Everest`
           : 'noch keine Höhenmeter erfasst',
@@ -191,7 +191,7 @@ export default function W3BikerPage() {
         value: life.kcal > 0 ? compactNumber(life.kcal) : DASH,
         unit: 'kcal',
         story: life.kcal > 0 ? `${Math.round(life.pizzas)} Pizzen` : 'noch nichts gezählt',
-        note: life.kcal > 0 ? 'eine Scheibe ist zehn Pizzen' : '',
+        note: life.kcal > 0 ? `eine Scheibe sind ${PIZZAS_PER_DISC} Pizzen` : '',
         pizzas: life.pizzas,
       },
     ]

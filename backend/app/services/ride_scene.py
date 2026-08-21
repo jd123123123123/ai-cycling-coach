@@ -32,11 +32,27 @@ class RideGeo:
 
 # terrain bucket -> background clause. Same restrained, cinematic register as
 # the character and the bike art — atmospheric places, not toy dioramas.
+# ── LANDFORM ONLY. THE SKY IS NOT OURS TO DECIDE. ──────────────────────────
+# Every one of these used to prescribe the weather as well as the terrain:
+# "under low, heavy cloud", "in flat overcast light", "cold mist between the
+# switchbacks", "cold light breaking over the sea". The model does exactly what
+# it is told, so a bright 133 km summer ride through rolling farmland was
+# rendered grey and rained-on — and then the real recorded weather, added later,
+# had to argue with prose that had already declared the sky.
+#
+# So these describe the SHAPE OF THE GROUND and nothing else. What the light was
+# doing comes from `ride_weather.clause`, which reads the temperature, the rain
+# and the wind that were actually measured that hour. Terrain we infer; weather
+# we know — and the one we know should win.
+#
+# They are also written to be ABUNDANT rather than austere. "Muted" and "empty"
+# are not neutral words: a scene told to be muted comes back drained, and the
+# picture a rider wants of their own ride is not a bleak one.
 _TERRAIN = {
-    "mountain": "a high mountain pass at first light — dark rock faces, deep shadowed valleys below, cold mist between the switchbacks and a hairpin road climbing steeply",
-    "hilly": "rolling hills under low, heavy cloud — muted greens, long shadows and a curving country road",
-    "flat": "a wide open plain in flat overcast light — muted fields, a low horizon and a long straight road running to it",
-    "coastal": "a windswept coastline — dark water, a cliffside road and cold light breaking over the sea",
+    "mountain": "a high mountain pass — layered rock faces with visible strata, deep valleys falling away below, dense alpine vegetation clinging to the slopes and a hairpin road climbing steeply through it",
+    "hilly": "rolling farmland hills — deep green fields in bands, hedgerows and stands of broadleaf trees, a curving country road cutting through the middle of it",
+    "flat": "wide open country — rich fields running to a low horizon, lines of poplars along the verges and a long road drawn straight through them",
+    "coastal": "a coastline — open water to one side, salt grass and low scrub on the headland, and a road running along the top of the cliff",
 }
 
 
@@ -129,7 +145,7 @@ def scene_descriptor(g: RideGeo) -> str:
     stylised outdoor road (never a fabricated location).
     """
     if (g.distance_m or 0) <= 0 and g.elevation_gain_m is None:
-        base = "an empty stretch of road in soft directional light, quiet and atmospheric"
+        base = "a stretch of open road with real verges — grass, scrub and trees close to its edge"
     else:
         base = _TERRAIN[terrain_key(g)]
 

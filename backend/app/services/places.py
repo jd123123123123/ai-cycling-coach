@@ -81,6 +81,18 @@ def price_for(geo: RideGeo) -> int:
     return PRICE_BY_TERRAIN.get(terrain_key(geo), DEFAULT_PRICE)
 
 
+#: Phrases that only ever appeared in the weather-prescribing terrain strings.
+#: Their presence dates a row to before that was fixed. See `ensure`.
+_STALE_PROSE = (
+    "low, heavy cloud",
+    "flat overcast light",
+    "cold mist between",
+    "cold light breaking over the sea",
+    "quiet and atmospheric",
+    "at first light — dark rock faces",
+)
+
+
 def prose_for(name: str, geo: RideGeo) -> str:
     """The BACKGROUND clause for this place, from the ride that found it.
 
@@ -152,6 +164,24 @@ async def ensure(
         select(Place).where(Place.slug == slug)
     )).scalar_one_or_none()
     if existing is not None:
+        # ── LAZY REFRESH, NO MIGRATION ──────────────────────────────────────
+        # A place's prose is written once, when the place is discovered, and
+        # then it is what every future picture of that place is built from. The
+        # terrain sentences used to prescribe the weather ("under low, heavy
+        # cloud"), so every row written before that was fixed carries a sky we
+        # have no business declaring — and no amount of real recorded weather
+        # can argue with prose that already said it was overcast.
+        #
+        # Rewriting them needs no schema change and no backfill job: a stale row
+        # is recognisable BY ITS OWN WORDS, and the next time anyone asks for it
+        # we hand back the corrected version. A row that fails to update is
+        # still returned — a stale sentence is worth far less than a 500.
+        if any(marker in (existing.prose or "") for marker in _STALE_PROSE):
+            existing.prose = prose_for(existing.name, geo)
+            try:
+                await db.commit()
+            except Exception:
+                await db.rollback()
         return existing
 
     place = Place(
