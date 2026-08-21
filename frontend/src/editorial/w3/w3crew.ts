@@ -23,10 +23,10 @@ export const periodWord = (p: W3Period) => (p === 'year' ? 'Saison' : p === 'mon
 /** "diese Woche" | "diesen Monat" | "diese Saison" (adverbial accusative). */
 export const thisPeriod = (p: W3Period) => (p === 'month' ? 'diesen Monat' : `diese ${periodWord(p)}`)
 
-/** Per-rider board colours, in board order (rank 1 first). */
-export const AVATAR_TINTS = ['#B9A7EE', '#A7D8EE', '#EEC7A7', '#A7EEC0', '#EEA7D2', '#EED7A7', '#A7C4EE', '#D2A7EE']
-/** The dark end of a tint gradient. */
-export const TINT_BASE = '#16131F'
+// Re-exported from the palette, where the measurements that chose these
+// eight live. They used to be eight pastels declared here, six of which read
+// as grey and two of which a full-colour reader could not tell apart.
+export { BOARD_TINTS as AVATAR_TINTS, BOARD_BASE as TINT_BASE } from './w3tokens'
 
 const MONTHS = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ']
 

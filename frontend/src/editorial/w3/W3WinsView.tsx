@@ -136,7 +136,7 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
         {/* Your challenges → hero */}
         <div style={{ ...band(28), gap: 14 }}>
           <SectionHead title={vm.challengesHeader} sub={vm.challengesSub} chip={vm.challengesChip} />
-          <div style={{ borderRadius: 24, background: `linear-gradient(180deg, #1b1c19, ${T.surface})`, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: `1px solid ${T.rule}` }}>
+          <div style={{ borderRadius: 24, background: `linear-gradient(180deg, ${T.acidTop}, ${T.surface})`, overflow: 'hidden', display: 'flex', flexDirection: 'column', border: `1px solid ${T.rule}` }}>
             <div style={{ height: 176, position: 'relative', display: 'grid', placeItems: 'center', background: `radial-gradient(circle at 50% 44%, ${T.acid}33, ${T.acid}0d 42%, transparent 66%)` }}>
               {/* pulsing radiant glow behind the emblem */}
               <motion.div
@@ -147,7 +147,7 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
                 {/* outer acid ring */}
                 <div style={{ position: 'absolute', inset: -8, clipPath: OCTAGON, background: `${T.acid}2e` }} />
                 <div style={{ position: 'absolute', width: 104, height: 104, background: T.acid, clipPath: OCTAGON, filter: 'blur(16px)', opacity: 0.65 }} />
-                <div style={{ position: 'absolute', inset: 0, clipPath: OCTAGON, background: `linear-gradient(155deg, #dbff5a, ${T.acid} 45%, ${T.acidDeep})` }} />
+                <div style={{ position: 'absolute', inset: 0, clipPath: OCTAGON, background: `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 45%, ${T.acidDeep})` }} />
                 {/* glossy top highlight */}
                 <div style={{ position: 'absolute', top: 6, left: 14, right: 30, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,.4)', filter: 'blur(6px)' }} />
                 <Flame size={44} color={T.bg} style={{ position: 'relative' }} />
@@ -224,7 +224,7 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
         <div style={{ ...band(28), gap: 14 }}>
           <SectionHead title={vm.communityHeader} sub={vm.communitySub} chip={vm.communityChip} />
           <div style={{ borderRadius: 24, background: T.surface, overflow: 'hidden' }}>
-            <div style={{ position: 'relative', minHeight: 210, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 18, background: 'linear-gradient(160deg, #2A3340 0%, #1B2330 42%, #14181F 100%)' }}>
+            <div style={{ position: 'relative', minHeight: 210, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: 18, background: `linear-gradient(160deg, ${T.nightHi} 0%, ${T.nightMid} 42%, ${T.nightLo} 100%)` }}>
               <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, transparent 30%, #0B0B0BCC 100%)' }} />
               <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.8, color: T.ink }}>{vm.communityHero.title}</span>
@@ -264,10 +264,10 @@ export default function W3WinsView({ vm, onNewChallenge, onEditChallenge }: { vm
             {vm.badges.map((b) => {
               const Ic = BADGE_ICON[b.earned ? b.icon : 'lock']
               return (
-                <div key={b.key} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 10px 14px', alignItems: 'center', borderRadius: 20, background: b.earned ? `linear-gradient(180deg, #1b1c19, ${T.surface})` : T.surface, border: `1px solid ${b.earned ? T.acid + '26' : T.rule}` }}>
+                <div key={b.key} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 10px 14px', alignItems: 'center', borderRadius: 20, background: b.earned ? `linear-gradient(180deg, ${T.acidTop}, ${T.surface})` : T.surface, border: `1px solid ${b.earned ? T.acid + '26' : T.rule}` }}>
                   <div style={{ width: 52, height: 52, position: 'relative', display: 'grid', placeItems: 'center' }}>
                     {b.earned && <div style={{ position: 'absolute', width: 60, height: 60, background: T.acid, clipPath: OCTAGON, filter: 'blur(15px)', opacity: 0.5 }} />}
-                    <div style={{ position: 'absolute', inset: 0, clipPath: OCTAGON, background: b.earned ? `linear-gradient(155deg, #dbff5a, ${T.acid} 48%, ${T.acidDeep})` : '#FFFFFF0F' }} />
+                    <div style={{ position: 'absolute', inset: 0, clipPath: OCTAGON, background: b.earned ? `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 48%, ${T.acidDeep})` : '#FFFFFF0F' }} />
                     {b.earned && <div style={{ position: 'absolute', top: 4, left: 8, right: 16, height: 13, borderRadius: '50%', background: 'rgba(255,255,255,.4)', filter: 'blur(3px)' }} />}
                     <Ic size={22} color={b.earned ? T.bg : T.quiet} />
                   </div>

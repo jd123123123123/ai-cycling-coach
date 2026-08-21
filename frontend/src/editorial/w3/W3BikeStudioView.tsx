@@ -199,7 +199,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
       <div className="w3-root">
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg, position: 'relative', overflow: 'hidden' }}>
           <div style={{ position: 'absolute', top: 120, left: '50%', transform: 'translateX(-50%)', width: 460, height: 460, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}1F, transparent)` }} />
-          {[T.acid, T.evening, '#00E5FF', T.warn, T.acid, T.evening].map((c, i) => (
+          {[T.acid, T.evening, T.hrv, T.warn, T.acid, T.evening].map((c, i) => (
             <motion.div key={i} initial={reduce ? false : { y: -20, opacity: 0 }} animate={{ y: [-20, 700], opacity: [0, 1, 0], rotate: [0, 220] }} transition={{ duration: 2.6, delay: i * 0.14, repeat: Infinity, repeatDelay: 0.8 }}
               style={{ position: 'absolute', top: 0, left: `${12 + i * 14}%`, width: 6, height: 12, borderRadius: 2, background: c, zIndex: 1 }} />
           ))}
@@ -313,7 +313,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
 
         {/* The card */}
         <div style={{ ...band(18) }}>
-          <Card grad={busy || p.state === 'reveal' ? grad : 'linear-gradient(180deg, #161616, #0F0F0F)'}>
+          <Card grad={busy || p.state === 'reveal' ? grad : `linear-gradient(180deg, ${T.surface}, ${T.ground})`}>
             {/* rendered collectible — only with a real image */}
             {p.state === 'reveal' && p.imageUrl && (
               <img src={p.imageUrl} alt="Dein Collectible-Bike" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />

@@ -155,7 +155,7 @@ export default function W3ChallengesView({ vm, onJoin }: { vm: W3ChallengesVm; o
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.acid }}>{vm.monthlyStatus}</span>
           </div>
 
-          <div style={{ borderRadius: 24, background: '#0F0F0F', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ borderRadius: 24, background: T.ground, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
             {/* Hero emblem */}
             <div style={{ padding: '30px 0 26px', display: 'grid', placeItems: 'center', position: 'relative' }}>
               <div style={{ position: 'absolute', width: 168, height: 168, borderRadius: '50%', background: 'radial-gradient(circle, rgba(200,255,0,0.42), rgba(200,255,0,0) 62%)', filter: 'blur(4px)' }} />

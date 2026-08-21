@@ -7,6 +7,7 @@ import { usePMC } from '../../hooks/usePMC'
 import { computeReadiness, canonicalReadiness, readinessTier } from '../../utils/metrics'
 import type { DailyMetric } from '../../api/dashboard'
 import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon, type SleepStage } from './W3ReadinessView'
+import { T } from './w3tokens'
 
 /**
  * W3 · READINESS, wired to real data. Route /e/w3-readiness.
@@ -124,7 +125,7 @@ export default function W3ReadinessPage() {
       const tot = sd.total_s as number
       const h = Math.floor(tot / 3600), m = Math.round((tot % 3600) / 60)
       const stage = (s: number | null, label: string, hue: string): SleepStage | null => (s != null && s > 0 ? { label, frac: s / tot, hue } : null)
-      const stages = [stage(sd.deep_s, 'Tief', '#7B5CFF'), stage(sd.rem_s, 'REM', '#00E5FF'), stage(sd.light_s, 'Leicht', '#6B8CFF'), stage(sd.awake_s, 'Wach', '#FFB020')].filter((x): x is SleepStage => x != null)
+      const stages = [stage(sd.deep_s, 'Tief', T.evening), stage(sd.rem_s, 'REM', T.rem), stage(sd.light_s, 'Leicht', T.cool), stage(sd.awake_s, 'Wach', T.warn)].filter((x): x is SleepStage => x != null)
       const deepPct = sd.deep_s != null ? Math.round((sd.deep_s / tot) * 100) : null
       return {
         total: `${h}:${String(m).padStart(2, '0')} h`,

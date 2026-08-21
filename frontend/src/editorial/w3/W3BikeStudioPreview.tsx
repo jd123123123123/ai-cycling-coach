@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import W3BikeStudioView, { type StudioState } from './W3BikeStudioView'
 import { STARTER_BIKE } from './starterBike'
+import { T } from './w3tokens'
 
 /** TEMP preview — drives the studio states with a fixture, no backend.
  *  /e/w3-bike-studio-preview is unguarded; remove before merge. Cycles
@@ -31,7 +32,7 @@ export default function W3BikeStudioPreview() {
   const [state, setState] = useState<StudioState>('reveal')
   const [celebrate, setCelebrate] = useState(true)
   const [rewardCase, setRewardCase] = useState<RewardCase>('granted')
-  const chip = (on: boolean) => ({ fontSize: 9, padding: '3px 6px', borderRadius: 5, border: 0, background: on ? '#C8FF00' : '#222', color: on ? '#000' : '#aaa', cursor: 'pointer' })
+  const chip = (on: boolean) => ({ fontSize: 9, padding: '3px 6px', borderRadius: 5, border: 0, background: on ? T.acid : '#222', color: on ? '#000' : '#aaa', cursor: 'pointer' })
   return (
     <div>
       {/* dev state switcher */}

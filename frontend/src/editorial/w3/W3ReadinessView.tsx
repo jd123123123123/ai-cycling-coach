@@ -36,11 +36,11 @@ export interface W3ReadinessVm {
 export interface W3ReadinessActions { onBack?: () => void }
 
 const ICONS: Record<DriverIcon, typeof Activity> = { hrv: Activity, rhr: HeartPulse, sleep: Moon, battery: BatteryCharging, stress: Waves, recovery: Timer, vo2: Wind }
-const HUE: Record<DriverIcon, string> = { hrv: '#00E5FF', rhr: '#FF6A8A', sleep: T.evening, battery: T.training, stress: T.warn, recovery: T.cool, vo2: T.acid }
+const HUE: Record<DriverIcon, string> = { hrv: T.hrv, rhr: T.rhr, sleep: T.evening, battery: T.training, stress: T.warn, recovery: T.cool, vo2: T.acid }
 
 const band = (pb: number): CSSProperties => ({ display: 'flex', flexDirection: 'column', width: '100%', background: T.bg, padding: `0 20px ${pb}px` })
 /** Bubbly card: big radius + a soft top-lit gradient + hairline. */
-const bubble = (accent = T.stroke): CSSProperties => ({ borderRadius: 28, padding: 20, display: 'flex', flexDirection: 'column', width: '100%', background: `linear-gradient(180deg, #1B1B1B, ${T.surface})`, border: `1px solid ${accent}` })
+const bubble = (accent = T.stroke): CSSProperties => ({ borderRadius: 28, padding: 20, display: 'flex', flexDirection: 'column', width: '100%', background: `linear-gradient(180deg, ${T.lift}, ${T.surface})`, border: `1px solid ${accent}` })
 
 // ── readiness ring — the dopamine hero ──
 function ReadinessRing({ score, word, tier }: { score: number | null; word: string | null; tier: string | null }) {

@@ -1,5 +1,6 @@
 import W3TodayView, { type W3Vm } from './W3TodayView'
 import { STARTER_BIKE } from './starterBike'
+import { T } from './w3tokens'
 
 /**
  * TEMP preview harness — renders W3TodayView with a pen-faithful fixture so the
@@ -39,9 +40,9 @@ export const FIXTURE: W3Vm = {
   coachDate: 'Di, 12. Aug · Woche 6 von 16',
   coachLead: '88 ist grünes Licht. Dein Körper verarbeitet alles, was die heutige Einheit verlangt.',
   coachWhy: 'Alle drei Nachtwerte zeigen zum ersten Mal seit neun Tagen in dieselbe Richtung: HRV 71 ms (+9 auf den Basiswert), Ruhepuls 42 (−3), Schlaf 7:42 bei 91 Qualität.',
-  hrv: { value: '71', unit: 'ms', sub: '+9 ggü. Basiswert', subHue: '#C8FF00', spark: spark([0.18, 0.45, 0.32, 0.68, 0.55, 0.82, 1], '#C8FF00') },
-  rhr: { value: '42', unit: 'bpm', sub: '−3 ggü. Basiswert', subHue: '#C8FF00', spark: spark([0.32, 0.45, 0.18, 0.6, 0.72, 0.72, 1], '#C8FF00') },
-  sleep: { value: '7:42', unit: 'h', sub: '91 Qualität', subHue: '#C8FF00', spark: spark([0.18, 0.55, 0.4, 1, 0.63, 0.82, 0.9], '#C8FF00') },
+  hrv: { value: '71', unit: 'ms', sub: '+9 ggü. Basiswert', subHue: T.acid, spark: spark([0.18, 0.45, 0.32, 0.68, 0.55, 0.82, 1], T.acid) },
+  rhr: { value: '42', unit: 'bpm', sub: '−3 ggü. Basiswert', subHue: T.acid, spark: spark([0.32, 0.45, 0.18, 0.6, 0.72, 0.72, 1], T.acid) },
+  sleep: { value: '7:42', unit: 'h', sub: '91 Qualität', subHue: T.acid, spark: spark([0.18, 0.55, 0.4, 1, 0.63, 0.82, 0.9], T.acid) },
   weekMeta: '486 von 620 TSS',
   weekBlockLabel: 'Aufbaublock · Woche 2',
   weekDoneChip: '1 / 6 erledigt',

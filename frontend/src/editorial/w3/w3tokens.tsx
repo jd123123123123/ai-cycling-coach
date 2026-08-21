@@ -58,7 +58,68 @@ export const T = {
   d1: '#FFFFFF14', d2: '#FFFFFF33', d3: '#FFFFFF4D', d4: '#FFFFFF8C',
   training: '#2BE68F', evening: '#7B5CFF', cool: '#6B8CFF',
   warn: '#FFB020', bad: '#FF4356',
+
+  // ── VITAL SIGNS ────────────────────────────────────────────────────────
+  // Cyan was not a decision anyone made; it appeared as a literal in five
+  // files (the HRV number, the HRV spark, the REM sleep stage, a studio
+  // swatch, the sleep icon) and became a second accent by accumulation. It
+  // does real work — a vital sign is an IDENTITY, and identity is the one
+  // job colour may hold — so it is declared here instead of scattered, and
+  // the app now has one place to change its mind.
+  hrv: '#00E5FF', rem: '#00E5FF', rhr: '#FF6A8A', sleep: '#ED29FF',
+  zone5: '#FF7A2F',          // the fifth zone, past `warn` — nothing else is
+  orbit: '#B9A6FF',          // the distance-around-the-Earth line, and only it
+
+  // ── GROUNDS ────────────────────────────────────────────────────────────
+  // Surfaces that were being written as literals next to the tokens they
+  // sit beside. `acidTop` is the warm-lit top of a card that has EARNED
+  // something — it is `surface` with the acid's own light fallen on it.
+  ground: '#0F0F0F',         // deeper than `surface`: a card that is a hole
+  card: '#151516',           // the referral portrait ground (blue-black)
+  chip: '#232427',           // a stat tile inside a dark card
+  acidTop: '#1B1C19',
+  lift: '#1B1B1B',           // a neutral card top — `acidTop` without the acid
+  acidHi: '#DBFF5A',         // the highlight stop above `acid` in a medal
+
+  // ── A NIGHT SKY ────────────────────────────────────────────────────────
+  // Three stops of the same cool descent, used as one gradient. Named as a
+  // set because they are meaningless apart.
+  nightHi: '#2A3340', nightMid: '#1B2330', nightLo: '#14181F',
 }
+
+/**
+ * Per-rider board colours, in board order (rank 1 first).
+ *
+ * These were eight pastels, and they did not work. Measured with the palette
+ * validator on this app's dark surface: SIX of the eight fell below the chroma
+ * floor — they read as grey — and the worst pair sat at ΔE 9.0 for NORMAL
+ * colour vision, below the floor of 15, meaning a rider with no deficiency at
+ * all could not tell one card from the next. For deuteranopia it was ΔE 2.2:
+ * no separation whatsoever.
+ *
+ * THERE ARE SIX BECAUSE EIGHT IS NOT POSSIBLE HERE. A first replacement kept
+ * eight and passed — but only on ADJACENT pairs, which is the wrong test for a
+ * leaderboard, where rank 1 and rank 6 are on screen together. Checked across
+ * ALL pairs, the yellow collided with the lime (ΔE 2.4 deutan) and the purple
+ * with the pink (13.1 normal), and no eighth hue fixed both: the dark surface
+ * simply does not hold eight separable colours. So the set was cut rather than
+ * fudged. Ranks past six reuse a colour, which the board can afford — rank and
+ * name are the identity, colour only reinforces it.
+ *
+ * All pairs now: worst ΔE 15.2 normal, 8.0 protan. The protan figure sits ON
+ * the floor, which is legal precisely because that secondary encoding is
+ * always present. Pinned by `boardPalette.test.ts`.
+ *
+ * The lightness band is the one check deliberately failed. It is tuned for thin
+ * chart marks; these are the lit end of a large gradient card behind a
+ * photograph, in an art direction that is neon on near-black. Dimming them into
+ * the band would fix a number and break the product.
+ */
+export const BOARD_TINTS = [
+  '#BFFF3C', '#00E5FF', '#FF6AC8', '#FF8A3C', '#6B8CFF', '#2BE68F',
+] as const
+/** The dark end of a board tint's gradient. */
+export const BOARD_BASE = '#16131F'
 export const FONT = '"Inter Tight", ui-sans-serif, system-ui, sans-serif'
 export const EASE = [0.22, 1, 0.36, 1] as const
 export const grow = (delay: number) => ({ duration: 0.55, ease: EASE, delay })
@@ -203,4 +264,25 @@ export const HIDDEN_FILE_INPUT = {
   height: 1,
   opacity: 0,
   pointerEvents: 'none' as const,
+}
+
+
+/**
+ * The painted sky and mountains behind a shared ride card.
+ *
+ * A palette source, like the basemap: these are scenery, and scenery has no
+ * token equivalents — nothing else in this app is a ridgeline at dusk, and
+ * inventing `T.mountainMid` would put a colour in the design system that no
+ * component may use. They live here so the share painter itself holds no raw
+ * hex, which is how it came to be painting a lime that was not this app's.
+ */
+export interface ShareScene {
+  skyTop: string; skyBot: string
+  mtnBack: string; mtnMid: string; mtnFront: string
+  route: string
+}
+export const SHARE_SCENES: Record<'rekord' | 'fahrt' | 'leistung', ShareScene> = {
+  rekord:   { skyTop: '#6A4BC4', skyBot: '#C56BA6', mtnBack: '#7A4FB0', mtnMid: '#5B3A90', mtnFront: '#3C2568', route: '#FF5CA8' },
+  fahrt:    { skyTop: '#241A54', skyBot: '#6B3A8C', mtnBack: '#4A2E7A', mtnMid: '#37225C', mtnFront: '#241645', route: '#C86BFF' },
+  leistung: { skyTop: '#1E5C46', skyBot: '#B23A7A', mtnBack: '#8A3A72', mtnMid: '#5B2E66', mtnFront: '#331F55', route: T.acid },
 }

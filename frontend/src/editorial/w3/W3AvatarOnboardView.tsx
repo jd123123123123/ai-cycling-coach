@@ -638,7 +638,7 @@ function W3AvatarGenerating({ heroImageUrl }: { heroImageUrl: string | null }) {
               <motion.div aria-hidden animate={{ rotate: 360 }} transition={{ duration: 5.5, repeat: Infinity, ease: 'linear' }}
                 style={{ position: 'absolute', width: CARD_H * 2, height: CARD_H * 2, background: `conic-gradient(from 0deg, transparent 0deg, ${T.acid} 45deg, transparent 110deg)` }} />
             )}
-            <div style={{ position: 'absolute', inset: 2, borderRadius: 24, overflow: 'hidden', background: '#232427' }}>
+            <div style={{ position: 'absolute', inset: 2, borderRadius: 24, overflow: 'hidden', background: T.chip }}>
               {heroImageUrl
                 ? <img src={heroImageUrl} alt="Dein Foto" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 25%', filter: 'brightness(0.62) saturate(0.85)' }} />
                 : (

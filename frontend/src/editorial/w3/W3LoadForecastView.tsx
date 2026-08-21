@@ -16,7 +16,7 @@ import './w3.css'
  * value or "—". "Belastung anpassen" opens the plan's real adjust sheet.
  */
 
-export const ZONE_HUES = [T.quiet, T.cool, T.training, T.warn, '#FF7A2F'] as const
+export const ZONE_HUES = [T.quiet, T.cool, T.training, T.warn, T.zone5] as const
 
 export interface ZoneRow { label: string; time: string; frac: number }
 export interface W3LoadVm {

@@ -187,7 +187,7 @@ function RideRow({ ride, accent, reduce, index, onOpen }: { ride: W3RideCard; ac
       style={{
         display: 'flex', flexDirection: 'column', gap: 12, width: '100%', minWidth: 0, textAlign: 'left', fontFamily: FONT,
         padding: 16, borderRadius: 22, overflow: 'hidden', cursor: tappable ? 'pointer' : 'default',
-        background: accent ? `linear-gradient(180deg, #1B1C19, ${T.surface} 62%)` : T.surface,
+        background: accent ? `linear-gradient(180deg, ${T.acidTop}, ${T.surface} 62%)` : T.surface,
         border: `1px solid ${accent ? T.acid + '33' : T.rule}`,
       }}>
 

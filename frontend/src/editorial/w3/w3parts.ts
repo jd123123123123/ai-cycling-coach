@@ -1,3 +1,4 @@
+import { T } from './w3tokens'
 /**
  * W3 · Parts — the cosmetics a rider buys to make a bike theirs.
  *
@@ -83,7 +84,7 @@ export const PARTS: W3Part[] = [
     prompt: 'a fully polished mirror-chrome bicycle frameset, highly reflective metal, no paint' },
   { id: 'frame-lime', name: 'W3-Lime', slot: 'frame', price: 650,
     blurb: 'Hausfarbe.',
-    prompt: 'a bicycle frameset in bright lime green (#C8FF00) with matte black panels on the down tube' },
+    prompt: `a bicycle frameset in bright lime green (${T.acid}) with matte black panels on the down tube` },
   { id: 'frame-oilslick', name: 'Ölschimmer', slot: 'frame', price: 1600,
     blurb: 'Ändert die Farbe mit dem Winkel.',
     prompt: 'a bicycle frameset in iridescent oil-slick paint, colour shifting from deep purple through teal to bronze' },
@@ -117,7 +118,7 @@ export const PARTS: W3Part[] = [
     prompt: 'a black aluminium drop handlebar wrapped in plain black bar tape' },
   { id: 'bars-lime', name: 'Limeband', slot: 'bars', price: 250,
     blurb: 'Passt zur Hausfarbe.',
-    prompt: 'a black drop handlebar wrapped in bright lime green (#C8FF00) bar tape' },
+    prompt: `a black drop handlebar wrapped in bright lime green (${T.acid}) bar tape` },
   { id: 'bars-leather', name: 'Leder', slot: 'bars', price: 700,
     blurb: 'Wird mit den Jahren schöner.',
     prompt: 'a silver drop handlebar wrapped in honey-brown stitched leather bar tape with twine ends' },
@@ -143,7 +144,7 @@ export const PARTS: W3Part[] = [
     prompt: 'a skeletal raw carbon-weave bicycle racing saddle, cut-out centre channel, minimal padding, carbon rails' },
   { id: 'saddle-lime', name: 'Lime-Kante', slot: 'saddle', price: 450,
     blurb: 'Der Streifen, den nur du siehst.',
-    prompt: 'a black bicycle racing saddle with a bright lime green (#C8FF00) accent stripe along its edge' },
+    prompt: `a black bicycle racing saddle with a bright lime green (${T.acid}) accent stripe along its edge` },
   { id: 'saddle-white', name: 'Weißsattel', slot: 'saddle', price: 400,
     blurb: 'Mutig bei Regen.',
     prompt: 'a clean white bicycle racing saddle with subtle grey logo detail' },

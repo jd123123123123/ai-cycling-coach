@@ -619,7 +619,7 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
         <Rule />
         {header}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <div style={{ width: 40, height: 40, flex: 'none', borderRadius: 13, background: '#00E5FF1F', display: 'grid', placeItems: 'center' }}><Moon size={19} color="#00E5FF" /></div>
+          <div style={{ width: 40, height: 40, flex: 'none', borderRadius: 13, background: `${T.rem}1F`, display: 'grid', placeItems: 'center' }}><Moon size={19} color={T.rem} /></div>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.4, color: T.ink }}>Ruhetag</span>
             <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>

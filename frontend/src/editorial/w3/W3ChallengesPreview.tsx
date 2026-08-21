@@ -1,4 +1,5 @@
 import W3ChallengesView, { type W3ChallengesVm } from './W3ChallengesView'
+import { T } from './w3tokens'
 
 /** TEMP preview — pen-exact fixture for `w3.pen` frame `VsLYE`, no backend.
  *  /e/w3-challenges-preview is unguarded; remove before merge. Every value is
@@ -26,7 +27,7 @@ export const CHALLENGES_FIXTURE: W3ChallengesVm = {
     {
       key: 'atw',
       title: 'Um die Welt ×2',
-      cover: 'radial-gradient(120% 80% at 62% 22%, rgba(210,124,58,0.55), rgba(210,124,58,0) 60%), linear-gradient(158deg, #3a3550 0%, #241f30 42%, #12131a 100%)',
+      cover: `radial-gradient(120% 80% at 62% 22%, rgba(210,124,58,0.55), rgba(210,124,58,0) 60%), linear-gradient(158deg, ${T.nightHi} 0%, ${T.nightMid} 42%, ${T.nightLo} 100%)`,
       pct: 26,
       progressNote: '20.840 von 80.150 km · noch 4 Wochen',
       youNote: 'Du hast 412 km beigetragen. Top 8 % der Community.',
@@ -34,7 +35,7 @@ export const CHALLENGES_FIXTURE: W3ChallengesVm = {
     {
       key: 'everest',
       title: 'Everest-Kollektiv',
-      cover: 'radial-gradient(100% 65% at 42% 18%, rgba(74,138,138,0.5), rgba(74,138,138,0) 60%), linear-gradient(160deg, #1e3a3a 0%, #16302f 46%, #0d1a1c 100%)',
+      cover: `radial-gradient(100% 65% at 42% 18%, rgba(74,138,138,0.5), rgba(74,138,138,0) 60%), linear-gradient(160deg, ${T.nightHi} 0%, ${T.nightMid} 46%, ${T.nightLo} 100%)`,
       pct: 47,
       progressNote: '4.180 von 8.848 km geklettert · noch 6 Wochen',
       youNote: 'Davon sind 21 km von dir. Top 14 % der Community.',

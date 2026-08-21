@@ -390,7 +390,7 @@ export default function W3TodayPage() {
       ? (() => {
           const { value, delta } = model.hrv.value
           const s = delta == null ? { sub: null, subHue: NEUTRAL } : subOf(`${signed(delta)} ggü. Basiswert`, delta >= 0)
-          return { value: String(Math.round(value)), unit: 'ms', ...s, spark: sparkFrom(hrvSeries, '#00E5FF') }
+          return { value: String(Math.round(value)), unit: 'ms', ...s, spark: sparkFrom(hrvSeries, T.hrv) }
         })()
       : null
 
@@ -422,7 +422,7 @@ export default function W3TodayPage() {
           const s = deltaMin != null && base != null
             ? subOf(`${signed(deltaMin)} min ggü. ${base.n}-Tage-Ø`, deltaMin >= 0)
             : { sub: null, subHue: NEUTRAL }
-          return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'h', ...s, spark: sparkFrom(sleepSeries, '#ED29FF') }
+          return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'h', ...s, spark: sparkFrom(sleepSeries, T.sleep) }
         })()
       : null
 

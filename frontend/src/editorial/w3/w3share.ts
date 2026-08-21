@@ -1,3 +1,4 @@
+import { T, SHARE_SCENES, type ShareScene } from './w3tokens'
 /**
  * W3 · Ride-teilen — the share-poster renderer + native-share plumbing.
  *
@@ -53,11 +54,14 @@ export interface PosterData {
   avatarInitial: string
 }
 
-interface Theme { skyTop: string; skyBot: string; mtnBack: string; mtnMid: string; mtnFront: string; route: string; acid: string }
+// The card that LEAVES the app was painting a lime this app does not use — a
+// near-miss on the acid. Its accent is the product's accent now, from the one
+// place that defines it; the scenery comes from the declared scene palette.
+type Theme = ShareScene & { acid: string }
 const THEMES: Record<ShareAngle, Theme> = {
-  rekord: { skyTop: '#6A4BC4', skyBot: '#C56BA6', mtnBack: '#7A4FB0', mtnMid: '#5B3A90', mtnFront: '#3C2568', route: '#FF5CA8', acid: '#C8FF00' },
-  fahrt: { skyTop: '#241A54', skyBot: '#6B3A8C', mtnBack: '#4A2E7A', mtnMid: '#37225C', mtnFront: '#241645', route: '#C86BFF', acid: '#C8FF00' },
-  leistung: { skyTop: '#1E5C46', skyBot: '#B23A7A', mtnBack: '#8A3A72', mtnMid: '#5B2E66', mtnFront: '#331F55', route: '#C8FF00', acid: '#C8FF00' },
+  rekord: { ...SHARE_SCENES.rekord, acid: T.acid },
+  fahrt: { ...SHARE_SCENES.fahrt, acid: T.acid },
+  leistung: { ...SHARE_SCENES.leistung, acid: T.acid },
 }
 
 const W = 1080
@@ -103,7 +107,7 @@ function mountainPath(ctx: CanvasRenderingContext2D, baseY: number, amp: number,
 
 /** IF → route accent, matching the ride-detail hero's intensity colours. */
 function intensityHue(iff: number): string {
-  return iff >= 1.02 ? '#FF6A3D' : iff >= 0.92 ? '#FFB020' : iff >= 0.8 ? '#C8FF00' : '#2BE68F'
+  return iff >= 1.02 ? T.zone5 : iff >= 0.92 ? T.warn : iff >= 0.8 ? T.acid : T.training
 }
 
 function drawRoute(ctx: CanvasRenderingContext2D, pts: [number, number][] | null, theme: Theme, heroH: number, routeColor: string) {
@@ -136,7 +140,7 @@ function drawRoute(ctx: CanvasRenderingContext2D, pts: [number, number][] | null
   ctx.restore()
   // start / end dots
   const dot = (p: { x: number; y: number }, fill: string) => { ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill() }
-  dot(path[0], '#FFFFFF'); dot(path[path.length - 1], theme.acid)
+  dot(path[0], T.ink); dot(path[path.length - 1], theme.acid)
 }
 
 function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, weight: string, color: string, spacing = 0, align: CanvasTextAlign = 'left') {
@@ -267,7 +271,7 @@ async function paint(
   const heroH = Math.round(H * 0.56)
 
   // ── background ──
-  ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, 0, W, H)
+  ctx.fillStyle = T.bg; ctx.fillRect(0, 0, W, H)
 
   if (sceneImg) {
     // THE RIDE'S OWN PICTURE, EDGE TO EDGE. Cover-cropped rather than fitted:
@@ -296,7 +300,7 @@ async function paint(
 
   // hero→panel fade
   const fade = ctx.createLinearGradient(0, heroH - 220, 0, heroH)
-  fade.addColorStop(0, 'rgba(11,11,11,0)'); fade.addColorStop(1, '#0B0B0B')
+  fade.addColorStop(0, 'rgba(11,11,11,0)'); fade.addColorStop(1, T.bg)
   ctx.fillStyle = fade; ctx.fillRect(0, heroH - 220, W, 220)
 
   // bike (with the rider) sitting on the route — only when no scene was
@@ -323,9 +327,9 @@ async function paint(
   ctx.save()
   ctx.beginPath(); ctx.arc(chipX + 46 + 12, av, 34, 0, Math.PI * 2); ctx.closePath(); ctx.clip()
   if (avatarImg) ctx.drawImage(avatarImg, chipX + 24, av - 34, 68, 68)
-  else { ctx.fillStyle = '#2BE68F'; ctx.fillRect(chipX + 24, av - 34, 68, 68); ctx.fillStyle = '#0B0B0B'; text(ctx, d.avatarInitial, chipX + 58, av + 12, 34, '700', '#0B0B0B', 0, 'center') }
+  else { ctx.fillStyle = T.training; ctx.fillRect(chipX + 24, av - 34, 68, 68); ctx.fillStyle = T.bg; text(ctx, d.avatarInitial, chipX + 58, av + 12, 34, '700', T.bg, 0, 'center') }
   ctx.restore()
-  text(ctx, d.handle, chipX + 108, av - 4, 30, '700', '#FFFFFF')
+  text(ctx, d.handle, chipX + 108, av - 4, 30, '700', T.ink)
   text(ctx, d.club, chipX + 108, av + 26, 22, '600', 'rgba(255,255,255,0.7)')
 
   // sparkle (top-right)
@@ -341,7 +345,7 @@ async function paint(
 
   // big value + unit + delta
   ctx.font = `700 150px ${FONT}`
-  const bigW = text(ctx, d.bigValue, px, y, 150, '700', '#FFFFFF')
+  const bigW = text(ctx, d.bigValue, px, y, 150, '700', T.ink)
   if (d.bigUnit) text(ctx, d.bigUnit, px + bigW + 20, y, 46, '600', 'rgba(255,255,255,0.65)')
   if (d.delta) {
     const dw = ctx.measureText(d.delta).width + 96
@@ -367,9 +371,9 @@ async function paint(
     const x = px + i * (pillW + pillGap)
     ctx.save()
     roundRect(ctx, x, y, pillW, pillH, 26)
-    ctx.fillStyle = p.tone === 'acid' ? t.acid : '#6B44E0'; ctx.fill()
+    ctx.fillStyle = p.tone === 'acid' ? t.acid : T.evening; ctx.fill()
     ctx.restore()
-    const ink = p.tone === 'acid' ? '#0B0B0B' : '#FFFFFF'
+    const ink = p.tone === 'acid' ? T.bg : T.ink
     text(ctx, p.text, x + 34, y + 54, 34, '700', ink)
     text(ctx, p.sub, x + 34, y + 88, 24, '600', p.tone === 'acid' ? 'rgba(11,11,11,0.7)' : 'rgba(255,255,255,0.75)')
   })
@@ -381,12 +385,12 @@ async function paint(
     const x = px + i * (tileW + tileGap)
     ctx.save()
     roundRect(ctx, x, y, tileW, tileH, 24)
-    ctx.fillStyle = '#161616'; ctx.fill()
+    ctx.fillStyle = T.surface; ctx.fill()
     ctx.restore()
     // The mark sits top-right of the tile: out of the number's way, and the
     // three of them make a rhythm across the row.
     statGlyph(ctx, s.l, x + tileW - 60, y + 26, 34, t.acid)
-    text(ctx, s.v, x + 26, y + 82, 52, '700', '#FFFFFF')
+    text(ctx, s.v, x + 26, y + 82, 52, '700', T.ink)
     text(ctx, s.l, x + 26, y + 126, 22, '700', 'rgba(255,255,255,0.5)', 1)
   })
   y += tileH + 60
@@ -394,7 +398,7 @@ async function paint(
   // footer
   text(ctx, d.footer, px, y, 26, '600', 'rgba(255,255,255,0.55)')
   star(ctx, W - px - 150, y - 8, 12, t.acid)
-  text(ctx, 'w3.ride', W - px - 128, y, 28, '700', '#FFFFFF')
+  text(ctx, 'w3.ride', W - px - 128, y, 28, '700', T.ink)
 }
 
 /** Render the poster once. Retries without the avatar if a cross-origin avatar
@@ -501,7 +505,7 @@ export function downloadPoster(blob: Blob, filename = 'w3-ride.png') {
 
 const AW = 1080
 const AH = 1440
-const ACID = '#C8FF00'
+const ACID = T.acid
 
 export interface AvatarCardData {
   avatarUrl: string | null
@@ -534,7 +538,7 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   const DOCK = 430          // where the copy begins; the portrait runs behind it
 
   // ── one ground for the whole card ──
-  ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, 0, AW, AH)
+  ctx.fillStyle = T.bg; ctx.fillRect(0, 0, AW, AH)
 
   // ── the portrait, full bleed ──
   if (avatar && avatar.width > 0 && avatar.height > 0) {
@@ -544,9 +548,9 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   } else {
     ctx.save()
     ctx.beginPath(); ctx.arc(AW / 2, (AH - DOCK) / 2, 190, 0, Math.PI * 2); ctx.closePath()
-    ctx.fillStyle = '#202020'; ctx.fill()
+    ctx.fillStyle = T.surface2; ctx.fill()
     ctx.restore()
-    text(ctx, d.avatarInitial, AW / 2, (AH - DOCK) / 2 + 60, 170, '700', '#6E7379', 0, 'center')
+    text(ctx, d.avatarInitial, AW / 2, (AH - DOCK) / 2 + 60, 170, '700', T.quiet, 0, 'center')
   }
 
   // The floor the copy stands on. One long gradient into the ground colour, so
@@ -554,9 +558,9 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   const floor = ctx.createLinearGradient(0, AH - DOCK - 300, 0, AH - DOCK + 60)
   floor.addColorStop(0, 'rgba(11,11,11,0)')
   floor.addColorStop(0.6, 'rgba(11,11,11,0.82)')
-  floor.addColorStop(1, '#0B0B0B')
+  floor.addColorStop(1, T.bg)
   ctx.fillStyle = floor; ctx.fillRect(0, AH - DOCK - 300, AW, 360)
-  ctx.fillStyle = '#0B0B0B'; ctx.fillRect(0, AH - DOCK + 58, AW, DOCK)
+  ctx.fillStyle = T.bg; ctx.fillRect(0, AH - DOCK + 58, AW, DOCK)
 
   // ── the handle, on the seam ──
   const chipY = AH - DOCK - 6
@@ -564,9 +568,9 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   const chipW = ctx.measureText(d.handle).width + 132
   const chipH = 84, chipX = (AW - chipW) / 2
   roundRect(ctx, chipX, chipY - chipH / 2, chipW, chipH, chipH / 2)
-  ctx.fillStyle = '#1A1A1C'; ctx.fill()
+  ctx.fillStyle = T.heroDock; ctx.fill()
   star(ctx, chipX + 46, chipY, 15, ACID)
-  text(ctx, d.handle, chipX + 78, chipY + 14, 40, '800', '#FFFFFF')
+  text(ctx, d.handle, chipX + 78, chipY + 14, 40, '800', T.ink)
 
   // role · LEVEL
   const roleY = chipY + 74
@@ -576,7 +580,7 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   ctx.font = `700 30px ${FONT}`
   const lvlW = ctx.measureText(lvl).width
   const rowW = roleW + 34 + lvlW
-  text(ctx, d.role, (AW - rowW) / 2, roleY, 30, '600', '#9BA0A6')
+  text(ctx, d.role, (AW - rowW) / 2, roleY, 30, '600', T.mid)
   text(ctx, lvl, (AW - rowW) / 2 + roleW + 34, roleY, 30, '700', ACID)
 
   // ── three facts, in the reveal's own order and labels ──
@@ -586,9 +590,9 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
     const x = px + i * (tileW + gap)
     ctx.save()
     roundRect(ctx, x, tileY, tileW, tileH, 26)
-    ctx.fillStyle = '#1A1A1C'; ctx.fill()
+    ctx.fillStyle = T.heroDock; ctx.fill()
     ctx.restore()
-    text(ctx, s.v, x + 28, tileY + 92, 46, '700', s.v === '—' ? '#6E7379' : '#FFFFFF')
+    text(ctx, s.v, x + 28, tileY + 92, 46, '700', s.v === '—' ? T.quiet : T.ink)
     text(ctx, s.l, x + 28, tileY + 142, 22, '700', 'rgba(255,255,255,0.45)', 1)
   })
 
@@ -596,7 +600,7 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   const fy = AH - 68
   if (d.footer) text(ctx, d.footer, px, fy, 26, '600', 'rgba(255,255,255,0.55)')
   star(ctx, AW - px - 150, fy - 8, 12, ACID)
-  text(ctx, 'w3.ride', AW - px - 128, fy, 28, '700', '#FFFFFF')
+  text(ctx, 'w3.ride', AW - px - 128, fy, 28, '700', T.ink)
 }
 
 /** Render the "AVATAR UNLOCKED" card. Never throws: a missing or tainting

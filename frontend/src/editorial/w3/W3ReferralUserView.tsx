@@ -38,13 +38,13 @@ export default function W3ReferralUserView({ vm, onBack, onClaim }: {
 
   return (
     <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, background: '#151516', position: 'relative' }}>
+      <div className="w3-frame" style={{ fontFamily: FONT, background: T.card, position: 'relative' }}>
         {/* Full-bleed avatar hero */}
         <div style={{ position: 'absolute', inset: 0, height: '76%' }}>
           {vm.avatarUrl
             ? <img src={vm.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <div style={{ width: '100%', height: '100%', background: `radial-gradient(120% 80% at 50% 20%, ${accent}55, #151516 70%)` }} />}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(0deg, #151516 4%, #15151600 46%)' }} />
+            : <div style={{ width: '100%', height: '100%', background: `radial-gradient(120% 80% at 50% 20%, ${accent}55, ${T.card} 70%)` }} />}
+          <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(0deg, ${T.card} 4%, ${T.card}00 46%)` }} />
         </div>
 
         {/* Back */}
@@ -61,7 +61,7 @@ export default function W3ReferralUserView({ vm, onBack, onClaim }: {
           <div style={{ display: 'flex', gap: 8 }}>
             {stats.map((s, i) => (
               <motion.div key={s.label} initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 * i }}
-                style={{ flex: 1, minWidth: 0, padding: '16px 12px', borderRadius: 18, background: '#232427', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                style={{ flex: 1, minWidth: 0, padding: '16px 12px', borderRadius: 18, background: T.chip, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <s.icon size={20} color={T.acid} />
                 <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{s.label}</span>
                 <span style={{ fontSize: 16, fontWeight: 800, letterSpacing: -0.5, color: T.ink }}>{s.value}</span>

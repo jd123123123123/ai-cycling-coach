@@ -69,32 +69,37 @@ describe('editorial isolation', () => {
     // considered, per the brief.
     const files = all.filter((f) => f.includes(`${path.sep}editorial${path.sep}`) && !f.endsWith('tokens.css'))
     const offenders = files.filter((f) => {
-      // tokens.test.ts asserts tokens.css carries the pen's palette
-      // verbatim: its hex literals are expected *test* values compared
-      // against tokens.css, not style values written into editorial/ code.
-      // That's the same class of exception as tokens.css itself.
-      if (f.endsWith(`${path.sep}__tests__${path.sep}tokens.test.ts`)) return false
-      // `w3/w3tokens.tsx` IS the W3 palette — the same role tokens.css plays
-      // for the original editorial surfaces, and exempt for the same reason:
-      // a palette source must contain hex or there is nothing to tokenise
-      // against. This rule predates W3, so its source file was never added to
-      // the exception and the assertion could not reach [] no matter how clean
-      // the components were. A gate that can never be green teaches everyone
-      // to scroll past a red test, which costs more than the rule earns.
-      if (f.endsWith(`${path.sep}w3${path.sep}w3tokens.tsx`)) return false
-      // `w3/w3map.ts` is a palette source too, for the BASEMAP — land, water,
-      // parks, road weights. Those have no token equivalents and should not
-      // get them: nothing else in this app is a lake or a national park, and
-      // inventing `T.water` to satisfy a lint rule would put a colour in the
-      // design system that no component may use. Same exemption as the file
-      // above, for the same reason.
-      if (f.endsWith(`${path.sep}w3${path.sep}w3map.ts`)) return false
-      // Test files that COMPARE hex are the class `tokens.test.ts` above is
-      // already excused for: the literals are expected values, not styles being
-      // written into a component. `fadeRunway` measures the distance between
-      // two colours, so hex IS its input — expressing it in tokens would make
-      // the test assert nothing about the numbers it exists to pin.
-      if (f.endsWith(`${path.sep}__tests__${path.sep}fadeRunway.test.ts`)) return false
+      // ── WHERE HEX IS THE SUBJECT, NOT THE STYLING ──────────────────
+      // Two kinds of file are exempt, and only two.
+      //
+      // PALETTE SOURCES must contain hex or there is nothing to tokenise
+      // against: `tokens.css` (excluded above), `w3/w3tokens.tsx` — the same
+      // role for W3 — and `w3/w3map.ts`, which is the BASEMAP's palette:
+      // land, water, parks, road weights. Those have no token equivalents and
+      // should not get them. Nothing else in this app is a lake, and inventing
+      // `T.water` to satisfy a lint rule would put a colour in the design
+      // system that no component may use.
+      //
+      // COLOUR TESTS compare hex as EXPECTED VALUES. `tokens` asserts
+      // tokens.css matches the pen; `fadeRunway` measures the distance between
+      // two colours, so hex IS its input; `groundColour` reads a colour back
+      // out of a rendered scene and pins the exact string, including the
+      // zero-padding bug it exists to catch (#050505 once came out "#555");
+      // `boardPalette` computes ΔE between the board tints. Expressing any of
+      // them in tokens would make the test assert nothing about the numbers it
+      // exists to pin.
+      //
+      // A test that STYLES something with hex is still an offender — that is
+      // why this is a named list and not a blanket `__tests__` exemption.
+      const EXEMPT = [
+        `${path.sep}w3${path.sep}w3tokens.tsx`,
+        `${path.sep}w3${path.sep}w3map.ts`,
+        `${path.sep}__tests__${path.sep}tokens.test.ts`,
+        `${path.sep}__tests__${path.sep}fadeRunway.test.ts`,
+        `${path.sep}__tests__${path.sep}groundColour.test.ts`,
+        `${path.sep}__tests__${path.sep}boardPalette.test.ts`,
+      ]
+      if (EXEMPT.some((e) => f.endsWith(e))) return false
       const src = stripComments(readFileSync(f, 'utf8'))
       return /#[0-9a-fA-F]{6}\b/.test(src)
     })

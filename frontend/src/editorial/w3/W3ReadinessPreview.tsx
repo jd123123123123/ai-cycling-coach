@@ -1,4 +1,5 @@
 import W3ReadinessView, { type W3ReadinessVm } from './W3ReadinessView'
+import { T } from './w3tokens'
 
 /** TEMP preview — fixture, no backend. /e/w3-readiness-preview is unguarded;
  *  remove before merge. */
@@ -12,10 +13,10 @@ const FIXTURE: W3ReadinessVm = {
   sleep: {
     total: '7:42 h',
     stages: [
-      { label: 'Tief', frac: 0.19, hue: '#7B5CFF' },
-      { label: 'REM', frac: 0.22, hue: '#00E5FF' },
-      { label: 'Leicht', frac: 0.54, hue: '#6B8CFF' },
-      { label: 'Wach', frac: 0.05, hue: '#FFB020' },
+      { label: 'Tief', frac: 0.19, hue: T.evening },
+      { label: 'REM', frac: 0.22, hue: T.rem },
+      { label: 'Leicht', frac: 0.54, hue: T.cool },
+      { label: 'Wach', frac: 0.05, hue: T.warn },
     ],
     spo2: '95%',
     resp: '14/min Atmung',

@@ -102,7 +102,7 @@ export default function W3ConnectCelebrateView({ vm, onContinue }: { vm: W3Conne
                 <span style={{ fontSize: 52, fontWeight: 700, letterSpacing: -2, lineHeight: 1, color: T.ink }}>{km.toLocaleString('de-DE')}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: T.quiet, marginTop: 2 }}>KILOMETER</span>
                 <div style={{ marginTop: 12, padding: '6px 13px', borderRadius: 100, background: `${VIOLET}22`, border: `1px solid ${VIOLET}55` }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#B9A6FF' }}>🌍 {vm.earthLine}</span>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: T.orbit }}>🌍 {vm.earthLine}</span>
                 </div>
               </div>
             </div>
