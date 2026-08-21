@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  buyPlace, fetchBackdrops, fetchDayScene, fetchGarage, fetchRideScene, fetchTodayStage, renameAsset, renderAsset, renderDayScene, renderRideScene, renderTodayStage, selectBackdrop, type Backdrops, type DayPose, type DayScene, type Garage, type GarageKind, type RideScene, type TodayStage,
+  buyPlace, fetchBackdrops, fetchDayScene, fetchGarage, fetchRideScene, fetchTodayStage, renameAsset, renderAsset, restyleAsset, renderDayScene, renderRideScene, renderTodayStage, selectBackdrop, type Backdrops, type DayPose, type DayScene, type Garage, type GarageKind, type RideScene, type TodayStage,
 } from '../api/garage'
 
 export const GARAGE_KEY = ['garage'] as const
@@ -47,6 +47,26 @@ export function useRenderAsset() {
       // Only a saved render changes the garage — a gated one leaves the
       // rider's existing bike exactly where it was.
       if (result.saved) qc.invalidateQueries({ queryKey: GARAGE_KEY })
+    },
+  })
+}
+
+/**
+ * Re-render an existing asset in today's art direction.
+ *
+ * The garage AND the composed scenes are invalidated on success: Today's hero
+ * and every ride picture were built from the old render and would otherwise go
+ * on showing it.
+ */
+export function useRestyleAsset() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (kind: GarageKind) => restyleAsset(kind),
+    onSuccess: (result) => {
+      if (!result.saved) return
+      qc.invalidateQueries({ queryKey: GARAGE_KEY })
+      qc.invalidateQueries({ queryKey: TODAY_STAGE_KEY })
+      qc.invalidateQueries({ queryKey: ['garage', 'scene'] })
     },
   })
 }

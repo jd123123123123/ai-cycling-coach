@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useGarage, useRenameAsset, useRenderAsset } from '../../hooks/useGarage'
+import { useGarage, useRenameAsset, useRenderAsset, useRestyleAsset } from '../../hooks/useGarage'
 import { markW3OnboardingSeen } from './w3Onboarding'
 import { useGrantOnboarding } from '../../hooks/useWallet'
 import { HIDDEN_FILE_INPUT } from './w3tokens'
@@ -46,6 +46,7 @@ export default function W3BikeStudioPage() {
   const [description, setDescription] = useState<string | null>(null)
   const [name, setName] = useState<string | null>(null)
   const rename = useRenameAsset()
+  const restyle = useRestyleAsset()
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [renderStatus, setRenderStatus] = useState<string | null>(null)
   const [prompt, setPrompt] = useState<string | null>(null)
@@ -175,6 +176,12 @@ export default function W3BikeStudioPage() {
         onBack={() => navigate(nextRoute)}
         onPick={() => fileRef.current?.click()}
         celebrate={celebrate}
+        onRestyle={stored?.description ? () => {
+          restyle.mutate('bike', {
+            onSuccess: (r) => { if (r.saved && r.image_base64) setImageUrl(r.image_base64) },
+          })
+        } : undefined}
+        restyling={restyle.isPending}
         onReset={reset}
         // Naming is optimistic: the field already shows what they typed, so
         // waiting on the server would only make it feel slow. A failure leaves

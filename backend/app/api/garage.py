@@ -213,6 +213,56 @@ class AssetNameRequest(BaseModel):
     name: str
 
 
+@router.post("/asset/{kind}/restyle", response_model=AssetRenderResponse,
+             summary="Re-render an existing asset in the current art direction")
+async def restyle_asset(
+    kind: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> AssetRenderResponse:
+    """Draw the rider's existing figure or bike again, in today's style.
+
+    THE ART DIRECTION MOVES AND THE PICTURES DO NOT. A render is made once and
+    then it is the rider's, so a rider who joined before a change keeps seeing
+    the old look on every screen — and the only way back was to find the
+    original photograph and shoot it again, which most people cannot do.
+
+    Nothing needs the photo: the vision pass's DESCRIPTION is what the renderer
+    was ever given, and it is stored. So this re-renders from that, which also
+    means the figure stays recognisably the same person and the bike stays the
+    same bicycle — only the treatment changes.
+
+    NEVER DESTRUCTIVE. A failed re-render leaves the existing picture exactly
+    where it was: the rider must not be able to lose the bike they have by
+    asking for a nicer photograph of it.
+    """
+    if kind not in ("bike", "rider"):
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="unknown_kind")
+    asset = await _get_asset(db, current_user.id, kind)
+    if asset is None or not asset.description:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="no_asset")
+
+    prompt_text, _ = cyclr_studio.split_description(asset.description)
+    image, prompt, status = await cyclr_studio.render_isolated(prompt_text, kind)
+
+    saved = False
+    if status == "ok" and image:
+        asset.image_url = image
+        await db.commit()
+        saved = True
+        # The composed scenes were built from the OLD picture, so they would
+        # keep showing it. Same reasoning as a fresh render — see `render_asset`.
+        await db.execute(delete(RideScene).where(RideScene.user_id == current_user.id))
+        await db.execute(delete(DayScene).where(DayScene.user_id == current_user.id))
+        await db.commit()
+
+    _, human = cyclr_studio.split_description(asset.description)
+    return AssetRenderResponse(
+        name=asset.name, description=human or None, prompt=prompt,
+        image_base64=image, status=status, saved=saved,
+    )
+
+
 @router.patch("/asset/{kind}/name", response_model=AssetOut,
               summary="Rename the rider's own bike or rider figure")
 async def rename_asset(

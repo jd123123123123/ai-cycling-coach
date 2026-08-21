@@ -33,6 +33,10 @@ export interface W3BikeStudioProps {
   onBack: () => void               // top-nav back
   onPick: () => void               // open the photo-library / file picker
   onReset: () => void
+  /** Draw this bike again in the current art direction, from its stored
+   *  description. Absent → the action is not offered. */
+  onRestyle?: () => void
+  restyling?: boolean
   onSave: () => void               // download the rendered collectible (image present only)
   bikeName?: string                // the collectible's real name, from the vision pass
   /** Save a name the rider typed. Absent → the name is read-only prose. */
@@ -414,6 +418,21 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
                 {p.imageUrl && (
                   <button onClick={p.onSave} style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center' }}>
                     <Download size={19} color={T.bg} strokeWidth={2.5} />Bild speichern
+                  </button>
+                )}
+                {/* ── THE ART DIRECTION MOVES; THE PICTURES DO NOT ─────────
+                     A render is made once and then it is the rider's, so
+                     somebody who joined before a change keeps seeing the old
+                     look on every screen — and the only way back was to find
+                     the original photograph and shoot it again, which most
+                     people cannot do. This needs no photo: the description is
+                     what the renderer was ever given, so the bike stays the
+                     same bicycle and only the treatment changes. */}
+                {p.onRestyle && (
+                  <button onClick={p.onRestyle} disabled={p.restyling}
+                    style={{ height: 48, borderRadius: 100, border: 0, background: T.tile, color: p.restyling ? T.quiet : T.acid, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: p.restyling ? 'default' : 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>
+                    <Sparkles size={15} color={p.restyling ? T.quiet : T.acid} />
+                    {p.restyling ? 'Wird neu gezeichnet…' : 'Im neuen Stil neu zeichnen'}
                   </button>
                 )}
                 <button onClick={p.onReset} style={{ height: 48, borderRadius: 100, border: 0, background: '#FFFFFF0A', color: T.ink, fontFamily: FONT, fontSize: 13, fontWeight: 700, cursor: 'pointer', display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center' }}>

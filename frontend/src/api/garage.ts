@@ -99,6 +99,19 @@ export async function renderAsset(kind: GarageKind, photoBase64: string): Promis
   return res.data
 }
 
+/** Draw an existing asset again in the current art direction.
+ *
+ *  Needs no photograph: the vision pass's description is what the renderer was
+ *  ever given, and it is stored — so the figure stays recognisably the same
+ *  person and the bike stays the same bicycle, and only the treatment changes.
+ *  Slow (a full image-model render), so it carries the same timeout as one. */
+export async function restyleAsset(kind: GarageKind): Promise<AssetRenderResult> {
+  const res = await apiClient.post<AssetRenderResult>(
+    `/garage/asset/${kind}/restyle`, undefined, { timeout: 180_000 },
+  )
+  return res.data
+}
+
 /** Name the thing the rider owns. The vision pass guesses a name off the frame,
  *  and a guess about somebody's own bicycle is a default, not a decision. */
 export async function renameAsset(kind: GarageKind, name: string): Promise<GarageAsset> {

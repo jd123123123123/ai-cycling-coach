@@ -5,8 +5,17 @@ import { T, FONT, EASE, Kicker } from './w3tokens'
 // The sign-up hero is its OWN picture, not the stock starter bike. That render
 // is the machine a rider is given on day one and it was doing double duty here
 // as the first thing anybody ever sees of this app — cropped, unlit and dull.
-// This one was made for the job: the bike on a lit plinth in a dark showroom,
-// one accent, real contact with the ground.
+//
+// SHOT ON THE GARAGE'S OWN CAMERA. Flat side elevation, drive side, facing
+// right — the same locked angle every bike in this app is photographed from
+// (`cyclr_studio.BIKE_CAMERA`), so the first machine somebody sees and the one
+// they will own are the same kind of object rather than two different pictures.
+//
+// And it is a CONCEPT machine, because a sign-up screen is allowed to promise
+// something: enclosed belt drive, hub motor, a battery reading out as five pips
+// on the down tube, an integrated cockpit with an inset display, acid light in
+// the rim wells, a cargo box on a machined rack. All plausible engineering,
+// none of it fantasy.
 const REGISTER_HERO = '/w3/register-hero.webp'
 import W3StatusBar from './W3StatusBar'
 import './w3.css'
@@ -54,7 +63,7 @@ export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange }: { v
         <div style={{ position: 'relative', height: 320, overflow: 'hidden' }}>
           <div style={{ position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)', width: 340, height: 190, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}24, transparent)` }} />
           <motion.img src={REGISTER_HERO} alt="" initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9, ease: EASE }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 52%' }} />
+            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 46%' }} />
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 130, background: `linear-gradient(180deg, ${T.bg}00, ${T.bg}CC 55%, ${T.bg})` }} />
           <div style={{ position: 'absolute', top: 16, left: 20, display: 'flex', gap: 7, alignItems: 'center', padding: '7px 12px 7px 10px', borderRadius: 100, background: '#000000A6' }}>
             <Bike size={13} color={T.acid} /><span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.ink }}>w3.ride</span>
