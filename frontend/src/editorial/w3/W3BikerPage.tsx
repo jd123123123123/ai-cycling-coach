@@ -12,17 +12,17 @@ import { useWahooStatus } from '../../hooks/useWahooStatus'
 import { useCorosStatus } from '../../hooks/useCorosStatus'
 import { useGarage } from '../../hooks/useGarage'
 import { compactNumber, useRiderLifetime } from './w3RiderStats'
-import W3BikerView, { type W3BikerVm, type W3Device, type W3Insight, type W3Milestone } from './W3BikerView'
+import type { W3Monument } from './W3Monument'
+import W3BikerView, { type W3BikerVm, type W3Device } from './W3BikerView'
 
 // The constants the milestones are measured against. Named, because a bare
 // 40075 in the middle of a template string is a number nobody can check.
 /** The equator, in kilometres — what "once around the Earth" actually is. */
 const EQUATOR_KM = 40_075
-/** Rides round up to the next fifty; hours to the next two-fifty. Chosen so the
- *  bar is never nearly-empty for a year at a time, which is the failure mode of
- *  a milestone that is too far away to feel like progress. */
+/** Rides round up to the next fifty — chosen so the tally is never nearly-empty
+ *  for a year at a time, which is the failure mode of a milestone too far away
+ *  to feel like progress. */
 const RIDE_STEP = 50
-const HOUR_STEP = 250
 
 /**
  * W3 · 05 BIKER (profile), wired. Route /e/w3-biker.
@@ -108,33 +108,94 @@ export default function W3BikerPage() {
       ? 'jeder Kilometer, den du je gefahren bist'
       : 'deine erste Fahrt schreibt diese Zahlen'
 
-    // ── the reveal's dopamine tiles, in this page's voice ──
-    const insights: W3Insight[] = [
+    // ── THE LIFETIME, AS MONUMENTS ─────────────────────────────────────
+    // Seven figures that used to be seven identical boxes with seven identical
+    // bars. Each carries the numbers its own drawing needs (`W3Monument`), so
+    // the shape can come from the meaning instead of from a template. Every
+    // value here is real or the em dash — the arithmetic is laps of a 40 075 km
+    // equator, a 8 848 m Everest, whole 24-hour days, and this rider's own
+    // average ride length.
+    const avgRideKm = life.rides > 0 ? life.distKm / life.rides : 0
+    const monuments: W3Monument[] = [
       {
-        key: 'elevation',
+        kind: 'orbit',
+        label: 'GESAMTDISTANZ',
+        value: has ? nf.format(Math.round(life.distKm)) : DASH,
+        unit: 'km',
+        story: has && life.earthLaps >= 0.01
+          ? `${life.earthLaps.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}× um die Erde`
+          : 'jeder Kilometer, den du je gefahren bist',
+        note: has
+          ? `noch ${nf.format(Math.max(0, Math.round(EQUATOR_KM * (Math.floor(life.earthLaps) + 1) - life.distKm)))} km bis Runde ${Math.floor(life.earthLaps) + 1}`
+          : '',
+        laps: has ? life.earthLaps : 0,
+      },
+      {
+        kind: 'column',
         label: 'HÖHENMETER',
-        value: life.elevM > 0 ? `${(life.elevM / 1000).toFixed(1)} km` : DASH,
-        caption: life.elevM > 0 ? `≈ ${life.everest.toFixed(life.everest < 10 ? 1 : 0)}× Mount Everest` : 'noch keine Höhenmeter erfasst',
+        value: life.elevM > 0 ? (life.elevM / 1000).toFixed(1) : DASH,
+        unit: 'km hoch',
+        story: life.elevM > 0
+          ? `${life.everest.toFixed(life.everest < 10 ? 1 : 0)}× Mount Everest`
+          : 'noch keine Höhenmeter erfasst',
+        note: life.elevM > 0 ? `vom Meeresspiegel aus gerechnet` : '',
+        everest: life.everest,
       },
       {
-        key: 'longest',
-        label: 'LÄNGSTE',
-        value: has ? `${Math.round(life.longestKm)} km` : DASH,
-        caption: has ? 'dein größter Tag im Sattel' : 'liegt noch vor dir',
-      },
-      {
-        key: 'speed',
+        kind: 'dial',
         label: 'Ø TEMPO',
         value: life.avgSpeedKmh > 0 ? life.avgSpeedKmh.toFixed(1) : DASH,
-        caption: 'km/h über alle Fahrten',
+        unit: 'km/h',
+        story: life.avgSpeedKmh > 0 ? 'über alle deine Fahrten' : 'noch kein Schnitt',
+        note: '',
+        kmh: life.avgSpeedKmh,
       },
       {
-        key: 'burned',
+        kind: 'tally',
+        label: 'FAHRTEN GESAMT',
+        value: has ? nf.format(life.rides) : DASH,
+        unit: life.rides === 1 ? 'Fahrt' : 'Fahrten',
+        story: has && life.years >= 1
+          ? `${(life.rides / Math.max(1, life.years * 52)).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pro Woche${life.firstYear ? `, seit ${life.firstYear}` : ''}`
+          : 'jedes Mal, das du losgefahren bist',
+        note: has ? `noch ${nf.format(RIDE_STEP - (life.rides % RIDE_STEP))} bis ${nf.format(Math.ceil((life.rides + 1) / RIDE_STEP) * RIDE_STEP)}` : '',
+        into: has ? life.rides % RIDE_STEP : 0,
+        step: RIDE_STEP,
+      },
+      {
+        kind: 'days',
+        label: 'SATTELZEIT',
+        value: has ? nf.format(Math.round(life.saddleH)) : DASH,
+        unit: 'Stunden',
+        story: has && life.saddleH >= 24
+          ? `${nf.format(Math.floor(life.saddleH / 24))} volle Tage im Sattel`
+          : 'jede Stunde, die du gefahren bist',
+        note: has && life.saddleH >= 24 ? 'ein Strich ist ein Tag, jeder siebte eine Woche' : '',
+        days: has ? Math.floor(life.saddleH / 24) : 0,
+      },
+      {
+        kind: 'rules',
+        label: 'LÄNGSTE FAHRT',
+        value: has ? String(Math.round(life.longestKm)) : DASH,
+        unit: 'km',
+        story: has && avgRideKm > 0
+          ? `${(life.longestKm / avgRideKm).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}× eine normale Fahrt`
+          : 'liegt noch vor dir',
+        note: has && avgRideKm > 0 ? `dein Schnitt liegt bei ${Math.round(avgRideKm)} km` : '',
+        longestKm: life.longestKm,
+        avgKm: avgRideKm,
+      },
+      {
+        kind: 'ration',
         label: 'VERBRANNT',
         value: life.kcal > 0 ? compactNumber(life.kcal) : DASH,
-        caption: life.kcal > 0 ? `kcal · ≈ ${nf.format(life.pizzas)} Pizzen` : 'kcal',
+        unit: 'kcal',
+        story: life.kcal > 0 ? `${Math.round(life.pizzas)} Pizzen` : 'noch nichts gezählt',
+        note: life.kcal > 0 ? 'eine Scheibe ist zehn Pizzen' : '',
+        pizzas: life.pizzas,
       },
     ]
+
 
     // ── engine ── FTP/weight are the athlete's own numbers; fitness is CTL.
     const pe = pmc?.entries ?? []
@@ -190,55 +251,8 @@ export default function W3BikerPage() {
       chips,
       headline,
       headlineCaption,
-      // ── THE THREE LIFETIME NUMBERS, AS MILESTONES ──────────────────────
-      // These were three cells in a strip, set at 18 px — smaller than the
-      // insight tiles beneath them, which is backwards: they are the biggest
-      // numbers the rider owns. Each one now carries what it MEANS and how far
-      // it is from the next round thing, both computed from the same raw
-      // figures the strip was formatting. Nothing here is invented: the equator
-      // is 40 075 km, a day is 24 hours, and the next milestone is arithmetic.
-      milestones: [
-        {
-          icon: 'route' as const,
-          label: 'GESAMTDISTANZ',
-          value: has ? nf.format(Math.round(life.distKm)) : DASH,
-          unit: 'km',
-          story: has && life.earthLaps >= 0.01
-            ? `${life.earthLaps.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}× um die Erde`
-            : 'jeder Kilometer, den du je gefahren bist',
-          pct: has ? life.earthLaps % 1 : 0,
-          nextNote: has
-            ? `noch ${nf.format(Math.max(0, Math.round(EQUATOR_KM * (Math.floor(life.earthLaps) + 1) - life.distKm)))} km bis Runde ${Math.floor(life.earthLaps) + 1}`
-            : '',
-        },
-        {
-          icon: 'bike' as const,
-          label: 'FAHRTEN GESAMT',
-          value: has ? nf.format(life.rides) : DASH,
-          unit: life.rides === 1 ? 'Fahrt' : 'Fahrten',
-          story: has && life.years >= 1
-            ? `${(life.rides / Math.max(1, life.years * 52)).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} pro Woche${life.firstYear ? `, seit ${life.firstYear}` : ''}`
-            : 'jedes Mal, das du losgefahren bist',
-          pct: has ? (life.rides % RIDE_STEP) / RIDE_STEP : 0,
-          nextNote: has
-            ? `noch ${nf.format(RIDE_STEP - (life.rides % RIDE_STEP))} bis ${nf.format(Math.ceil((life.rides + 1) / RIDE_STEP) * RIDE_STEP)}`
-            : '',
-        },
-        {
-          icon: 'timer' as const,
-          label: 'SATTELZEIT',
-          value: has ? nf.format(Math.round(life.saddleH)) : DASH,
-          unit: 'Stunden',
-          story: has && life.saddleH >= 24
-            ? `${nf.format(Math.floor(life.saddleH / 24))} volle Tage im Sattel`
-            : 'jede Stunde, die du gefahren bist',
-          pct: has ? (life.saddleH % HOUR_STEP) / HOUR_STEP : 0,
-          nextNote: has
-            ? `noch ${nf.format(Math.ceil(HOUR_STEP - (life.saddleH % HOUR_STEP)))} h bis ${nf.format(Math.ceil((life.saddleH + 1) / HOUR_STEP) * HOUR_STEP)} h`
-            : '',
-        },
-      ] as [W3Milestone, W3Milestone, W3Milestone],
-      insights,
+
+      monuments,
       engine,
       streak: rhythmStreak,
       badges: rhythmBadges,
