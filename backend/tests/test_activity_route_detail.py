@@ -5,6 +5,7 @@ that budget is the whole difference between a map a rider recognises and a
 shape that is confidently wrong.
 """
 import inspect
+import json
 
 from app.api import activities
 from app.services.activity_stream_analysis import (
@@ -59,3 +60,45 @@ def test_the_list_still_ships_thumbnails():
     """A 50-row page must not start carrying 50 full tracks."""
     src = inspect.getsource(activities.list_activities)
     assert "ROUTE_DETAIL_POINTS" not in src
+
+
+# ── The cached road, and the coercion that decides whether it is used ───────
+#
+# `matched_polyline` is a jsonb column, and selected as a column expression it
+# comes back from asyncpg as raw JSON TEXT rather than a list — which is exactly
+# why `_as_points` exists and why every other channel in this endpoint goes
+# through it. This one did not: it tested `isinstance(value, list)` directly, so
+# the test was always False and every matched ride silently fell back to its raw
+# GPS trace. The road geometry sat in the database, unused, while the rider
+# looked at a line cutting across a forest.
+#
+# The failure was invisible from every angle that was checked: the column
+# existed, the matcher ran, rows were written. Only the drawn line was wrong.
+
+
+def test_a_cached_road_survives_arriving_as_json_text():
+    """The regression, stated as the thing that broke: a matched route handed
+    over as a STRING must be read, not discarded."""
+    road = [[47.0, 11.0], [47.1, 11.1], [47.2, 11.2]]
+    assert activities._as_points(json.dumps(road)) == road
+
+
+def test_the_endpoint_does_not_type_check_the_cached_road_by_hand():
+    """Pins the fix at its cause rather than its symptom. A bare isinstance on
+    the raw column value is the bug; the coercion is the contract."""
+    src = inspect.getsource(activities.get_activity)
+    assert "_as_points(row[2])" in src, "the cached road must go through the coercion"
+    # CODE ONLY. The comment above the fix names the bug on purpose, and a
+    # test that cannot tell an explanation from a regression would forbid
+    # writing the explanation down.
+    code = "\n".join(
+        line for line in src.splitlines() if not line.lstrip().startswith("#")
+    )
+    assert "isinstance(row[2]" not in code, "this is the bug that shipped"
+
+
+def test_every_json_channel_in_the_detail_route_uses_the_same_door():
+    """Four channels are read out of the stream row; all four are jsonb, so all
+    four need the same treatment. Counting them is what would have caught this."""
+    src = inspect.getsource(activities.get_activity)
+    assert src.count("_as_points(") >= 4

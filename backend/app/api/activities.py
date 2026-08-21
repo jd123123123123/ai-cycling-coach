@@ -220,7 +220,16 @@ async def get_activity(
     # It is still simplified: matched geometry is road detail, and a whole
     # Alpine loop comes back as 8 000 points.
     raw = {"latitude": _as_points(row[0]), "longitude": _as_points(row[1])}
-    matched = row[2] if isinstance(row[2], list) and len(row[2]) > 1 else None
+    # THROUGH `_as_points`, LIKE EVERY OTHER JSON CHANNEL HERE. A jsonb column
+    # selected as a column expression comes back from asyncpg as the raw JSON
+    # TEXT, not a list — which is the whole reason `_as_points` exists. This
+    # branch tested `isinstance(row[2], list)` directly, so it was always False,
+    # and every matched ride silently fell back to its raw GPS trace. The road
+    # geometry had been sitting in the database, unused, the entire time: the
+    # rider saw a line cutting across a forest and there was nothing in the logs
+    # to say why.
+    cached = _as_points(row[2])
+    matched = cached if cached and len(cached) > 1 else None
     if matched:
         out.route_polyline = route_sketch_polyline(
             {"latitude": [p[0] for p in matched], "longitude": [p[1] for p in matched]},
