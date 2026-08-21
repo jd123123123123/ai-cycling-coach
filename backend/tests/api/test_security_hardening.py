@@ -46,6 +46,27 @@ def test_csp_allows_spa_assets(client):
     assert "unsafe-eval" not in csp
 
 
+def test_csp_allows_the_basemap(client):
+    """The map is the ride screen, and a policy that blocks its tiles fails
+    silently: the route line still draws from our own API, so the page looks
+    like a map with no tiles rather than a browser refusing to fetch them.
+    Pinned per host, and pinned as a SET so a wildcard cannot creep in."""
+    csp = client.get("/healthz").headers["Content-Security-Policy"]
+    connect = next(d for d in csp.split("; ") if d.startswith("connect-src"))
+    for host in (
+        "https://styles.maptoolkit.org",   # the style document
+        "https://tiles.maptoolkit.org",    # TileJSON + vector tiles
+        "https://fonts.maptoolkit.org",    # glyphs — labels are blank without them
+        "https://icons.maptoolkit.org",    # the sprite sheet
+        "https://tiles.mapterhorn.com",    # terrain-RGB, fetched to read its pixels
+    ):
+        assert host in connect, f"the basemap cannot reach {host}"
+    # MapLibre builds its tile worker from a blob it created itself.
+    assert "worker-src 'self' blob:" in csp
+    # Opening the policy is not the same as removing it.
+    assert "*" not in connect
+
+
 def test_hsts_only_on_https(client):
     # Plain http request (TestClient default) → no HSTS.
     assert "Strict-Transport-Security" not in client.get("/healthz").headers

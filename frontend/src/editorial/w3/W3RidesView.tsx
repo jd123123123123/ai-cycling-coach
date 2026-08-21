@@ -1,10 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Gauge, Zap, Timer, TrendingUp, Bike, Trophy, ChevronRight } from 'lucide-react'
-import { T, FONT, EASE, grow, band } from './w3tokens'
+import { Gauge, Zap, Timer, Bike, Trophy, ChevronRight } from 'lucide-react'
+import { T, FONT, EASE, grow, band, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
+import W3RidesDock from './W3RidesDock'
+import { useHeroPanel } from './W3HeroShell'
+import { useDockOpenness } from './useDockOpenness'
 import W3TopBar from './W3TopBar'
 import './w3.css'
 
@@ -228,6 +231,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
   const reduce = useReducedMotion()
   const nav = useNavigate()
   const [filter, setFilter] = useState<W3RideFilter>('all')
+  const openness = useDockOpenness()
 
   const shown = useMemo(() => vm.rides.filter((r) => {
     if (filter === 'outdoor') return !r.indoor
@@ -240,143 +244,131 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
   const earlier = shown.filter((r) => !r.recent)
   const maxBar = Math.max(...vm.bars, 0.001)
 
+  // ── THE PANEL ─────────────────────────────────────────────────────────────
+  // The season's distance, over the same floor the bike stands on. The season
+  // card used to carry this number at 64px in the middle of a scrolling page;
+  // up here it is the first thing on the screen, which is what it always was.
+  const dock = (
+    <W3RidesDock vm={{
+      totalKm: vm.totalKm || null,
+      totalUnit: vm.totalUnit,
+      progress: vm.progress,
+      ofGoalPct: vm.ofGoalPct,
+      goalChip: vm.goalChip,
+      toGoLabel: vm.toGoLabel,
+      paceLabel: vm.paceLabel,
+      paceAhead: vm.paceAhead,
+      stats: [
+        { label: 'Ø TEMPO', value: vm.avgSpeed === DASH ? null : vm.avgSpeed, unit: 'km/h' },
+        { label: 'Ø LEISTUNG', value: vm.avgPower === DASH ? null : vm.avgPower, unit: 'W' },
+        { label: 'SATTELZEIT', value: vm.saddleTime === DASH ? null : vm.saddleTime, unit: 'h' },
+      ],
+      expand: openness,
+    }} />
+  )
+  const { inShell, portal } = useHeroPanel(dock)
+
+  // ── THE CONTENT ───────────────────────────────────────────────────────────
+  // Everything the screen had, minus the five figures that moved into the
+  // panel. Nothing was dropped: the count, the filters, the monthly bars and
+  // both ride groups are all still here, in the same order.
+  const content = (
+    <>
+      <div style={{ ...band(0), padding: '18px 20px 16px', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>{vm.title}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>{vm.loggedLabel}</span>
+          <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{vm.count}</span>
+        </div>
+      </div>
+
+      {/* Filter chips (real) */}
+      <div style={{ ...band(24), flexDirection: 'row', gap: 8 }}>
+        {FILTERS.map(({ key, label }) => {
+          const on = filter === key
+          return (
+            <button key={key} onClick={() => setFilter(key)}
+              style={{ flex: 'none', padding: '9px 16px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT,
+                fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
+                background: on ? T.acid : T.surface, color: on ? T.bg : T.mid }}>
+              {label}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Monthly distance bars (real). The season card's numbers are in the
+          panel above; what stays here is the SHAPE of the season, which is the
+          one thing that needs room to be read. */}
+      <div style={{ ...band(30) }}>
+        <div style={{ borderRadius: 24, background: T.surface, padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.quiet }}>{vm.seasonLabel}</span>
+          <div style={{ display: 'flex', gap: 6, height: 70, alignItems: 'flex-end' }}>
+            {vm.bars.map((b, i) => {
+              const on = i >= vm.barsAccentFrom
+              return (
+                <motion.div key={i}
+                  initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }}
+                  transition={grow(i * 0.03)}
+                  style={{ flex: 1, height: `${Math.max(8, Math.round((b / maxBar) * 100))}%`, transformOrigin: 'bottom', borderRadius: 4,
+                    background: on ? T.acid : T.surface2, boxShadow: on ? `0 0 12px ${T.acid}40` : 'none' }} />
+              )
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Ride groups (real) */}
+      {shown.length === 0 && (
+        <div style={{ ...band(30) }}>
+          <div style={{ padding: '26px 20px', borderRadius: 24, background: T.surface, textAlign: 'center', color: T.quiet, fontSize: 12.5, fontWeight: 600 }}>
+            Noch keine Fahrten in diesem Filter.
+          </div>
+        </div>
+      )}
+
+      {recent.length > 0 && (
+        <div style={{ ...band(28), gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>LETZTE 7 TAGE</span>
+            <div style={{ flex: 1, height: 1, background: T.rule }} />
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{recent.length}</span>
+          </div>
+          {recent.map((r, i) => (
+            <RideRow key={r.id ?? `r${i}`} ride={r} accent={i === 0} reduce={reduce} index={i}
+              onOpen={() => r.id != null && nav(`/e/w3-ride/${r.id}`)} />
+          ))}
+        </div>
+      )}
+
+      {earlier.length > 0 && (
+        <div style={{ ...band(34), gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>FRÜHER</span>
+            <div style={{ flex: 1, height: 1, background: T.rule }} />
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{earlier.length}</span>
+          </div>
+          {earlier.map((r, i) => (
+            <RideRow key={r.id ?? `e${i}`} ride={r} accent={false} reduce={reduce} index={i}
+              onOpen={() => r.id != null && nav(`/e/w3-ride/${r.id}`)} />
+          ))}
+        </div>
+      )}
+    </>
+  )
+
+  if (inShell) return <>{portal}{content}</>
+
+  // Outside the room — a preview route, or a deep link that skipped it — the
+  // screen still draws its own frame, with the panel where the hero would be.
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
-
         <W3StatusBar />
         <W3TopBar />
-
-        {/* Header */}
-        <div style={{ ...band(0), padding: '14px 20px 18px', flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-          <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.6, lineHeight: 1, color: T.ink }}>{vm.title}</span>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>{vm.loggedLabel}</span>
-            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{vm.count}</span>
-          </div>
-        </div>
-
-        {/* Filter chips (real) */}
-        <div style={{ ...band(24), flexDirection: 'row', gap: 8 }}>
-          {FILTERS.map(({ key, label }) => {
-            const on = filter === key
-            return (
-              <button key={key} onClick={() => setFilter(key)}
-                style={{ flex: 'none', padding: '9px 16px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT,
-                  fontSize: 11, fontWeight: 700, letterSpacing: 0.8,
-                  background: on ? T.acid : T.surface, color: on ? T.bg : T.mid }}>
-                {label}
-              </button>
-            )
-          })}
-        </div>
-
-        {/* Season total card (distance REAL · goal FIXTURE) */}
-        <div style={{ ...band(30) }}>
-          <div style={{ borderRadius: 24, background: T.surface, border: `1px solid ${T.rule}`, padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.quiet }}>{vm.seasonLabel}</span>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.mid, padding: '6px 12px', borderRadius: 100, background: T.surface2 }}>{vm.goalChip}</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <motion.span
-                  initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
-                  style={{ fontSize: 64, fontWeight: 700, letterSpacing: -3, lineHeight: 0.9, color: T.acid }}>{vm.totalKm}</motion.span>
-                <span style={{ fontSize: 20, fontWeight: 700, color: T.mid }}>{vm.totalUnit}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>{vm.ofGoalLabel}</span>
-                <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.acid }}>{vm.ofGoalPct}</span>
-              </div>
-            </div>
-
-            {/* progress (fixture: real km against a placeholder goal) */}
-            <div style={{ position: 'relative', height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'visible' }}>
-              <motion.div
-                initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(vm.progress * 100)}%` }} transition={grow(0.05)}
-                style={{ position: 'relative', height: '100%', borderRadius: 100, background: T.acid }}>
-                <div style={{ position: 'absolute', right: -1, top: -3, width: 3, height: 12, borderRadius: 2, background: T.ink }} />
-              </motion.div>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>{vm.toGoLabel}</span>
-              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: vm.paceAhead ? T.acid : T.warn }}>
-                <TrendingUp size={13} color={vm.paceAhead ? T.acid : T.warn} style={{ transform: vm.paceAhead ? 'none' : 'scaleY(-1)' }} />
-                {vm.paceLabel}
-              </span>
-            </div>
-
-            {/* monthly distance bars (real) */}
-            <div style={{ display: 'flex', gap: 6, height: 70, alignItems: 'flex-end', paddingTop: 4 }}>
-              {vm.bars.map((b, i) => {
-                const on = i >= vm.barsAccentFrom
-                return (
-                  <motion.div key={i}
-                    initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }}
-                    transition={grow(i * 0.03)}
-                    style={{ flex: 1, height: `${Math.max(8, Math.round((b / maxBar) * 100))}%`, transformOrigin: 'bottom', borderRadius: 4,
-                      background: on ? T.acid : '#2C2C2C', boxShadow: on ? `0 0 12px ${T.acid}40` : 'none' }} />
-                )
-              })}
-            </div>
-            <div style={{ height: 1, background: T.rule }} />
-
-            {/* season footer stats (real) */}
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              {[
-                { k: 'speed' as const, l: 'Ø TEMPO', v: vm.avgSpeed, u: 'km/h' },
-                { k: 'power' as const, l: 'Ø LEISTUNG', v: vm.avgPower, u: 'w' },
-                { k: 'time' as const, l: 'SATTELZEIT', v: vm.saddleTime, u: 'h' },
-              ].map((s) => (
-                <div key={s.l} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{s.l}</span>
-                  <StatChip kind={s.k} value={s.v} unit={s.u} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Ride groups (real) */}
-        {shown.length === 0 && (
-          <div style={{ ...band(30) }}>
-            <div style={{ padding: '26px 20px', borderRadius: 24, background: T.surface, textAlign: 'center', color: T.quiet, fontSize: 12.5, fontWeight: 600 }}>
-              Noch keine Fahrten in diesem Filter.
-            </div>
-          </div>
-        )}
-
-        {recent.length > 0 && (
-          <div style={{ ...band(28), gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>LETZTE 7 TAGE</span>
-              <div style={{ flex: 1, height: 1, background: T.rule }} />
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{recent.length}</span>
-            </div>
-            {recent.map((r, i) => (
-              <RideRow key={r.id ?? `r${i}`} ride={r} accent={i === 0} reduce={reduce} index={i}
-                onOpen={() => r.id != null && nav(`/e/w3-ride/${r.id}`)} />
-            ))}
-          </div>
-        )}
-
-        {earlier.length > 0 && (
-          <div style={{ ...band(34), gap: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingBottom: 2 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>FRÜHER</span>
-              <div style={{ flex: 1, height: 1, background: T.rule }} />
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{earlier.length}</span>
-            </div>
-            {earlier.map((r, i) => (
-              <RideRow key={r.id ?? `e${i}`} ride={r} accent={false} reduce={reduce} index={i}
-                onOpen={() => r.id != null && nav(`/e/w3-ride/${r.id}`)} />
-            ))}
-          </div>
-        )}
-
+        <div style={{ ...band(0), padding: '10px 16px 4px' }}>{dock}</div>
+        {content}
         <W3TabBar />
-
       </div>
     </div>
   )

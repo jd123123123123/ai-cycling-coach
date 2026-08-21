@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Activity, Route as RouteIcon, Bike, Trophy, UserRound } from 'lucide-react'
 import { T, FONT } from './w3tokens'
-import { scheduleW3TabPrefetch } from './w3TabChunks'
+import { preloadTab, scheduleW3TabPrefetch } from './w3TabChunks'
 
 /**
  * The shared W3 bottom navigation. One source of truth for the 5-tab bar, so
@@ -86,7 +86,14 @@ export default function W3TabBar() {
             const active = key === shownKey
             const col = active ? T.acid : T.quiet
             return (
-              <button key={key} onClick={() => go(key, route)} aria-label={label} aria-current={key === activeKey ? 'page' : undefined}
+              <button key={key} onClick={() => go(key, route)}
+                // The finger is already down; the tap is ~100 ms away and the
+                // rider has visibly committed. Spending that gap on the chunk
+                // is the difference between a screen that appears and a screen
+                // that loads. Idempotent — the module registry dedupes, so a
+                // scroll that grazes the bar costs nothing.
+                onPointerDown={() => preloadTab(route)}
+                aria-label={label} aria-current={key === activeKey ? 'page' : undefined}
                 style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', justifyContent: 'center', padding: '8px 0 6px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, position: 'relative' }}>
                 {active && <div style={{ position: 'absolute', top: 2, width: 46, height: 30, borderRadius: 100, background: T.acidDim, boxShadow: `0 0 18px ${T.acid}33` }} />}
                 <Icon size={21} color={col} style={{ position: 'relative' }} />

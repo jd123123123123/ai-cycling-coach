@@ -5,6 +5,7 @@ import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3PartsDock from './W3PartsDock'
+import W3GarageLane from './W3GarageLane'
 import { useHeroPanel } from './W3HeroShell'
 import W3GearPanel from './W3GearPanel'
 import W3WorkshopPanel from './W3WorkshopPanel'
@@ -79,9 +80,10 @@ export function W3GarageHome() {
   const { data: workshop } = useWorkshop()
 
   // NO STAGE OF ITS OWN. The garage is the same room as Today, and the room
-  // belongs to `W3HeroShell` — so this page contributes only the panel that
-  // floats over the floor. That is also the whole feature: switching to the
-  // garage changes the panel and nothing else, so the machine never flashes.
+  // belongs to `W3HeroShell` — so this page contributes the panel that floats
+  // over the floor, and the lane the rider scrolls into. That is also the whole
+  // feature: switching to the garage changes those two and nothing else, so the
+  // machine never flashes.
   const dock = (
     <W3PartsDock
       gear={gear ?? null}
@@ -91,20 +93,25 @@ export function W3GarageHome() {
   )
   const { inShell, portal } = useHeroPanel(dock)
 
+  const lane = (
+    <W3GarageLane
+      workshop={workshop ?? null}
+      onOpenWorkshop={() => navigate('/e/w3-workshop')}
+      onOpenGear={() => navigate('/e/w3-gear')}
+      onOpenShop={() => navigate('/e/w3-shop')}
+      onOpenPlaces={() => navigate('/e/w3-places')} />
+  )
+
+  if (inShell) return <>{portal}{lane}</>
+
   // Outside the shell — a deep link that skipped it — the garage still draws
   // its own room rather than a bare panel on a black page.
-  if (inShell) return <>{portal}</>
-  return <W3GarageStandalone dock={dock} />
-}
-
-/** The garage with a room of its own, for the case above. Kept minimal on
- *  purpose: it is a fallback, not a second design. */
-function W3GarageStandalone({ dock }: { dock: React.ReactNode }) {
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <W3StatusBar />
         <div style={{ flex: 1, display: 'flex', alignItems: 'flex-end', padding: '10px 16px 18px' }}>{dock}</div>
+        {lane}
         <W3TabBar />
       </div>
     </div>

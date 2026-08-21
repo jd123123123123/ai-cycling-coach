@@ -13,6 +13,8 @@ import ErrorBoundary from './components/ErrorBoundary'
 import AppLoading from './components/AppLoading'
 import PageTransition from './components/PageTransition'
 import { lazyWithRetry } from './lib/lazyWithRetry'
+// The five bottom-bar screens are declared next to the bar that preloads them.
+import { W3BikerPage, W3GarageHome, W3RidesPage, W3TodayPage, W3WinsPage } from './editorial/w3/w3TabChunks'
 import { resolveLandingPath } from './editorial/state/designSystem'
 
 // Auth entry points stay eager so first paint is instant.
@@ -66,19 +68,15 @@ const EditorialSessionDetailPage = lazyWithRetry(() => import('./editorial/pages
 // Same module specifier → same emitted chunk → after a prefetch these
 // React.lazy factories resolve straight from the ES module registry with no
 // second request. Keep the two lists in step.
-const W3TodayPage = lazyWithRetry(() => import('./editorial/w3/W3TodayPage'))
 const W3TodayPreview = lazyWithRetry(() => import('./editorial/w3/W3TodayPreview'))
 const W3SessionPage = lazyWithRetry(() => import('./editorial/w3/W3SessionPage'))
 const W3SessionPreview = lazyWithRetry(() => import('./editorial/w3/W3SessionPreview'))
-const W3RidesPage = lazyWithRetry(() => import('./editorial/w3/W3RidesPage'))
 const W3RidesPreview = lazyWithRetry(() => import('./editorial/w3/W3RidesPreview'))
 const W3GaragePage = lazyWithRetry(() => import('./editorial/w3/W3GaragePage'))
 const W3GaragePreview = lazyWithRetry(() => import('./editorial/w3/W3GaragePreview'))
 const W3WorkshopPreview = lazyWithRetry(() => import('./editorial/w3/W3WorkshopPreview'))
 const W3GearPreview = lazyWithRetry(() => import('./editorial/w3/W3GearPreview'))
 const W3GarageStagePreview = lazyWithRetry(() => import('./editorial/w3/W3GarageStagePreview'))
-const W3GarageHome = lazyWithRetry(() =>
-  import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3GarageHome })))
 const W3GearScreen = lazyWithRetry(() =>
   import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3GearScreen })))
 const W3WorkshopScreen = lazyWithRetry(() =>
@@ -102,7 +100,6 @@ const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3Conn
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
 const W3AvatarOnboardPage = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPage'))
 const W3AvatarOnboardPreview = lazyWithRetry(() => import('./editorial/w3/W3AvatarOnboardPreview'))
-const W3BikerPage = lazyWithRetry(() => import('./editorial/w3/W3BikerPage'))
 const W3BikerPreview = lazyWithRetry(() => import('./editorial/w3/W3BikerPreview'))
 const W3FirstBikePage = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePage'))
 const W3FirstBikePreview = lazyWithRetry(() => import('./editorial/w3/W3FirstBikePreview'))
@@ -144,7 +141,6 @@ const W3ReadinessPreview = lazyWithRetry(() => import('./editorial/w3/W3Readines
 const W3LoginPage = lazyWithRetry(() => import('./editorial/w3/W3LoginPage'))
 const W3RegisterPage = lazyWithRetry(() => import('./editorial/w3/W3RegisterPage'))
 const W3AuthPreview = lazyWithRetry(() => import('./editorial/w3/W3AuthPreview'))
-const W3WinsPage = lazyWithRetry(() => import('./editorial/w3/W3WinsPage'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
 const W3ChallengesPreview = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPreview'))
@@ -208,6 +204,7 @@ function App() {
  */
 const ROOMS: Record<string, string> = {
   '/e/w3-today': 'w3-room',
+  '/e/w3-rides': 'w3-room',
   '/e/w3-garage': 'w3-room',
 }
 function roomKey(pathname: string): string {
@@ -435,7 +432,6 @@ function AppRoutes() {
           <Route path="/e/w3-session" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
           <Route path="/e/w3-session/:id" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
           <Route path="/e/w3-session-preview" element={<W3SessionPreview />} />
-          <Route path="/e/w3-rides" element={<ProtectedRoute checkOnboarding><W3Guard><W3RidesPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-rides-preview" element={<W3RidesPreview />} />
           {/* The GARAGE tab: the bike you ride + the shop you buy it from. The
               bike-studio photo upload stays reachable by URL but is no longer a
@@ -446,7 +442,8 @@ function AppRoutes() {
               still answers `/e/w3-garage-old` until the shop it depends on is
               removed — see docs/superpowers/specs/2026-08-19-own-bike-customisation-design.md */}
           {/* ── ONE ROOM, TWO QUESTIONS ────────────────────────────────
-              Today and the garage are the same bike in the same room. Nested
+              Today, the rides and the garage are the same bike in the same
+              room, asked three questions. Nested
               under one layout they SHARE the mounted stage: navigating between
               them swaps the panel over the floor and the content beneath, and
               the machine itself never flashes out and back in. See
@@ -454,6 +451,7 @@ function AppRoutes() {
               another copy of the room. ── */}
           <Route element={<ProtectedRoute checkOnboarding><W3Guard><W3HeroRoute /></W3Guard></ProtectedRoute>}>
             <Route path="/e/w3-today" element={<W3TodayPage />} />
+            <Route path="/e/w3-rides" element={<W3RidesPage />} />
             <Route path="/e/w3-garage" element={<W3GarageHome />} />
           </Route>
           <Route path="/e/w3-gear" element={<ProtectedRoute checkOnboarding><W3Guard><W3GearScreen /></W3Guard></ProtectedRoute>} />

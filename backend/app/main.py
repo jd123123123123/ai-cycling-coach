@@ -23,6 +23,32 @@ logger = logging.getLogger(__name__)
 # the Google Fonts stylesheet (fonts.googleapis.com) + font files
 # (fonts.gstatic.com) the page links. No inline/eval scripts are used, so
 # script-src stays a strict 'self' with no 'unsafe-inline'/'unsafe-eval'.
+#
+# ─── THE BASEMAP HOSTS, AND WHY THEY ARE NAMED ONE BY ONE ───────────────────
+# `connect-src 'self'` silently broke every map in the product. The route line
+# still drew — it comes from our own API — so the page LOOKED like a map that
+# had lost its tiles rather than a policy refusing to fetch them, and the only
+# evidence was a console line nobody sees on a phone. The map is not decoration
+# on the ride screen; it is the screen.
+#
+# Named hosts rather than a wildcard, because each one does a specific job and
+# a wildcard would let a future dependency reach anywhere:
+#   styles.maptoolkit.org  the style document itself
+#   tiles.maptoolkit.org   its TileJSON + the vector tiles (.mvt)
+#   fonts.maptoolkit.org   glyph ranges (.pbf) — labels are blank without them
+#   icons.maptoolkit.org   the sprite sheet (JSON via fetch, PNG via img-src)
+#   tiles.mapterhorn.com   terrain-RGB, which MapLibre must FETCH rather than
+#                          load as an image, because it reads the pixels back
+#                          to build a DEM (see RouteMap on the encoding).
+# `blob:` on worker-src and img-src is MapLibre's own machinery: it builds its
+# tile worker and some textures from blobs it created itself.
+_MAP_HOSTS = (
+    "https://styles.maptoolkit.org "
+    "https://tiles.maptoolkit.org "
+    "https://fonts.maptoolkit.org "
+    "https://icons.maptoolkit.org "
+    "https://tiles.mapterhorn.com"
+)
 _CSP = "; ".join(
     [
         "default-src 'self'",
@@ -30,13 +56,13 @@ _CSP = "; ".join(
         "object-src 'none'",
         "frame-ancestors 'none'",
         "form-action 'self'",
-        "img-src 'self' data:",
+        f"img-src 'self' data: blob: {_MAP_HOSTS}",
         "script-src 'self'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' data: https://fonts.gstatic.com",
-        "connect-src 'self'",
+        f"connect-src 'self' {_MAP_HOSTS}",
         "manifest-src 'self'",
-        "worker-src 'self'",
+        "worker-src 'self' blob:",
     ]
 )
 

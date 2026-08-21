@@ -1,6 +1,5 @@
-import { useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useParams, useNavigate } from 'react-router-dom'
+import { useActivity } from '../../hooks/useActivity'
 import W3Loading from './W3Loading'
 import W3RideMapView from './W3RideMapView'
 
@@ -9,16 +8,17 @@ import W3RideMapView from './W3RideMapView'
  * function of its props and can be rendered from a preview route with a
  * synthetic track — the map is the one thing on this screen, so being able to
  * look at it without a login is worth the ten-line split.
+ *
+ * IT ASKS FOR THIS RIDE, NOT FOR THE YEAR. It used to find the activity by
+ * scanning the season list, and that list carries the SKETCH polyline — around
+ * twenty points for a fifty-kilometre ride, which is a scribble that follows no
+ * road and cannot be laid over a map. `/activities/{id}` carries the detail
+ * route and its gradients, which is what a screen made entirely of a map needs.
  */
 export default function W3RideMapPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
-  const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
-  const { data: season, isLoading } = useActivitiesRange(seasonStart, new Date())
-  const activity = useMemo(
-    () => (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null,
-    [season, id],
-  )
+  const { data: activity, isLoading } = useActivity(id ? Number(id) : undefined)
 
   if (isLoading) return <W3Loading label="Lade deine Route…" />
   return (

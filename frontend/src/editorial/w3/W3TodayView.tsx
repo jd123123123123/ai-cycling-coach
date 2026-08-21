@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, Reveal } from './w3tokens'
@@ -8,6 +8,7 @@ import W3TodayDock from './W3TodayDock'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { useHeroPanel } from './W3HeroShell'
+import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3CoachCard from './W3CoachCard'
@@ -196,16 +197,8 @@ export default function W3TodayView({ vm, onAdapt }: {
   // range where a hard edge would actually be visible. Below ~2 levels nobody
   // can see a step, so nothing is spent hiding one.
   const fadeH = fadeRunway(ground, T.bg)
-  // How far the readiness panel is open, from the page's own scroll. The first
-  // 130px of travel opens it fully — far enough that a stray flick does not
-  // trigger it, short enough that the answer is there before the hero leaves.
-  const [openness, setOpenness] = useState(0)
-  useEffect(() => {
-    const onScroll = () => setOpenness(Math.min(1, window.scrollY / 130))
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
+  // How far the readiness panel is open, from the page's own scroll.
+  const openness = useDockOpenness()
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))

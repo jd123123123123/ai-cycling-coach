@@ -1,16 +1,20 @@
 /**
- * The W3 destinations, as dynamic-import loaders, warmed on idle.
+ * The W3 destinations, warmed on idle.
  *
- * These are the SAME module specifiers `App.tsx` hands to `lazyWithRetry`, so
- * the bundler emits exactly one chunk per page and the ES module registry
- * dedupes: once a loader here has run, `React.lazy`'s own call resolves from
- * the already-evaluated module instead of hitting the network. (Keep the two
- * lists in step — a typo'd path here would silently prefetch a second copy.)
+ * THE TABS ARE DECLARED HERE, ONCE, and `App.tsx` imports the components from
+ * this file. They used to be two parallel lists — loaders here, `lazyWithRetry`
+ * calls in `App` — kept in step by a comment asking us to keep them in step. We
+ * did not: `loadW3Garage` pointed at `W3GaragePage`, the OLD catalogue garage
+ * that now only answers `/e/w3-garage-old`, while the GARAGE tab renders
+ * `W3EconomyPages`. So every session quietly downloaded a screen nobody can
+ * reach from the bar, and the one screen the bar does reach was never warmed at
+ * all. A prefetcher that drifts from the router is worse than none, because it
+ * spends the bytes and reports success. One list cannot drift.
  *
- * Nothing is imported at module scope, only thunks, and the sole importer is
- * `W3TabBar` — which is itself inside the lazy page chunks. So this file never
- * touches the entry bundle: the app boots exactly as before, and only a rider
- * who has actually reached a W3 screen pays for the warm-up.
+ * The page modules are still only ever reached through thunks, so what lands in
+ * the entry bundle is this list and nothing it points at: the app boots with
+ * five arrow functions, and a screen is downloaded when it is warmed or
+ * rendered, never before.
  *
  * `scheduleW3Prefetch()` is fired from `W3TabBar` on mount (see there for why
  * idle rather than hover/touch), which makes the first tap on each destination
@@ -34,14 +38,43 @@
  * rider may never open is not a favour.
  */
 
-// ── Tier 1 · the bottom tabs ──────────────────────────────────────────────
-export const loadW3Today = () => import('./W3TodayPage')
-export const loadW3Rides = () => import('./W3RidesPage')
-export const loadW3Garage = () => import('./W3GaragePage')
-export const loadW3Wins = () => import('./W3WinsPage')
-export const loadW3Biker = () => import('./W3BikerPage')
+import { lazyWithRetry } from '../../lib/lazyWithRetry'
 
-const TABS = [loadW3Today, loadW3Rides, loadW3Garage, loadW3Wins, loadW3Biker]
+// ── Tier 1 · the bottom tabs ──────────────────────────────────────────────
+// ONE list, keyed by the route slug `W3TabBar` already navigates by — so a tab
+// can be warmed by the same name the bar uses to reach it, and the router and
+// the prefetcher cannot disagree about what a tab IS.
+const TAB_LOADERS: Record<string, () => Promise<unknown>> = {
+  'w3-today': () => import('./W3TodayPage'),
+  'w3-rides': () => import('./W3RidesPage'),
+  'w3-garage': () => import('./W3EconomyPages'),
+  'w3-wins': () => import('./W3WinsPage'),
+  'w3-biker': () => import('./W3BikerPage'),
+}
+
+export const W3TodayPage = lazyWithRetry(() => import('./W3TodayPage'))
+export const W3RidesPage = lazyWithRetry(() => import('./W3RidesPage'))
+export const W3GarageHome = lazyWithRetry(() =>
+  import('./W3EconomyPages').then((m) => ({ default: m.W3GarageHome })))
+export const W3WinsPage = lazyWithRetry(() => import('./W3WinsPage'))
+export const W3BikerPage = lazyWithRetry(() => import('./W3BikerPage'))
+
+const TABS = Object.values(TAB_LOADERS)
+
+/**
+ * Fetch ONE tab's chunk now, without rendering it.
+ *
+ * Called on the pointer-down that precedes a tap by roughly a tenth of a
+ * second — free time that would otherwise be spent waiting, and enough of it to
+ * cover a warm cache hit outright. Unknown slugs are a no-op: the preview routes
+ * share this bar and are not worth a special case.
+ *
+ * Fire-and-forget by design. A prefetch that fails is not an error; it is a tap
+ * that pays the old price.
+ */
+export function preloadTab(route: string): void {
+  void TAB_LOADERS[route]?.().catch(() => {})
+}
 
 // ── Tier 2 · the non-tab destinations reachable from Today / Rides ────────
 // Ordered by how soon a rider typically reaches them, cheapest-and-likeliest
