@@ -123,7 +123,7 @@ export default function W3GaragePage() {
       render={data?.render ?? null}
       rendering={isRendering}
       onEquip={(item: ShopItem) => equip.mutate(item.id)}
-      onOpenShop={() => navigate('/e/w3-shop')}
+      onOpenShop={() => navigate('/e/w3-gear')}
       slots={{
         // The REAL economy, not the fixture catalogue the bike list above still
         // reads from: `/garage/gear` knows what is owned, worn, priced and

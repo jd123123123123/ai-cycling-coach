@@ -46,7 +46,7 @@ export default function W3TabBar() {
   // screens map to their closest tab so the bar never wrongly lights "Today".
   const p = loc.pathname
   const related: [RegExp, string][] = [
-    [/w3-shop|w3-bike-studio/, 'garage'],
+    [/w3-bike-studio/, 'garage'],
     [/w3-session|w3-ride/, 'rides'],
     [/w3-crew|w3-referral/, 'biker'],
     [/w3-challenge/, 'wins'],

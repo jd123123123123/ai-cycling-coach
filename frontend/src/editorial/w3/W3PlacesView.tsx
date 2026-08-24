@@ -44,9 +44,20 @@ export interface W3PlacesProps {
   onBuy: (slug: string) => void
   onSelect: (id: string) => void
   onBack: () => void
+  /** Rendered INSIDE the shop rather than as its own screen: no status bar, no
+   *  back arrow, no page title, no balance — the shop already carries all four,
+   *  and a second set of them halfway down a scroll reads as two apps stacked.
+   *  See `W3GearScreen`, where this now lives. */
+  embedded?: boolean
+  /** What the last purchase failed with. Null when nothing has failed. */
+  error?: string | null
 }
 
-function PlateFrame({ url, name, dim }: { url: string | null; name: string; dim: boolean }) {
+function PlateFrame({ url, name, dim, mine }: {
+  url: string | null; name: string; dim: boolean
+  /** A place this rider has ridden or owns — its picture is being made now. */
+  mine: boolean
+}) {
   return (
     <div style={{
       position: 'relative', width: '100%', aspectRatio: '1 / 1', borderRadius: 16,
@@ -67,9 +78,14 @@ function PlateFrame({ url, name, dim }: { url: string | null; name: string; dim:
       ) : (
         <div style={{
           position: 'absolute', inset: 0, display: 'grid', placeItems: 'center',
-          color: T.quiet, fontSize: 10, fontWeight: 700, letterSpacing: 1.2,
+          padding: 10, textAlign: 'center',
+          color: T.quiet, fontSize: 10, fontWeight: 700, letterSpacing: 1.2, lineHeight: 1.5,
         }}>
-          NOCH KEIN BILD
+          {/* A black square with NOCH KEIN BILD on it reads as a broken card.
+              For the rider's OWN places it is also wrong: opening this screen
+              queues exactly those first (`api/garage.py::get_backdrops`), so
+              the picture is genuinely on its way and saying so is the truth. */}
+          {mine ? 'BILD WIRD ERSTELLT' : 'NOCH KEIN BILD'}
         </div>
       )}
     </div>
@@ -86,7 +102,7 @@ function PlaceCard({ place, busy, onBuy, onSelect }: {
 
   return (
     <div style={{ ...lux(20), padding: S.md, display: 'flex', flexDirection: 'column', gap: S.sm }}>
-      <PlateFrame url={place.plate_url} name={place.name} dim={locked} />
+      <PlateFrame url={place.plate_url} name={place.name} dim={locked} mine={!locked} />
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <span style={{ fontSize: 14, fontWeight: 700, color: T.ink, lineHeight: 1.2 }}>
@@ -150,36 +166,50 @@ export default function W3PlacesView(p: W3PlacesProps) {
   const reduce = useReducedMotion()
   const stamped = p.places.filter((x) => x.stamped || x.owned)
   const rest = p.places.filter((x) => !x.stamped && !x.owned)
+  const embedded = p.embedded === true
 
   return (
-    <div style={{ minHeight: '100dvh', background: T.bg, fontFamily: FONT }}>
-      <W3StatusBar />
+    <div style={embedded
+      ? { fontFamily: FONT }
+      : { minHeight: '100dvh', background: T.bg, fontFamily: FONT }}>
+      {!embedded && <W3StatusBar />}
 
-      <div style={{ padding: `0 ${S.xl}px ${S.xxl}px` }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: S.md, height: 52,
-        }}>
-          <button
-            type="button" onClick={p.onBack} aria-label="Zurück"
-            style={{
-              width: 36, height: 36, borderRadius: 100, border: 0, background: T.surface,
-              display: 'grid', placeItems: 'center', cursor: 'pointer', color: T.ink,
-            }}
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <h1 style={{ fontSize: 22, fontWeight: 800, color: T.ink, margin: 0, letterSpacing: -0.3 }}>
-            Orte
-          </h1>
-          <div style={{ marginLeft: 'auto' }}>
-            {p.balance != null && <W3Price amount={p.balance} size={14} />}
+      <div style={{ padding: embedded ? 0 : `0 ${S.xl}px ${S.xxl}px` }}>
+        {!embedded && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: S.md, height: 52,
+          }}>
+            <button
+              type="button" onClick={p.onBack} aria-label="Zurück"
+              style={{
+                width: 36, height: 36, borderRadius: 100, border: 0, background: T.surface,
+                display: 'grid', placeItems: 'center', cursor: 'pointer', color: T.ink,
+              }}
+            >
+              <ArrowLeft size={18} />
+            </button>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: T.ink, margin: 0, letterSpacing: -0.3 }}>
+              Orte
+            </h1>
+            <div style={{ marginLeft: 'auto' }}>
+              {p.balance != null && <W3Price amount={p.balance} size={14} />}
+            </div>
           </div>
-        </div>
+        )}
 
         <p style={{ fontSize: 12, color: T.mid, lineHeight: 1.5, margin: `0 0 ${S.xl}px` }}>
           Jeder Ort hier wurde von jemandem erfahren. Wo du selbst warst, kannst du kaufen —
           und dein Rad steht dann dort.
         </p>
+
+        {/* A refused purchase used to clear the spinner and say nothing at all,
+            which is the one failure a rider is most likely to hit. */}
+        {p.error && (
+          <p style={{
+            fontSize: 12, fontWeight: 600, color: T.warn, lineHeight: 1.45,
+            margin: `0 0 ${S.md}px`,
+          }}>{p.error}</p>
+        )}
 
         {stamped.length > 0 && (
           <>

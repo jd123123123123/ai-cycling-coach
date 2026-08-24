@@ -80,7 +80,6 @@ export function preloadTab(route: string): void {
 // Ordered by how soon a rider typically reaches them, cheapest-and-likeliest
 // first, so an interrupted warm-up has still bought the most.
 const SECONDARY = [
-  () => import('./W3ShopPage'),          // /e/w3-shop         — the garage's own CTA
   () => import('./W3RideDetailPage'),    // /e/w3-ride/:id     — tapping a ride
   () => import('./W3ReadinessPage'),     // /e/w3-readiness    — Today's hero
   () => import('./W3PlanPage'),          // /e/w3-plan         — Today's plan strip

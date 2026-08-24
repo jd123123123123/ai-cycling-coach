@@ -30,6 +30,7 @@ from typing import Annotated, Literal, get_args
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi import status as http_status
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -51,6 +52,7 @@ from app.services import (
     backdrops,
     bike_build,
     bike_wear,
+    cutout,
     cyclr_studio,
     gear,
     places,
@@ -207,6 +209,51 @@ async def _get_asset(db: AsyncSession, user_id: int, kind: str) -> GarageAsset |
     )
     return result.scalar_one_or_none()
 
+
+async def _ensure_cut_out(db: AsyncSession, bike: GarageAsset | None) -> GarageAsset | None:
+    """Free a bike rendered BEFORE the cut-out existed, once, on first read.
+
+    `cyclr_studio` cuts every bike out at render time now, but the renders made
+    before that shipped are still sitting in `garage_assets` as square
+    photographs with a studio ground baked into them. Every surface downstream
+    was rewritten to trust the cut-out — the Today room stands the machine on
+    its own floor line at 94% width — so an uncut render draws there as a
+    rectangle laid over the room, edges, baked floor, baked shadow and all.
+    That is what a rider with an older bike actually sees.
+
+    Re-rendering is a paid model call and would return a DIFFERENT bicycle. The
+    cut is the same picture with its ground removed, so it is done here instead:
+    once, on the next read, and persisted.
+
+    THE MARKER IS THE ALPHA CHANNEL, not a flag column and not the container
+    format — `cutout.is_cut_out` reads the image's own mode from its header. A
+    cut bike carries transparency and an uncut render does not, so there is
+    nothing to keep in sync and nothing to migrate.
+
+    NEVER FATAL, like every other step in the render pipeline: a cut that fails
+    leaves the original exactly where it was.
+    """
+    if bike is None or not bike.image_url:
+        return bike
+    if cutout.is_cut_out(bike.image_url):
+        # Already free of its ground — but a rider cut before the cut-out moved
+        # to WebP carries a PNG four times the size of the same picture, on the
+        # first screen's critical path. Re-encoding costs no model call.
+        packed = await run_in_threadpool(cutout.repack, bike.image_url)
+        if packed:
+            bike.image_url = packed
+            await db.commit()
+            logger.info("repacked a PNG cut-out as WebP for user %s", bike.user_id)
+        return bike
+    cut = await run_in_threadpool(cutout.cut_out, bike.image_url)
+    if not cut:
+        return bike
+    bike.image_url = cut
+    await db.commit()
+    logger.info("cut out a pre-cutout bike render for user %s", bike.user_id)
+    return bike
+
+
 class AssetNameRequest(BaseModel):
     """What the rider decided to call their machine."""
 
@@ -308,7 +355,8 @@ async def get_garage(
         select(GarageAsset).where(GarageAsset.user_id == current_user.id)
     )
     assets = {a.kind: a for a in result.scalars().all()}
-    return GarageOut(rider=_to_out(assets.get("rider")), bike=_to_out(assets.get("bike")))
+    bike = await _ensure_cut_out(db, assets.get("bike"))
+    return GarageOut(rider=_to_out(assets.get("rider")), bike=_to_out(bike))
 
 
 # ── the built bike ──────────────────────────────────────────────────────────
@@ -433,7 +481,9 @@ async def get_today_stage(
     is `POST /garage/today/render`, an explicit act.
     """
     rider = await _get_asset(db, current_user.id, "rider")
-    bike = await _get_asset(db, current_user.id, "bike")
+    # Whichever of the two reads a rider hits first frees a pre-cut-out render;
+    # the other then sees the PNG. See `_ensure_cut_out`.
+    bike = await _ensure_cut_out(db, await _get_asset(db, current_user.id, "bike"))
     stage_id = await _selected_backdrop(db, current_user.id)
     owned = await _owned_stages(db, current_user.id)
 
@@ -1549,6 +1599,13 @@ async def get_backdrops(
     # fills it in rather than firing every render at once.
     if background is not None:
         pending = [p for p in all_places if not p.plate_url]
+        # THE RIDER'S OWN PLACES ARE RENDERED FIRST. Oldest-first was a fair
+        # queue and the wrong one: the gallery leads with DEINE ORTE — the
+        # places this rider has actually stood their bike in — and those are
+        # the cards they look at, so those are the cards that must stop being
+        # a black square. A place nobody here has ridden can wait for its
+        # picture; the one with "6 x gefahren" under it cannot.
+        pending.sort(key=lambda p: (p.id not in stamps, p.created_at))
         if pending:
             background.add_task(_render_plate_later, current_user.id, pending[0].slug)
 

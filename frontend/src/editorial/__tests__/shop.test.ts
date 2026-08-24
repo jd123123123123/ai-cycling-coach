@@ -6,8 +6,7 @@ import {
 } from '../w3/w3shop'
 import { STARTER_BIKE_ID } from '../w3/w3bikes'
 import { STOCK_PARTS, SLOTS } from '../w3/w3parts'
-import { stateOf } from '../w3/W3ShopView'
-import { purchaseError } from '../w3/W3ShopPage'
+import { purchaseError } from '../w3/w3purchase'
 import type { Loadout } from '../../api/shop'
 
 const loadout = (over: Partial<Loadout> = {}): Loadout => ({
@@ -100,29 +99,6 @@ describe('isEquipped / equippedInSlot', () => {
 })
 
 // ── The state one item is in for one rider ──────────────────────────────────
-describe('stateOf', () => {
-  const fixie = item('steel-fixie')       // 550 RC
-  const owned = (...ids: string[]) => new Set(ids)
-
-  it('ranks equipped above owned', () => {
-    expect(stateOf(fixie, owned('steel-fixie'), loadout({ bike: 'steel-fixie' }), 9999)).toBe('equipped')
-  })
-
-  it('ranks owned above affordable', () => {
-    expect(stateOf(fixie, owned('steel-fixie'), loadout(), 9999)).toBe('owned')
-  })
-
-  it('is affordable at exactly the price', () => {
-    expect(stateOf(fixie, owned(), loadout(), fixie.price)).toBe('affordable')
-    expect(stateOf(fixie, owned(), loadout(), fixie.price - 1)).toBe('tooExpensive')
-  })
-
-  it('never calls something affordable while the balance is unknown', () => {
-    // A null balance is "we could not read the wallet" — offering a buy button
-    // against it would promise a purchase the server may refuse with a 402.
-    expect(stateOf(fixie, owned(), loadout(), null)).toBe('tooExpensive')
-  })
-})
 
 // ── Turning a failed purchase into a sentence ───────────────────────────────
 describe('purchaseError', () => {

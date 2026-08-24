@@ -378,10 +378,24 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
           stage's own floor sweep runs continuously behind and around the
           machine, which is what the reference does and what the old
           screen-blend was faking badly. */}
+      {/* ── THE MACHINE DOES NOT SLIDE IN ─────────────────────────────────
+          This carried `y: 16 → 0` over 600 ms, and it is the reason the bike
+          "jumps" when you change pages. Inside the room it never fired —
+          today, the rides and the garage share one mounted stage, so nothing
+          re-enters. But the tab bar's other two destinations are NOT nested
+          under this layout, so every trip through them unmounts the room and
+          the machine slides 16 px into place on the way back. Measured in the
+          390x844 harness: it lands at y=401 and settles at 386 over ~800 ms.
+
+          A fade stays, because it covers the image decode and a picture
+          appearing at full opacity mid-decode is its own flicker. What goes is
+          the TRANSLATION: the bike is the one object this app promises is
+          always in the same room in the same place, and an object that slides
+          to its position is an object that was somewhere else a moment ago. ── */}
       <motion.div
-        initial={reduce ? false : { opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
+        initial={reduce ? false : { opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 0.45, ease: EASE }}
         style={{
           // NOT `relative`. This block used to establish a containing block,
           // so the bike wrapper inside it resolved `bottom: 23.8%` against the

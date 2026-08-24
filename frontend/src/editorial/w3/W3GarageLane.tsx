@@ -89,7 +89,6 @@ export interface W3GarageLaneProps {
   onOpenWorkshop: () => void
   onOpenGear: () => void
   onOpenShop: () => void
-  onOpenPlaces: () => void
 }
 
 export default function W3GarageLane(p: W3GarageLaneProps) {
@@ -164,8 +163,11 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
         <div style={{ paddingBottom: 10 }}><Kicker>Weiter</Kicker></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <Row icon={Package} title="Ausrüstung" note="Teile kaufen und montieren" onClick={p.onOpenGear} />
-          <Row icon={Sparkles} title="Shop" note="Räder, Lackierungen, Kulissen" onClick={p.onOpenShop} />
-          <Row icon={MapPin} title="Orte" note="Wo dein Rad schon gestanden hat" onClick={p.onOpenPlaces} />
+          {/* ONE ROW, because there is now one screen behind it. "Shop" and
+              "Orte" were two rows leading to two screens that both sold things
+              with RideCoin; the places moved into the shop, so a second row
+              pointing at the same scroll is a choice with no difference in it. */}
+          <Row icon={Sparkles} title="Shop" note="Teile, Kulissen und Orte" onClick={p.onOpenShop} />
         </div>
       </div>
     </motion.div>

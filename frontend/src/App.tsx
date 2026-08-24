@@ -76,9 +76,6 @@ const W3WorkshopScreen = lazyWithRetry(() =>
   import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3WorkshopScreen })))
 const W3ShopsScreen = lazyWithRetry(() =>
   import('./editorial/w3/W3EconomyPages').then((m) => ({ default: m.W3ShopsScreen })))
-const W3ShopPage = lazyWithRetry(() => import('./editorial/w3/W3ShopPage'))
-const W3PlacesPage = lazyWithRetry(() => import('./editorial/w3/W3PlacesPage'))
-const W3ShopPreview = lazyWithRetry(() => import('./editorial/w3/W3ShopPreview'))
 const W3BikeStudioPage = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPage'))
 const W3BikeStudioPreview = lazyWithRetry(() => import('./editorial/w3/W3BikeStudioPreview'))
 const W3RideDetailPage = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPage'))
@@ -445,9 +442,13 @@ function AppRoutes() {
           <Route path="/e/w3-workshop-preview" element={<W3WorkshopPreview />} />
           <Route path="/e/w3-gear-preview" element={<W3GearPreview />} />
           <Route path="/e/w3-garage-stage-preview" element={<W3GarageStagePreview />} />
-          <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3Guard><W3ShopPage /></W3Guard></ProtectedRoute>} />
-          <Route path="/e/w3-places" element={<ProtectedRoute checkOnboarding><W3Guard><W3PlacesPage /></W3Guard></ProtectedRoute>} />
-          <Route path="/e/w3-shop-preview" element={<W3ShopPreview />} />
+          {/* The old catalogue shop is retired — its collectible bikes are
+              read from `useGarageCollection` by the hero and the garage, but
+              nobody buys one any more. Kept as a redirect rather than a 404 so
+              a bookmark lands in the shop that exists. */}
+          <Route path="/e/w3-shop" element={<Navigate to="/e/w3-gear" replace />} />
+          {/* The places are a section of the shop now — see `W3GearScreen`. */}
+          <Route path="/e/w3-places" element={<Navigate to="/e/w3-gear" replace />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
           <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />

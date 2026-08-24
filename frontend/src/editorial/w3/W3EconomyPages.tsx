@@ -9,6 +9,7 @@ import W3PartsDock from './W3PartsDock'
 import W3GarageLane from './W3GarageLane'
 import { useHeroPanel } from './W3HeroShell'
 import W3GearPanel from './W3GearPanel'
+import W3PlacesPanel from './W3PlacesPanel'
 import W3WorkshopPanel from './W3WorkshopPanel'
 import W3Shops from './W3Shops'
 import { useBuyGear, useEquipGear, useGear, useUnequipGear } from '../../hooks/useGear'
@@ -118,8 +119,7 @@ export function W3GarageHome() {
       workshop={workshop ?? null}
       onOpenWorkshop={() => navigate('/e/w3-workshop')}
       onOpenGear={() => navigate('/e/w3-gear')}
-      onOpenShop={() => navigate('/e/w3-shop')}
-      onOpenPlaces={() => navigate('/e/w3-places')} />
+      onOpenShop={() => navigate('/e/w3-gear')} />
   )
 
   if (inShell) return <>{portal}{lane}</>
@@ -143,6 +143,13 @@ export function W3GearScreen() {
   return (
     <Shell title="Ausrüstung" back right={<Balance />}>
       <W3GearPanel />
+      {/* ── THE BACKDROPS ARE SOLD WHERE THINGS ARE SOLD ─────────────────
+          They were behind a "Orte" row in the garage lane, two taps away from
+          the only screen a rider goes to in order to spend RideCoin — which is
+          how an app ends up with a feature nobody knows about. The gallery is
+          the same one; it is just no longer hidden. `/e/w3-places` redirects
+          here so an old link still lands on the places. ── */}
+      <W3PlacesPanel />
     </Shell>
   )
 }
