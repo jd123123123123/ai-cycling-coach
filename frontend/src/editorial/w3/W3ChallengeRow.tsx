@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { CalendarCheck, Clock, Flame, MoreHorizontal, Mountain, Route, Zap } from 'lucide-react'
+import { CalendarCheck, ChevronRight, Clock, Flame, MoreHorizontal, Mountain, Route, Users, Zap } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
 import { TNUM } from './w3surfaces'
 
@@ -48,6 +48,12 @@ export interface W3ChallengeRowVm {
   /** Only an in-flight custom challenge can be edited. */
   editable?: boolean
   onEdit?: () => void
+  /** How many riders are in this one. Undefined draws no chip — a count of
+   *  zero and an unknown count are different things and must not look alike. */
+  participants?: number
+  /** Opens the board. Absent → the count is stated but not tappable, which is
+   *  the honest shape for a challenge that has no board (a custom one). */
+  onBoard?: () => void
 }
 
 //: TOKENS ONLY. Every tint here is one the design system already names — the
@@ -141,13 +147,37 @@ export default function W3ChallengeRow({ vm }: { vm: W3ChallengeRowVm }) {
         />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <span style={{
-          fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8,
-          color: vm.completed ? T.acid : T.quiet,
-        }}>
-          {vm.completed ? 'GESCHAFFT' : 'IN ARBEIT'}
-        </span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        {/* WHO ELSE IS IN IT, in the place the status word used to sit alone.
+            "63 dabei" is what turns a to-do item into a race, and it is worth
+            more of this line than the word IN ARBEIT, which the bar above has
+            already said in a way you cannot misread. */}
+        {vm.participants != null && vm.participants > 0 ? (
+          <button
+            type="button"
+            onClick={vm.onBoard}
+            disabled={!vm.onBoard}
+            aria-label={`${vm.participants} dabei — Rangliste öffnen`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5, height: 26,
+              padding: vm.onBoard ? '0 9px 0 10px' : '0 10px', borderRadius: 100, border: 0,
+              background: T.surface2, fontFamily: FONT,
+              cursor: vm.onBoard ? 'pointer' : 'default',
+            }}>
+            <Users size={12} color={T.mid} />
+            <span style={{ fontSize: 11, fontWeight: 700, color: T.mid, ...TNUM }}>
+              {nf.format(vm.participants)} dabei
+            </span>
+            {vm.onBoard && <ChevronRight size={12} color={T.quiet} />}
+          </button>
+        ) : (
+          <span style={{
+            fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8,
+            color: vm.completed ? T.acid : T.quiet,
+          }}>
+            {vm.completed ? 'GESCHAFFT' : 'IN ARBEIT'}
+          </span>
+        )}
         <span style={{
           display: 'inline-flex', alignItems: 'center', height: 26, padding: '0 12px',
           borderRadius: 100, background: vm.completed ? T.acidDim : T.surface2,

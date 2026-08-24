@@ -26,13 +26,19 @@ import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.challenge import ChallengeEnrollment
+from app.models.user import User
 from app.models.rewards import REASON_CHALLENGE_BONUS
 from app.services import rewards
-from app.services.crew_score import CHALLENGE_METRICS, challenge_value_for_user
+from app.services.crew_score import (
+    CHALLENGE_METRICS,
+    challenge_series_for_user,
+    challenge_value_for_user,
+    display_handle,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,24 +65,44 @@ class ChallengeTemplate:
 # every metric is one the activity engine computes for real.
 CATALOG: tuple[ChallengeTemplate, ...] = (
     ChallengeTemplate(
-        key="show_up_20", title="Show up ×20",
-        detail="Ride on 20 days this month. Consistency is the whole game.",
+        key="show_up_20", title="20× auftauchen",
+        detail="Fahr an 20 Tagen in diesem Monat. Auftauchen ist das ganze Spiel.",
         metric="active_days", target=20, tier="silver",
     ),
     ChallengeTemplate(
-        key="distance_600", title="600 km month",
-        detail="Cover 600 km before the month is out.",
+        key="distance_600", title="600 km im Monat",
+        detail="600 Kilometer, bevor der Monat um ist.",
         metric="distance_km", target=600, tier="silver",
     ),
     ChallengeTemplate(
-        key="build_engine", title="Build the engine",
-        detail="Bank 2,000 TSS of training stress this month.",
+        key="build_engine", title="Motor bauen",
+        detail="2.000 TSS Trainingsreiz in einem Monat auf die Waage bringen.",
         metric="tss", target=2000, tier="gold",
     ),
     ChallengeTemplate(
-        key="fifteen_rides", title="Fifteen rides",
-        detail="Log 15 rides this month — any distance counts.",
+        key="fifteen_rides", title="Fünfzehn Fahrten",
+        detail="15 Fahrten loggen — die Länge ist egal.",
         metric="rides", target=15, tier="bronze",
+    ),
+    # ── Added with the challenges rebuild. Four entries meant a rider who had
+    # joined them all had an empty catalogue for the rest of the month, and
+    # every one of them asked for volume. These three ask for something else:
+    # a first month that is actually reachable, time in the saddle rather than
+    # distance, and the one metric that rewards riding HARD rather than long.
+    ChallengeTemplate(
+        key="first_month", title="Erster Monat",
+        detail="Acht Fahrten. Der Einstieg, nicht die Prüfung — und er zählt trotzdem.",
+        metric="rides", target=8, tier="bronze",
+    ),
+    ChallengeTemplate(
+        key="saddle_30h", title="30 Stunden im Sattel",
+        detail="30 Stunden fahren. Zeit auf dem Rad, nicht Kilometer auf der Uhr.",
+        metric="hours", target=30, tier="silver",
+    ),
+    ChallengeTemplate(
+        key="burn_25k", title="25.000 kJ verbrennen",
+        detail="25.000 Kilojoule Arbeit. Das belohnt harte Fahrten, nicht nur lange.",
+        metric="kj", target=25000, tier="gold",
     ),
 )
 
@@ -359,7 +385,144 @@ async def list_mine(db: AsyncSession, user_id: int) -> dict:
         for t in CATALOG if t.key not in enrolled
     ]
 
+    # HOW MANY OTHERS ARE IN IT, on every card. A catalogue entry that says
+    # nothing about who else took it is a to-do list item; "47 dabei" is the
+    # reason to take this one rather than that one. One grouped COUNT covers
+    # the whole screen.
+    counts = await participant_counts(db, period)
+    for c in active:
+        c["participants"] = counts.get(c["key"], 1)
+    for c in available:
+        c["participants"] = counts.get(c["key"], 0)
+
     # Stable, friendly ordering: active first (least-complete first so the next
     # win is on top), then joinable by tier value.
     active.sort(key=lambda c: (c["completed"], -c["pct"]))
     return {"period": period, "active": active, "available": available}
+
+
+# ── Who else is in it ───────────────────────────────────────────────────────
+# A challenge nobody else can see you take is a to-do list. These two functions
+# are the whole difference between the two.
+
+#: How many riders a board draws. Every entry costs one activity query — see
+#: `challenge_value_for_user` — so this is a real ceiling rather than a page
+#: size, and the count above it is always the true one.
+BOARD_LIMIT = 20
+
+
+async def participant_counts(db: AsyncSession, period: str) -> dict[str, int]:
+    """How many riders are in each challenge this period, keyed by challenge.
+
+    One grouped COUNT for the whole screen rather than a query per card: the
+    catalogue draws seven of these at once and a per-card count would be seven
+    round trips for one number each.
+    """
+    rows = await db.execute(
+        select(ChallengeEnrollment.challenge_key, func.count())
+        .where(ChallengeEnrollment.period == period)
+        .group_by(ChallengeEnrollment.challenge_key)
+    )
+    return {key: int(n) for key, n in rows.all()}
+
+
+async def board(
+    db: AsyncSession, key: str, viewer_id: int, limit: int = BOARD_LIMIT,
+) -> dict:
+    """The standing of everyone in one challenge this month.
+
+    RANK IS COMPUTED OVER EVERY ENROLMENT, then the list is cut to `limit` —
+    so a rider sitting 40th is told they are 40th of 63 rather than being told
+    nothing because they fell off the end. The viewer's own row is always
+    returned, whether or not it survived the cut.
+
+    A CUSTOM CHALLENGE IS PRIVATE. Its key carries the creator's own id, and
+    two riders who invent the same goal do not share a board — so a board is
+    only ever drawn for the catalogue, and asking for a custom one returns an
+    empty board rather than another rider's numbers.
+    """
+    period = current_period()
+    if key.startswith(CUSTOM_PREFIX) or key not in _BY_KEY:
+        return {"key": key, "period": period, "participants": 0,
+                "you": None, "rows": [], "truncated": False}
+
+    t = _BY_KEY[key]
+    rows = (await db.execute(
+        select(ChallengeEnrollment).where(
+            ChallengeEnrollment.challenge_key == key,
+            ChallengeEnrollment.period == period,
+        )
+    )).scalars().all()
+
+    scored: list[dict] = []
+    for r in rows:
+        value = await challenge_value_for_user(
+            db, r.user_id, r.starts_on, r.ends_on, r.metric,
+        )
+        user = await db.get(User, r.user_id)
+        scored.append({
+            "user_id": r.user_id,
+            "handle": display_handle(user) if user is not None else "—",
+            "avatar_url": getattr(user, "avatar_url", None),
+            "value": value,
+            "pct": pct(value, t.target),
+            "completed": r.awarded_rc is not None,
+        })
+
+    order = {r.user_id: i for i, r in enumerate(rows)}
+    ranked = rank_board(scored, order, viewer_id, limit)
+    ranked["key"] = key
+    ranked["period"] = period
+    return ranked
+
+
+def rank_board(
+    scored: list[dict], order: dict[int, int], viewer_id: int, limit: int,
+) -> dict:
+    """Order a board, number it, and cut it — the part worth testing.
+
+    RANK IS OVER EVERYONE, and only then is the list cut. A rider sitting 40th
+    of 63 is told exactly that; cutting first and numbering after would tell
+    them nothing at all, which is the version of this that makes a leaderboard
+    feel like a wall.
+
+    Furthest along leads. A TIE GOES TO WHOEVER JOINED FIRST — `order` carries
+    enrolment order — because committing early and holding on is the harder
+    half of the same result.
+
+    The viewer's own row always comes back, whether or not it survived the cut.
+    """
+    ranked = sorted(scored, key=lambda x: (-x["value"], order.get(x["user_id"], 0)))
+    for i, x in enumerate(ranked, start=1):
+        x["rank"] = i
+    you = next((dict(x) for x in ranked if x["user_id"] == viewer_id), None)
+    return {
+        "participants": len(ranked),
+        "you": you,
+        "rows": ranked[:limit],
+        "truncated": len(ranked) > limit,
+    }
+
+
+async def day_series(db: AsyncSession, user_id: int, key: str) -> dict:
+    """Which DAYS of the month moved this challenge's number.
+
+    The page draws the month as a strip of days rather than as a bar, because
+    "rode four huge days" and "rode every single day" are different months that
+    a percentage renders identically — and the difference is the thing a rider
+    is actually proud of.
+    """
+    period = current_period()
+    row = (await db.execute(
+        select(ChallengeEnrollment).where(
+            ChallengeEnrollment.user_id == user_id,
+            ChallengeEnrollment.challenge_key == key,
+            ChallengeEnrollment.period == period,
+        )
+    )).scalar_one_or_none()
+    if row is None:
+        return {"key": key, "period": period, "days": []}
+    series = await challenge_series_for_user(
+        db, user_id, row.starts_on, row.ends_on, row.metric,
+    )
+    return {"key": key, "period": period, "days": series}

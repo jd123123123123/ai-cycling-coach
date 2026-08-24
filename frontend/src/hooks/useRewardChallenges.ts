@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   fetchMyChallenges, joinChallenge, createCustomChallenge, editCustomChallenge, deleteCustomChallenge,
-  type MyChallenges, type ChallengeMetric,
+  fetchChallengeBoard, fetchChallengeDays,
+  type MyChallenges, type ChallengeMetric, type ChallengeBoard,
 } from '../api/rewardChallenges'
 
 // Monthly personal challenges with real progress + payouts. Reading can
@@ -12,6 +13,33 @@ export function useRewardChallenges() {
     queryKey: ['challenges', 'mine'],
     queryFn: fetchMyChallenges,
     staleTime: 60 * 1000,
+  })
+}
+
+/**
+ * Everyone in one challenge this month.
+ *
+ * Enabled only when a board is actually open: each row costs the server one
+ * activity query (`challenges.board`), so this is never fetched for the seven
+ * cards on the page — those carry a participant COUNT, which is one grouped
+ * query for all of them.
+ */
+export function useChallengeBoard(key: string | null) {
+  return useQuery<ChallengeBoard>({
+    queryKey: ['challenges', 'board', key],
+    queryFn: () => fetchChallengeBoard(key as string),
+    enabled: key != null,
+    staleTime: 60 * 1000,
+  })
+}
+
+/** Which days of the month moved a challenge — the month strip's data. */
+export function useChallengeDays(key: string | null) {
+  return useQuery<{ key: string; period: string; days: number[] }>({
+    queryKey: ['challenges', 'days', key],
+    queryFn: () => fetchChallengeDays(key as string),
+    enabled: key != null,
+    staleTime: 5 * 60 * 1000,
   })
 }
 

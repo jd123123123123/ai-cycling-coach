@@ -1,56 +1,67 @@
-import W3ChallengesView, { type W3ChallengesVm } from './W3ChallengesView'
-import { T } from './w3tokens'
+import { useState } from 'react'
+import { T, FONT, band, Kicker } from './w3tokens'
+import W3MonthStrip from './W3MonthStrip'
+import W3ChallengeRow from './W3ChallengeRow'
+import './w3.css'
 
-/** TEMP preview — pen-exact fixture for `w3.pen` frame `VsLYE`, no backend.
- *  /e/w3-challenges-preview is unguarded; remove before merge. Every value is
- *  transcribed from the pen; the reward economy it depicts is not built. */
+/**
+ * TEMP preview — /e/w3-challenges-preview, unguarded and backend-free.
+ *
+ * The live page is `W3ChallengesPage`, which is entirely real data; this exists
+ * so the two pieces that only appear under specific conditions — a month with
+ * an interesting shape, and a row that knows how many others are in it — can be
+ * looked at without waiting for a month to happen.
+ */
 
-// Month names always come from the locale, never a hand-written table.
-const thisMonth = new Date().toLocaleDateString('de-DE', { month: 'long' })
-
-export const CHALLENGES_FIXTURE: W3ChallengesVm = {
-  title: 'Challenges',
-  subtitle: 'Trainingsziele mit Auszahlung. Jede schaffst du, indem du den Plan fährst, nie durch Bezahlen.',
-  monthlyKicker: 'Monats-Challenge',
-  monthlyStatus: 'Dabei',
-  monthly: {
-    name: 'Heißer Streak',
-    daysLeftLabel: 'Noch 19 Tage',
-    blurb: `Triff an 20 Tagen im ${thisMonth} deine vorgegebene Einheit. Erholungstage zählen, wenn du sie nimmst.`,
-    done: 9,
-    total: 20,
-    progressLabel: '9 von 20 Tagen',
-    reward: 'BELOHNUNG · 1.000 RIDECOIN',
-  },
-  communityKicker: 'Community-Challenges',
-  community: [
-    {
-      key: 'atw',
-      title: 'Um die Welt ×2',
-      cover: `radial-gradient(120% 80% at 62% 22%, rgba(210,124,58,0.55), rgba(210,124,58,0) 60%), linear-gradient(158deg, ${T.nightHi} 0%, ${T.nightMid} 42%, ${T.nightLo} 100%)`,
-      pct: 26,
-      progressNote: '20.840 von 80.150 km · noch 4 Wochen',
-      youNote: 'Du hast 412 km beigetragen. Top 8 % der Community.',
-    },
-    {
-      key: 'everest',
-      title: 'Everest-Kollektiv',
-      cover: `radial-gradient(100% 65% at 42% 18%, rgba(74,138,138,0.5), rgba(74,138,138,0) 60%), linear-gradient(160deg, ${T.nightHi} 0%, ${T.nightMid} 46%, ${T.nightLo} 100%)`,
-      pct: 47,
-      progressNote: '4.180 von 8.848 km geklettert · noch 6 Wochen',
-      youNote: 'Davon sind 21 km von dir. Top 14 % der Community.',
-    },
-  ],
-  openKicker: 'Offen zum Mitmachen',
-  open: [
-    { key: 'threshold', title: 'Schwellen-Monat', blurb: 'Sechs 2×20-Einheiten bei 100 % FTP', reward: '800', icon: 'zap', accent: true },
-    { key: 'dawn', title: 'Frühaufsteher', blurb: 'Zehn Fahrten vor 07:00 gestartet', reward: '350', icon: 'sunrise' },
-    { key: 'longhaul', title: 'Lange Distanz', blurb: 'Eine Fahrt über 160 km, Tempo egal', reward: '300', icon: 'mountain' },
-    { key: 'z2', title: 'Nie Z2 auslassen', blurb: 'Zwölf Stunden in Zone 2 in diesem Block', reward: '450', icon: 'repeat' },
-  ],
-  footnote: 'Auszahlungen landen einen Tag nach der bestätigten Fahrt in der Garage. Nichts hier lässt sich kaufen.',
-}
+// A month with a real shape in it: a quiet start, a big weekend, a steady
+// middle, two days off. A flat fixture would have proved nothing.
+const AUGUST = [
+  0, 42, 0, 0, 88, 130, 0, 55, 61, 0, 0, 74, 0, 96,
+  120, 44, 0, 58, 63, 0, 71, 210, 180, 0, 0, 66, 72, 80, 0, 48, 0,
+]
 
 export default function W3ChallengesPreview() {
-  return <W3ChallengesView vm={CHALLENGES_FIXTURE} />
+  const [done, setDone] = useState(false)
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, minHeight: '100dvh', background: T.bg }}>
+        <div style={{ ...band(24), paddingTop: 24, gap: 6 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.6, color: T.ink, margin: 0 }}>
+            Challenges · Bausteine
+          </h1>
+          <span style={{ fontSize: 12, color: T.mid }}>
+            Die echte Seite ist /e/w3-challenges.
+          </span>
+        </div>
+
+        <div style={{ ...band(26), gap: 12 }}>
+          <Kicker>DER MONATSSTREIFEN</Kicker>
+          <div style={{ background: T.surface, borderRadius: 24, padding: 20 }}>
+            <W3MonthStrip days={AUGUST} todayIndex={24} completed={done} />
+          </div>
+          <button onClick={() => setDone((d) => !d)} style={{
+            height: 34, borderRadius: 100, border: 0, background: T.surface2,
+            color: T.mid, fontFamily: FONT, fontSize: 12, fontWeight: 700, cursor: 'pointer',
+          }}>
+            {done ? 'als laufend zeigen' : 'als geschafft zeigen'}
+          </button>
+        </div>
+
+        <div style={{ ...band(40), gap: 10 }}>
+          <Kicker>EINE ZEILE MIT MITSPIELERN</Kicker>
+          <W3ChallengeRow vm={{
+            key: 'distance_600', title: '600 km im Monat', kind: 'distance_km',
+            value: 412, target: 600, unit: 'km', fill: 0.687,
+            reward: '500 RC', completed: false, deadline: 'noch 7 Tage',
+            participants: 63, onBoard: () => {},
+          }} />
+          <W3ChallengeRow vm={{
+            key: 'custom:1', title: 'Meine eigene Runde', kind: 'active_days',
+            value: 20, target: 20, unit: 'Tage', fill: 1,
+            reward: '500 RC', completed: true, deadline: null,
+          }} />
+        </div>
+      </div>
+    </div>
+  )
 }

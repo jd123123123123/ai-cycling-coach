@@ -407,6 +407,54 @@ async def challenge_value_for_user(
     return 0.0
 
 
+async def challenge_series_for_user(
+    db: AsyncSession, uid: int, start_on: date, end_on: date, metric: str
+) -> list[float]:
+    """The SAME metric as `challenge_value_for_user`, split per local day.
+
+    WHY THE TOTAL IS NOT THE SUM OF THIS. `challenge_value_for_user` rounds
+    once, at the end; rounding each day and adding them up drifts. So the two
+    are computed separately and only one of them is the number a rider is
+    judged on — this one exists to show WHICH DAYS moved it, never to restate
+    how far along they are.
+
+    Returns one entry per day in [start_on, end_on], oldest first, in the
+    athlete's own timezone. `active_days` comes back as 1.0 or 0.0, which is
+    what that metric means on a single day.
+    """
+    _, profile = await _user_context(db, uid)
+    tz = _resolve_tz(profile)
+
+    window_start_utc = datetime.combine(
+        start_on - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+    )
+    window_end_utc = datetime.combine(
+        end_on + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc
+    )
+    acts = await _activities_for_user_in_window(db, uid, window_start_utc, window_end_utc)
+
+    days = _window_dates(start_on, end_on)
+    per_day: dict[date, float] = {d: 0.0 for d in days}
+    for a in acts:
+        d = _local_day(a.started_at, tz)
+        if d not in per_day:
+            continue
+        if metric == "tss":
+            per_day[d] += float(a.tss or 0.0)
+        elif metric == "distance_km":
+            per_day[d] += float(a.distance_meters or 0.0) / 1000.0
+        elif metric == "hours":
+            per_day[d] += float(a.duration_seconds or 0.0) / 3600.0
+        elif metric == "kj":
+            per_day[d] += _activity_kj(a)
+        elif metric == "rides":
+            per_day[d] += 1.0
+        elif metric == "active_days":
+            per_day[d] = 1.0
+
+    return [per_day[d] for d in days]
+
+
 async def crew_duel(
     db: AsyncSession,
     caller_user_id: int,

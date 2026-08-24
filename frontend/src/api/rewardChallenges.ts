@@ -24,6 +24,49 @@ export interface RewardChallenge {
   completed: boolean
   awarded_rc: number | null
   custom?: boolean       // rider-created (editable/deletable)
+  /** How many riders are in this challenge this month. A catalogue entry that
+   *  says nothing about who else took it is a to-do list item. */
+  participants?: number
+}
+
+// ── Who else is in it ───────────────────────────────────────────────────────
+
+export interface BoardRow {
+  user_id: number
+  handle: string
+  avatar_url: string | null
+  value: number
+  pct: number
+  completed: boolean
+  rank: number
+}
+
+export interface ChallengeBoard {
+  key: string
+  period: string
+  /** Everyone enrolled, not just the rows that fit. */
+  participants: number
+  /** The rider's own row — present even when they fell off the visible board. */
+  you: BoardRow | null
+  rows: BoardRow[]
+  truncated: boolean
+}
+
+/** GET /challenges/{key}/board — everyone in this month's challenge, ranked. */
+export async function fetchChallengeBoard(key: string): Promise<ChallengeBoard> {
+  const res = await apiClient.get<ChallengeBoard>(`/challenges/${encodeURIComponent(key)}/board`)
+  return res.data
+}
+
+/** GET /challenges/{key}/days — one number per day of the month.
+ *
+ *  Feeds the month strip. Deliberately NOT used to restate progress: the total
+ *  is its own number, and summing a rounded per-day series would disagree with
+ *  it. This answers "which days moved it", which a percentage cannot. */
+export async function fetchChallengeDays(key: string): Promise<{ key: string; period: string; days: number[] }> {
+  const res = await apiClient.get<{ key: string; period: string; days: number[] }>(
+    `/challenges/${encodeURIComponent(key)}/days`)
+  return res.data
 }
 
 export const CHALLENGE_METRICS: { metric: ChallengeMetric; label: string; unit: string }[] = [

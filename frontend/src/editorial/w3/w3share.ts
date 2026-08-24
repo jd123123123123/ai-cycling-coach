@@ -398,7 +398,7 @@ async function paint(
   // footer
   text(ctx, d.footer, px, y, 26, '600', 'rgba(255,255,255,0.55)')
   star(ctx, W - px - 150, y - 8, 12, t.acid)
-  text(ctx, 'w3.ride', W - px - 128, y, 28, '700', T.ink)
+  text(ctx, 'Ridr', W - px - 128, y, 28, '700', T.ink)
 }
 
 /** Render the poster once. Retries without the avatar if a cross-origin avatar
@@ -449,7 +449,7 @@ export async function sharePoster(blob: Blob | null, caption: string, filename =
   const file = new File([blob], filename, { type: 'image/png' })
   if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] }) && navigator.share) {
     try {
-      await navigator.share({ files: [file], text: caption, title: 'w3.ride' })
+      await navigator.share({ files: [file], text: caption, title: 'Ridr' })
       return 'shared'
     } catch (err) {
       // user dismissed the sheet — not an error worth a fallback
@@ -469,7 +469,7 @@ export async function sharePoster(blob: Blob | null, caption: string, filename =
 export async function shareTextOrCopy(text: string, url?: string): Promise<'shared' | 'copied' | 'failed'> {
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     try {
-      await navigator.share(url ? { title: 'w3.ride', text, url } : { title: 'w3.ride', text })
+      await navigator.share(url ? { title: 'Ridr', text, url } : { title: 'Ridr', text })
       return 'shared'
     } catch (err) {
       if ((err as Error)?.name === 'AbortError') return 'shared'
@@ -600,7 +600,7 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   const fy = AH - 68
   if (d.footer) text(ctx, d.footer, px, fy, 26, '600', 'rgba(255,255,255,0.55)')
   star(ctx, AW - px - 150, fy - 8, 12, ACID)
-  text(ctx, 'w3.ride', AW - px - 128, fy, 28, '700', T.ink)
+  text(ctx, 'Ridr', AW - px - 128, fy, 28, '700', T.ink)
 }
 
 /** Render the "AVATAR UNLOCKED" card. Never throws: a missing or tainting
@@ -630,4 +630,118 @@ export async function renderAvatarCard(d: AvatarCardData): Promise<{ blob: Blob 
   let out = await tryExport()
   if (out === 'tainted') { avatar = null; out = await tryExport() }
   return out === 'tainted' ? { blob: null, dataUrl: '' } : out
+}
+
+
+// ── The challenge poster ────────────────────────────────────────────────────
+
+export interface ChallengeCardData {
+  title: string
+  /** "412 von 600" — what you have against what it takes. */
+  value: string
+  target: string
+  unit: string
+  pct: number
+  /** One number per day of the month, oldest first. The strip is the point. */
+  days: number[]
+  /** 1-based index of today; ≤ 0 draws no marker. */
+  todayIndex: number
+  /** "4. von 63" — null when nobody else is in it. */
+  standing: string | null
+  /** "800 RIDECOIN" when it is already paid, else null. */
+  earned: string | null
+  handle: string
+  footer: string
+}
+
+/**
+ * What leaves the app is the same thing that was on screen.
+ *
+ * THE STRIP TRAVELS. A share card showing a percentage would be a card about
+ * any rider's month; the strip of days is about THIS one — four huge days or
+ * thirty steady ones, legible at a glance in a feed where nobody will read a
+ * caption. It is the reason this card is worth posting, so it gets the middle
+ * of the poster rather than a corner of it.
+ *
+ * The standing is stated as a fact and never as a boast: "4. von 63" is true
+ * whether that is a podium or not, and a card that only prints wins is a card
+ * nobody believes.
+ */
+function paintChallengeCard(ctx: CanvasRenderingContext2D, d: ChallengeCardData) {
+  const px = 64
+  // CONTENT DOCKS AT THE BOTTOM, and the strip takes the room in between. The
+  // first version laid the facts out top-down and left an empty third under
+  // them whenever a challenge had no payout yet — the same "content stopped at
+  // sixty per cent" the avatar card was rebuilt to fix. Now the card fills
+  // whether it carries one fact or three.
+  const DOCK = 300
+
+  ctx.fillStyle = T.bg; ctx.fillRect(0, 0, AW, AH)
+
+  const bloom = ctx.createRadialGradient(AW / 2, 520, 20, AW / 2, 520, 640)
+  bloom.addColorStop(0, 'rgba(191,255,60,0.13)')
+  bloom.addColorStop(1, 'rgba(191,255,60,0)')
+  ctx.fillStyle = bloom; ctx.fillRect(0, 0, AW, AH)
+
+  text(ctx, 'CHALLENGE', px, 150, 26, '700', ACID, 6)
+  text(ctx, d.title, px, 246, 76, '800', T.ink, -1)
+
+  text(ctx, d.value, px, 470, 200, '800', T.ink, -6)
+  const vw = ctx.measureText(d.value).width
+  text(ctx, d.unit, px + vw + 22, 470, 46, '700', 'rgba(255,255,255,0.45)')
+  text(ctx, `von ${d.target} ${d.unit}`, px, 540, 32, '600', 'rgba(255,255,255,0.55)')
+
+  // ── the month, given the whole middle of the card ──
+  const sx = px, sw = AW - px * 2
+  const sTop = 640
+  const sh = AH - DOCK - 90 - sTop
+  const peak = Math.max(...d.days, 0)
+  const n = Math.max(d.days.length, 1)
+  const gap = 6
+  const cw = (sw - gap * (n - 1)) / n
+  d.days.forEach((v, i) => {
+    const x = sx + i * (cw + gap)
+    const isFuture = d.todayIndex > 0 && i + 1 > d.todayIndex
+    const h = v > 0 ? Math.max(10, (peak > 0 ? v / peak : 0) * sh) : 7
+    ctx.fillStyle = v > 0 ? ACID : isFuture ? 'rgba(255,255,255,0.07)' : 'rgba(255,255,255,0.16)'
+    roundRect(ctx, x, sTop + sh - h, cw, h, Math.min(6, cw / 2))
+    ctx.fill()
+  })
+  const moved = d.days.filter((v) => v > 0).length
+  text(ctx, `${moved} VON ${d.days.length} TAGEN HABEN GEZÄHLT`, px, sTop + sh + 52, 26, '700',
+    'rgba(255,255,255,0.45)', 3)
+
+  // ── the facts, docked, laid out side by side so one or two both fill ──
+  const fy = AH - DOCK + 96
+  const facts: { v: string; l: string; acid?: boolean }[] = []
+  if (d.standing) facts.push({ v: d.standing, l: 'IM FELD' })
+  if (d.earned) facts.push({ v: d.earned, l: 'AUSGEZAHLT', acid: true })
+  if (facts.length === 0) facts.push({ v: `${d.pct} %`, l: 'GESCHAFFT' })
+  facts.forEach((f, i) => {
+    const x = px + i * ((AW - px * 2) / 2)
+    text(ctx, f.v, x, fy, 54, '800', f.acid ? ACID : T.ink, -1)
+    text(ctx, f.l, x, fy + 46, 24, '700', 'rgba(255,255,255,0.45)', 3)
+  })
+
+  const foot = AH - 68
+  text(ctx, d.handle, px, foot, 28, '700', 'rgba(255,255,255,0.55)')
+  star(ctx, AW - px - 150, foot - 8, 12, ACID)
+  text(ctx, 'Ridr', AW - px - 128, foot, 28, '700', T.ink)
+}
+
+/** Render the challenge poster. Pure canvas — no images to taint it, so unlike
+ *  the ride poster there is no fallback pass to run. */
+export async function renderChallengeCard(d: ChallengeCardData): Promise<{ blob: Blob | null; dataUrl: string }> {
+  const canvas = document.createElement('canvas')
+  canvas.width = AW; canvas.height = AH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return { blob: null, dataUrl: '' }
+  paintChallengeCard(ctx, d)
+  try {
+    const dataUrl = canvas.toDataURL('image/png')
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+    return { blob, dataUrl }
+  } catch {
+    return { blob: null, dataUrl: '' }
+  }
 }

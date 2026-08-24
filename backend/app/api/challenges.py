@@ -98,3 +98,28 @@ async def join_challenge(
         return await challenges.join(db, current_user.id, key)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{key}/board", summary="Everyone in this challenge this month, ranked")
+async def challenge_board(
+    key: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """The standing of every rider who joined this month's challenge.
+
+    Rank is over ALL enrolments and the list is then cut, so a rider outside the
+    board still learns where they stand. A custom challenge is private and
+    returns an empty board — see `challenges.board`.
+    """
+    return await challenges.board(db, key, current_user.id)
+
+
+@router.get("/{key}/days", summary="Which days of the month moved this challenge")
+async def challenge_days(
+    key: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """One number per day of the period, for the month strip."""
+    return await challenges.day_series(db, current_user.id, key)
