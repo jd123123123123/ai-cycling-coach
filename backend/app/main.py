@@ -80,17 +80,27 @@ _SECURITY_HEADERS = {
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Register Garmin sync job — every 15 minutes (user directive, July 2026:
-    # near-live data). Incremental syncs are cheap (last_sync_at − 2h window);
-    # the client's per-request delays + rate-limit handling protect the
-    # unofficial API, and coalesce/max_instances stop overlapping runs from
-    # piling up when a sync takes longer than the interval.
+    # Register Garmin sync job — EVERY MINUTE (owner directive, Aug 2026: the
+    # 15-minute cadence was not delivering data soon enough after a ride).
+    # Incremental syncs are cheap (last_sync_at − 2h window); the client's
+    # per-request delays and rate-limit handling protect the unofficial API.
+    #
+    # `max_instances=1` + `coalesce=True` are what make a one-minute interval
+    # safe rather than reckless: a sync that takes longer than sixty seconds
+    # does not start a second copy of itself, and the runs it missed while busy
+    # collapse into ONE catch-up rather than a queue that never drains. Without
+    # those two, this interval would be a way to hammer the upstream API with
+    # overlapping jobs.
+    #
+    # `misfire_grace_time` drops to 45 s with the interval: a run that is more
+    # than one interval late has been superseded by the next one, and firing it
+    # anyway is a duplicate rather than a catch-up.
     scheduler.add_job(
         run_all_user_syncs,
         "interval",
-        minutes=15,
+        minutes=1,
         id="garmin_sync",
-        misfire_grace_time=300,
+        misfire_grace_time=45,
         coalesce=True,
         max_instances=1,
     )
@@ -129,7 +139,7 @@ async def lifespan(app: FastAPI):
         max_instances=1,
     )
     scheduler.start()
-    logger.info("APScheduler started with Garmin sync every 15 minutes")
+    logger.info("APScheduler started with Garmin sync every minute")
     # Build the background-removal session before a rider needs it. Cold it
     # costs ~3.3s (import + ONNX session) on top of the 1.0s cut, and that bill
     # lands on whichever request happens to be first. In a thread, because it is
