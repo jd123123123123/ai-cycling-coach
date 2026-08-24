@@ -29,13 +29,16 @@ export interface W3DayRouteProps {
   category?: string | null
   /** True once the rider has taken this session indoors. */
   indoor?: boolean
+  /** Names which of the two answers this is, when both are shown together.
+   *  Omitted when a single suggestion stands on its own. */
+  caption?: string | null
   onOpen?: () => void
 }
 
 const fmtTime = (s: number) => `${Math.floor(s / 3600)}:${String(Math.round((s % 3600) / 60)).padStart(2, '0')} Std.`
 
 export default function W3DayRoute({
-  targetTss, durationMinutes, category, indoor = false, onOpen,
+  targetTss, durationMinutes, category, indoor = false, caption = null, onOpen,
 }: W3DayRouteProps) {
   const hasTarget = (targetTss ?? 0) > 0 || (durationMinutes ?? 0) > 0
   const { data } = useRecommendedRoute(
@@ -48,7 +51,7 @@ export default function W3DayRoute({
   const r = top.route
   const Icon = r.is_virtual ? MonitorSmartphone : RouteIcon
 
-  return (
+  const button = (
     <button
       onClick={onOpen}
       style={{
@@ -94,5 +97,13 @@ export default function W3DayRoute({
 
       {onOpen && <ChevronRight size={16} color={T.quiet} style={{ flex: 'none' }} />}
     </button>
+  )
+
+  if (!caption) return button
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{caption}</span>
+      {button}
+    </div>
   )
 }

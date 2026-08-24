@@ -629,9 +629,21 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
             </span>
           </div>
         </div>
-        {isToday && (showAdapt
-          ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
-          : <AdjustButton onOpen={() => setShowAdapt(true)} />)}
+        {/* A rest day is still a DAY, and "what is the weather doing" is a
+            question about the day, not about the session. This branch used to
+            return before the weather line below ever ran, so the one screen
+            that answers it went blank on exactly the days a rider is deciding
+            whether to go out anyway. */}
+        <Rule />
+        <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
+        {isToday && (
+          <>
+            <SessionLink label="Training ansehen" onOpen={() => navigate('/e/w3-session')} />
+            {showAdapt
+              ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
+              : <AdjustButton onOpen={() => setShowAdapt(true)} />}
+          </>
+        )}
       </motion.div>
     )
   }
@@ -692,11 +704,28 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
            Never on a rest day, and never before there is history to draw on —
            see `W3DayRoute`, which renders nothing rather than guessing. ── */}
       {(isToday || isFuture) && day.status !== 'rest' && (
-        <W3DayRoute
-          targetTss={result?.tss ?? day.planned}
-          durationMinutes={durMinutes}
-          indoor={adapt === 'indoor' || result?.title?.toLowerCase().includes('rolle') === true}
-          onOpen={() => navigate('/e/w3-rides')} />
+        <>
+          {/* BOTH answers, not the one the app guessed. Whether this session
+              happens on the road or on the trainer is the rider's call and it
+              is usually made at the door — so the card stops inferring it from
+              the adaptation and shows the real recommendation for each, side
+              by side. They are different queries against the same session:
+              outdoors ranks their own roads, indoors ranks their trainer
+              routes. Each renders nothing when it has nothing worth naming,
+              so a rider with no trainer history simply sees the one. */}
+          <W3DayRoute
+            caption="Draußen"
+            targetTss={result?.tss ?? day.planned}
+            durationMinutes={durMinutes}
+            indoor={false}
+            onOpen={() => navigate('/e/w3-rides')} />
+          <W3DayRoute
+            caption="Drinnen"
+            targetTss={result?.tss ?? day.planned}
+            durationMinutes={durMinutes}
+            indoor
+            onOpen={() => navigate('/e/w3-rides')} />
+        </>
       )}
 
       {isPast && day.status !== 'rest' && (
@@ -728,17 +757,37 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
               <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
             </div>
           )}
-          <button onClick={() => navigate('/e/w3-session')}
-            style={{ height: 52, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
-            <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>Training ansehen</span>
-            <div style={{ width: 38, height: 38, flex: 'none', borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
-          </button>
+          <SessionLink label="Training ansehen" onOpen={() => navigate('/e/w3-session')} />
           {showAdapt
             ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
             : <AdjustButton onOpen={() => setShowAdapt(true)} />}
         </>
       )}
+
+      {/* ── THE WAY IN IS NOT TODAY-ONLY ──────────────────────────────────
+           This button lived inside the `isToday` branch above, so selecting
+           any other day in the strip removed the only route from Today into a
+           training's detail — and nothing on screen said that tapping the
+           lit day tile would bring it back. A planned day HAS a session with
+           real intervals; it is reachable in the full plan, so the day that
+           owns one keeps a way into it. Past days keep planned-vs-done, which
+           is their detail. ── */}
+      {isFuture && day.title != null && (
+        <SessionLink label="Im Plan ansehen" onOpen={() => navigate('/e/w3-plan')} />
+      )}
     </motion.div>
+  )
+}
+
+/** The way into a training's own screen. One element, because the today CTA
+ *  and the planned-day CTA are the same promise and must not drift apart. */
+function SessionLink({ label, onOpen }: { label: string; onOpen: () => void }) {
+  return (
+    <button onClick={onOpen}
+      style={{ height: 52, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
+      <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>{label}</span>
+      <div style={{ width: 38, height: 38, flex: 'none', borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
+    </button>
   )
 }
 
