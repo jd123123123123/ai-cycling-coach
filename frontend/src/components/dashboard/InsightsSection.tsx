@@ -9,7 +9,7 @@
  */
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { ChevronRight, Fingerprint, Gauge, MessageSquarePlus, Mountain, Trophy } from 'lucide-react'
+import { ChevronRight, Fingerprint, Gauge, Mountain, Trophy } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import { usePowerProfile } from '../../hooks/usePowerProfile'
 import { useLocale } from '../../contexts/LocaleContext'
@@ -126,19 +126,6 @@ export default function InsightsSection({ sport }: { sport: 'cycling' | 'running
           <span style={{ fontSize: 11, color: 'var(--color-muted)', lineHeight: 1.35 }}>{de ? 'Echte Meilensteine, kein XP' : 'Real milestones, no XP'}</span>
         </Link>
       </div>
-      {/* Power users → the NL chart workspace (no competitor has this) */}
-      <Link to="/dashboards" className="rounded-[24px] p-5 hover-card flex items-center gap-3.5" style={{ ...cardStyle, borderColor: 'var(--color-accent)' }}>
-        <span className="grid place-items-center rounded-[14px] shrink-0" style={{ width: 46, height: 46, background: 'color-mix(in srgb, var(--color-accent) 16%, transparent)' }}>
-          <MessageSquarePlus size={22} style={{ color: 'var(--color-accent)' }} />
-        </span>
-        <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-          <span className="num-display" style={{ fontSize: 16, color: 'var(--color-ink)' }}>{de ? 'Baue jeden Chart — einfach fragen' : 'Build any chart — just ask'}</span>
-          <span style={{ fontSize: 12, color: 'var(--color-muted)' }}>
-            {de ? '„Zeig mir W/kg vs. HRV der letzten 90 Tage" — dein eigenes Analyse-Board.' : '“Show me W/kg vs. HRV for the last 90 days” — your own analytics board.'}
-          </span>
-        </div>
-        <ChevronRight size={18} className="hover-arrow shrink-0" style={{ color: 'var(--color-accent)' }} />
-      </Link>
     </div>
   )
 }

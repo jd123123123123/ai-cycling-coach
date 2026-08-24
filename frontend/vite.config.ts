@@ -112,7 +112,6 @@ export default defineConfig({
           if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id))
             return 'vendor-react'
           if (/[\\/]node_modules[\\/]recharts[\\/]/.test(id)) return 'vendor-recharts'
-          if (/[\\/]node_modules[\\/]react-grid-layout[\\/]/.test(id)) return 'vendor-grid'
           if (/[\\/]node_modules[\\/]motion[\\/]/.test(id)) return 'vendor-motion'
           if (/[\\/]node_modules[\\/]date-fns[\\/]/.test(id)) return 'vendor-datefns'
           if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) return 'vendor-lucide'

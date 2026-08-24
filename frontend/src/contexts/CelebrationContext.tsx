@@ -26,17 +26,36 @@ import {
   useMemo,
   useRef,
   useState,
+  lazy,
+  Suspense,
   type ComponentType,
   type ReactNode,
 } from 'react'
 import { AnimatePresence } from 'motion/react'
 import { Zap, Flame, Target, TrendingUp, Trophy, type LucideProps } from 'lucide-react'
-import CelebrationOverlay, {
-  type CelebrationKind,
-  type CelebrationPayload,
+import type {
+  CelebrationKind,
+  CelebrationPayload,
 } from '../components/celebration/CelebrationOverlay'
-import { type StreakBreakContent } from '../components/celebration/StreakBreakOverlay'
-import StreakBreakOverlay from '../components/celebration/StreakBreakOverlay'
+import type { StreakBreakContent } from '../components/celebration/StreakBreakOverlay'
+
+/**
+ * ── THE PARTY IS NOT ON THE CRITICAL PATH ────────────────────────────────
+ * These two overlays were STATIC imports on a provider that wraps the whole
+ * app, so every cold start downloaded and parsed ~780 lines of confetti UI —
+ * plus the icon set it draws with — before the first frame, for a moment that
+ * happens after a ride and, in the break's case, almost never.
+ *
+ * Lazy, with NO Suspense fallback around them on purpose: a celebration that
+ * arrives 80 ms late is a celebration; a spinner where a celebration should be
+ * is a bug. `null` until the chunk lands, and the overlay's own entry animation
+ * then plays exactly as it always did.
+ *
+ * The TYPES stay statically imported above — a type import is erased at build
+ * time and pulls in nothing.
+ */
+const CelebrationOverlay = lazy(() => import('../components/celebration/CelebrationOverlay'))
+const StreakBreakOverlay = lazy(() => import('../components/celebration/StreakBreakOverlay'))
 import CelebrationTriggers from '../components/celebration/CelebrationTriggers'
 import { fireConfetti } from '../lib/confetti'
 import { hapticCelebrate } from '../lib/haptics'
@@ -255,6 +274,7 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
       {/* One overlay slot, `mode="wait"` so card N fully exits before card N+1
           enters — a natural inter-card gap, and celebration + break can never
           overlap because only the head ever renders. */}
+      <Suspense fallback={null}>
       <AnimatePresence mode="wait">
         {head && head.type === 'celebration' && (
           <CelebrationOverlay
@@ -281,6 +301,7 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
           />
         )}
       </AnimatePresence>
+      </Suspense>
     </CelebrationContext.Provider>
   )
 }

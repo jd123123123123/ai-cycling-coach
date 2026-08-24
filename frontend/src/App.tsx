@@ -27,7 +27,6 @@ const ActivitiesPage = lazyWithRetry(() => import('./pages/ActivitiesPage'))
 const CoachPage = lazyWithRetry(() => import('./pages/CoachPage'))
 const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'))
 const ProfileView = lazyWithRetry(() => import('./pages/ProfileView'))
-const DashboardsPage = lazyWithRetry(() => import('./pages/DashboardsPage'))
 const WeeklyRecapStory = lazyWithRetry(() => import('./pages/WeeklyRecapStory'))
 const WeeklyWrapped = lazyWithRetry(() => import('./pages/WeeklyWrapped'))
 const DesignLabView = lazyWithRetry(() => import('./pages/DesignLabView'))
@@ -291,14 +290,6 @@ function AppRoutes() {
             element={
               <ProtectedRoute checkOnboarding>
                 <ProfileView />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/dashboards"
-            element={
-              <ProtectedRoute checkOnboarding>
-                <DashboardsPage />
               </ProtectedRoute>
             }
           />
