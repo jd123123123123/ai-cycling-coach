@@ -1,4 +1,5 @@
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
@@ -6,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
+from app.services import cutout
 from app.scheduler import (
     run_all_user_syncs,
     run_brief_refresh_sweep,
@@ -128,6 +130,12 @@ async def lifespan(app: FastAPI):
     )
     scheduler.start()
     logger.info("APScheduler started with Garmin sync every 15 minutes")
+    # Build the background-removal session before a rider needs it. Cold it
+    # costs ~3.3s (import + ONNX session) on top of the 1.0s cut, and that bill
+    # lands on whichever request happens to be first. In a thread, because it is
+    # CPU-bound and blocking the event loop here would delay the boot it is
+    # meant to protect. Never fatal: see `cutout.warm`.
+    threading.Thread(target=cutout.warm, name="cutout-warm", daemon=True).start()
     yield
     scheduler.shutdown()
     logger.info("APScheduler shut down")
