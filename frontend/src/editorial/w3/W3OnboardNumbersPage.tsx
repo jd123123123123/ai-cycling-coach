@@ -42,6 +42,19 @@ import './w3.css'
 
 const ARCHIVO = 'Archivo, "Inter Tight", sans-serif'
 
+/**
+ * A typed number, read the way the athlete typed it.
+ *
+ * The app is German-first and `72,5` is how a German rider writes their
+ * weight. `Number('72,5')` is `NaN`, `NaN || null` is `null`, and a null
+ * weight means `starterFtp` has nothing to multiply — so the CTA stays grey
+ * with no reason given. Both separators are read here.
+ */
+function decimal(raw: string): number | null {
+  const n = Number(raw.trim().replace(',', '.'))
+  return Number.isFinite(n) && n > 0 ? n : null
+}
+
 const FITNESS: { key: StarterFitness; label: string; sub: string }[] = [
   { key: 'new', label: 'Neu dabei', sub: 'erste Saison auf dem Rad' },
   { key: 'returning', label: 'Zurück', sub: 'war mal fit, komme wieder' },
@@ -103,8 +116,8 @@ export default function W3OnboardNumbersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
 
-  const weight = Number(weightInput) || profile?.weight_kg || null
-  const typedFtp = Number(ftpInput) || null
+  const weight = decimal(weightInput) ?? profile?.weight_kg ?? null
+  const typedFtp = decimal(ftpInput)
   const starter = starterFtp(weight, fitness)
   const ftp = typedFtp ?? profile?.ftp_watts ?? est?.watts ?? starter ?? null
   // WHERE THE NUMBER CAME FROM, ranked by how much it is worth. These are
@@ -219,14 +232,14 @@ export default function W3OnboardNumbersPage() {
         {/* ── CORRECT IT ───────────────────────────────────────────────── */}
         <div style={{ ...band(24), gap: 9 }}>
           {editing === 'ftp' ? (
-            <input autoFocus type="number" inputMode="numeric" placeholder="FTP in Watt"
+            <input autoFocus type="text" inputMode="numeric" placeholder="FTP in Watt"
               value={ftpInput} onChange={(e) => setFtpInput(e.target.value)}
               style={{ width: '100%', height: 62, padding: '0 16px', borderRadius: 20, background: T.tile, border: `1px solid ${T.acid}55`, outline: 'none', color: T.ink, fontFamily: ARCHIVO, fontSize: 26, fontWeight: 700 }} />
           ) : (
             <Row label="FTP" value={ftp == null ? '' : String(Math.round(ftp))} unit="Watt" onEdit={() => setEditing('ftp')} />
           )}
           {editing === 'weight' ? (
-            <input autoFocus type="number" inputMode="decimal" placeholder="Gewicht in kg"
+            <input autoFocus type="text" inputMode="decimal" placeholder="Gewicht in kg"
               value={weightInput} onChange={(e) => setWeightInput(e.target.value)}
               style={{ width: '100%', height: 62, padding: '0 16px', borderRadius: 20, background: T.tile, border: `1px solid ${T.acid}55`, outline: 'none', color: T.ink, fontFamily: ARCHIVO, fontSize: 26, fontWeight: 700 }} />
           ) : (
