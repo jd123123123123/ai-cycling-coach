@@ -44,6 +44,24 @@ export const T = {
   // (`backend/scripts/generate_gear_art.py`), so the frame drawn around a tile
   // and the photograph inside it agree. Legendary has no entry — it is `acid`,
   // because the loudest rarity should be the brand's own colour.
+  // ── THE CARD TINTS ────────────────────────────────────────────────────
+  // The house deck is not a black app with a lime accent — that is one of its
+  // registers. What it actually does is stand ONE object on its own softly
+  // tinted ground, one tint per card, with the lime kept for the thing you
+  // press. Named here rather than in the surface that first needed them,
+  // because a tint invented at a call site is how a system grows a sixth blue.
+  // `tintInk` is the near-black that sits ON them; the app's `ink` is white.
+  tintMint: '#CDEFDC',
+  tintLilac: '#E4D8FB',
+  tintPeach: '#F7DCC8',
+  tintSky: '#D3DDF8',
+  tintPaper: '#EFEFEA',
+  tintInk: '#131315',
+  // The hard training zones AS THEY SIT ON A PALE CARD. `bad` and `warn` are
+  // tuned against near-black; at full saturation on paper they stop reading as
+  // "this hurt" and start reading as "something is wrong".
+  hotOnPaper: '#FF6B5A',
+  warmOnPaper: '#FFA23D',
   rareCommon: '#9DB39A',     // sage
   rareRare: '#98A6D8',       // periwinkle
   // The floor: a linear sweep that gets LIGHTER toward the bottom, so the bike

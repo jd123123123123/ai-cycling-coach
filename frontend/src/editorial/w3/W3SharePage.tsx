@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { BLOCKS, MIN_BLOCKS, type BlockId } from './w3shareBlocks'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage, useRideScene } from '../../hooks/useGarage'
@@ -45,6 +46,24 @@ export function prDelta(pctOfBest: number | null): string | null {
   return diff > 0 ? `↑ ${diff}%` : `↓ ${Math.abs(diff)}%`
 }
 
+//: Where a rider's card layout is remembered. One key, because the choice is
+//: about how THEY like to post rather than about any one ride.
+const BLOCKS_KEY = 'ridr.share.blocks'
+
+/**
+ * What each angle leads with when the rider has not chosen for themselves.
+ *
+ * These are not arbitrary. A RECORD is about one effort, so it opens with the
+ * peaks it beat. A WHOLE RIDE is about where you went, so it opens with the
+ * route. A POWER card is about how the effort was distributed, so it opens
+ * with the trace and the zones under it.
+ */
+const ANGLE_BLOCKS: Record<ShareAngle, BlockId[]> = {
+  rekord: ['peaks', 'stats', 'pills'],
+  fahrt: ['route', 'stats', 'pills'],
+  leistung: ['trace', 'zones', 'stats'],
+}
+
 export default function W3SharePage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
@@ -69,6 +88,27 @@ export default function W3SharePage() {
   // Never uploaded, never persisted: the picture only exists for as long as
   // this screen is open, which is exactly as long as it is needed.
   const [ownPhoto, setOwnPhoto] = useState<string | null>(null)
+
+  // ── WHAT THE RIDER PUTS ON THE CARD ─────────────────────────────────────
+  // Null means "whatever this angle leads with"; the moment they touch the
+  // picker their choice takes over for every angle, because a rider who has
+  // said they want the trace wants it on the record card too. Remembered
+  // across rides — nobody wants to rebuild their card every time they finish
+  // one — and read defensively, so a private window or a cleared store just
+  // falls back to the defaults.
+  const [chosen, setChosen] = useState<BlockId[] | null>(() => {
+    try {
+      const raw = localStorage.getItem(BLOCKS_KEY)
+      if (!raw) return null
+      const ids = JSON.parse(raw) as BlockId[]
+      const known = ids.filter((id) => BLOCKS.some((b) => b.id === id))
+      return known.length >= MIN_BLOCKS ? known : null
+    } catch { return null }
+  })
+  const pickBlocks = useCallback((ids: BlockId[]) => {
+    setChosen(ids)
+    try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(ids)) } catch { /* private window */ }
+  }, [])
   const { data: garage } = useGarage()
 
   const [angle, setAngle] = useState<ShareAngle>('fahrt')
@@ -121,9 +161,48 @@ export default function W3SharePage() {
     const statNpWkg: [string, string] = [npWkg != null ? de(npWkg, 2) : '—', 'W/KG SCHNITT']
 
     const s = (t: [string, string]) => ({ v: t[0], l: t[1] })
+
+    // ── WHAT THE BLOCKS DRAW FROM ──────────────────────────────────────────
+    // Downsampled here, once, rather than inside the painter: 240 columns is
+    // what fills the card's width at one column per pixel-and-a-bit, and a
+    // five-hour ride arrives with eighteen thousand samples. Averaging into
+    // buckets keeps the SHAPE — a max would turn every ride into spikes and a
+    // stride would drop whole intervals.
+    const bucket = (xs: (number | null)[], n = 240): number[] => {
+      const vals = xs.map((v) => (v == null ? 0 : v))
+      if (vals.length <= n) return vals
+      const size = vals.length / n
+      return Array.from({ length: n }, (_, i) => {
+        const lo = Math.floor(i * size), hi = Math.max(lo + 1, Math.floor((i + 1) * size))
+        let sum = 0
+        for (let k = lo; k < hi; k++) sum += vals[k]
+        return sum / (hi - lo)
+      })
+    }
+    const story = debrief?.story ?? null
+    const blockData = {
+      power: story ? bucket(story.power) : [],
+      hr: story ? bucket(story.hr) : [],
+      altitude: story ? bucket(story.altitude) : [],
+      ftp,
+      peaks: efforts
+        .slice()
+        .sort((a, b) => a.duration_s - b.duration_s)
+        .map((e) => ({
+          label: e.duration_s < 60 ? `${e.duration_s} s` : `${Math.round(e.duration_s / 60)} min`,
+          watts: e.ride_watts,
+          best: e.best_watts,
+          isPr: e.is_pr,
+        })),
+      polyline: activity?.route_polyline ?? null,
+      stats: [] as { v: string; l: string }[],
+      pills: [] as { text: string; sub: string; tone: 'acid' | 'violet' }[],
+    }
     const prCount = prs.length
 
-    let data: Omit<PosterData, 'angle' | 'polyline' | 'bikeSrc' | 'avatarUrl' | 'avatarInitial' | 'handle' | 'club' | 'footer'>
+    // `data` is the ANGLE's own copy and figures; everything structural —
+    // the blocks, the series they draw from, the imagery — is added once below.
+    let data: Omit<PosterData, 'angle' | 'polyline' | 'bikeSrc' | 'avatarUrl' | 'avatarInitial' | 'handle' | 'club' | 'footer' | 'blocks' | 'blockData' | 'sceneSrc' | 'intensity'>
     if (angle === 'fahrt') {
       data = {
         kicker: `GANZE FAHRT · ${rideName.toUpperCase()}`,
@@ -177,6 +256,10 @@ export default function W3SharePage() {
       angle,
       handle,
       club: dateStr,
+      blocks: chosen ?? ANGLE_BLOCKS[angle],
+      // The two blocks that were always on the card read their content from
+      // the angle, so they are filled in here rather than above.
+      blockData: { ...blockData, stats: data.stats, pills: data.pills },
       // Real ride intensity (IF) — tints the route glow on the poster.
       intensity: iff ?? (h?.tss != null && durS ? Math.sqrt(h.tss / ((durS / 3600) * 100)) : undefined),
       polyline: activity?.route_polyline ?? null,
@@ -198,7 +281,7 @@ export default function W3SharePage() {
       footer: `${rideName} · ${dateStr}`,
       ...data,
     }
-  }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile])
+  }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile, chosen])
 
   // ── render the poster whenever the payload changes ──
   useEffect(() => {
@@ -226,6 +309,7 @@ export default function W3SharePage() {
     activeAngle: angle,
     canShare: shareable,
     hasOwnPhoto: ownPhoto != null,
+    blocks: chosen ?? ANGLE_BLOCKS[angle],
     angles: [
       { id: 'rekord', label: 'Bestleistung', sub: 'Stärkster Push' },
       { id: 'fahrt', label: 'Ganze Fahrt', sub: activity?.title || 'Deine Runde' },
@@ -240,6 +324,7 @@ export default function W3SharePage() {
       onDownload={onDownload}
       onSelectAngle={setAngle}
       onPickPhoto={setOwnPhoto}
+      onPickBlocks={pickBlocks}
       onShare={onShare}
       onStory={onShare}
       onCrew={() => navigate('/e/w3-crew')}

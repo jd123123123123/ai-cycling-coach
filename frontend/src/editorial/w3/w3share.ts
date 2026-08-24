@@ -1,4 +1,8 @@
 import { T, SHARE_SCENES, type ShareScene } from './w3tokens'
+import {
+  blocksHeight, fitBlocks, paintBlocks, usableBlocks,
+  type BlockData, type BlockId,
+} from './w3shareBlocks'
 /**
  * W3 · Ride-teilen — the share-poster renderer + native-share plumbing.
  *
@@ -55,6 +59,14 @@ export interface PosterData {
   bikeSrc: string | null
   avatarUrl: string | null
   avatarInitial: string
+  /** WHAT THE RIDER CHOSE TO SHOW, in the order they chose it. The card used
+   *  to be one fixed stack — a number, a sentence, two pills, three tiles —
+   *  which is a receipt. What a cyclist posts is the SHAPE of the day, and
+   *  which shape matters differs between a 20-minute test and a five-hour
+   *  epic. See `w3shareBlocks`. */
+  blocks: BlockId[]
+  /** The series and figures those blocks draw from. */
+  blockData: BlockData
 }
 
 // The card that LEAVES the app was painting a lime this app does not use — a
@@ -361,19 +373,51 @@ async function paint(
   const KICKER_TO_BIG = 138     // the 150 px figure's cap height, plus air
   const BIG_TO_SENTENCE = 70
   const SENTENCE_LINE = 52
-  const SENTENCE_TO_PILLS = 30
-  const PILL_H = 116
-  const PILLS_TO_TILES = 26
-  const TILE_H = 180
-  const TILES_TO_FOOTER = 60
+  const SENTENCE_TO_BLOCKS = 34
+  const BLOCKS_TO_FOOTER = 56
   const FOOTER_BOTTOM = 64      // below the footer baseline, to the card edge
   ctx.font = `600 40px ${FONT}`
   const sentenceLines = wrap(ctx, d.sentence, 40, '600', W - 128).length
-  const panelH =
+  // Only the blocks this ride can actually fill: a chosen block with no data
+  // behind it is dropped and the card closes up, rather than drawing an empty
+  // box under a kicker.
+  const usable = usableBlocks(d.blocks, d.blockData)
+  // THE CARD IS A FIXED SIZE AND THE BLOCKS ARE NOT. Six of them ask for more
+  // room than the poster has, and the first version simply let the panel run
+  // past the bottom edge — the footer, and the last block with it, fell off a
+  // finished export. So the room is worked out first and the choice is fitted
+  // into it: blocks dropped from the END, because the rider tapped what they
+  // care about first. Below the floor the hero yields instead, which is the
+  // right trade between a shorter picture and a missing footer.
+  // TWO FLOORS, AND THEY ARE NOT THE SAME NUMBER — which is what the first
+  // version got wrong. `PREFERRED_HERO` is how much picture the card would
+  // LIKE; `MIN_HERO` is the point below which the top stops being a picture at
+  // all, and it is set by the one thing that must always fit up there: the
+  // handle chip. Fitting the blocks against the PREFERRED floor left three big
+  // blocks unable to fit and unable to be trimmed (three is the minimum), so
+  // the panel silently ran off the bottom and took the footer with it — while
+  // the comment beside it claimed the hero would yield, which it could not,
+  // because it was already at the floor being tested against.
+  //
+  // Blocks are fitted against the HARD floor, so three heavy blocks are always
+  // allowed and simply squeeze the picture to a band. That is a real card: a
+  // rider who picks the trace, the zones and the peaks has said they want the
+  // data, not the photograph.
+  const MIN_HERO = 150
+  const PREFERRED_HERO = Math.round(H * 0.24)
+  const chrome =
     PANEL_TOP + KICKER_TO_BIG + BIG_TO_SENTENCE +
-    sentenceLines * SENTENCE_LINE + SENTENCE_TO_PILLS +
-    PILL_H + PILLS_TO_TILES + TILE_H + TILES_TO_FOOTER + FOOTER_BOTTOM
-  const heroH = Math.max(Math.round(H * 0.42), H - panelH)
+    sentenceLines * SENTENCE_LINE + SENTENCE_TO_BLOCKS +
+    BLOCKS_TO_FOOTER + FOOTER_BOTTOM
+  // Fit against the preferred floor first, so a light set of blocks leaves a
+  // proper picture; fall back to the hard floor only when the rider's choice
+  // genuinely needs the room.
+  const roomy = fitBlocks(usable, d.blockData, H - PREFERRED_HERO - chrome)
+  const blocks = roomy.length === usable.length
+    ? roomy
+    : fitBlocks(usable, d.blockData, H - MIN_HERO - chrome)
+  const panelH = chrome + blocksHeight(blocks, d.blockData)
+  const heroH = Math.max(MIN_HERO, H - panelH)
   //: How far the hero image runs past its band so the fade has something to
   //: dissolve. Without it the photograph ends on a visible horizontal cut.
   const BLEED = 150
@@ -514,42 +558,11 @@ async function paint(
     text(ctx, line, px, y, 40, '600', 'rgba(255,255,255,0.82)')
     y += SENTENCE_LINE
   }
-  y += SENTENCE_TO_PILLS
+  y += SENTENCE_TO_BLOCKS
 
-  // pills
-  const pillH = PILL_H, pillGap = 20, pillW = (W - px * 2 - pillGap) / 2
-  d.pills.forEach((p, i) => {
-    const x = px + i * (pillW + pillGap)
-    ctx.save()
-    roundRect(ctx, x, y, pillW, pillH, 26)
-    ctx.fillStyle = p.tone === 'acid' ? t.acid : T.evening; ctx.fill()
-    ctx.restore()
-    const ink = p.tone === 'acid' ? T.bg : T.ink
-    text(ctx, p.text, x + 34, y + 54, 34, '700', ink)
-    text(ctx, p.sub, x + 34, y + 88, 24, '600', p.tone === 'acid' ? 'rgba(11,11,11,0.7)' : 'rgba(255,255,255,0.75)')
-  })
-  y += pillH + PILLS_TO_TILES
-
-  // three stat tiles
-  const tileGap = 18, tileW = (W - px * 2 - tileGap * 2) / 3, tileH = TILE_H
-  d.stats.forEach((s, i) => {
-    const x = px + i * (tileW + tileGap)
-    // THE FIRST TILE IS THE ONE THAT MATTERS. Three identical grey boxes make
-    // the eye read all three or none; leading with the stat this angle is
-    // about, lit, means the row is scannable in the half second a feed gives
-    // it. The other two support it and are quiet on purpose.
-    const lead = i === 0
-    ctx.save()
-    roundRect(ctx, x, y, tileW, tileH, 24)
-    ctx.fillStyle = lead ? 'rgba(191,255,60,0.10)' : T.surface; ctx.fill()
-    if (lead) { ctx.strokeStyle = 'rgba(191,255,60,0.38)'; ctx.lineWidth = 2; ctx.stroke() }
-    ctx.restore()
-    statGlyph(ctx, s.l, x + tileW - 60, y + 28, 34, t.acid)
-    text(ctx, s.v, x + 26, y + 92, 62, '800', lead ? t.acid : T.ink, -1)
-    text(ctx, s.l, x + 26, y + 138, 23, '700',
-      lead ? 'rgba(191,255,60,0.75)' : 'rgba(255,255,255,0.55)', 1)
-  })
-  y += tileH + TILES_TO_FOOTER
+  // ── what the rider chose ──
+  y = paintBlocks(ctx, blocks, d.blockData, px, y, W - px * 2, statGlyph)
+  y += BLOCKS_TO_FOOTER
 
   // footer
   text(ctx, d.footer, px, y, 26, '600', 'rgba(255,255,255,0.55)')

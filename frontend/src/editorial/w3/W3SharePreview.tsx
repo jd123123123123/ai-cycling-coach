@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { STARTER_BIKE } from './starterBike'
 import { renderSharePoster, canShareImage, type ShareAngle, type PosterData } from './w3share'
+import type { BlockId } from './w3shareBlocks'
 import W3ShareView, { type W3ShareVm } from './W3ShareView'
 
 /** TEMP preview harness — renders W3ShareView with a pen-faithful fixture, no
@@ -17,6 +18,8 @@ function build(angle: ShareAngle): PosterData {
   const common = {
     angle, handle: '@jannis_d', club: 'So, 24. August',
     polyline: POLY, bikeSrc: STARTER_BIKE, avatarUrl: null, avatarInitial: 'J',
+    blocks: PREVIEW_BLOCKS,
+    blockData: PREVIEW_BLOCK_DATA,
     footer: 'Harzrunde · So, 24. August',
   }
   if (angle === 'fahrt') return {
@@ -42,6 +45,34 @@ function build(angle: ShareAngle): PosterData {
   }
 }
 
+//: Three blocks, and enough of a ride behind them to draw all three — the
+//: harness exists to show the card, and a card with empty blocks shows nothing.
+const PREVIEW_BLOCKS: BlockId[] = ['trace', 'stats', 'pills']
+const PREVIEW_BLOCK_DATA = {
+  power: Array.from({ length: 240 }, (_, i) =>
+    140 + 70 * Math.sin(i / 9) + (i % 47 === 0 ? 260 : 0) + (i > 150 && i < 190 ? 120 : 0)),
+  hr: Array.from({ length: 240 }, (_, i) => 118 + 34 * Math.sin(i / 22) + i / 14),
+  altitude: Array.from({ length: 240 }, (_, i) => 40 + 30 * Math.sin(i / 30)),
+  ftp: 265,
+  peaks: [
+    { label: '5 s', watts: 596, best: 640, isPr: false },
+    { label: '1 min', watts: 412, best: 412, isPr: true },
+    { label: '5 min', watts: 318, best: 344, isPr: false },
+    { label: '20 min', watts: 279, best: 291, isPr: false },
+  ],
+  // A loop, so the route block has something real to draw when it is picked.
+  polyline: Array.from({ length: 80 }, (_, i) => {
+    const a = (i / 79) * Math.PI * 2
+    return [51.80 + 0.06 * Math.sin(a) + 0.014 * Math.sin(a * 3),
+            10.62 + 0.09 * Math.cos(a) + 0.02 * Math.cos(a * 2)] as [number, number]
+  }),
+  // Filled, because a preview whose blocks are empty drops them and then shows
+  // exactly what this harness exists to prove it can draw.
+  stats: [{ v: '8,1', l: 'W/KG SPITZE' }, { v: '96', l: 'TSS' }, { v: '1:53', l: 'STUNDEN' }],
+  pills: [{ text: '3 PRs', sub: 'an einem Tag', tone: 'acid' as const },
+          { text: 'Längste', sub: 'Fahrt im Block', tone: 'violet' as const }],
+}
+
 export default function W3SharePreview() {
   const [angle, setAngle] = useState<ShareAngle>('rekord')
   const [dataUrl, setDataUrl] = useState<string | null>(null)
@@ -62,6 +93,7 @@ export default function W3SharePreview() {
     generating,
     activeAngle: angle,
     hasOwnPhoto: false,
+    blocks: PREVIEW_BLOCKS,
     canShare: canShareImage(),
     angles: [
       { id: 'rekord', label: 'Segment-PR', sub: 'Sonnenberg' },

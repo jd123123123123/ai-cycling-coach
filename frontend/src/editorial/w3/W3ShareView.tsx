@@ -6,6 +6,7 @@ import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import type { ShareAngle } from './w3share'
 import { fileToDownscaledDataUrl } from './w3photo'
+import { BLOCKS, MIN_BLOCKS, MAX_BLOCKS, type BlockId } from './w3shareBlocks'
 import './w3.css'
 
 /**
@@ -28,11 +29,15 @@ export interface W3ShareVm {
   canShare: boolean
   /** True once the rider has put their own photograph behind the card. */
   hasOwnPhoto: boolean
+  /** The blocks on the card, in the order they will be drawn. */
+  blocks: BlockId[]
 }
 export interface W3ShareActions {
   /** The rider's own photograph, already downscaled to a data URL. Null clears
    *  it and hands the background back to the composed scene. */
   onPickPhoto?: (dataUrl: string | null) => void
+  /** The rider rebuilt their card. Between MIN_BLOCKS and MAX_BLOCKS. */
+  onPickBlocks?: (ids: BlockId[]) => void
   onClose?: () => void
   onDownload?: () => void
   onSelectAngle?: (id: ShareAngle) => void
@@ -49,7 +54,7 @@ const ACTIONS = [
   { id: 'more', label: 'Mehr', Icon: MoreHorizontal },
 ] as const
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickBlocks, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
@@ -154,6 +159,72 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
                 onPickPhoto?.(await fileToDownscaledDataUrl(f, 1440).catch(() => null))
               }} />
           </label>
+        </div>
+
+        {/* ── WAS DRAUFSTEHT ────────────────────────────────────────────
+            Tapped in order, and the order is the card's order — so the block
+            a rider taps first is the one that leads their poster. That is why
+            these are numbered rather than merely lit: the number IS the
+            position, not decoration.
+
+            Three is the floor because a card with two blocks is a headline
+            with a footnote, and six is the ceiling because the seventh does
+            not fit above the fold of any feed. Both limits are stated on the
+            screen rather than enforced silently. ── */}
+        <div style={{ padding: '22px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>
+              WAS DRAUFSTEHT
+            </span>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.5, color: T.mid }}>
+              {vm.blocks.length} VON {MAX_BLOCKS}
+            </span>
+            {vm.blocks.length <= MIN_BLOCKS && (
+              <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 600, color: T.quiet }}>
+                Mindestens {MIN_BLOCKS}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {BLOCKS.map((b) => {
+              const at = vm.blocks.indexOf(b.id)
+              const on = at >= 0
+              const locked = on && vm.blocks.length <= MIN_BLOCKS
+              const full = !on && vm.blocks.length >= MAX_BLOCKS
+              return (
+                <button
+                  key={b.id}
+                  type="button"
+                  disabled={locked || full}
+                  onClick={() => onPickBlocks?.(
+                    on ? vm.blocks.filter((x) => x !== b.id) : [...vm.blocks, b.id],
+                  )}
+                  aria-pressed={on}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    padding: '10px 13px', borderRadius: 14, cursor: locked || full ? 'default' : 'pointer',
+                    fontFamily: FONT, textAlign: 'left',
+                    background: on ? T.acidDim : T.surface,
+                    border: `1px solid ${on ? T.acid : T.stroke}`,
+                    opacity: full ? 0.4 : 1,
+                  }}>
+                  <span style={{
+                    width: 20, height: 20, flex: 'none', borderRadius: 100,
+                    background: on ? T.acid : 'transparent',
+                    border: on ? 0 : `1px solid ${T.stroke}`,
+                    display: 'grid', placeItems: 'center',
+                    fontSize: 10.5, fontWeight: 800, color: T.heroInk,
+                  }}>{on ? at + 1 : ''}</span>
+                  <span style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? T.acid : T.ink }}>
+                      {b.label}
+                    </span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{b.sub}</span>
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Action row */}
