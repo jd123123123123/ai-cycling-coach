@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { T, FONT } from './w3tokens'
@@ -10,7 +11,7 @@ import { useHeroPanel } from './W3HeroShell'
 import W3GearPanel from './W3GearPanel'
 import W3WorkshopPanel from './W3WorkshopPanel'
 import W3Shops from './W3Shops'
-import { useGear } from '../../hooks/useGear'
+import { useBuyGear, useEquipGear, useGear, useUnequipGear } from '../../hooks/useGear'
 import { useWorkshop } from '../../hooks/useWorkshop'
 import { useWallet } from '../../hooks/useWallet'
 
@@ -85,12 +86,30 @@ export function W3GarageHome() {
   // over the floor, and the lane the rider scrolls into. That is also the whole
   // feature: switching to the garage changes those two and nothing else, so the
   // machine never flashes.
+  // The three verbs the dock's shelf needs. Owned here rather than inside the
+  // dock so the dock stays a pure function of props and its preview route can
+  // drive it with fixtures — the same split `W3GearPanel` uses for the full
+  // catalogue screen. `busyId` is which TILE is in flight, not which verb: all
+  // three mutations can be the one running.
+  const equip = useEquipGear()
+  const unequip = useUnequipGear()
+  const buy = useBuyGear()
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const run = (m: { mutate: (id: string, o: object) => void }) => (id: string) => {
+    setBusyId(id)
+    m.mutate(id, { onSettled: () => setBusyId(null) })
+  }
+
   const dock = (
     <W3PartsDock
       gear={gear ?? null}
-      onOpenSlot={() => navigate('/e/w3-gear')}
       onOpenWorkshop={() => navigate('/e/w3-workshop')}
-      workshopBonus={workshop?.total_bonus_rc ?? null} />
+      workshopBonus={workshop?.total_bonus_rc ?? null}
+      onOpenGear={() => navigate('/e/w3-gear')}
+      busyId={busyId}
+      onEquip={run(equip)}
+      onUnequip={run(unequip)}
+      onBuy={run(buy)} />
   )
   const { inShell, portal } = useHeroPanel(dock)
 

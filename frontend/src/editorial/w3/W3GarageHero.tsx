@@ -93,7 +93,6 @@ export default function W3GarageHero(p: W3GarageHeroProps) {
           }}>
             <W3PartsDock
               gear={p.gear}
-              onOpenSlot={p.onOpenSlot}
               onOpenWorkshop={p.onOpenWorkshop}
               workshopBonus={p.workshopBonus} />
           </div>

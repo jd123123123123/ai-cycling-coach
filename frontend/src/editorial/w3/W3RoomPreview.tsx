@@ -49,9 +49,24 @@ function ReadinessScreen() {
   )
 }
 
+/** Enough of a catalogue to exercise the shelf: something fitted, something
+ *  owned and not fitted, and something priced out of reach — the three states
+ *  the row has to tell apart. `gear={null}` drew a dock with a dead empty
+ *  message, which showed nothing this harness exists to show. */
+const PREVIEW_GEAR = {
+  balance: 900,
+  slots: { wheels: 'Laufräder', tyres: 'Reifen', bars: 'Lenker', bags: 'Taschen', charm: 'Talisman' },
+  items: [
+    { id: 'deep_carbon', name_de: 'Deep Carbon 50', slot: 'wheels', slot_label: 'Laufräder', rarity: 'rare' as const, pct: 9, price_rc: 2400, why: 'im Flachen', flavour_de: '', owned: true, equipped: true, affordable: true },
+    { id: 'climbing_wheels', name_de: 'Kletterlaufräder', slot: 'wheels', slot_label: 'Laufräder', rarity: 'rare' as const, pct: 7, price_rc: 2100, why: 'über 800 hm', flavour_de: '', owned: true, equipped: false, affordable: true },
+    { id: 'aero_wheels', name_de: 'Aero 65', slot: 'wheels', slot_label: 'Laufräder', rarity: 'legendary' as const, pct: 11, price_rc: 4800, why: 'ab 30 km/h', flavour_de: '', owned: false, equipped: false, affordable: false },
+    { id: 'slicks', name_de: 'Slicks 25', slot: 'tyres', slot_label: 'Reifen', rarity: 'common' as const, pct: 4, price_rc: 600, why: 'auf Asphalt', flavour_de: '', owned: false, equipped: false, affordable: true },
+  ],
+}
+
 function PartsScreen() {
   const { portal } = useHeroPanel(
-    <W3PartsDock gear={null} onOpenSlot={() => {}} onOpenWorkshop={() => {}} workshopBonus={140} />,
+    <W3PartsDock gear={PREVIEW_GEAR} onOpenWorkshop={() => {}} workshopBonus={140} />,
   )
   return (
     <Panel>

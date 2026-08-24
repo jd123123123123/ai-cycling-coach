@@ -3,6 +3,11 @@ import {
   buyGear, equipGear, fetchBikeBuild, fetchGear, unequipGear,
   type BikeBuild, type Gear,
 } from '../api/gear'
+// IMPORTED, never mirrored. `WALLET_KEY` below is copied by hand and that is
+// survivable because a wrong wallet key only misses a refresh of a number. A
+// wrong STAGE key silently invalidates nothing at all, which is exactly the
+// bug this line fixes — so this one is the real constant or it is worthless.
+import { TODAY_STAGE_KEY } from './useGarage'
 
 export const GEAR_KEY = ['gear'] as const
 export const BUILD_KEY = ['gear', 'build'] as const
@@ -58,10 +63,23 @@ function useGearMutation(fn: (id: string) => Promise<Gear>, spendsCoins = false)
     onSuccess: (gear) => {
       qc.setQueryData(GEAR_KEY, gear)
       if (spendsCoins) qc.invalidateQueries({ queryKey: WALLET_KEY })
-      // Equipping changes the machine, so the build is now stale. Invalidated
-      // rather than cleared: the garage keeps showing the previous bike while
-      // the new one composes, which is far better than an empty stage.
-      if (!spendsCoins) qc.invalidateQueries({ queryKey: BUILD_KEY })
+      // Equipping changes the machine, so every picture of it is now stale.
+      // Invalidated rather than cleared: the garage keeps showing the previous
+      // bike while the new one composes, which is far better than an empty
+      // stage.
+      //
+      // THE STAGE IS THE ONE THE RIDER ACTUALLY LOOKS AT. `BUILD_KEY` alone was
+      // the whole invalidation, and nothing in the app renders that query — the
+      // machine on screen comes from `useTodayStage`, whose server key already
+      // includes the equipped loadout (`api/garage.py::_bike_key`). So the
+      // render existed, was correct, and was never re-requested: equipping a
+      // wheelset changed a number in the dock and left the bicycle untouched.
+      // Both keys go, because both are pictures of a machine that just changed.
+      if (!spendsCoins) {
+        qc.invalidateQueries({ queryKey: BUILD_KEY })
+        qc.invalidateQueries({ queryKey: TODAY_STAGE_KEY })
+        qc.invalidateQueries({ queryKey: ['garage', 'scene'] })
+      }
     },
   })
 }
