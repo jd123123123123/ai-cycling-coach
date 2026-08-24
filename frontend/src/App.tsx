@@ -462,6 +462,9 @@ function AppRoutes() {
           <Route path="/e/w3-rank-preview" element={<W3RankPreview />} />
           <Route path="/e/w3-garage-hero-preview" element={<W3GarageHeroPreview />} />
           <Route path="/e/w3-room-preview/*" element={<W3RoomPreview />} />
+          {/* The launch mark on its own, so the one animation every cold start
+              shows can be looked at without racing a Suspense boundary. */}
+          <Route path="/e/w3-loading-preview" element={<AppLoading label="Einen Moment…" />} />
           {/* No `checkOnboarding`: this IS an onboarding step. The gate is satisfied
               by the NUMBERS screen, which comes after this one — guarding it would
               bounce every mid-onboarding rider back to the welcome screen the

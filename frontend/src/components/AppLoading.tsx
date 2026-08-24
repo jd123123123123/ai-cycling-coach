@@ -1,8 +1,8 @@
 /**
- * The app's ONE loading treatment — the branded W3 wait state.
+ * The app's ONE loading treatment — the branded wait state.
  *
- * A softly pulsing acid bloom behind the W3 mark, over the same near-black
- * ground as every screen. Used for:
+ * The Ridr mark drawing itself on its lime tile, over a softly pulsing acid
+ * bloom on the same near-black ground as every screen. Used for:
  *   · the cold first paint (App's <Suspense> fallback),
  *   · the auth / onboarding resolve in <ProtectedRoute>,
  *   · any page whose first data read has not landed yet.
@@ -21,9 +21,15 @@
  * This renders precisely when things are slow, and it is reachable from the
  * ENTRY chunk (ProtectedRoute is eagerly imported). Pulling motion/react in
  * would put ~120 kB of animation runtime in front of the first paint to draw a
- * spinner. The keyframes below are a literal transcription of the motion
- * variants this replaced, so the design is unchanged; `prefers-reduced-motion`
- * is honoured by the stylesheet rather than by a hook.
+ * spinner. The bloom's keyframes are a literal transcription of the motion
+ * variants this replaced; `prefers-reduced-motion` is honoured by the
+ * stylesheet rather than by a hook.
+ *
+ * `RidrMarkAnimated` is held to the same budget and passes it for a different
+ * reason: it carries no runtime at all. It is ~4 kB of shader source and a
+ * hundred lines of raw WebGL setup, it falls back to the still mark wherever a
+ * GL context is refused, and it honours reduced motion by rendering the last
+ * frame of the loop — the finished R — rather than by animating slower.
  *
  * Colours are the W3 tokens (editorial/w3/w3tokens.tsx) written out, because
  * nothing outside editorial/ may import them. That copying is why the acid was
@@ -34,13 +40,12 @@
  * rider ever sees. If these drift again, `w3tokens.tsx` is the truth.
  */
 
+import RidrMarkAnimated from './RidrMarkAnimated'
+
 const BG = '#0B0B0B'
 const ACID = '#BFFF3C'
-const RULE = '#FFFFFF14'
 const QUIET = '#6E7379'
 const FONT = '"Inter Tight", ui-sans-serif, system-ui, sans-serif'
-
-import RidrMark from './RidrMark'
 
 export default function AppLoading({ label }: { label?: string }) {
   return (
@@ -51,23 +56,26 @@ export default function AppLoading({ label }: { label?: string }) {
         gap: 22, background: BG, fontFamily: FONT,
       }}
     >
-      <div style={{ position: 'relative', width: 76, height: 76, display: 'grid', placeItems: 'center' }}>
-        {/* pulsing bloom */}
+      {/* ── THE MARK DRAWS ITSELF ──────────────────────────────────────
+           A spinning arc around a ✱ was a spinner wearing a logo's clothes: it
+           said "waiting" and nothing else, and it was the first thing every
+           cold start showed. The mark's own animation says the same thing —
+           it takes time, and you watch it resolve — while being the app
+           introducing itself rather than a progress indicator.
+
+           The bloom stays, knocked back behind the tile: it is what keeps the
+           lime square from reading as a sticker on a black page. Its glow is
+           the app's acid rather than the logo's lime on purpose, because it is
+           the ROOM's light falling on the mark, not part of the mark. ── */}
+      <div style={{ position: 'relative', width: 132, height: 132, display: 'grid', placeItems: 'center' }}>
         <div
           className="app-loading-bloom"
-          style={{ position: 'absolute', width: 76, height: 76, borderRadius: 100, background: ACID, filter: 'blur(20px)' }}
+          style={{
+            position: 'absolute', width: 108, height: 108, borderRadius: 100,
+            background: ACID, filter: 'blur(30px)', opacity: 0.5,
+          }}
         />
-        {/* spinning arc */}
-        <svg className="app-loading-arc" width={76} height={76} viewBox="0 0 76 76" style={{ position: 'absolute' }}>
-          <circle cx={38} cy={38} r={32} fill="none" stroke={RULE} strokeWidth={4} />
-          <path d="M38 6 a32 32 0 0 1 32 32" fill="none" stroke={ACID} strokeWidth={4} strokeLinecap="round" />
-        </svg>
-        {/* the mark — the real one now. The ✱ that stood here was a stand-in
-            from before the app had a logo, and it was the first thing every
-            cold start showed. */}
-        <span className="app-loading-mark" style={{ display: 'grid', placeItems: 'center' }}>
-          <RidrMark size={34} color={ACID} />
-        </span>
+        <RidrMarkAnimated size={112} />
       </div>
       {label && (
         <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: 0.3, color: QUIET }}>{label}</span>
