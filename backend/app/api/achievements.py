@@ -17,6 +17,20 @@ from app.services import achievement_service
 router = APIRouter(prefix="/achievements", tags=["achievements"])
 
 
+@router.get("/records", summary="The rider's lifetime bests")
+async def my_records(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    """Longest ride, highest climb, longest time, hardest ride — each with the
+    ride it came from, so the profile can name the day rather than only the
+    number. A record with no qualifying ride comes back as null; the screen
+    then omits it rather than printing a zero."""
+    from app.services import rider_records
+
+    return await rider_records.lifetime(db, current_user.id)
+
+
 @router.get(
     "/mine",
     summary="Unlocked + in-progress training milestones, detected server-side",
