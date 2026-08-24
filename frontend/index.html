@@ -17,10 +17,35 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- ── FONTS ARE NOT IN FRONT OF THE FIRST FRAME ────────────────────
+         A stylesheet in the head blocks the first paint until it arrives, and
+         this one is a third-party request. Loaded as `print` and promoted to
+         `all` on load, the page paints immediately in the fallback stack and
+         swaps when the fonts land — which is what `display=swap` already
+         promised and could not deliver while the CSS itself was the thing
+         being waited on. The <noscript> copy keeps it working without
+         JavaScript.
+
+         The `wght@400..800` range syntax replaces the enumerated list. MEASURED
+         2026-08-24: it is NOT a byte saving — Google Fonts returns byte-identical
+         CSS for both forms (50 274 B, 123 @font-face rules, discrete static
+         instances). It is kept because it is the form that will serve a variable
+         file where one is offered, and because the app writes in-between weights
+         (560, 590, 620, 650) that only a real axis can render. Today those still
+         snap to the nearest static cut. Do not re-derive this: the two URLs were
+         fetched and diffed. ── -->
     <link
       rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700;800&family=Archivo+Narrow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Anton&family=Instrument+Serif&family=Archivo:wght@400;500;600;700;800&display=swap"
+      media="print"
+      onload="this.media='all'"
+      href="https://fonts.googleapis.com/css2?family=Sora:wght@400..800&family=Inter:wght@400..700&family=Inter+Tight:wght@400..800&family=Archivo+Narrow:wght@400..700&family=JetBrains+Mono:wght@400..600&family=Anton&family=Instrument+Serif&family=Archivo:wght@400..800&display=swap"
     />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Sora:wght@400..800&family=Inter:wght@400..700&family=Inter+Tight:wght@400..800&family=Archivo+Narrow:wght@400..700&family=JetBrains+Mono:wght@400..600&family=Anton&family=Instrument+Serif&family=Archivo:wght@400..800&display=swap"
+      />
+    </noscript>
   </head>
   <body>
     <div id="root"></div>
