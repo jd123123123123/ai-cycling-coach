@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { BLOCKS, MIN_BLOCKS, type BlockId } from './w3shareBlocks'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
-import { useGarage, useRideScene } from '../../hooks/useGarage'
+import { useGarage, useRenderRideScene, useRideScene } from '../../hooks/useGarage'
 import {
   renderSharePoster, sharePoster, downloadPoster, canShareImage,
   type ShareAngle, type PosterData,
@@ -82,6 +82,29 @@ export default function W3SharePage() {
   // The composed hero for this ride, and the rider's own garage bike behind it.
   // Both are cheap cached reads and neither ever generates.
   const { data: scene } = useRideScene(activity?.id)
+  const composeScene = useRenderRideScene()
+
+  // ── THE HEADER IS THE BIKE, IN THE PLACE THE GPX FOUND ─────────────────
+  // The scene — the rider's own machine standing in the world their track was
+  // resolved to — was only ever composed from the ride-detail screen. This one
+  // merely READ it, so a rider who came straight here got the drawn mountains:
+  // a generic landscape on the one picture they were about to post publicly.
+  //
+  // Composing is a slow, paid model call and the codebase is right to gate it
+  // on explicit intent — but OPENING THE SHARE SCREEN IS THAT INTENT. It is
+  // asked for exactly once, only when the ride has no scene yet and the server
+  // says one can be made (`not_generated`; `needs_bike` and `needs_rider` are
+  // answers, not failures, and asking again would only fail again). Nothing
+  // waits on it: the poster paints immediately with whatever it has and swaps
+  // to the real scene when it lands.
+  const askedRef = useRef(false)
+  useEffect(() => {
+    if (askedRef.current) return
+    if (activity?.id == null) return
+    if (scene?.status !== 'not_generated') return
+    askedRef.current = true
+    composeScene.mutate(activity.id)
+  }, [activity?.id, scene?.status, composeScene])
   // Weight, for W/kg. Absent is honest — the tile shows an em dash rather than
   // a watts-per-kilo computed against a weight nobody entered.
   const { data: profile } = useAthleteProfile()

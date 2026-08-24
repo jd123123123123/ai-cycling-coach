@@ -104,23 +104,9 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath()
 }
 
-function mountainPath(ctx: CanvasRenderingContext2D, baseY: number, amp: number, seed: number, color: string, heroH: number) {
-  ctx.beginPath()
-  ctx.moveTo(0, heroH)
-  ctx.lineTo(0, baseY)
-  const steps = 7
-  for (let i = 0; i <= steps; i++) {
-    const x = (i / steps) * W
-    const y = baseY - Math.abs(Math.sin(i * 1.3 + seed)) * amp
-    ctx.lineTo(x, y)
-  }
-  ctx.lineTo(W, heroH)
-  ctx.closePath()
-  ctx.fillStyle = color
-  ctx.fill()
-}
-
-/** IF → route accent, matching the ride-detail hero's intensity colours. */
+// `mountainPath` lived here and drew three ranges of invented scenery behind
+// the bike. The fallback is the app's own studio room now — see `paint` — so
+// there is no landscape to paint and nothing this could be reused for.
 function intensityHue(iff: number): string {
   return iff >= 1.02 ? T.zone5 : iff >= 0.92 ? T.warn : iff >= 0.8 ? T.acid : T.training
 }
@@ -403,8 +389,20 @@ async function paint(
   // allowed and simply squeeze the picture to a band. That is a real card: a
   // rider who picks the trace, the zones and the peaks has said they want the
   // data, not the photograph.
-  const MIN_HERO = 150
-  const PREFERRED_HERO = Math.round(H * 0.24)
+  // ── THE PICTURE OUTRANKS THE BLOCKS ────────────────────────────────
+  // The header is the machine standing in the world the ride's GPX resolved
+  // to, and that is the reason the card is worth posting at all. So when there
+  // IS a picture — a composed scene, the rider's own photograph, or the bike in
+  // the app's own room — the hero's floor is a real stage and the blocks are
+  // trimmed to fit around it. Squeezed to a strip the bike came back as a
+  // thumbnail in a black band, which is the picture nobody would post.
+  //
+  // With nothing to show, the floor drops to the height of the handle chip and
+  // the blocks take the card: a data-only card is a legitimate card, and a tall
+  // empty stage above three blocks is not.
+  const hasPicture = sceneImg != null || bikeImg != null
+  const MIN_HERO = hasPicture ? Math.round(H * 0.34) : 150
+  const PREFERRED_HERO = Math.round(H * (hasPicture ? 0.46 : 0.24))
   const chrome =
     PANEL_TOP + KICKER_TO_BIG + BIG_TO_SENTENCE +
     sentenceLines * SENTENCE_LINE + SENTENCE_TO_BLOCKS +
@@ -425,6 +423,17 @@ async function paint(
   // ── background ──
   ctx.fillStyle = T.bg; ctx.fillRect(0, 0, W, H)
 
+  // THE HERO IS CLIPPED TO ITS BAND, and it always should have been. Nothing
+  // enforced it while the band was a fixed 56 % of the card and the scene was
+  // roughly square — the overflow simply landed under the panel that was drawn
+  // afterwards. Now that the blocks can squeeze the hero to a strip, an
+  // unclipped square scene is drawn a thousand pixels tall over the whole card:
+  // the kicker, the trace and the tiles all disappeared behind a bicycle.
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, W, heroH + BLEED)
+  ctx.clip()
+
   if (sceneImg) {
     // THE RIDE'S OWN PICTURE, EDGE TO EDGE. Cover-cropped rather than fitted:
     // the scene is square and the hero band is not, and letterboxing it would
@@ -444,15 +453,33 @@ async function paint(
     // pushed that road under the fade.
     ctx.drawImage(sceneImg, (W - sw) / 2, 0, sw, sh)
   } else {
-    // sky
-    const sky = ctx.createLinearGradient(0, 0, 0, heroH)
-    sky.addColorStop(0, t.skyTop); sky.addColorStop(1, t.skyBot)
-    ctx.fillStyle = sky; ctx.fillRect(0, 0, W, heroH)
+    // ── THE SAME ROOM THE APP STANDS THE BIKE IN ───────────────────────
+    // This drew a painted sky and three ranges of mountains — a landscape the
+    // rider had never been to, on the one picture they were about to post. It
+    // also belonged to no part of the app: Today, the rides and the garage all
+    // stand the machine in ONE studio, a near-black wall meeting a floor at a
+    // low horizon (`W3TodayStage`, `T.heroFloor`, FLOOR at 76 %). A shared card
+    // that invents its own world is a card from a different product.
+    //
+    // So the fallback is that room, drawn from the same four stops and the same
+    // floor fraction, with the rider's own bike standing on the floor line. The
+    // composed scene still wins when there is one — this is what a ride with no
+    // GPS, or one whose scene has not been made yet, gets instead.
+    const room = ctx.createLinearGradient(0, 0, 0, heroH)
+    room.addColorStop(0, T.heroFloor[0])
+    room.addColorStop(0.40, T.heroFloor[1])
+    room.addColorStop(0.76, T.heroFloor[2])
+    room.addColorStop(1, T.heroFloor[3])
+    ctx.fillStyle = room
+    ctx.fillRect(0, 0, W, heroH)
 
-    // mountains (back→front)
-    mountainPath(ctx, heroH * 0.62, 190, 0.4, t.mtnBack, heroH)
-    mountainPath(ctx, heroH * 0.74, 150, 2.1, t.mtnMid, heroH)
-    mountainPath(ctx, heroH * 0.86, 120, 4.0, t.mtnFront, heroH)
+    // The pool of light the machine stands in, centred on the floor line.
+    const floorY = heroH * 0.762
+    const pool = ctx.createRadialGradient(W / 2, floorY, 20, W / 2, floorY, W * 0.62)
+    pool.addColorStop(0, 'rgba(255,255,255,0.09)')
+    pool.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.fillStyle = pool
+    ctx.fillRect(0, 0, W, heroH)
   }
 
   // Over the DRAWN hero the route is the hero graphic, so it goes down before
@@ -489,16 +516,38 @@ async function paint(
   // bike (with the rider) sitting on the route — only when no scene was
   // composed, because a scene already HAS the bike in it.
   if (bikeImg && !sceneImg) {
-    // 640 left the machine as a stamp in the middle of a big empty sky. The
-    // bike is the subject of a cycling poster; it gets the width.
-    const bw = 880
-    const bh = bw * (bikeImg.height / bikeImg.width)
-    const bx = (W - bw) / 2, by = heroH * 0.7 - bh / 2
+    // IT STANDS ON THE FLOOR LINE, like it does everywhere else in the app.
+    // Centring the machine on 70 % of the band left it hovering above the
+    // horizon the ground gradient draws at 76 % — the same defect
+    // `W3TodayStage` documents fixing, reproduced here because this file drew
+    // its own world and never had a floor to stand it on.
+    // SIZED BY THE BAND, not only by the card. Scaling to 92 % of the width
+    // put a 980 px-wide machine into a 150 px-tall hero — drawn from the floor
+    // line upwards, the whole bicycle sat above the top edge and the card came
+    // back with an empty black strip where the subject should be.
+    const floorY = heroH * 0.762
+    const ratio = bikeImg.height / bikeImg.width
+    const maxW = Math.min(W * 0.92, 980)
+    const maxH = floorY - 24            // from the floor line up to the top edge
+    const bw = Math.min(maxW, maxH / ratio)
+    const bh = bw * ratio
+    const bx = (W - bw) / 2
+    const by = floorY - bh
+
+    // The contact shadow, on the floor rather than under the picture.
     ctx.save()
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 40; ctx.shadowOffsetY = 20
-    ctx.drawImage(bikeImg, bx, by, bw, bh)
+    ctx.globalAlpha = 0.5
+    const sh = ctx.createRadialGradient(W / 2, floorY, 8, W / 2, floorY, bw * 0.42)
+    sh.addColorStop(0, 'rgba(0,0,0,0.75)')
+    sh.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = sh
+    ctx.fillRect(bx, floorY - 40, bw, 120)
     ctx.restore()
+
+    ctx.drawImage(bikeImg, bx, by, bw, bh)
   }
+
+  ctx.restore()   // end of the hero band's clip
 
   // avatar chip (top-left)
   const chipX = 44, chipY = 44, chipH = 92
