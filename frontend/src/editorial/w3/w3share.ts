@@ -250,7 +250,41 @@ function statGlyph(ctx: CanvasRenderingContext2D, label: string, x: number, y: n
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
 
-  if (/watt|leistung|normal|power|ftp/.test(l)) {
+  // SPECIFIC BEFORE GENERIC. `W/KG` would otherwise fall through to the bolt
+  // and TSS to the default dot, and a row of tiles whose marks do not match
+  // their numbers is worse than a row with no marks at all.
+  if (/w\/kg/.test(l)) {
+    // a bolt standing on a baseline: power, carried per kilo
+    ctx.beginPath()
+    ctx.moveTo(x + s * 0.54, y)
+    ctx.lineTo(x + s * 0.24, y + s * 0.46)
+    ctx.lineTo(x + s * 0.46, y + s * 0.46)
+    ctx.lineTo(x + s * 0.38, y + s * 0.84)
+    ctx.lineTo(x + s * 0.74, y + s * 0.36)
+    ctx.lineTo(x + s * 0.50, y + s * 0.36)
+    ctx.closePath()
+    ctx.fill()
+    ctx.beginPath()
+    ctx.moveTo(x + s * 0.12, y + s * 0.96); ctx.lineTo(x + s * 0.88, y + s * 0.96)
+    ctx.stroke()
+  } else if (/tss/.test(l)) {
+    // three rising bars: load, stacked up over a ride
+    const bw = s * 0.2
+    ;[0.42, 0.66, 0.9].forEach((h, i) => {
+      const bx = x + s * 0.1 + i * (bw + s * 0.11)
+      ctx.beginPath()
+      ctx.rect(bx, y + s * (1 - h), bw, s * h)
+      ctx.fill()
+    })
+  } else if (/kilojoule|kj\b|energie/.test(l)) {
+    // a flame: work turned into heat
+    ctx.beginPath()
+    ctx.moveTo(x + s * 0.5, y + s * 0.04)
+    ctx.bezierCurveTo(x + s * 0.88, y + s * 0.4, x + s * 0.78, y + s * 0.98, x + s * 0.5, y + s * 0.98)
+    ctx.bezierCurveTo(x + s * 0.22, y + s * 0.98, x + s * 0.12, y + s * 0.4, x + s * 0.5, y + s * 0.04)
+    ctx.closePath()
+    ctx.fill()
+  } else if (/watt|leistung|normal|power|ftp/.test(l)) {
     // a bolt
     ctx.beginPath()
     ctx.moveTo(x + s * 0.56, y)
@@ -315,7 +349,31 @@ async function paint(
   sceneImg: HTMLImageElement | null,
 ) {
   const t = THEMES[d.angle]
-  const heroH = Math.round(H * 0.56)
+
+  // ── THE PANEL IS MEASURED, THE HERO GETS WHAT IS LEFT ──────────────────
+  // `heroH` was a fixed 56 % of the card and the panel below it was laid out
+  // top-down and hoped to fit. It did, until the stat tiles grew by 12 px and
+  // the kicker gained the 42 px it needed to stop being overprinted — and then
+  // the footer fell off the bottom edge, on the finished export, silently.
+  // Adding up what the panel actually needs and giving the hero the remainder
+  // means the two can never disagree again, whatever a tile is worth tomorrow.
+  const PANEL_TOP = 92          // kicker baseline below the hero
+  const KICKER_TO_BIG = 138     // the 150 px figure's cap height, plus air
+  const BIG_TO_SENTENCE = 70
+  const SENTENCE_LINE = 52
+  const SENTENCE_TO_PILLS = 30
+  const PILL_H = 116
+  const PILLS_TO_TILES = 26
+  const TILE_H = 180
+  const TILES_TO_FOOTER = 60
+  const FOOTER_BOTTOM = 64      // below the footer baseline, to the card edge
+  ctx.font = `600 40px ${FONT}`
+  const sentenceLines = wrap(ctx, d.sentence, 40, '600', W - 128).length
+  const panelH =
+    PANEL_TOP + KICKER_TO_BIG + BIG_TO_SENTENCE +
+    sentenceLines * SENTENCE_LINE + SENTENCE_TO_PILLS +
+    PILL_H + PILLS_TO_TILES + TILE_H + TILES_TO_FOOTER + FOOTER_BOTTOM
+  const heroH = Math.max(Math.round(H * 0.42), H - panelH)
   //: How far the hero image runs past its band so the fade has something to
   //: dissolve. Without it the photograph ends on a visible horizontal cut.
   const BLEED = 150
@@ -417,16 +475,26 @@ async function paint(
   star(ctx, W - 80, 88, 30, t.acid)
 
   // ── panel ──
-  let y = heroH + 92
+  let y = heroH + PANEL_TOP
   const px = 64
   // kicker
   star(ctx, px + 12, y - 14, 13, t.acid)
   text(ctx, d.kicker, px + 40, y, 26, '700', t.acid, 3)
   // 96 was less than the cap height of the 150 px figure that follows, so the
   // number was drawn THROUGH the kicker. Visible on the shipped card.
-  y += 138
+  y += KICKER_TO_BIG
 
   // big value + unit + delta
+  // ── THE NUMBER IS THE REWARD, so it is lit rather than merely large. A soft
+  //    acid bloom behind the figure, which costs nothing in a still image and
+  //    is the difference between a receipt and a trophy. ──
+  ctx.save()
+  const glow = ctx.createRadialGradient(px + 180, y - 46, 10, px + 180, y - 46, 340)
+  glow.addColorStop(0, 'rgba(191,255,60,0.18)')
+  glow.addColorStop(1, 'rgba(191,255,60,0)')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, y - 260, W, 380)
+  ctx.restore()
   ctx.font = `700 150px ${FONT}`
   const bigW = text(ctx, d.bigValue, px, y, 150, '700', T.ink)
   if (d.bigUnit) text(ctx, d.bigUnit, px + bigW + 20, y, 46, '600', 'rgba(255,255,255,0.65)')
@@ -439,17 +507,17 @@ async function paint(
     ctx.restore()
     text(ctx, d.delta, W - px - dw + 34, dy + 44, 30, '700', t.acid)
   }
-  y += 70
+  y += BIG_TO_SENTENCE
 
   // sentence
   for (const line of wrap(ctx, d.sentence, 40, '600', W - px * 2)) {
     text(ctx, line, px, y, 40, '600', 'rgba(255,255,255,0.82)')
-    y += 52
+    y += SENTENCE_LINE
   }
-  y += 30
+  y += SENTENCE_TO_PILLS
 
   // pills
-  const pillH = 116, pillGap = 20, pillW = (W - px * 2 - pillGap) / 2
+  const pillH = PILL_H, pillGap = 20, pillW = (W - px * 2 - pillGap) / 2
   d.pills.forEach((p, i) => {
     const x = px + i * (pillW + pillGap)
     ctx.save()
@@ -460,23 +528,28 @@ async function paint(
     text(ctx, p.text, x + 34, y + 54, 34, '700', ink)
     text(ctx, p.sub, x + 34, y + 88, 24, '600', p.tone === 'acid' ? 'rgba(11,11,11,0.7)' : 'rgba(255,255,255,0.75)')
   })
-  y += pillH + 26
+  y += pillH + PILLS_TO_TILES
 
   // three stat tiles
-  const tileGap = 18, tileW = (W - px * 2 - tileGap * 2) / 3, tileH = 168
+  const tileGap = 18, tileW = (W - px * 2 - tileGap * 2) / 3, tileH = TILE_H
   d.stats.forEach((s, i) => {
     const x = px + i * (tileW + tileGap)
+    // THE FIRST TILE IS THE ONE THAT MATTERS. Three identical grey boxes make
+    // the eye read all three or none; leading with the stat this angle is
+    // about, lit, means the row is scannable in the half second a feed gives
+    // it. The other two support it and are quiet on purpose.
+    const lead = i === 0
     ctx.save()
     roundRect(ctx, x, y, tileW, tileH, 24)
-    ctx.fillStyle = T.surface; ctx.fill()
+    ctx.fillStyle = lead ? 'rgba(191,255,60,0.10)' : T.surface; ctx.fill()
+    if (lead) { ctx.strokeStyle = 'rgba(191,255,60,0.38)'; ctx.lineWidth = 2; ctx.stroke() }
     ctx.restore()
-    // The mark sits top-right of the tile: out of the number's way, and the
-    // three of them make a rhythm across the row.
-    statGlyph(ctx, s.l, x + tileW - 60, y + 26, 34, t.acid)
-    text(ctx, s.v, x + 26, y + 82, 52, '700', T.ink)
-    text(ctx, s.l, x + 26, y + 126, 22, '700', 'rgba(255,255,255,0.5)', 1)
+    statGlyph(ctx, s.l, x + tileW - 60, y + 28, 34, t.acid)
+    text(ctx, s.v, x + 26, y + 92, 62, '800', lead ? t.acid : T.ink, -1)
+    text(ctx, s.l, x + 26, y + 138, 23, '700',
+      lead ? 'rgba(191,255,60,0.75)' : 'rgba(255,255,255,0.55)', 1)
   })
-  y += tileH + 60
+  y += tileH + TILES_TO_FOOTER
 
   // footer
   text(ctx, d.footer, px, y, 26, '600', 'rgba(255,255,255,0.55)')

@@ -1,10 +1,11 @@
 import { type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Download, Camera, Users, Link2, MoreHorizontal, Share2 } from 'lucide-react'
-import { T, FONT, EASE } from './w3tokens'
+import { Download, Camera, Users, Link2, MoreHorizontal, Share2, ImagePlus, X } from 'lucide-react'
+import { T, FONT, EASE, HIDDEN_FILE_INPUT } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import type { ShareAngle } from './w3share'
+import { fileToDownscaledDataUrl } from './w3photo'
 import './w3.css'
 
 /**
@@ -25,8 +26,13 @@ export interface W3ShareVm {
   angles: ShareAngleChip[]
   activeAngle: ShareAngle
   canShare: boolean
+  /** True once the rider has put their own photograph behind the card. */
+  hasOwnPhoto: boolean
 }
 export interface W3ShareActions {
+  /** The rider's own photograph, already downscaled to a data URL. Null clears
+   *  it and hands the background back to the composed scene. */
+  onPickPhoto?: (dataUrl: string | null) => void
   onClose?: () => void
   onDownload?: () => void
   onSelectAngle?: (id: ShareAngle) => void
@@ -43,7 +49,7 @@ const ACTIONS = [
   { id: 'more', label: 'Mehr', Icon: MoreHorizontal },
 ] as const
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
@@ -96,6 +102,58 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
               )
             })}
           </div>
+
+          {/* ── THE RIDER'S OWN PHOTOGRAPH ────────────────────────────────
+              A composed scene is a picture of where the app thinks they were;
+              a photo from their pocket is a picture of where they WERE. It
+              never leaves the device — the poster is rendered locally in a
+              canvas, so the only copy that goes anywhere is the one the rider
+              hands to the share sheet themselves. ── */}
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px',
+            borderRadius: 16, cursor: 'pointer', fontFamily: FONT,
+            background: vm.hasOwnPhoto ? T.acidDim : T.surface,
+            border: `1px ${vm.hasOwnPhoto ? 'solid' : 'dashed'} ${vm.hasOwnPhoto ? T.acid : T.stroke}`,
+          }}>
+            <span style={{
+              width: 34, height: 34, flex: 'none', borderRadius: 11,
+              background: vm.hasOwnPhoto ? 'transparent' : T.surface2,
+              display: 'grid', placeItems: 'center',
+            }}>
+              <ImagePlus size={17} color={vm.hasOwnPhoto ? T.acid : T.mid} />
+            </span>
+            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: vm.hasOwnPhoto ? T.acid : T.ink }}>
+                {vm.hasOwnPhoto ? 'Dein Foto ist drauf' : 'Eigenes Foto nehmen'}
+              </span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
+                {vm.hasOwnPhoto ? 'Tippen zum Wechseln' : 'Bleibt auf deinem Gerät'}
+              </span>
+            </span>
+            {vm.hasOwnPhoto && (
+              <button
+                type="button"
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPickPhoto?.(null) }}
+                aria-label="Eigenes Foto entfernen"
+                style={{
+                  width: 28, height: 28, flex: 'none', borderRadius: 100, border: 0,
+                  background: T.surface2, display: 'grid', placeItems: 'center', cursor: 'pointer',
+                }}>
+                <X size={13} color={T.mid} />
+              </button>
+            )}
+            <input
+              type="file" accept="image/*" style={HIDDEN_FILE_INPUT}
+              onChange={async (e) => {
+                const f = e.target.files?.[0]
+                // Reset first: picking the SAME file twice must still fire.
+                e.target.value = ''
+                if (!f) return
+                // 1440 rather than the studio's 1024 — this one is drawn at
+                // 1080 across and then cropped, so it needs the headroom.
+                onPickPhoto?.(await fileToDownscaledDataUrl(f, 1440).catch(() => null))
+              }} />
+          </label>
         </div>
 
         {/* Action row */}

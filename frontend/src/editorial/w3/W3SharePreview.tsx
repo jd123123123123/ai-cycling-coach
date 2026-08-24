@@ -61,6 +61,7 @@ export default function W3SharePreview() {
     posterDataUrl: dataUrl,
     generating,
     activeAngle: angle,
+    hasOwnPhoto: false,
     canShare: canShareImage(),
     angles: [
       { id: 'rekord', label: 'Segment-PR', sub: 'Sonnenberg' },

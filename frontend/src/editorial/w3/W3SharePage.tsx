@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage, useRideScene } from '../../hooks/useGarage'
@@ -62,6 +63,12 @@ export default function W3SharePage() {
   // The composed hero for this ride, and the rider's own garage bike behind it.
   // Both are cheap cached reads and neither ever generates.
   const { data: scene } = useRideScene(activity?.id)
+  // Weight, for W/kg. Absent is honest — the tile shows an em dash rather than
+  // a watts-per-kilo computed against a weight nobody entered.
+  const { data: profile } = useAthleteProfile()
+  // Never uploaded, never persisted: the picture only exists for as long as
+  // this screen is open, which is exactly as long as it is needed.
+  const [ownPhoto, setOwnPhoto] = useState<string | null>(null)
   const { data: garage } = useGarage()
 
   const [angle, setAngle] = useState<ShareAngle>('fahrt')
@@ -80,7 +87,6 @@ export default function W3SharePage() {
     const durS = h?.moving_time_s ?? activity?.duration_seconds ?? null
     const np = h?.np_watts ?? activity?.normalized_power ?? null
     const ftp = debrief?.wko?.mftp_watts ?? null
-    const speed = distKm != null && durS ? (distKm / (durS / 3600)) : null
     const iff = np != null && ftp ? np / ftp : null
     const efforts = debrief?.efforts ?? []
     const prs = efforts.filter((e) => e.is_pr)
@@ -96,9 +102,23 @@ export default function W3SharePage() {
     const statKm: [string, string] = [distKm != null ? String(Math.round(distKm)) : '—', 'KM']
     const statHm: [string, string] = [hm != null ? de(Math.round(hm)) : '—', 'HÖHENMETER']
     const statDur: [string, string] = [durS != null ? hms(durS) : '—', 'STUNDEN']
-    const statSpeed: [string, string] = [speed != null ? `${de(speed, 1)}` : '—', 'KM/H Ø']
-    const statNP: [string, string] = [np != null ? String(Math.round(np)) : '—', 'NORMALISIERT']
     const statIF: [string, string] = [iff != null ? de(iff, 2) : '—', 'INTENSITÄT']
+    // ── THE NUMBERS RIDERS ACTUALLY TRADE IN ──────────────────────────────
+    // `tss` and `total_kj` sat in the debrief header unused while the card
+    // showed the duration three times over in different clothes. TSS is how
+    // hard the ride was and kJ is how much work it took — the two figures a
+    // cyclist compares with another cyclist. W/kg is the third, and it is the
+    // one that decides who gets up the hill first.
+    const tss: number | null = h?.tss ?? null
+    const kj: number | null = h?.total_kj ?? null
+    const weight = profile?.weight_kg ?? null
+    const wkgOf = (w: number | null) => (w != null && weight ? w / weight : null)
+    const statTss: [string, string] = [tss != null ? String(Math.round(tss)) : '—', 'TSS']
+    const statKj: [string, string] = [kj != null ? de(Math.round(kj)) : '—', 'KILOJOULE']
+    const prWkg = wkgOf(bestPR?.ride_watts ?? null)
+    const statPrWkg: [string, string] = [prWkg != null ? de(prWkg, 1) : '—', 'W/KG SPITZE']
+    const npWkg = wkgOf(np)
+    const statNpWkg: [string, string] = [npWkg != null ? de(npWkg, 2) : '—', 'W/KG SCHNITT']
 
     const s = (t: [string, string]) => ({ v: t[0], l: t[1] })
     const prCount = prs.length
@@ -115,7 +135,8 @@ export default function W3SharePage() {
           { text: prCount > 0 ? `${prCount} Bestzeiten` : 'Solide Fahrt', sub: prCount > 0 ? 'an Segmenten' : 'im Kasten', tone: 'acid' },
           { text: 'Ausdauer', sub: 'lange im Sattel', tone: 'violet' }, // sub: framing
         ],
-        stats: [s(statHm), s(statDur), s(statSpeed)],
+        // The whole ride: how far, how much of it went up, what it cost.
+        stats: [s(statKm), s(statHm), s(statKj)],
       }
     } else if (angle === 'leistung') {
       data = {
@@ -128,7 +149,8 @@ export default function W3SharePage() {
           { text: ftp != null ? `${Math.round(ftp)} W FTP` : 'Solide Power', sub: 'aktuelle Schwelle', tone: 'acid' },
           { text: iff != null ? `IF ${de(iff, 2)}` : 'Intensität', sub: 'Belastungsgrad', tone: 'violet' },
         ],
-        stats: [s(statNP), s(statIF), s(statDur)],
+        // Intensity leads a power card; the work done and the time back it up.
+        stats: [s(statIF), s(statNpWkg), s(statTss)],
       }
     } else {
       // rekord — the ride's standout power PR effort (real)
@@ -146,7 +168,8 @@ export default function W3SharePage() {
           { text: prCount > 0 ? `${prCount} PRs` : 'Neuer Reiz', sub: prCount > 0 ? 'an einem Tag' : 'gesetzt', tone: 'acid' },
           { text: 'Längste', sub: 'Fahrt im Block', tone: 'violet' }, // sub: framing
         ],
-        stats: [s(statKm), s(statHm), s(statDur)],
+        // A record card leads with what that effort was worth per kilo.
+        stats: [s(statPrWkg), s(statTss), s(statDur)],
       }
     }
 
@@ -159,7 +182,12 @@ export default function W3SharePage() {
       polyline: activity?.route_polyline ?? null,
       // THE RIDE'S OWN HERO when one has been composed: the rider's bike, shot
       // in the framing that ride earned. It becomes the whole top half.
-      sceneSrc: scene?.image_base64 ?? null,
+      // THE RIDER'S OWN PHOTOGRAPH WINS. A composed scene is a picture of
+      // where the app believes they were; a photo from their pocket is a
+      // picture of where they were. It stays on the device — the poster is
+      // painted locally, so the only copy that travels is the one they hand to
+      // the share sheet themselves.
+      sceneSrc: ownPhoto ?? scene?.image_base64 ?? null,
       // THE RIDER'S OWN BIKE otherwise — never `STARTER_BIKE`, which is what
       // stood here and put a grey catalogue bicycle on every rider's poster.
       // Null draws no bike: a poster with a route and no machine is honest, one
@@ -170,7 +198,7 @@ export default function W3SharePage() {
       footer: `${rideName} · ${dateStr}`,
       ...data,
     }
-  }, [activity, debrief, angle, user, scene, garage])
+  }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile])
 
   // ── render the poster whenever the payload changes ──
   useEffect(() => {
@@ -197,6 +225,7 @@ export default function W3SharePage() {
     generating,
     activeAngle: angle,
     canShare: shareable,
+    hasOwnPhoto: ownPhoto != null,
     angles: [
       { id: 'rekord', label: 'Bestleistung', sub: 'Stärkster Push' },
       { id: 'fahrt', label: 'Ganze Fahrt', sub: activity?.title || 'Deine Runde' },
@@ -210,6 +239,7 @@ export default function W3SharePage() {
       onClose={() => navigate(-1)}
       onDownload={onDownload}
       onSelectAngle={setAngle}
+      onPickPhoto={setOwnPhoto}
       onShare={onShare}
       onStory={onShare}
       onCrew={() => navigate('/e/w3-crew')}
