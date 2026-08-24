@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
@@ -30,6 +31,39 @@ async def create_consent(
 
     now = datetime.now(timezone.utc)
 
+    # ── RE-GRANTING IS NOT AN ERROR ─────────────────────────────────────────
+    # `consent_records` carries UNIQUE (user_id, consent_type, consent_version)
+    # and this endpoint used to INSERT unconditionally. The onboarding screen
+    # grants `health_data` v1.0 every time its Continue button is pressed, so
+    # the second press raised an IntegrityError, FastAPI turned that into a 500,
+    # and the screen showed "Das hat gerade nicht geklappt."
+    #
+    # PERMANENTLY. Once the row existed every later attempt hit the same
+    # constraint, so a rider who got that far could never leave the numbers
+    # screen again — the exact failure this was reported as.
+    #
+    # Re-affirming a consent you already hold is a normal act and, under GDPR,
+    # an update to the record rather than a second one: the audit trail keeps
+    # the latest IP, agent and timestamp, and a re-grant clears any withdrawal.
+    existing = (await db.execute(
+        select(ConsentRecord).where(
+            ConsentRecord.user_id == current_user.id,
+            ConsentRecord.consent_type == body.consent_type,
+            ConsentRecord.consent_version == body.consent_version,
+        )
+    )).scalar_one_or_none()
+
+    if existing is not None:
+        existing.granted = body.granted
+        existing.granted_at = now if body.granted else existing.granted_at
+        existing.withdrawn_at = None if body.granted else now
+        existing.ip_address = ip_address
+        existing.user_agent = user_agent
+        existing.consent_text = body.consent_text
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
     consent_record = ConsentRecord(
         user_id=current_user.id,
         consent_type=body.consent_type,
@@ -41,7 +75,20 @@ async def create_consent(
         consent_text=body.consent_text,
     )
     db.add(consent_record)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        # Two taps in flight at once. Whoever lost the race gets the row the
+        # winner wrote, which is the correct answer either way.
+        await db.rollback()
+        raced = (await db.execute(
+            select(ConsentRecord).where(
+                ConsentRecord.user_id == current_user.id,
+                ConsentRecord.consent_type == body.consent_type,
+                ConsentRecord.consent_version == body.consent_version,
+            )
+        )).scalar_one()
+        return raced
     await db.refresh(consent_record)
     return consent_record
 

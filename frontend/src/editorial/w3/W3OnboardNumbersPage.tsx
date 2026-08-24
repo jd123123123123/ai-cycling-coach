@@ -155,8 +155,23 @@ export default function W3OnboardNumbersPage() {
         ...(weight ? { weight_kg: Number(weight) } : {}),
       })
       navigate('/e/w3-onboard-rider')
-    } catch {
-      setError('Das hat gerade nicht geklappt. Versuch es nochmal.')
+    } catch (err) {
+      // ── THE ERROR HAS TO NAME ITSELF ────────────────────────────────────
+      // One catch-all sentence hid a 500 from POST /consent for as long as it
+      // took somebody to open the network tab. A rider stuck on this screen
+      // could not say what was wrong and neither could anyone reading the
+      // code. The status is the difference between "sign in again", "we broke
+      // something" and "your connection went".
+      const status = (err as { response?: { status?: number } })?.response?.status
+      setError(
+        status === 401
+          ? 'Deine Sitzung ist abgelaufen. Melde dich neu an.'
+          : status === 422
+            ? 'Diese Werte konnten wir nicht speichern. Prüf FTP und Gewicht.'
+            : status != null
+              ? `Das hat gerade nicht geklappt (Fehler ${status}). Versuch es nochmal.`
+              : 'Keine Verbindung. Versuch es gleich noch einmal.',
+      )
     } finally {
       setBusy(false)
     }
