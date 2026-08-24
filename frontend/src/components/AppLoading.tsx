@@ -40,6 +40,8 @@ const RULE = '#FFFFFF14'
 const QUIET = '#6E7379'
 const FONT = '"Inter Tight", ui-sans-serif, system-ui, sans-serif'
 
+import RidrMark from './RidrMark'
+
 export default function AppLoading({ label }: { label?: string }) {
   return (
     <div
@@ -60,12 +62,11 @@ export default function AppLoading({ label }: { label?: string }) {
           <circle cx={38} cy={38} r={32} fill="none" stroke={RULE} strokeWidth={4} />
           <path d="M38 6 a32 32 0 0 1 32 32" fill="none" stroke={ACID} strokeWidth={4} strokeLinecap="round" />
         </svg>
-        {/* the mark */}
-        <span
-          className="app-loading-mark"
-          style={{ fontSize: 26, fontWeight: 800, color: ACID, letterSpacing: -1 }}
-        >
-          ✱
+        {/* the mark — the real one now. The ✱ that stood here was a stand-in
+            from before the app had a logo, and it was the first thing every
+            cold start showed. */}
+        <span className="app-loading-mark" style={{ display: 'grid', placeItems: 'center' }}>
+          <RidrMark size={34} color={ACID} />
         </span>
       </div>
       {label && (

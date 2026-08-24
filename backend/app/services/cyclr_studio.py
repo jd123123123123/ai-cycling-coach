@@ -209,8 +209,9 @@ INTEGRATION = (
 DEFAULT_KIT = (
     "THE STARTER KIT, worn by every rider so the look is consistent from day one, and described "
     "here as the garment it is. A fitted short-sleeved cycling jersey in matte black with bold "
-    "acid lime-green (#C8FF00) side panels and sleeves, a bold white 'W3' wordmark across the "
-    "chest and a thin lime accent stripe, worn over matching black bib shorts. "
+    "acid lime-green (#C8FF00) side panels and sleeves, the wordmark RIDR across the chest in "
+    "bold white capitals — exactly the four letters R, I, D, R and no other word — and a thin "
+    "lime accent stripe, worn over matching black bib shorts. "
     "Render the fabric richly: the fine ribbed weave of technical lycra catching the light, crisp "
     "flatlock seams tracing every panel join, a full-length front zip with individual teeth and a "
     "small pull tab at the collar, a gripper band at the hem and cuffs, and the subtle sheen "
