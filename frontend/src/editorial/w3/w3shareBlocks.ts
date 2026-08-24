@@ -217,11 +217,35 @@ function paintTrace(ctx: CanvasRenderingContext2D, d: BlockData, x: number, y: n
         const py = top + 16 + (1 - (v - loHr) / span) * (h - 60)
         if (!started) { ctx.moveTo(x + i * cw, py); started = true } else ctx.lineTo(x + i * cw, py)
       }
-      ctx.strokeStyle = 'rgba(19,19,21,0.55)'
+      ctx.strokeStyle = 'rgba(19,19,21,0.5)'
       ctx.lineWidth = 4
       ctx.lineJoin = 'round'
       ctx.stroke()
+
+      // The pulse needs to be NAMEABLE. An unlabelled grey line over a
+      // coloured fill is a stray mark; two numbers at its ends make it a
+      // heart rate, and they are the only two values of it anybody quotes.
+      ctx.font = `800 22px "Inter Tight", sans-serif`
+      ctx.fillStyle = 'rgba(19,19,21,0.6)'
+      ctx.textAlign = 'right'
+      ctx.fillText(`${Math.round(hiHr)} BPM MAX`, x + w - 20, top + 34)
+      ctx.textAlign = 'left'
     }
+
+    // ── ONE SCALE MARK, AND IT STATES THE MAXIMUM ────────────────────────
+    // The trace is read as a silhouette, which is why it gets no axis and no
+    // grid. But with no number anywhere on it, 300 W and 500 W draw the same
+    // picture, so one figure sits in the corner.
+    //
+    // It is the ride's TRUE MAXIMUM, not the 98th-percentile ceiling the bars
+    // are scaled to. The first version printed the ceiling — "316 W" on a ride
+    // that peaked at 690 — which is a wrong number stated confidently, the
+    // worst kind. The clipped spike already touches the top of the box, so the
+    // maximum is where the eye reads it anyway; the ceiling is a drawing
+    // decision and has no business being quoted as a fact.
+    ctx.font = `800 22px "Inter Tight", sans-serif`
+    ctx.fillStyle = 'rgba(19,19,21,0.6)'
+    ctx.fillText(`${Math.round(Math.max(...d.power))} W MAX`, x + 20, top + 34)
   }
   ctx.restore()
 }
@@ -275,22 +299,38 @@ function paintZones(ctx: CanvasRenderingContext2D, d: BlockData, x: number, y: n
     cx += sw
   })
 
-  // The legend, only for the zones that actually took time.
+  // ── THE LEGEND IS CAPPED, BECAUSE THE BLOCK'S HEIGHT IS FIXED ────────
+  // Wrapping to a second line was the first fix for a legend running off the
+  // card's edge, and it would have run into the block below instead — every
+  // block declares its height before anything is measured. Four entries fit on
+  // one line at any zone spread, and the four biggest are the ones a rider
+  // reads; the bar above already shows every zone exactly.
+  const shown = shares
+    .map((v, i) => ({ v, i }))
+    .filter((e) => e.v >= 0.04)
+    .sort((a, b) => b.v - a.v)
+    .slice(0, 4)
+    .sort((a, b) => a.i - b.i)
   let lx = x
   const ly = top + barH + 52
-  shares.forEach((s, i) => {
-    if (s < 0.04) return
-    ctx.beginPath(); ctx.arc(lx + 8, ly - 9, 8, 0, Math.PI * 2)
-    ctx.fillStyle = ZONES[i].hue; ctx.fill()
-    const pct = `${Math.round(s * 100)} %`
+  shown.forEach(({ v: s, i }) => {
+    // Measured before it is drawn, so a ride that touched five zones wraps to
+    // a second line instead of running off the card's edge.
     ctx.font = `800 28px "Inter Tight", sans-serif`
-    ctx.fillStyle = T.ink
-    ctx.fillText(pct, lx + 26, ly)
+    const pct = `${Math.round(s * 100)} %`
     const pw = ctx.measureText(pct).width
     ctx.font = `700 24px "Inter Tight", sans-serif`
+    const zw = ctx.measureText(ZONES[i].z).width
+    const entry = 24 + pw + 9 + zw + 30
+    ctx.beginPath(); ctx.arc(lx + 7, ly - 9, 7, 0, Math.PI * 2)
+    ctx.fillStyle = ZONES[i].hue; ctx.fill()
+    ctx.font = `800 28px "Inter Tight", sans-serif`
+    ctx.fillStyle = T.ink
+    ctx.fillText(pct, lx + 24, ly)
+    ctx.font = `700 24px "Inter Tight", sans-serif`
     ctx.fillStyle = 'rgba(255,255,255,0.45)'
-    ctx.fillText(ZONES[i].z, lx + 26 + pw + 10, ly)
-    lx += 26 + pw + 10 + ctx.measureText(ZONES[i].z).width + 34
+    ctx.fillText(ZONES[i].z, lx + 24 + pw + 9, ly)
+    lx += entry
   })
 }
 
@@ -320,8 +360,8 @@ function paintPeaks(ctx: CanvasRenderingContext2D, d: BlockData, x: number, y: n
     const frac = p.best && p.best > 0 ? Math.min(1, p.watts / p.best) : 1
     const cardH = PEAK_ROW - 14
     ctx.save()
-    rr(ctx, x, ry, w, cardH, 26)
-    ctx.fillStyle = p.isPr ? T.acid : 'rgba(255,255,255,0.05)'
+    rr(ctx, x, ry, w, cardH, R)
+    ctx.fillStyle = p.isPr ? T.acid : 'rgba(255,255,255,0.09)'
     ctx.fill()
     ctx.restore()
 
@@ -462,7 +502,7 @@ function paintPills(ctx: CanvasRenderingContext2D, d: BlockData, x: number, y: n
   d.pills.slice(0, 2).forEach((p, i) => {
     const pxx = x + i * (pw + gap)
     ctx.save()
-    rr(ctx, pxx, y, pw, PILLS_H, 26)
+    rr(ctx, pxx, y, pw, PILLS_H, R)
     ctx.fillStyle = p.tone === 'acid' ? T.acid : T.evening
     ctx.fill()
     ctx.restore()
