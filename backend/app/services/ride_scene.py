@@ -48,11 +48,32 @@ class RideGeo:
 # They are also written to be ABUNDANT rather than austere. "Muted" and "empty"
 # are not neutral words: a scene told to be muted comes back drained, and the
 # picture a rider wants of their own ride is not a bleak one.
+# TWO REGISTERS, AND THE DIFFERENCE MATTERS MORE THAN IT LOOKS.
+#
+# `_TERRAIN` invents a whole landscape, and that is right when the ride has no
+# resolved place: something has to be described. It is WRONG the moment we know
+# where the ride was. A 54 km ride through BERLIN classifies as "flat", and the
+# flat sentence says "rich fields running to a low horizon, lines of poplars
+# along the verges and a long road drawn straight through them" — so the model
+# was handed the name of a capital city and a paragraph describing farmland,
+# and it painted the farmland. The rider got a picture with nothing in it they
+# had ridden past.
+#
+# With a place known, terrain has exactly one honest job: say how hilly it was.
+# `_TERRAIN_NOTE` is that job and nothing more — it never names a plant, a
+# building or a road, because the place is what decides those.
 _TERRAIN = {
     "mountain": "a high mountain pass — layered rock faces with visible strata, deep valleys falling away below, dense alpine vegetation clinging to the slopes and a hairpin road climbing steeply through it",
     "hilly": "rolling farmland hills — deep green fields in bands, hedgerows and stands of broadleaf trees, a curving country road cutting through the middle of it",
     "flat": "wide open country — rich fields running to a low horizon, lines of poplars along the verges and a long road drawn straight through them",
     "coastal": "a coastline — open water to one side, salt grass and low scrub on the headland, and a road running along the top of the cliff",
+}
+
+_TERRAIN_NOTE = {
+    "mountain": "the road climbs hard here, so put the bike on a real gradient with the ground falling away behind it",
+    "hilly": "the road rolls here, so give the ground a real gradient rather than a level plane",
+    "flat": "the road is level here",
+    "coastal": "the road runs near open water here",
 }
 
 
@@ -156,13 +177,22 @@ def scene_descriptor(g: RideGeo) -> str:
     # known for, because `_TERRAIN["mountain"]` had already spent five adjectives
     # describing a different mountain.
     #
-    # So a resolved place becomes the subject and the terrain bucket demotes to
-    # a qualifier. Without a place nothing changes — the terrain sentence stands
-    # alone exactly as before, and no location is ever invented.
+    # Leading was not enough, and the reason is the VOCABULARY. The clause asked
+    # for "the specific rock, vegetation and landforms that place is known for"
+    # — words that only fit a mountain. Handed "Berlin", the model was asked for
+    # that city's rock and vegetation, with a farmland sentence still trailing
+    # behind it, and drew a field. What makes a place recognisable to somebody
+    # who has ridden it is whatever that place actually has: its buildings and
+    # street furniture as readily as its rock, and the demand is now for the
+    # thing itself rather than for a category it may not belong to.
     if g.place_name:
         base = (
-            f"the real roads of {g.place_name}, rendered so the specific rock, vegetation and "
-            f"landforms that place is actually known for are unmistakable — {base}"
+            f"the real roads of {g.place_name}. Render what a rider who has actually been there "
+            f"would recognise on sight — the buildings, street furniture, surfaces, landmarks, "
+            f"planting, rock and light that belong to THAT place and to nowhere else. If it is a "
+            f"city, it looks like that city and not like countryside; if it is a coast or a "
+            f"mountain range, the same rule applies. Never a generic landscape with the name "
+            f"attached. For scale and gradient: {_TERRAIN_NOTE[terrain_key(g)]}"
         )
     return f"BACKGROUND: {base}. {_RENDER_STYLE}"
 

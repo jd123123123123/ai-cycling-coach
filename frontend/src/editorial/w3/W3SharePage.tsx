@@ -31,6 +31,19 @@ const fmtDate = (iso: string | null | undefined) => {
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' })
 }
 
+/**
+ * How this effort stands against the rider's own best, as a signed percentage.
+ *
+ * Null below a whole point in either direction: "0 %" next to a big number
+ * reads as a broken calculation, and nobody posts a card to announce a tie.
+ */
+export function prDelta(pctOfBest: number | null): string | null {
+  if (pctOfBest == null || !Number.isFinite(pctOfBest)) return null
+  const diff = Math.round(pctOfBest - 100)
+  if (diff === 0) return null
+  return diff > 0 ? `↑ ${diff}%` : `↓ ${Math.abs(diff)}%`
+}
+
 export default function W3SharePage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
@@ -123,7 +136,11 @@ export default function W3SharePage() {
         kicker: bestPR ? `BESTLEISTUNG · ${prDur}` : 'HIGHLIGHT DER FAHRT',
         bigValue: bestPR?.ride_watts != null ? String(bestPR.ride_watts) : (np != null ? String(Math.round(np)) : '—'),
         bigUnit: 'W',
-        delta: bestPR?.pct_of_best != null && bestPR.pct_of_best >= 1 ? `${Math.round((bestPR.pct_of_best - 1) * 100)}%` : null,
+        // `pct_of_best` IS A PERCENTAGE — `effort_matching` computes
+        // `rw / bw * 100`, so 118.2 means "118 % of your best". This read it as
+        // a RATIO and printed `(118.2 - 1) * 100` = 11720 %, under a hardcoded
+        // down-arrow, on the one card riders post publicly.
+        delta: prDelta(bestPR?.pct_of_best ?? null),
         sentence: bestPR ? `Deine beste ${prDur?.toLowerCase()}-Leistung dieser Fahrt.` : 'Ein starker Moment dieser Fahrt.',
         pills: [
           { text: prCount > 0 ? `${prCount} PRs` : 'Neuer Reiz', sub: prCount > 0 ? 'an einem Tag' : 'gesetzt', tone: 'acid' },

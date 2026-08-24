@@ -90,6 +90,13 @@ _STALE_PROSE = (
     "cold light breaking over the sea",
     "quiet and atmospheric",
     "at first light — dark rock faces",
+    # Written 2026-08-24. Every place discovered before this carries a clause
+    # asking for "the specific rock, vegetation and landforms" of wherever it
+    # is — mountain vocabulary, handed to cities as readily as to passes — with
+    # a full landscape sentence trailing behind it. A flat city ride therefore
+    # rendered as farmland. Recognisable by its own words, so the next read
+    # rewrites it; no migration, no backfill.
+    "rock, vegetation and landforms",
 )
 
 

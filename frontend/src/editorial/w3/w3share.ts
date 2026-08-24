@@ -25,6 +25,9 @@ export interface PosterData {
   kicker: string
   bigValue: string
   bigUnit: string
+  /** Written by the caller INCLUDING its arrow. The painter used to hardcode a
+   *  "↓", so an effort ABOVE the old best pointed downwards — the one direction
+   *  it can never mean. */
   delta: string | null
   sentence: string
   pills: [PosterPill, PosterPill]
@@ -110,36 +113,80 @@ function intensityHue(iff: number): string {
   return iff >= 1.02 ? T.zone5 : iff >= 0.92 ? T.warn : iff >= 0.8 ? T.acid : T.training
 }
 
-function drawRoute(ctx: CanvasRenderingContext2D, pts: [number, number][] | null, theme: Theme, heroH: number, routeColor: string) {
-  // Target rect in the lower hero band.
-  const rx = 90, ry = heroH * 0.5, rw = W - 180, rh = heroH * 0.34
+function drawRoute(
+  ctx: CanvasRenderingContext2D,
+  pts: [number, number][] | null,
+  theme: Theme,
+  heroH: number,
+  routeColor: string,
+  overPhoto: boolean,
+) {
+  // ── WHERE THE TRACK GOES, AND WHY IT MOVED ─────────────────────────────
+  // This drew a 12 px glowing line across the middle third of the hero
+  // whatever was underneath it. Over the generated stylised mountains that is
+  // the hero graphic and it works. Over the rider's OWN photograph it ran
+  // straight across the bicycle — the subject of the picture, the thing they
+  // opened the card to look at — and the file's own comment claimed it "sits
+  // lower and lighter" over a photograph, which the code had no way of knowing
+  // and never did.
+  //
+  // Over a photograph it is now a CARTOUCHE in the bottom-left: the same track,
+  // drawn small on its own dark plate, out of the subject's way. A route is a
+  // caption on a photograph and the hero graphic on a drawing, and those are
+  // two different jobs that were sharing one implementation.
+  // TOP-RIGHT over a photograph: the avatar chip owns the top-left, the machine
+  // owns the middle, and the bottom belongs to the fade. That leaves one corner,
+  // and it is the one a viewer's eye reaches last — correct for a caption.
+  const rect = overPhoto
+    ? { x: W - 56 - 250, y: 44, w: 250, h: 190, stroke: 6, dot: 7, pad: 24 }
+    : { x: 90, y: heroH * 0.5, w: W - 180, h: heroH * 0.34, stroke: 12, dot: 12, pad: 0 }
+
   let path: { x: number; y: number }[]
+  const inner = { x: rect.x + rect.pad, y: rect.y + rect.pad, w: rect.w - rect.pad * 2, h: rect.h - rect.pad * 2 }
   if (pts && pts.length > 1) {
     const lats = pts.map((p) => p[0]), lngs = pts.map((p) => p[1])
     const minLat = Math.min(...lats), maxLat = Math.max(...lats)
     const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
     const spanLat = Math.max(1e-6, maxLat - minLat), spanLng = Math.max(1e-6, maxLng - minLng)
-    const scale = Math.min(rw / spanLng, rh / spanLat)
-    const offX = rx + (rw - spanLng * scale) / 2
-    const offY = ry + (rh - spanLat * scale) / 2
-    path = pts.map(([lat, lng]) => ({ x: offX + (lng - minLng) * scale, y: offY + (maxLat - lat) * scale }))
+    // Latitude is compressed by cos(lat) so the loop keeps its real
+    // proportions — a rider recognises their own roads well enough to notice
+    // a track 40 % too wide, which is what an uncorrected drawing gives at
+    // 52° N. The ride card drew it uncorrected; the route thumbnail on Today
+    // has always corrected it (`W3RouteCard.project`).
+    const kx = Math.cos(((minLat + maxLat) / 2 * Math.PI) / 180)
+    const gw = spanLng * kx
+    const scale = Math.min(inner.w / gw, inner.h / spanLat)
+    const offX = inner.x + (inner.w - gw * scale) / 2
+    const offY = inner.y + (inner.h - spanLat * scale) / 2
+    path = pts.map(([lat, lng]) => ({
+      x: offX + (lng - minLng) * kx * scale,
+      y: offY + (maxLat - lat) * scale,
+    }))
   } else {
-    // Stylised winding fallback (marked by the caller as no-GPX).
     path = Array.from({ length: 24 }, (_, i) => {
       const t = i / 23
-      return { x: rx + t * rw, y: ry + rh * (0.5 + 0.42 * Math.sin(t * 7)) }
+      return { x: inner.x + t * inner.w, y: inner.y + inner.h * (0.5 + 0.42 * Math.sin(t * 7)) }
     })
   }
+
   ctx.save()
+  if (overPhoto) {
+    // Its own plate, so the track is legible over grass, tarmac or sky without
+    // a glow bright enough to compete with the machine.
+    roundRect(ctx, rect.x, rect.y, rect.w, rect.h, 26)
+    ctx.fillStyle = 'rgba(11,11,11,0.58)'; ctx.fill()
+  }
   ctx.lineJoin = 'round'; ctx.lineCap = 'round'
-  ctx.shadowColor = routeColor; ctx.shadowBlur = 26
-  ctx.strokeStyle = routeColor; ctx.lineWidth = 12
+  ctx.shadowColor = routeColor; ctx.shadowBlur = overPhoto ? 10 : 26
+  ctx.strokeStyle = routeColor; ctx.lineWidth = rect.stroke
   ctx.beginPath()
   path.forEach((p, i) => (i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y)))
   ctx.stroke()
   ctx.restore()
-  // start / end dots
-  const dot = (p: { x: number; y: number }, fill: string) => { ctx.beginPath(); ctx.arc(p.x, p.y, 12, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill() }
+
+  const dot = (p: { x: number; y: number }, fill: string) => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, rect.dot, 0, Math.PI * 2); ctx.fillStyle = fill; ctx.fill()
+  }
   dot(path[0], T.ink); dot(path[path.length - 1], theme.acid)
 }
 
@@ -269,6 +316,9 @@ async function paint(
 ) {
   const t = THEMES[d.angle]
   const heroH = Math.round(H * 0.56)
+  //: How far the hero image runs past its band so the fade has something to
+  //: dissolve. Without it the photograph ends on a visible horizontal cut.
+  const BLEED = 150
 
   // ── background ──
   ctx.fillStyle = T.bg; ctx.fillRect(0, 0, W, H)
@@ -278,9 +328,19 @@ async function paint(
     // the scene is square and the hero band is not, and letterboxing it would
     // reproduce the exact fault this replaces — a photograph floating in a
     // rectangle instead of being the poster.
-    const scale = Math.max(W / sceneImg.width, heroH / sceneImg.height)
+    //
+    // DRAWN PAST THE BAND ON PURPOSE. It used to end exactly at `heroH`, and
+    // the 220 px fade below it had nothing to fade FROM — so the photograph
+    // stopped dead on a horizontal line, grass cut mid-blade, with the panel
+    // starting underneath it. The image now runs `BLEED` px further down and
+    // the fade dissolves it into the ground, so there is no edge to see.
+    const target = heroH + BLEED
+    const scale = Math.max(W / sceneImg.width, target / sceneImg.height)
     const sw = sceneImg.width * scale, sh = sceneImg.height * scale
-    ctx.drawImage(sceneImg, (W - sw) / 2, (heroH - sh) / 2, sw, sh)
+    // Anchored to the TOP of the band rather than centred: the composed scene
+    // stands its bike on a road in the lower half, and centring a tall crop
+    // pushed that road under the fade.
+    ctx.drawImage(sceneImg, (W - sw) / 2, 0, sw, sh)
   } else {
     // sky
     const sky = ctx.createLinearGradient(0, 0, 0, heroH)
@@ -293,15 +353,36 @@ async function paint(
     mountainPath(ctx, heroH * 0.86, 120, 4.0, t.mtnFront, heroH)
   }
 
-  // route (the GPX), glowing in the intensity accent when we know it. Over a
-  // real photograph it sits lower and lighter — the picture is the subject
-  // there, and a bright track across the middle of it competes.
-  drawRoute(ctx, d.polyline, t, heroH, d.intensity != null ? intensityHue(d.intensity) : t.route)
+  // Over the DRAWN hero the route is the hero graphic, so it goes down before
+  // the fade and gets softened by it like the mountains behind it.
+  if (!sceneImg) {
+    drawRoute(ctx, d.polyline, t, heroH,
+      d.intensity != null ? intensityHue(d.intensity) : t.route, false)
+  }
 
-  // hero→panel fade
-  const fade = ctx.createLinearGradient(0, heroH - 220, 0, heroH)
-  fade.addColorStop(0, 'rgba(11,11,11,0)'); fade.addColorStop(1, T.bg)
-  ctx.fillStyle = fade; ctx.fillRect(0, heroH - 220, W, 220)
+  // hero→panel fade. Long, and it runs INTO the bleed rather than stopping at
+  // the band, so the photograph has image under every pixel of the gradient.
+  // A short fade over a hard image edge is the edge with a gradient on top.
+  // It reaches FULL ground exactly at `heroH`, and the bleed below is then
+  // covered flat. The panel has to start on solid black — the first attempt ran
+  // the gradient down through the bleed, which left the kicker and the big
+  // number sitting on a half-visible photograph.
+  const fadeTop = heroH - 340
+  const fade = ctx.createLinearGradient(0, fadeTop, 0, heroH)
+  fade.addColorStop(0, 'rgba(11,11,11,0)')
+  fade.addColorStop(0.55, 'rgba(11,11,11,0.72)')
+  fade.addColorStop(1, T.bg)
+  ctx.fillStyle = fade; ctx.fillRect(0, fadeTop, W, heroH - fadeTop)
+  ctx.fillStyle = T.bg; ctx.fillRect(0, heroH, W, BLEED)
+
+  // Over a PHOTOGRAPH the route is a caption, and it goes down AFTER the fade —
+  // drawn before it, the gradient washed the plate out to nothing and left a
+  // dim orange scribble lying on the rear wheel, which is worse than the
+  // problem it was moved to solve.
+  if (sceneImg) {
+    drawRoute(ctx, d.polyline, t, heroH,
+      d.intensity != null ? intensityHue(d.intensity) : t.route, true)
+  }
 
   // bike (with the rider) sitting on the route — only when no scene was
   // composed, because a scene already HAS the bike in it.
@@ -341,7 +422,9 @@ async function paint(
   // kicker
   star(ctx, px + 12, y - 14, 13, t.acid)
   text(ctx, d.kicker, px + 40, y, 26, '700', t.acid, 3)
-  y += 96
+  // 96 was less than the cap height of the 150 px figure that follows, so the
+  // number was drawn THROUGH the kicker. Visible on the shipped card.
+  y += 138
 
   // big value + unit + delta
   ctx.font = `700 150px ${FONT}`
@@ -354,7 +437,7 @@ async function paint(
     roundRect(ctx, W - px - dw, dy, dw, 64, 32)
     ctx.fillStyle = 'rgba(200,255,0,0.14)'; ctx.fill()
     ctx.restore()
-    text(ctx, `↓ ${d.delta}`, W - px - dw + 34, dy + 44, 30, '700', t.acid)
+    text(ctx, d.delta, W - px - dw + 34, dy + 44, 30, '700', t.acid)
   }
   y += 70
 
