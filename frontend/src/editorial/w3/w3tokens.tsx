@@ -57,6 +57,13 @@ export const T = {
   tintSky: '#D3DDF8',
   tintPaper: '#EFEFEA',
   tintInk: '#131315',
+  // The graded ground a PORTRAIT stands on. The deck never puts a character on
+  // a flat swatch: the tint lifts to near-white behind the head and deepens at
+  // the edges, which is what turns a cut-out into a photograph. Two ends of one
+  // ramp, named because a gradient built from raw hexes at a call site is
+  // exactly what the isolation gate exists to stop.
+  portraitHi: '#FFFFFF',
+  portraitLo: '#C9BBEA',
   // The hard training zones AS THEY SIT ON A PALE CARD. `bad` and `warn` are
   // tuned against near-black; at full saturation on paper they stop reading as
   // "this hurt" and start reading as "something is wrong".
@@ -95,6 +102,12 @@ export const T = {
   ground: '#0F0F0F',         // deeper than `surface`: a card that is a hole
   card: '#151516',           // the referral portrait ground (blue-black)
   chip: '#232427',           // a stat tile inside a dark card
+  // A pill that floats ON art. The ground's own black at ~72% behind a blur:
+  // dark enough that white 8.5px type holds over a lit illustration, sheer
+  // enough that it reads as glass lying on the picture rather than a hole
+  // punched in it. `shadowSoft` (35%) is a shadow, not a surface, and a pill
+  // built from it goes unreadable the moment the art behind it brightens.
+  glass: '#0B0B0BB8',
   acidTop: '#1B1C19',
   lift: '#1B1B1B',           // a neutral card top — `acidTop` without the acid
   acidHi: '#DBFF5A',         // the highlight stop above `acid` in a medal

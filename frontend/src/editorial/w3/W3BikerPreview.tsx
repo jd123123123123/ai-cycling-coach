@@ -1,50 +1,33 @@
-import W3BikerView, { type W3BikerVm } from './W3BikerView'
-import { SHOWCASE_RIDER } from './showcaseRider'
+import W3RiderHighlights from './W3RiderHighlights'
+import W3StatusBar from './W3StatusBar'
+import W3TabBar from './W3TabBar'
+import { T, FONT } from './w3tokens'
+import './w3.css'
 
-/** TEMP preview — design fixture only. /e/w3-biker-preview (unguarded).
- *  The LIVE page (`W3BikerPage`) renders none of these numbers: it reads the
- *  rider's real rides, wallet, profile, streak, badges and devices. */
-const FIXTURE: W3BikerVm = {
-  avatarUrl: SHOWCASE_RIDER, // design fixture only — the live page shows the rider's OWN garage figurine
-  name: 'Jonathan Ghost',
-  handle: '@jonathan.ghost',
-  ready: true,
-  role: 'Kletterer',
-  level: 7,
-  levelPct: 0.62,
-  levelNote: '190 RC bis Level 8',
-  chips: ['CAT 2', '3,8 W/KG', '292 W FTP', 'SEIT 2021'],
-  monuments: [
-    { kind: 'orbit', label: 'GESAMTDISTANZ', value: '48.120', unit: 'km',
-      story: '1,2× um die Erde', note: 'noch 32.030 km bis Runde 2', laps: 1.2 },
-    { kind: 'column', label: 'HÖHENMETER', value: '61,4', unit: 'km',
-      story: '6,9× Mount Everest', note: 'vom Meeresspiegel aus gerechnet', everest: 6.9 },
-    { kind: 'dial', label: 'Ø TEMPO', value: '27,4', unit: 'km/h',
-      story: 'über alle deine Fahrten', note: '', kmh: 27.4 },
-    { kind: 'tally', label: 'FAHRTEN GESAMT', value: '1.204', unit: 'Fahrten',
-      story: '4,8 pro Woche, seit 2021', note: 'noch 46 bis 1.250', into: 4, step: 50 },
-    { kind: 'days', label: 'SATTELZEIT', value: '1.760', unit: 'Stunden',
-      story: '73 volle Tage im Sattel', note: 'ein Strich ist ein Tag, jeder siebte eine Woche', days: 73 },
-    { kind: 'rules', label: 'LÄNGSTE FAHRT', value: '233', unit: 'km',
-      story: '5,8× eine normale Fahrt', note: 'dein Schnitt liegt bei 40 km', longestKm: 233, avgKm: 40 },
-    { kind: 'ration', label: 'VERBRANNT', value: '184,2K', unit: 'kcal',
-      story: '216 Pizzen', note: 'eine Scheibe sind 25 Pizzen', pizzas: 216 },
-  ],
-  engine: [
-    { label: 'FTP', value: '292 W', caption: 'Watt an der Schwelle' },
-    { label: 'W/KG', value: '4,1', caption: 'bei 71,2 kg' },
-    { label: 'FITNESS', value: '68', caption: 'CTL · 42-Tage-Belastung' },
-  ],
-  streak: { label: 'STREAK', value: '12', caption: 'Tage in Folge' },
-  badges: { label: 'ABZEICHEN', value: '14/38', caption: 'Meilensteine, erfahren im Sattel' },
-  coin: { balance: '15.800', pct: 63, foot: 'RIDECOIN · aus echten Fahrten verdient', note: '9.200 BIS STUFE PRESTIGE' },
-  referral: { code: 'HYXBS9', note: '3 aktiv · 1 abgeschlossen' },
-  devices: [
-    { name: 'Garmin', sub: 'Sync vor 2 min', icon: 'watch', on: true },
-    { name: 'Wahoo', sub: 'Nicht verbunden', icon: 'zap', on: false },
-  ],
-}
-
+/** TEMP preview — /e/w3-biker-preview, unguarded and backend-free. Renders the
+ *  REAL highlights screen against a fixture, including the state that matters
+ *  most: a rider with only two records, so the bento has to close up. */
 export default function W3BikerPreview() {
-  return <W3BikerView vm={FIXTURE} />
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, minHeight: '100dvh', background: T.bg }}>
+        <W3StatusBar />
+        <W3RiderHighlights
+          avatarUrl="/w3/example-rider.webp"
+          handle="@jannis"
+          role="Funseeker"
+          pills={[{ v: '12.480', l: 'KM' }, { v: '284', l: 'FAHRTEN' }]}
+          tier={{ label: 'Silber · Stufe 7', pct: 0.73, note: '312 RC bis Stufe 8' }}
+          milestone={{ pct: 0.5, label: 'Meilenstein', note: 'Noch 25 Fahrten bis Gold' }}
+          records={[
+            { key: 'longest_ride_km', value: '212', unit: 'km', label: 'LÄNGSTE FAHRT', ride: 'Harzrunde', when: '4. Mai' },
+            { key: 'highest_climb_m', value: '2.140', unit: 'hm', label: 'HÖCHSTER ANSTIEG', ride: 'Brocken', when: '18. Juni' },
+            { key: 'longest_time_s', value: '8:12', unit: 'Std.', label: 'LÄNGSTE ZEIT', ride: 'Havel-Schleife', when: '2. Juli' },
+            { key: 'hardest_ride_tss', value: '341', unit: 'TSS', label: 'HÄRTESTE FAHRT', ride: 'Intervalle', when: '9. Aug' },
+          ]}
+          badges={{ unlocked: 14, total: 32, latest: 'Erster Jahrhunderter' }} />
+        <W3TabBar />
+      </div>
+    </div>
+  )
 }
