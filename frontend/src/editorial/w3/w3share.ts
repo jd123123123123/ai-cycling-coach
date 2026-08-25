@@ -64,7 +64,11 @@ export interface PosterData {
    *  which is a receipt. What a cyclist posts is the SHAPE of the day, and
    *  which shape matters differs between a 20-minute test and a five-hour
    *  epic. See `w3shareBlocks`. */
-  blocks: BlockId[]
+  /** VESTIGIAL. It told the old poster painter which pieces to compose; the
+   *  pen's five templates have fixed compositions and nothing reads it. Optional
+   *  so callers can stop passing it, and it goes when this shape is retired in
+   *  favour of `StoryData`. */
+  blocks?: BlockId[]
   /** The series and figures those blocks draw from. */
   blockData: BlockData
 }
@@ -381,7 +385,7 @@ async function paint(
   // Only the blocks this ride can actually fill: a chosen block with no data
   // behind it is dropped and the card closes up, rather than drawing an empty
   // box under a kicker.
-  const usable = usableBlocks(d.blocks, d.blockData)
+  const usable = usableBlocks(d.blocks ?? [], d.blockData)
   // THE CARD IS A FIXED SIZE AND THE BLOCKS ARE NOT. Six of them ask for more
   // room than the poster has, and the first version simply let the panel run
   // past the bottom edge — the footer, and the last block with it, fell off a
@@ -1037,6 +1041,11 @@ export interface StoryData {
   ticker?: string
   /** Three labelled readings for the viewfinder and the trace card. */
   readings?: { v: string; l: string }[]
+  /** The card's accent. Defaults to the app's acid. One colour, everywhere the
+   *  card is loud — the emphasis word, the unit, the strip, the ticker band,
+   *  the viewfinder brackets, the route line. Changing it changes all of them,
+   *  which is the whole point: a rider picks a colour, not six. */
+  accent?: string
   /** The ride's track, for `trace`. Null falls back to the strip. */
   polyline?: [number, number][] | null
   handle: string
@@ -1057,7 +1066,7 @@ export interface StoryData {
   photo: string | null
 }
 
-function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][]) {
+function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][], accent: string) {
   // The route, drawn as ONE line and nothing else. No tiles, no north arrow, no
   // start pin: a rider recognises their own road from its shape, and every
   // other mark on a map card is furniture.
@@ -1079,7 +1088,7 @@ function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][])
     const y = oy + (maxY - lat) * scale
     if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
   })
-  ctx.strokeStyle = T.acid
+  ctx.strokeStyle = accent
   ctx.lineWidth = 10
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
@@ -1089,6 +1098,7 @@ function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][])
 function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTMLImageElement | null) {
   const layout = d.layout ?? 'full'
   const mono = "'JetBrains Mono', ui-monospace, monospace"
+  const accent = d.accent || T.acid
   ctx.fillStyle = T.bg
   ctx.fillRect(0, 0, SW, SH)
 
@@ -1111,7 +1121,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
 
   const markAndFooter = (footerColor = 'rgba(255,255,255,0.5)') => {
     text(ctx, d.footer, 64, SH - 74, 24, '600', footerColor, 0.6)
-    text(ctx, 'w3.ride', SW - 64, SH - 74, 24, '700', T.acid, 0.6, 'right')
+    text(ctx, 'w3.ride', SW - 64, SH - 74, 24, '700', accent, 0.6, 'right')
   }
 
   const strip = (top: number) => {
@@ -1121,28 +1131,30 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     const bw = (SW - 128 - gap * (bars.length - 1)) / bars.length
     for (let i = 0; i < bars.length; i++) {
       const hgt = Math.max(4, Math.min(1, bars[i]) * 74)
-      ctx.fillStyle = bars[i] >= 0.92 ? T.acid : 'rgba(191,255,60,0.42)'
+      // The quiet bars are the accent at low alpha, so a changed accent does not
+      // leave a strip of the old one behind it.
+      ctx.fillStyle = bars[i] >= 0.92 ? accent : accent + '6B'
       roundRect(ctx, 64 + i * (bw + gap), top + (74 - hgt), bw, hgt, 3)
       ctx.fill()
     }
   }
 
   const chips = () => {
-    const chip = (label: string, x: number, align: CanvasTextAlign, accent: boolean) => {
+    const chip = (label: string, x: number, align: CanvasTextAlign, lit: boolean) => {
       ctx.textAlign = 'left'
       ctx.font = `700 30px ${FONT}`
       // Clamped: a font that has not finished loading measures wider, and a card
       // that has left the app cannot re-lay itself out.
       const w = Math.min(ctx.measureText(label).width + 66, SW - 128)
       const left = Math.max(64, Math.min(align === 'right' ? x - w : x, SW - 64 - w))
-      ctx.fillStyle = accent ? T.acid : 'rgba(12,12,12,0.62)'
+      ctx.fillStyle = lit ? accent : 'rgba(12,12,12,0.62)'
       roundRect(ctx, left, 74, w, 68, 34)
       ctx.fill()
       ctx.beginPath()
       ctx.arc(left + 34, 108, 9, 0, Math.PI * 2)
-      ctx.fillStyle = accent ? T.bg : T.acid
+      ctx.fillStyle = lit ? T.bg : accent
       ctx.fill()
-      text(ctx, label, left + 54, 119, 30, '700', accent ? T.bg : T.ink, 1.2)
+      text(ctx, label, left + 54, 119, 30, '700', lit ? T.bg : T.ink, 1.2)
     }
     chip(d.handle, 64, 'left', false)
     chip(d.badge, SW - 64, 'right', true)
@@ -1170,7 +1182,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     // The ticker. Acid band, black type, running off both edges on purpose —
     // it reads as a strip of tape rather than a caption that happens to fit.
     const bandY = SH - 250
-    ctx.fillStyle = T.acid
+    ctx.fillStyle = accent
     ctx.fillRect(0, bandY, SW, 96)
     const line = [d.bigValue + ' ' + d.bigUnit.toUpperCase(), ...d.stats.map((x) => x.v + ' ' + x.l.split(' ')[0])].join('  —  ')
     text(ctx, line, 40, bandY + 64, 44, '700', T.bg, 1)
@@ -1188,7 +1200,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     ctx.fillRect(0, 0, SW, inset.y)
     ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
 
-    ctx.strokeStyle = T.acid
+    ctx.strokeStyle = accent
     ctx.lineWidth = 8
     const b = 64, len = 86
     for (const [cx, cy, dx, dy] of [[b, b, 1, 1], [SW - b, b, -1, 1], [b, SH - b, 1, -1], [SW - b, SH - b, -1, -1]] as const) {
@@ -1205,7 +1217,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     ctx.font = `700 150px ${FONT}`
     const w = ctx.measureText(d.bigValue).width
     text(ctx, d.bigValue, 64, bl, 150, '700', T.ink, -6)
-    text(ctx, d.bigUnit.toUpperCase(), 64 + w + 16, bl, 40, '700', T.acid, 1)
+    text(ctx, d.bigUnit.toUpperCase(), 64 + w + 16, bl, 40, '700', accent, 1)
     ctx.font = `600 26px ${mono}`
     text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), 64, bl + 56, 26, '600', T.mid, 1.2)
 
@@ -1229,7 +1241,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     bottom0.addColorStop(1, 'rgba(0,0,0,0.9)')
     ctx.fillStyle = bottom0
     ctx.fillRect(0, SH - 700, SW, 700)
-    if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline)
+    if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
     chips()
     text(ctx, `${(d.routeName ?? '').toUpperCase()} · ${d.dateline ?? ''}`, SW / 2, SH - 300, 24, '700', T.mid, 2, 'center')
     const items = [{ v: d.bigValue, l: d.bigUnit }, ...d.stats.map((x) => ({ v: x.v, l: '' }))]
@@ -1270,7 +1282,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
       text(ctx, line, 64, y, 62, '700', T.ink, -1.4); y += 74
     }
     for (const line of wrap(ctx, d.emphasis, 62, '700', SW - 128)) {
-      text(ctx, line, 64, y, 62, '700', T.acid, -1.4); y += 74
+      text(ctx, line, 64, y, 62, '700', accent, -1.4); y += 74
     }
   }
 
@@ -1278,7 +1290,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
   ctx.font = `700 128px ${FONT}`
   const bigW = ctx.measureText(d.bigValue).width
   text(ctx, d.bigValue, 64, baseline, 128, '700', T.ink, -5)
-  text(ctx, d.bigUnit, 64 + bigW + 14, baseline, 40, '700', T.acid, -0.5)
+  text(ctx, d.bigUnit, 64 + bigW + 14, baseline, 40, '700', accent, -0.5)
 
   let sx = 64 + bigW + 150
   for (const st of d.stats) {

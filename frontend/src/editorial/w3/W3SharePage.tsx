@@ -2,15 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
-import { BLOCKS, MIN_BLOCKS, type BlockId } from './w3shareBlocks'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage, useRenderRideScene, useRideScene } from '../../hooks/useGarage'
 import {
-  renderSharePoster, renderStoryCard, sharePoster, downloadPoster, canShareImage,
+  renderStoryCard, sharePoster, downloadPoster, canShareImage,
   type StoryLayout, type StoryData,
   type ShareAngle, type PosterData,
 } from './w3share'
+import { VALUES, DEFAULT_VALUES, type ValueId } from './w3shareValues'
+import { T } from './w3tokens'
 import W3ShareView, { type W3ShareVm, type ShareAngleChip } from './W3ShareView'
 
 /**
@@ -49,7 +50,6 @@ export function prDelta(pctOfBest: number | null): string | null {
 
 //: Where a rider's card layout is remembered. One key, because the choice is
 //: about how THEY like to post rather than about any one ride.
-const BLOCKS_KEY = 'ridr.share.blocks'
 
 /**
  * What each angle leads with when the rider has not chosen for themselves.
@@ -59,11 +59,6 @@ const BLOCKS_KEY = 'ridr.share.blocks'
  * route. A POWER card is about how the effort was distributed, so it opens
  * with the trace and the zones under it.
  */
-const ANGLE_BLOCKS: Record<ShareAngle, BlockId[]> = {
-  rekord: ['peaks', 'stats', 'pills'],
-  fahrt: ['route', 'stats', 'pills'],
-  leistung: ['trace', 'zones', 'stats'],
-}
 
 export default function W3SharePage() {
   const navigate = useNavigate()
@@ -120,27 +115,20 @@ export default function W3SharePage() {
   // across rides — nobody wants to rebuild their card every time they finish
   // one — and read defensively, so a private window or a cleared store just
   // falls back to the defaults.
-  const [chosen, setChosen] = useState<BlockId[] | null>(() => {
-    try {
-      const raw = localStorage.getItem(BLOCKS_KEY)
-      if (!raw) return null
-      const ids = JSON.parse(raw) as BlockId[]
-      const known = ids.filter((id) => BLOCKS.some((b) => b.id === id))
-      return known.length >= MIN_BLOCKS ? known : null
-    } catch { return null }
-  })
-  const pickBlocks = useCallback((ids: BlockId[]) => {
-    setChosen(ids)
-    try { localStorage.setItem(BLOCKS_KEY, JSON.stringify(ids)) } catch { /* private window */ }
-  }, [])
+  // THE BLOCK PICKER IS GONE, and with it the localStorage that remembered it.
+  // It chose which pieces the OLD poster composed itself from; the pen's five
+  // templates have fixed compositions, so what a rider picks now is which
+  // VALUES fill their slots. See `w3shareValues`.
   const { data: garage } = useGarage()
 
   const [angle, setAngle] = useState<ShareAngle>('fahrt')
-  // WHICH OF THE FIVE LEAVES THE APP. The in-app card ('card') is the app's own
-  // artefact; the other five are the 9:16 story templates the pen draws. The
-  // format is the design decision, so it lives beside the angle rather than
-  // behind a menu.
-  const [format, setFormat] = useState<StoryLayout | 'card'>('card')
+  // WHICH OF THE FIVE LEAVES THE APP. The old in-app poster is gone: the pen's
+  // templates are the screens now, and keeping a sixth "our own card" option
+  // beside them would be the old design surviving as a preference.
+  const [format, setFormat] = useState<StoryLayout>('full')
+  // What the rider put on the card, in the order they tapped it.
+  const [values, setValues] = useState<ValueId[]>(DEFAULT_VALUES)
+  const [accent, setAccent] = useState<string>(T.acid)
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null)
   const [posterBlob, setPosterBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -285,10 +273,20 @@ export default function W3SharePage() {
       angle,
       handle,
       club: dateStr,
-      blocks: chosen ?? ANGLE_BLOCKS[angle],
-    format,
+      format,
+    values,
+    accent,
+    availableValues: debrief
+      ? VALUES.map((v) => ({ id: v.id, label: v.label, value: v.resolve(debrief, profile?.weight_kg ?? null) }))
+          .filter((v): v is { id: ValueId; label: string; value: string } => v.value != null)
+      : [],
       // The two blocks that were always on the card read their content from
       // the angle, so they are filled in here rather than above.
+      // `blocks` is vestigial: it told the OLD poster painter which pieces to
+      // compose. Nothing reads it now — this object survives only as the shape
+      // the page assembles its numbers into before handing them to the story
+      // card. It goes when that assembly is rewritten against `StoryData`.
+      blocks: [],
       blockData: { ...blockData, stats: data.stats, pills: data.pills },
       // Real ride intensity (IF) — tints the route glow on the poster.
       intensity: iff ?? (h?.tss != null && durS ? Math.sqrt(h.tss / ((durS / 3600) * 100)) : undefined),
@@ -311,11 +309,11 @@ export default function W3SharePage() {
       footer: `${rideName} · ${dateStr}`,
       ...data,
     }
-  }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile, chosen])
+  }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile])
 
   /** The story card's payload, from the same numbers the poster already has. */
   const story = useMemo<StoryData | null>(() => {
-    if (!poster || format === 'card') return null
+    if (!poster || !story) return null
     return {
       layout: format,
       handle: poster.handle,
@@ -344,10 +342,10 @@ export default function W3SharePage() {
 
   // ── render whichever card is selected whenever the payload changes ──
   useEffect(() => {
-    if (!poster) return
+    if (!story) return
     let alive = true
     setGenerating(true)
-    const job = story ? renderStoryCard(story) : renderSharePoster(poster)
+    const job = renderStoryCard(story)
     job
       .then((out) => { if (alive) { setPosterDataUrl(out.dataUrl || null); setPosterBlob(out.blob) } })
       .finally(() => { if (alive) setGenerating(false) })
@@ -369,7 +367,6 @@ export default function W3SharePage() {
     activeAngle: angle,
     canShare: shareable,
     hasOwnPhoto: ownPhoto != null,
-    blocks: chosen ?? ANGLE_BLOCKS[angle],
     angles: [
       { id: 'rekord', label: 'Bestleistung', sub: 'Stärkster Push' },
       { id: 'fahrt', label: 'Ganze Fahrt', sub: activity?.title || 'Deine Runde' },
@@ -384,7 +381,8 @@ export default function W3SharePage() {
       onDownload={onDownload}
       onSelectAngle={setAngle}
       onPickPhoto={setOwnPhoto}
-      onPickBlocks={pickBlocks}
+      onPickValues={setValues}
+      onPickAccent={setAccent}
       onPickFormat={setFormat}
       onShare={onShare}
       onStory={onShare}

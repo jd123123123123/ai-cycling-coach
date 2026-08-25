@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { STARTER_BIKE } from './starterBike'
-import { renderSharePoster, canShareImage, type ShareAngle, type PosterData } from './w3share'
-import type { BlockId } from './w3shareBlocks'
+import { renderStoryCard, canShareImage, type ShareAngle, type PosterData } from './w3share'
 import W3ShareView, { type W3ShareVm } from './W3ShareView'
+import { T } from './w3tokens'
 
 /** TEMP preview harness — renders W3ShareView with a pen-faithful fixture, no
  *  backend. Route /e/w3-share-preview is unguarded. Mirrors pen `oLeCk` +
@@ -18,7 +18,6 @@ function build(angle: ShareAngle): PosterData {
   const common = {
     angle, handle: '@jannis_d', club: 'So, 24. August',
     polyline: POLY, bikeSrc: STARTER_BIKE, avatarUrl: null, avatarInitial: 'J',
-    blocks: PREVIEW_BLOCKS,
     blockData: PREVIEW_BLOCK_DATA,
     footer: 'Harzrunde · So, 24. August',
   }
@@ -47,7 +46,6 @@ function build(angle: ShareAngle): PosterData {
 
 //: Three blocks, and enough of a ride behind them to draw all three — the
 //: harness exists to show the card, and a card with empty blocks shows nothing.
-const PREVIEW_BLOCKS: BlockId[] = ['trace', 'stats', 'pills']
 const PREVIEW_BLOCK_DATA = {
   power: Array.from({ length: 240 }, (_, i) =>
     140 + 70 * Math.sin(i / 9) + (i % 47 === 0 ? 260 : 0) + (i > 150 && i < 190 ? 120 : 0)),
@@ -82,7 +80,19 @@ export default function W3SharePreview() {
   useEffect(() => {
     let alive = true
     setGenerating(true)
-    renderSharePoster(build(angle))
+    // The STORY card, not the retired poster — the harness must show the same
+    // object the real screen sends, or it is a preview of nothing.
+    const p = build(angle)
+    renderStoryCard({
+      layout: 'full',
+      handle: p.handle, badge: 'W3 ANALYSE',
+      lead: p.sentence.split(' — ')[0] ?? p.sentence,
+      emphasis: p.sentence.split(' — ').slice(1).join(' — '),
+      bigValue: p.bigValue, bigUnit: p.bigUnit,
+      stats: [{ v: p.stats[0].v, l: p.stats[0].l }, { v: p.stats[1].v, l: p.stats[1].l }],
+      series: [], footer: p.footer, photo: null, polyline: p.polyline,
+      routeName: 'Harzrunde', dateline: p.footer,
+    })
       .then((o) => { if (alive) { setDataUrl(o.dataUrl || null); setBlob(o.blob) } })
       .finally(() => { if (alive) setGenerating(false) })
     return () => { alive = false }
@@ -93,8 +103,20 @@ export default function W3SharePreview() {
     generating,
     activeAngle: angle,
     hasOwnPhoto: false,
-    blocks: PREVIEW_BLOCKS,
     canShare: canShareImage(),
+    // The four controls the real screen now offers, so the harness exercises
+    // them rather than the retired block picker.
+    format: 'full',
+    accent: T.acid,
+    values: ['distance', 'time', 'ascent'],
+    availableValues: [
+      { id: 'distance', label: 'Distanz', value: '52,4' },
+      { id: 'time', label: 'Zeit', value: '1:47:32' },
+      { id: 'ascent', label: 'Höhenmeter', value: '612' },
+      { id: 'speed', label: 'Ø Tempo', value: '29,2 km/h' },
+      { id: 'np', label: 'Ø Leistung', value: '234 W' },
+      { id: 'hr', label: 'Puls', value: '172' },
+    ],
     angles: [
       { id: 'rekord', label: 'Segment-PR', sub: 'Sonnenberg' },
       { id: 'fahrt', label: 'Beste Fahrt', sub: 'Harzrunde' },
