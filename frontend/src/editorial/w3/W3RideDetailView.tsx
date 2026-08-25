@@ -349,8 +349,15 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           ))}
         </div>
 
-        {/* Execution + AI verdict */}
+        {/* Execution + AI verdict.
+
+            THE SCORE IS A GRADE AGAINST A PRESCRIPTION, so it appears on the
+            same terms as "Hast du gehalten?" — a free outdoor ride was not
+            executed WELL or BADLY, it was just ridden, and a 94/100 stamped on
+            it is a mark out of nothing. The coach's sentence stays either way;
+            that one is about the ride rather than about compliance. */}
         <div style={{ ...band(28), gap: 12 }}>
+          {vm.repeats.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
             <span style={{ fontSize: 94, fontWeight: 700, letterSpacing: -4, lineHeight: 0.8, color: T.acid }}>{vm.execScore}</span>
             <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
@@ -358,9 +365,12 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               <Kicker>Ausführung</Kicker>
             </div>
           </div>
-          <div style={{ height: 6, borderRadius: 100, background: '#FFFFFF14', overflow: 'hidden' }}>
+          )}
+          {vm.repeats.length > 0 && (
+          <div style={{ height: 6, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
             <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
           </div>
+          )}
           <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.25, color: T.ink }}>{vm.verdictHeadline}</span>
           <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
           {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>KI-Urteil · {vm.aiModel}</span>}
@@ -423,8 +433,13 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                       now, not by colour, because colour has a job here. */}
                   <span style={{ width: 74, fontSize: 11.5, fontWeight: z.peak ? 800 : 600, color: z.peak ? T.ink : T.mid }}>{z.name}</span>
                   <div style={{ flex: 1, height: 1, background: T.rule }} />
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.mid }}>{z.min}</span>
-                  <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 700, color: T.quiet }}>{z.pct}%</span>
+                  {/* MINUTES, NOT MINUTES AND PERCENT. The stacked bar directly
+                      above this list is the proportion — that is the only thing
+                      a stacked bar is — so printing the same split again as
+                      percentages made five rows carry two numbers where one was
+                      new. Minutes stay because they are the part the bar cannot
+                      tell you: how long, in units a rider feels. */}
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.mid, ...TNUM }}>{z.min}</span>
                 </div>
               ))}
             </div>
@@ -472,13 +487,13 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                   )}
                 </div>
 
-                {r.bestWatts && !r.pr && (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: T.quiet, ...TNUM }}>
-                      BESTWERT {r.bestWatts}
-                    </span>
-                  </div>
-                )}
+                {/* NO "BESTWERT 1.240 W" LINE. The tick at the end of the beam
+                    IS the record and "−60 W" is the distance to it: printing the
+                    record as well gives the rider the same fact a third time and
+                    costs a line of type under every one of five rows. Anyone who
+                    wants the absolute number can add sixty to what they rode —
+                    and the ones who care about that number are looking at the
+                    Bestwerte page, not at this ride. */}
               </div>
             )})}
           </div>
