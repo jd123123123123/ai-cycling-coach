@@ -131,6 +131,7 @@ const W3LoginPage = lazyWithRetry(() => import('./editorial/w3/W3LoginPage'))
 const W3RegisterPage = lazyWithRetry(() => import('./editorial/w3/W3RegisterPage'))
 const W3AuthPreview = lazyWithRetry(() => import('./editorial/w3/W3AuthPreview'))
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
+const W3RideWrapPreview = lazyWithRetry(() => import('./editorial/w3/W3RideWrapPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
 const W3ChallengesPreview = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPreview'))
 const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
@@ -470,6 +471,7 @@ function AppRoutes() {
           <Route path="/e/w3-first-bike" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />
           <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
+          <Route path="/e/w3-ride-wrap-preview" element={<W3RideWrapPreview />} />
           <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />
           <Route path="/e/w3-week-review-preview" element={<W3WeekReviewPreview />} />
           {/* W3 first-open onboarding chain: welcome → devices → rewards → garage → today */}
