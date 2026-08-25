@@ -21,7 +21,15 @@ log = logging.getLogger(__name__)
 
 #: The circle is 40 px at 2x. 96 keeps it crisp on a 3x screen and still costs
 #: a few kilobytes.
-THUMB_PX = 96
+THUMB_PX = 256
+#: WHY 256 AND NOT 96. The board draws these at ~170 CSS px on a phone, which is
+#: 340 device pixels at 2×and over 500 at 3× — so a 96 px source was being blown
+#: up three to five times and looked exactly like that. The reason it was small
+#: was payload, and the arithmetic there is kinder than it sounds. MEASURED on a
+#: real rider render: 96 px = 2.2 kB, 256 px = 7.0 kB, both WebP q82. As base64
+#: that is 3.0 kB against 9.4 kB, so a crew of eight goes from 24 kB to 75 kB —
+#: fifty kilobytes, once, on a screen that already ships a ride scene. The one
+#: thing a rider looks for on this board is a face; it is worth fifty kilobytes.
 
 
 def thumbnail(image_url: str | None) -> str | None:
@@ -43,7 +51,9 @@ def thumbnail(image_url: str | None) -> str | None:
         im = im.crop((max(0, (im.width - side) // 2), 0, max(0, (im.width - side) // 2) + side, side))
         im = im.resize((THUMB_PX, THUMB_PX), Image.LANCZOS)
         buf = io.BytesIO()
-        im.save(buf, format="WEBP", quality=82, method=4)
+        # method=6 is slower to encode and smaller at the same quality; this
+        # runs once per rider per read, not per frame.
+        im.save(buf, format="WEBP", quality=82, method=6)
         return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
     except Exception:
         log.info("avatar thumbnail failed", exc_info=True)

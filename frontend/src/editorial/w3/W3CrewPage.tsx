@@ -50,7 +50,7 @@ const EMPTY: W3CrewVm = {
   blurb: 'Eine Crew misst jeden Fahrer an seinem eigenen Wochenplan — so stehen eine kurze und eine große Woche auf demselben Board. Lade ein paar Fahrer ein und starte deine.',
   period: 'week', windowChip: '',
   rankOrdinal: DASH, rankSub: '', propsHint: '',
-  crewTss: DASH, crewTssSub: '', crewKm: DASH, crewKmCoverage: null, avgTss: DASH, yourShare: DASH, outputNote: '',
+  crewTotals: [], crewTss: DASH, crewTssSub: '', crewKm: DASH, crewKmCoverage: null, avgTss: DASH, yourShare: DASH, outputNote: '',
   members: [], showedUp: [], showedUpFilled: 0, showedUpTotal: 0, showedUpNote: '', gridDow: false, gridEdges: null,
   showDistanceGoal: false,
   distanceKm: 0, distanceGoalKm: 0, distancePct: 0, distanceToGo: 0,
@@ -118,6 +118,11 @@ export default function W3CrewPage() {
       rank: i + 1,
       tssLabel: nf.format(r.weekly_tss ?? 0),
       kmLabel: r.distance_km != null ? `${kmLabel(r.distance_km)} km` : null,
+      // One decimal below ten hours, none above: "3,2 h" is a week, "12 h" is a
+      // week, and "12,4 h" is a spreadsheet.
+      hoursLabel: r.hours != null && r.hours > 0
+        ? `${r.hours >= 10 ? Math.round(r.hours) : r.hours.toFixed(1).replace('.', ',')} h`
+        : null,
       pct: Math.round((r.weekly_score / topScore) * 100),
       isYou: r.is_you,
     }))
@@ -136,6 +141,7 @@ export default function W3CrewPage() {
 
     // ── 4 · Around the world — the crew goal is a WEEKLY challenge, so the ring
     // is only honest on the week window. ──
+    const crewHours = ranked.reduce((sum, r) => sum + (r.hours ?? 0), 0)
     const crewKmRounded = Math.round(crewKmNum)
     const yourKmRounded = myKm != null ? Math.round(myKm) : 0
     const distanceGoalKm = distanceChallenge
@@ -202,6 +208,21 @@ export default function W3CrewPage() {
       crewTss: nf.format(crewTssNum),
       crewTssSub: `${words(total)} Fahrer · ${thisPeriod(period)}`,
       crewKm: kmRows.length > 0 ? `${nf.format(crewKmRounded)} km` : DASH,
+      // THE CREW'S WEEK, summed from the same rows the board is ranked on.
+      // Kilometres first, hours second, load last — the order a crew actually
+      // says these out loud, and the reverse of the order the retired
+      // "Crew-Leistung" card used. A total nobody has data for is dropped
+      // rather than printed as a zero: an absent number and a crew that rode
+      // nothing are different sentences.
+      crewTotals: [
+        kmRows.length > 0
+          ? { key: 'km', value: nf.format(crewKmRounded), unit: 'km', label: 'ZUSAMMEN GEFAHREN' }
+          : null,
+        crewHours > 0
+          ? { key: 'h', value: nf.format(Math.round(crewHours)), unit: 'h', label: 'IM SATTEL' }
+          : null,
+        { key: 'tss', value: nf.format(crewTssNum), label: 'CREW TSS' },
+      ].filter(Boolean) as { key: string; value: string; unit?: string; label: string }[],
       crewKmCoverage,
       avgTss: nf.format(Math.round(crewTssNum / total)),
       yourShare: me && crewTssNum > 0 ? `${Math.round((myTss / crewTssNum) * 100)}%` : DASH,

@@ -614,6 +614,10 @@ async def crew_standings_window(
         # Per-day TSS bucket over the window + cumulative distance.
         per_day = {d: 0.0 for d in window_days}
         distance_km = 0.0
+        # Time in the saddle over the same window. The board used to carry TSS
+        # and kilometres only, and TSS is the one number on it a rider cannot
+        # feel — hours is what somebody actually compares themselves on.
+        seconds = 0.0
         acts = await _activities_for_user_in_window(
             db, uid, window_start_utc, window_end_utc
         )
@@ -622,6 +626,7 @@ async def crew_standings_window(
             if d in per_day:
                 per_day[d] += float(a.tss or 0.0)
                 distance_km += float(a.distance_meters or 0.0) / 1000.0
+                seconds += float(a.duration_seconds or 0.0)
 
         # This rider's OWN bar — 4-week avg × 1.05, never a shared fixed wall.
         targets = await personal_week_targets(db, uid, ref_monday)
@@ -658,6 +663,7 @@ async def crew_standings_window(
                 # re-ranking on the frontend. Null where the source is missing
                 # (never fabricated). Elevation + 5K PR have no source → omitted.
                 "distance_km": round(distance_km, 1),
+                "hours": round(seconds / 3600.0, 1),
                 "wkg": _wkg_from_profile(profile),
                 "vo2max": vo2max,
                 # This rider's own bars — the footnote's honest denominator.

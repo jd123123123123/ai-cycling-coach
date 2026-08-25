@@ -25,7 +25,6 @@ import './w3.css'
  * Props), the 500 km "Around the world" ring fallback, and the 8-seat cap.
  */
 
-const DOW = ['M', 'D', 'M', 'D', 'F', 'S', 'S']
 
 export interface W3CrewMember {
   id: number
@@ -37,6 +36,9 @@ export interface W3CrewMember {
   rank: number          // 1-based, by window score
   tssLabel: string      // real window TSS, formatted
   kmLabel: string | null // real window distance, or null when the rider has none
+  /** Real window saddle time. Null on a payload that predates it — and then the
+   *  tile shows two numbers rather than a zero. */
+  hoursLabel: string | null
   pct: number           // window score vs the crew leader, 0-100+ (real)
   isYou: boolean
 }
@@ -70,6 +72,10 @@ export interface W3CrewVm {
   // ── 1 · Crew output (all real, summed from the rows) ──
   crewTss: string           // summed weekly_tss over the window
   crewTssSub: string        // "sechs Fahrer · diesen Monat"
+  /** THE CREW'S WEEK, IN THE ORDER A CREW SAYS IT: kilometres, hours, then the
+   *  training load. Summed from the same real rows the board is ranked on, and
+   *  a total nobody has data for is dropped rather than shown as a zero. */
+  crewTotals: { key: string; value: string; unit?: string; label: string; quiet?: boolean }[]
   crewKm: string            // summed distance_km, or "—" when nobody has any
   crewKmCoverage: string | null  // honest note when only some riders have distance
   avgTss: string            // crew TSS / riders
@@ -139,7 +145,21 @@ function MemberCard({ m, i, reduce, onOpen }: {
           <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: T.ink }}>{m.tssLabel}<span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: T.mid }}> TSS</span></span>
           <span style={{ flex: 'none', fontSize: 13, fontWeight: 800, color: pctColor }}>{m.pct}%</span>
         </div>
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10, fontWeight: 600, color: m.kmLabel ? T.mid : T.quiet }}>{m.kmLabel ?? `${DASH} km`}</span>
+        {/* KM AND HOURS BESIDE THE TSS, because TSS is the one number on this
+            board a rider cannot feel. "84 km · 3,2 h" is a week somebody
+            recognises; "412 TSS" is a week they have to convert. A measurement
+            the payload does not carry is dropped rather than shown as a zero. */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, overflow: 'hidden' }}>
+          {[m.kmLabel, m.hoursLabel].filter(Boolean).map((v, i) => (
+            <span key={i} style={{
+              whiteSpace: 'nowrap', fontSize: 10.5, fontWeight: 700, color: T.mid,
+              ...(i > 0 ? { opacity: 0.8 } : null),
+            }}>{i > 0 ? '· ' : ''}{v}</span>
+          ))}
+          {!m.kmLabel && !m.hoursLabel && (
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{DASH}</span>
+          )}
+        </div>
       </div>
     </motion.button>
   )
@@ -159,12 +179,6 @@ const SectionHead = ({ n, title, chip }: { n: number; title: string; chip?: stri
     <NumBadge n={n} />
     <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{title}</span>
     {chip ? <Chip>{chip}</Chip> : null}
-  </div>
-)
-const Tile = ({ label, value, quiet }: { label: string; value: string; quiet?: boolean }) => (
-  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
-    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label}</span>
-    <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: -0.5, color: quiet ? T.quiet : T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</span>
   </div>
 )
 
@@ -193,8 +207,6 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
 
   const memberRows: W3CrewMember[][] = []
   for (let i = 0; i < vm.members.length; i += 2) memberRows.push(vm.members.slice(i, i + 2))
-  const cols = vm.showedUp[0]?.days.length ?? 0
-  const gridGap = cols > 8 ? 4 : 6
 
   return (
     <div className="w3-root">
@@ -251,6 +263,45 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
             {/* 2 · The crew */}
             <div style={{ ...band(28), gap: 14 }}>
               <SectionHead n={1} title="Die Crew" chip={`${vm.members.length} FAHRER`} />
+
+              {/* ── WHAT THE CREW DID, TOGETHER ────────────────────────────
+                  Above the faces, because this is the one line on the screen
+                  that is about all of them and nobody's rank. It used to sit
+                  BELOW the board in a section of its own, which made it read
+                  as a second scoreboard rather than as the celebration it is —
+                  and it repeated the per-rider numbers three inches under the
+                  per-rider numbers.
+
+                  Kilometres lead, hours next, TSS last. That is the order a
+                  crew says these out loud, and it is the reverse of the order
+                  the old card used. */}
+              <div style={{
+                display: 'flex', alignItems: 'stretch', gap: 0,
+                padding: '16px 4px', borderRadius: 22, background: T.acidTop,
+                border: `1px solid ${T.acid}22`,
+              }}>
+                {vm.crewTotals.map((t, i) => (
+                  <div key={t.key} style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'stretch' }}>
+                    {i > 0 && <div style={{ width: 1, background: T.rule, opacity: 0.5, margin: '3px 0' }} />}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, minWidth: 0 }}>
+                        <motion.span
+                          initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.45, ease: EASE, delay: 0.04 * i }}
+                          style={{
+                            fontSize: 26, fontWeight: 800, letterSpacing: -1, lineHeight: 1,
+                            color: t.quiet ? T.mid : T.acid,
+                            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
+                          }}>{t.value}</motion.span>
+                        {t.unit && (
+                          <span style={{ fontSize: 11, fontWeight: 800, color: t.quiet ? T.quiet : T.acid }}>{t.unit}</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet, textAlign: 'center' }}>{t.label}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
               {memberRows.map((pair, ri) => (
                 <div key={ri} style={{ display: 'flex', gap: 12 }}>
                   {pair.map((m, ci) => <MemberCard key={m.id} m={m} i={ri * 2 + ci} reduce={reduce} onOpen={onOpenMember} />)}
@@ -262,31 +313,9 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
               </span>
             </div>
 
-            {/* 1 · Crew output — the aggregate answer, summed from the real rows */}
-            <div style={{ ...band(28), gap: 14 }}>
-              <SectionHead n={2} title="Crew-Leistung" chip={vm.windowChip || undefined} />
-              <div style={{ ...card(), gap: 16 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>CREW TSS</span>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, minWidth: 0 }}>
-                    <motion.span
-                      initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, ease: EASE }}
-                      style={{ fontSize: 56, fontWeight: 800, letterSpacing: -2.4, lineHeight: 1, color: T.acid, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>{vm.crewTss}</motion.span>
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 500, color: T.mid }}>{vm.crewTssSub}</span>
-                </div>
-                <div style={{ height: 1, background: T.rule }} />
-                <div style={{ display: 'flex', gap: 12 }}>
-                  <Tile label="KILOMETER" value={vm.crewKm} quiet={vm.crewKm === DASH} />
-                  <Tile label="Ø / FAHRER" value={vm.avgTss} />
-                  <Tile label="DEIN ANTEIL" value={vm.yourShare} quiet={vm.yourShare === DASH} />
-                </div>
-                {vm.crewKmCoverage && (
-                  <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{vm.crewKmCoverage}</span>
-                )}
-                <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{vm.outputNote}</span>
-              </div>
-            </div>
+            {/* CREW-LEISTUNG IS GONE. Its four figures are the band above the
+                board now — the same numbers, said once, where they read as the
+                crew's week rather than as a second scoreboard under the first. */}
 
             {/* Give props — a real crew_week cheer */}
             <div style={{ ...band(10) }}>
@@ -298,42 +327,14 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
               <span style={{ fontSize: 11, fontWeight: 500, color: T.quiet, textAlign: 'center', width: '100%' }}>{vm.propsHint}</span>
             </div>
 
-            {/* 3 · Who showed up */}
-            {cols > 0 && (
-              <div style={{ ...band(28), gap: 14 }}>
-                <SectionHead n={3} title="Wer da war" chip={`${vm.showedUpFilled} / ${vm.showedUpTotal}`} />
-                <div style={{ ...card(), gap: 12, padding: 18 }}>
-                  {vm.gridDow && (
-                    <div style={{ display: 'flex', gap: gridGap }}>
-                      {DOW.map((d, i) => (
-                        <span key={i} style={{ flex: 1, minWidth: 0, textAlign: 'center', fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}>{d}</span>
-                      ))}
-                    </div>
-                  )}
-                  {vm.showedUp.map((row, ri) => (
-                    <div key={row.id} style={{ display: 'flex', gap: gridGap, alignItems: 'center' }}>
-                      {row.days.map((filled, di) => (
-                        <motion.div key={di}
-                          initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(ri * 0.03 + di * 0.01)}
-                          style={{ flex: 1, minWidth: 0, height: 20, borderRadius: 6, background: filled ? (row.isYou ? T.acid : T.d3) : T.rule, transformOrigin: 'center' }} />
-                      ))}
-                    </div>
-                  ))}
-                  {vm.gridEdges && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}>{vm.gridEdges.left}</span>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet }}>{vm.gridEdges.right}</span>
-                    </div>
-                  )}
-                  <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{vm.showedUpNote}</span>
-                </div>
-              </div>
-            )}
+            {/* WER DA WAR IS GONE. A 6×7 grid of blocks answering "did this
+                rider ride on Tuesday" is a question nobody arrived with, and
+                each tile's own bar already says how much of their week landed. */}
 
             {/* 4 · Around the world — the crew's weekly distance challenge */}
             {vm.showDistanceGoal && (
               <div style={{ ...band(28), gap: 14 }}>
-                <SectionHead n={4} title="Einmal um die Welt" chip={`${vm.distancePct}%`} />
+                <SectionHead n={2} title="Einmal um die Welt" chip={`${vm.distancePct}%`} />
                 <div style={{ ...card(), gap: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
@@ -360,28 +361,14 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
               </div>
             )}
 
-            {/* 5 · Highlights */}
-            {vm.highlights.length > 0 && (
-              <div style={{ ...band(28), gap: 14 }}>
-                <SectionHead n={vm.showDistanceGoal ? 5 : 4} title={vm.highlightsTitle} />
-                <div style={{ ...card(), gap: 0, padding: '4px 18px' }}>
-                  {vm.highlights.map((h, i) => (
-                      <div key={h.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '15px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                        {/* The rider's own face here too, and the same rule as
-                            the board: acid ring if it is you, nothing if not. */}
-                        {h.avatar
-                          ? <img src={h.avatar} alt="" style={{ width: 34, height: 34, borderRadius: 100, objectFit: 'cover', flex: 'none', outline: h.isYou ? `2px solid ${YOU_TINT}` : 'none', outlineOffset: 1 }} />
-                          : <div style={{ width: 34, height: 34, borderRadius: 100, background: h.isYou ? T.acidDim : T.surface2, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: h.isYou ? T.acid : T.mid, flex: 'none' }}>{h.name.replace(/^@/, '').charAt(0).toUpperCase()}</div>}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: h.isYou ? T.acid : T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
-                          <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.35, color: T.mid }}>{h.text}</span>
-                        </div>
-                        <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: T.mid, padding: '6px 10px', borderRadius: 100, background: T.rule, flex: 'none', textAlign: 'center', maxWidth: 96, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.badge}</span>
-                      </div>
-                  ))}
-                </div>
-              </div>
-            )}
+            {/* HIGHLIGHTS IS GONE — it restated the board in sentences.
+                "@mara leads the crew board this week", "You · 412 TSS · 84 km",
+                "@timo showed up 3 of 7 days": the first is the board's rank 1,
+                the second is your own tile, the third was the attendance grid.
+                Three ways of saying what the screen has already said, in a mix
+                of German and English, at the bottom where a rider arrives
+                having already read it. */}
+
 
             {/* Footer — seats + invite */}
             <div style={{ ...band(30) }}>

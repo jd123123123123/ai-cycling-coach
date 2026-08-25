@@ -50,6 +50,10 @@ export interface StandingRow {
   // Nullable — honest "—" where the source is missing. Elevation + 5K PR
   // have no data source and are intentionally absent.
   distance_km?: number | null  // cumulative ridden distance (km)
+  /** Time in the saddle over the window. The one number on this board a rider
+   *  can actually feel — TSS is the one they cannot. Nullable on older
+   *  payloads; a board that predates it shows km alone rather than a zero. */
+  hours?: number | null
   wkg?: number | null          // ftp_watts / weight_kg (threshold W/kg)
   vo2max?: number | null       // latest VO2max on/before window end
   // Each rider's OWN bar (4-week avg weekly TSS × 1.05, floor 60) — the honest
