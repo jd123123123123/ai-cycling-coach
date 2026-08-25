@@ -12,7 +12,7 @@ import {
 } from './w3share'
 import { VALUES, DEFAULT_VALUES, type ValueId } from './w3shareValues'
 import {
-  canRenderVideo, renderStoryVideo, videoPosterFrame, MAX_STORY_SECONDS,
+  canRenderVideo, renderStoryVideo, videoPosterFrame, renderStoryOverlay, MAX_STORY_SECONDS,
 } from './w3share' 
 import { T } from './w3tokens'
 import W3ShareView, { type W3ShareVm, type ShareAngleChip } from './W3ShareView'
@@ -423,6 +423,22 @@ export default function W3SharePage() {
     }
     void sharePoster(posterBlob, caption)
   }, [video, story, posterBlob, caption])
+  /**
+   * THE STICKER ROUTE. The overlay alone, transparent, saved to the camera roll
+   * — the rider opens their own story in Instagram, adds their photo or video
+   * as the background, and drops this on with the photo sticker, which keeps a
+   * PNG's alpha. More taps than the burn, and the only way the composition ends
+   * up in their hands rather than ours.
+   *
+   * It is a SAVE, not a share sheet: a transparent PNG sent through the sheet
+   * lands in Instagram as a post, not as a sticker.
+   */
+  const onSticker = useCallback(async () => {
+    if (!story) return
+    const out = await renderStoryOverlay(story)
+    if (out.blob) downloadPoster(out.blob, 'w3-sticker.png')
+  }, [story])
+
   const onDownload = useCallback(() => { if (posterBlob) downloadPoster(posterBlob) }, [posterBlob])
   const onLink = useCallback(async () => { try { if (navigator.clipboard) await navigator.clipboard.writeText(caption) } catch { /* ignore */ } }, [caption])
 
@@ -470,6 +486,7 @@ export default function W3SharePage() {
       onPickFormat={setFormat}
       onShare={onShare}
       onStory={onShare}
+      onSticker={onSticker}
       onCrew={() => navigate('/e/w3-crew')}
       onLink={onLink}
     />

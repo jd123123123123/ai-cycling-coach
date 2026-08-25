@@ -1057,6 +1057,13 @@ export interface StoryData {
   ticker?: string
   /** Three labelled readings for the viewfinder and the trace card. */
   readings?: { v: string; l: string }[]
+  /**
+   * Paint the overlay ALONE, on transparency — no ground, no photograph, no
+   * scrims. What comes out is a sticker the rider drops onto their own story in
+   * Instagram, where they can move and scale it, instead of a finished picture
+   * with our composition baked into it. See `renderStoryOverlay`.
+   */
+  transparent?: boolean
   /** The card's accent. Defaults to the app's acid. One colour, everywhere the
    *  card is loud — the emphasis word, the unit, the strip, the ticker band,
    *  the viewfinder brackets, the route line. Changing it changes all of them,
@@ -1133,8 +1140,18 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   const layout = d.layout ?? 'full'
   const mono = "'JetBrains Mono', ui-monospace, monospace"
   const accent = d.accent || CARD.acid
-  ctx.fillStyle = CARD.bg
-  ctx.fillRect(0, 0, SW, SH)
+  const bare = d.transparent === true
+  if (!bare) {
+    ctx.fillStyle = CARD.bg
+    ctx.fillRect(0, 0, SW, SH)
+  } else {
+    // A sticker lands on a background we have never seen — a bright sky, a
+    // white wall — so the type carries its own shadow instead of a scrim. A
+    // scrim on transparency is just a grey rectangle sitting on the story.
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'
+    ctx.shadowBlur = 24
+    ctx.shadowOffsetY = 3
+  }
 
   // ── The photograph. Every layout keeps it; only where it sits changes. The
   //    broadsheet and the viewfinder inset it so their own furniture has room.
@@ -1200,9 +1217,11 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   // rather than sitting in tiles. The register is a newspaper, so nothing is
   // rounded and nothing glows.
   if (layout === 'headline') {
-    ctx.fillStyle = CARD.bg
-    ctx.fillRect(0, 0, SW, inset.y)
-    ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+    if (!bare) {
+      ctx.fillStyle = CARD.bg
+      ctx.fillRect(0, 0, SW, inset.y)
+      ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+    }
     text(ctx, d.dateline ?? d.footer, 64, 130, 26, '700', CARD.mid, 2.4)
     const name = (d.routeName ?? '').toUpperCase()
     let size = 128
@@ -1230,9 +1249,11 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   // number set in the monospace the app uses for telemetry. It is the ride as
   // instrument readout, which is the opposite pitch to the broadsheet.
   if (layout === 'viewfinder') {
-    ctx.fillStyle = CARD.bg
-    ctx.fillRect(0, 0, SW, inset.y)
-    ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+    if (!bare) {
+      ctx.fillStyle = CARD.bg
+      ctx.fillRect(0, 0, SW, inset.y)
+      ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+    }
 
     ctx.strokeStyle = accent
     ctx.lineWidth = 8
@@ -1275,17 +1296,16 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   // is not the same statement as a card about a personal best, and the colour
   // is how a rider says which one they are making.
   if (layout === 'effort') {
+    if (bare) { /* no scrims on a sticker; the shadow carries the type */ }
     const scrimTop2 = ctx.createLinearGradient(0, 0, 0, 620)
     scrimTop2.addColorStop(0, 'rgba(0,0,0,0.88)')
     scrimTop2.addColorStop(1, 'rgba(0,0,0,0)')
-    ctx.fillStyle = scrimTop2
-    ctx.fillRect(0, 0, SW, 620)
+    if (!bare) { ctx.fillStyle = scrimTop2; ctx.fillRect(0, 0, SW, 620) }
     const scrimBot = ctx.createLinearGradient(0, SH - 620, 0, SH)
     scrimBot.addColorStop(0, 'rgba(0,0,0,0)')
     scrimBot.addColorStop(0.5, 'rgba(0,0,0,0.82)')
     scrimBot.addColorStop(1, 'rgba(0,0,0,0.96)')
-    ctx.fillStyle = scrimBot
-    ctx.fillRect(0, SH - 620, SW, 620)
+    if (!bare) { ctx.fillStyle = scrimBot; ctx.fillRect(0, SH - 620, SW, 620) }
 
     text(ctx, (d.dateline ?? d.footer).toUpperCase(), 64, 118, 24, '700', CARD.mid, 2)
     let ey = 200
@@ -1336,11 +1356,13 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   // line, and three readings under a hairline. No headline, no big number —
   // for the ride whose picture is the point.
   if (layout === 'trace') {
-    const bottom0 = ctx.createLinearGradient(0, SH - 700, 0, SH)
-    bottom0.addColorStop(0, 'rgba(0,0,0,0)')
-    bottom0.addColorStop(1, 'rgba(0,0,0,0.9)')
-    ctx.fillStyle = bottom0
-    ctx.fillRect(0, SH - 700, SW, 700)
+    if (!bare) {
+      const bottom0 = ctx.createLinearGradient(0, SH - 700, 0, SH)
+      bottom0.addColorStop(0, 'rgba(0,0,0,0)')
+      bottom0.addColorStop(1, 'rgba(0,0,0,0.9)')
+      ctx.fillStyle = bottom0
+      ctx.fillRect(0, SH - 700, SW, 700)
+    }
     if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
     // Pen `i4lb4E`: the name in caps, ONE meta line under it, both hard left.
     // No chips, no big number — the line already said how far it went, and a
@@ -1401,6 +1423,32 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
 
   strip(SH - 190)
   markAndFooter()
+}
+
+/**
+ * THE OVERLAY ALONE, on transparency — the sticker route.
+ *
+ * WHY THIS EXISTS BESIDE THE BURNED CARD. Burning fixes our composition into
+ * the rider's picture: they cannot move the headline off their own face. The
+ * native apps solve that with Instagram's story-sharing API, which takes a
+ * transparent `stickerImage` and a separate `backgroundImage` and hands the
+ * rider a layer they can drag, scale and rotate inside Instagram. That API is
+ * UIPasteboard keys plus an `instagram-stories://` URL scheme, and it is not
+ * reachable from a browser — this app is a PWA, so it is not on offer to us.
+ *
+ * What IS on offer: Instagram's own photo sticker reads a transparent PNG out
+ * of the camera roll and keeps its alpha. So the rider saves this, opens their
+ * story with their own photo or video as the background, and adds this as a
+ * sticker they place themselves. More taps than the burn, and the only route
+ * that leaves the composition in their hands.
+ *
+ * No ground and no scrims: the type carries a soft shadow instead, because a
+ * scrim on transparency is a grey rectangle sitting on somebody's story.
+ */
+export async function renderStoryOverlay(d: StoryData): Promise<{ blob: Blob | null; dataUrl: string }> {
+  // `photo: null` matters as much as the flag: a sticker drawn over a
+  // photograph would bake that photograph into its own transparency.
+  return renderStoryCard({ ...d, transparent: true, photo: null })
 }
 
 /** The rider's photograph with their ride written over it. 1080 × 1920. */

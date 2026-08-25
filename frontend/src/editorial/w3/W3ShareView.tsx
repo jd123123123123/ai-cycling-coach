@@ -1,6 +1,6 @@
 import { type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Download, Camera, Users, Link2, MoreHorizontal, Share2, ImagePlus, X } from 'lucide-react'
+import { Download, Camera, Users, Link2, Sticker, Share2, ImagePlus, X } from 'lucide-react'
 import { T, FONT, EASE, HIDDEN_FILE_INPUT } from './w3tokens'
 import { TNUM } from './w3surfaces'
 import type { StoryLayout } from './w3share'
@@ -58,15 +58,19 @@ export interface W3ShareActions {
   onSelectAngle?: (id: ShareAngle) => void
   onShare?: () => void
   onStory?: () => void
+  /** Save the overlay alone, transparent, to place by hand in Instagram. */
+  onSticker?: () => void
   onCrew?: () => void
   onLink?: () => void
 }
 
 const ACTIONS = [
   { id: 'story', label: 'Story', Icon: Camera },
+  // The sticker route: the overlay alone, on transparency, for a rider who
+  // wants to place it themselves in Instagram rather than accept ours.
+  { id: 'sticker', label: 'Sticker', Icon: Sticker },
   { id: 'crew', label: 'Crew', Icon: Users },
   { id: 'link', label: 'Link', Icon: Link2 },
-  { id: 'more', label: 'Mehr', Icon: MoreHorizontal },
 ] as const
 
 /** The four, in the order they give things up. See `StoryLayout` for why there
@@ -90,15 +94,15 @@ const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'effort', name: 'Effort', drops: 'Satz oben' },
 ]
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onShare, onStory, onSticker, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
   const onAction = (id: (typeof ACTIONS)[number]['id']) => {
     if (id === 'story') onStory?.()
+    else if (id === 'sticker') onSticker?.()
     else if (id === 'crew') onCrew?.()
-    else if (id === 'link') onLink?.()
-    else onShare?.()
+    else onLink?.()
   }
 
   return (
