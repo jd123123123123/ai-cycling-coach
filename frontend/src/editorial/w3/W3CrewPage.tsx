@@ -113,6 +113,8 @@ export default function W3CrewPage() {
     const members: W3CrewMember[] = ranked.map((r, i) => ({
       id: r.user_id,
       name: label(r),
+      // It was in `StandingRow` the whole time and nothing read it.
+      avatar: r.avatar ?? null,
       rank: i + 1,
       tssLabel: nf.format(r.weekly_tss ?? 0),
       kmLabel: r.distance_km != null ? `${kmLabel(r.distance_km)} km` : null,
@@ -155,13 +157,13 @@ export default function W3CrewPage() {
     const highlights: W3Highlight[] = []
     const leader = ranked[0]
     highlights.push({
-      id: `lead-${leader.user_id}`, name: label(leader), isYou: leader.is_you,
+      id: `lead-${leader.user_id}`, name: label(leader), avatar: leader.avatar ?? null, isYou: leader.is_you,
       text: leader.is_you ? `Spitze des Crew-Boards ${thisPeriod(period)}` : `Führt das Crew-Board ${thisPeriod(period)}`,
       badge: `${nf.format(Math.round(leader.weekly_score))} PKT`,
     })
     if (me && myRank > 1) {
       highlights.push({
-        id: `you-${me.user_id}`, name: 'Du', isYou: true,
+        id: `you-${me.user_id}`, name: 'Du', avatar: me.avatar ?? null, isYou: true,
         text: `${nf.format(myTss)} TSS${myKm != null && myKm > 0 ? ` · ${kmLabel(myKm)} km` : ''} ${thisPeriod(period)}`,
         badge: ORD(myRank).toUpperCase(),
       })
@@ -169,7 +171,7 @@ export default function W3CrewPage() {
     const topKm = [...kmRows].sort((a, b) => (b.distance_km as number) - (a.distance_km as number))[0]
     if (topKm && (topKm.distance_km as number) > 0 && !highlights.some((h) => h.id.endsWith(`-${topKm.user_id}`))) {
       highlights.push({
-        id: `km-${topKm.user_id}`, name: label(topKm), isYou: topKm.is_you,
+        id: `km-${topKm.user_id}`, name: label(topKm), avatar: topKm.avatar ?? null, isYou: topKm.is_you,
         text: 'Die meisten Kilometer in der Crew',
         badge: `${kmLabel(topKm.distance_km as number)} KM`,
       })

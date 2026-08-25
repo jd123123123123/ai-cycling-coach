@@ -26,7 +26,30 @@ export const thisPeriod = (p: W3Period) => (p === 'month' ? 'diesen Monat' : `di
 // Re-exported from the palette, where the measurements that chose these
 // eight live. They used to be eight pastels declared here, six of which read
 // as grey and two of which a full-colour reader could not tell apart.
+import { T } from './w3tokens'
+
 export { BOARD_TINTS as AVATAR_TINTS, BOARD_BASE as TINT_BASE } from './w3tokens'
+
+/**
+ * COLOUR MEANS ONE THING ON THIS SCREEN: is this you, or is it somebody else.
+ *
+ * The board used to hand every rider a different hue out of `BOARD_TINTS`, six
+ * of them, cycling. Two things were wrong with that and both were reported:
+ *
+ *  1. A rainbow of six carries no information. A rider scanning the board
+ *     cannot find themselves in it, because their colour means nothing more
+ *     than "you were fourth in the array".
+ *  2. `BOARD_TINTS[0]` IS THE ACID. So on the member screen, where the duel
+ *     bar paints YOUR share in acid and THEIRS in their tint, rider number one
+ *     got a bar the same colour as yours — the exact complaint, and it was
+ *     unreadable rather than merely ugly.
+ *
+ * Two tones, maximally far apart, used the same way everywhere: acid is always
+ * you, violet is always the other rider. Everyone who is neither is a neutral
+ * surface, because a crew board is a place to find yourself first.
+ */
+export const YOU_TINT = T.acid
+export const THEM_TINT = T.evening
 
 const MONTHS = ['JAN', 'FEB', 'MÄR', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ']
 

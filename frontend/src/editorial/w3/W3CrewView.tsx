@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Sparkles, UserPlus, Pencil, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE, grow, band, card, DASH } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
-import { AVATAR_TINTS, TINT_BASE, type W3Period } from './w3crew'
+import { YOU_TINT, type W3Period } from './w3crew'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import './w3.css'
@@ -30,6 +30,10 @@ const DOW = ['M', 'D', 'M', 'D', 'F', 'S', 'S']
 export interface W3CrewMember {
   id: number
   name: string          // handle (no @) or "Du"
+  /** The rider's own collectible, 96 px, as a data URL. Null when they have
+   *  not made one — and then the tile shows their initial instead, which is a
+   *  placeholder rather than a picture of somebody else's bike. */
+  avatar?: string | null
   rank: number          // 1-based, by window score
   tssLabel: string      // real window TSS, formatted
   kmLabel: string | null // real window distance, or null when the rider has none
@@ -47,6 +51,8 @@ export interface W3ShowedUpRow {
 export interface W3Highlight {
   id: string
   name: string
+  /** Their collectible thumbnail, when they have one. */
+  avatar?: string | null
   isYou: boolean
   text: string
   badge: string
@@ -97,9 +103,10 @@ export interface W3CrewVm {
 function MemberCard({ m, i, reduce, onOpen }: {
   m: W3CrewMember; i: number; reduce: boolean | null; onOpen?: (id: number) => void
 }) {
-  const tint = AVATAR_TINTS[i % AVATAR_TINTS.length]
-  const namePillBg = m.isYou ? T.acid : T.evening
-  const namePillFg = m.isYou ? T.bg : T.ink
+  // ONE QUESTION THE COLOUR ANSWERS: is this me? The tile used to take a hue
+  // from a cycling list of six, so a rider could not find themselves on their
+  // own crew board — and the first of those hues was the acid itself.
+  const mine = m.isYou
   const pctColor = m.pct >= 100 ? T.acid : T.mid
   const initial = m.name.replace(/^@/, '').charAt(0).toUpperCase()
   return (
@@ -107,12 +114,24 @@ function MemberCard({ m, i, reduce, onOpen }: {
       onClick={onOpen ? () => onOpen(m.id) : undefined}
       aria-label={`${m.name} öffnen`}
       initial={reduce ? false : { opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, ease: EASE, delay: i * 0.05 }}
-      style={{ position: 'relative', flex: 1, minWidth: 0, aspectRatio: '0.9', borderRadius: 22, overflow: 'hidden', padding: 0, border: 0, fontFamily: FONT, textAlign: 'left', cursor: onOpen ? 'pointer' : 'default', background: `linear-gradient(160deg, ${tint}, ${TINT_BASE})`, outline: m.isYou ? `2px solid ${T.acid}` : 'none', outlineOffset: -2 }}
+      style={{
+        position: 'relative', flex: 1, minWidth: 0, aspectRatio: '0.9', borderRadius: 22,
+        overflow: 'hidden', padding: 0, border: 0, fontFamily: FONT, textAlign: 'left',
+        cursor: onOpen ? 'pointer' : 'default', background: mine ? T.acidTop : T.surface,
+        outline: mine ? `2px solid ${T.acid}` : 'none', outlineOffset: -2,
+      }}
     >
-      <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 52, fontWeight: 800, color: T.d3 }}>{initial}</div>
+      {/* THE RIDER'S OWN COLLECTIBLE. It has been in the payload all along —
+          `StandingRow.avatar`, a 96 px thumbnail the server already builds — and
+          this tile drew a letter over a gradient instead. A crew board whose
+          faces are all letters is a spreadsheet. */}
+      {m.avatar
+        ? <img src={m.avatar} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 52, fontWeight: 800, color: T.d2 }}>{initial}</div>}
+
       {/* name + rank pill */}
       <div style={{ position: 'absolute', left: 8, right: 8, top: 8, display: 'flex', justifyContent: 'center' }}>
-        <span style={{ padding: '5px 12px', borderRadius: 100, background: namePillBg, fontSize: 11, fontWeight: 800, color: namePillFg, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.rank} · {m.name}</span>
+        <span style={{ padding: '5px 12px', borderRadius: 100, background: mine ? YOU_TINT : T.glass, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', fontSize: 11, fontWeight: 800, color: mine ? T.bg : T.ink, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.rank} · {m.name}</span>
       </div>
       {/* window TSS + distance + share of the leader */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 11px 10px', background: `linear-gradient(0deg, ${T.bg}, transparent)`, display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -159,6 +178,19 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
   onOpenMember?: (id: number) => void
 }) {
   const reduce = useReducedMotion()
+
+  // WHO THE READER IS. The whole screen is a comparison, and every comparison
+  // needs a subject — this one is derived once here rather than re-found in
+  // three places, and the verdict band above the board is built from it.
+  const you = vm.members.find((m) => m.isYou) ?? null
+  // The rider one place ahead, named, because "2nd of six" is a fact and
+  // "18 TSS behind @mara" is something a rider can act on this evening.
+  const ahead = (() => {
+    if (!you || you.rank <= 1) return null
+    const above = vm.members.find((m) => m.rank === you.rank - 1)
+    return above ? `${above.name} liegt vor dir` : null
+  })()
+
   const memberRows: W3CrewMember[][] = []
   for (let i = 0; i < vm.members.length; i += 2) memberRows.push(vm.members.slice(i, i + 2))
   const cols = vm.showedUp[0]?.days.length ?? 0
@@ -185,17 +217,54 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
               <W3PeriodTabs value={vm.period} onChange={(p) => onPeriod?.(p)} />
             </div>
 
-            {/* Big rank */}
-            <div style={{ ...band(22), alignItems: 'center', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
-                <span style={{ fontSize: 52, fontWeight: 800, letterSpacing: -2, color: T.ink }}>{vm.rankOrdinal}</span>
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.mid }}>{vm.rankSub}</span>
+            {/* ── THE ANSWER, BEFORE ANY OF THE EVIDENCE ────────────────────
+                This was a bare ordinal floating in the middle of the page —
+                "2nd", centred, with five equally-weighted numbered sections
+                under it, so the question a rider opens this screen with ("how
+                am I doing?") was answered by a number with nothing attached and
+                then buried. It reads as a verdict now: the place, who it is out
+                of, and whether you are clearing your OWN bar, which is the only
+                comparison this board claims to make. ── */}
+            <div style={{ ...band(24), gap: 12 }}>
+              <div style={{ ...card(), padding: '20px 18px', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+                  <span style={{ fontSize: 56, fontWeight: 800, letterSpacing: -2.4, lineHeight: 0.9, color: T.acid }}>{vm.rankOrdinal}</span>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, color: T.mid }}>{vm.rankSub}</span>
+                </div>
+                {you && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Your own bar, as a bar. The percentage was a number in a
+                        tile; a rider reads "am I over the line" from a line. */}
+                    <div style={{ height: 8, borderRadius: 100, background: T.d1, overflow: 'hidden', position: 'relative' }}>
+                      <motion.div
+                        initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.min(100, you.pct)}%` }} transition={grow(0.1)}
+                        style={{ height: '100%', borderRadius: 100, background: you.pct >= 100 ? T.acid : T.evening }} />
+                    </div>
+                    <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>
+                      <span style={{ color: you.pct >= 100 ? T.acid : T.ink, fontWeight: 800 }}>{you.pct}%</span> deiner eigenen Woche{ahead ? ` · ${ahead}` : ''}
+                    </span>
+                  </div>
+                )}
               </div>
+            </div>
+
+            {/* 2 · The crew */}
+            <div style={{ ...band(28), gap: 14 }}>
+              <SectionHead n={1} title="Die Crew" chip={`${vm.members.length} FAHRER`} />
+              {memberRows.map((pair, ri) => (
+                <div key={ri} style={{ display: 'flex', gap: 12 }}>
+                  {pair.map((m, ci) => <MemberCard key={m.id} m={m} i={ri * 2 + ci} reduce={reduce} onOpen={onOpenMember} />)}
+                  {pair.length === 1 && <div style={{ flex: 1 }} />}
+                </div>
+              ))}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: T.quiet }}>
+                Tippe auf einen Fahrer für {vm.period === 'year' ? 'seine Saison' : vm.period === 'month' ? 'seinen Monat' : 'seine Woche'}<ChevronRight size={12} />
+              </span>
             </div>
 
             {/* 1 · Crew output — the aggregate answer, summed from the real rows */}
             <div style={{ ...band(28), gap: 14 }}>
-              <SectionHead n={1} title="Crew-Leistung" chip={vm.windowChip || undefined} />
+              <SectionHead n={2} title="Crew-Leistung" chip={vm.windowChip || undefined} />
               <div style={{ ...card(), gap: 16 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>CREW TSS</span>
@@ -227,20 +296,6 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
             </div>
             <div style={{ ...band(26) }}>
               <span style={{ fontSize: 11, fontWeight: 500, color: T.quiet, textAlign: 'center', width: '100%' }}>{vm.propsHint}</span>
-            </div>
-
-            {/* 2 · The crew */}
-            <div style={{ ...band(28), gap: 14 }}>
-              <SectionHead n={2} title="Die Crew" chip={`${vm.members.length} FAHRER`} />
-              {memberRows.map((pair, ri) => (
-                <div key={ri} style={{ display: 'flex', gap: 12 }}>
-                  {pair.map((m, ci) => <MemberCard key={m.id} m={m} i={ri * 2 + ci} reduce={reduce} onOpen={onOpenMember} />)}
-                  {pair.length === 1 && <div style={{ flex: 1 }} />}
-                </div>
-              ))}
-              <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: T.quiet }}>
-                Tippe auf einen Fahrer für {vm.period === 'year' ? 'seine Saison' : vm.period === 'month' ? 'seinen Monat' : 'seine Woche'}<ChevronRight size={12} />
-              </span>
             </div>
 
             {/* 3 · Who showed up */}
@@ -310,19 +365,20 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
               <div style={{ ...band(28), gap: 14 }}>
                 <SectionHead n={vm.showDistanceGoal ? 5 : 4} title={vm.highlightsTitle} />
                 <div style={{ ...card(), gap: 0, padding: '4px 18px' }}>
-                  {vm.highlights.map((h, i) => {
-                    const tint = AVATAR_TINTS[i % AVATAR_TINTS.length]
-                    return (
+                  {vm.highlights.map((h, i) => (
                       <div key={h.id} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: '15px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                        <div style={{ width: 34, height: 34, borderRadius: 100, background: `linear-gradient(160deg, ${tint}, ${TINT_BASE})`, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: T.d4, flex: 'none' }}>{h.name.replace(/^@/, '').charAt(0).toUpperCase()}</div>
+                        {/* The rider's own face here too, and the same rule as
+                            the board: acid ring if it is you, nothing if not. */}
+                        {h.avatar
+                          ? <img src={h.avatar} alt="" style={{ width: 34, height: 34, borderRadius: 100, objectFit: 'cover', flex: 'none', outline: h.isYou ? `2px solid ${YOU_TINT}` : 'none', outlineOffset: 1 }} />
+                          : <div style={{ width: 34, height: 34, borderRadius: 100, background: h.isYou ? T.acidDim : T.surface2, display: 'grid', placeItems: 'center', fontSize: 14, fontWeight: 800, color: h.isYou ? T.acid : T.mid, flex: 'none' }}>{h.name.replace(/^@/, '').charAt(0).toUpperCase()}</div>}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
                           <span style={{ fontSize: 13, fontWeight: 800, color: h.isYou ? T.acid : T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.name}</span>
                           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.35, color: T.mid }}>{h.text}</span>
                         </div>
                         <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.5, color: T.mid, padding: '6px 10px', borderRadius: 100, background: T.rule, flex: 'none', textAlign: 'center', maxWidth: 96, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.badge}</span>
                       </div>
-                    )
-                  })}
+                  ))}
                 </div>
               </div>
             )}

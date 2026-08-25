@@ -5,7 +5,7 @@ import { useCrewRides } from '../../hooks/useCrewRides'
 import { DASH } from './w3tokens'
 import W3CrewMemberView, { type W3CrewMemberStat, type W3CrewMemberVm, type W3DuelRow, type W3MemberRide } from './W3CrewMemberView'
 import W3Loading from './W3Loading'
-import { AVATAR_TINTS, bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
+import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period, THEM_TINT } from './w3crew'
 
 /**
  * W3 · 11 CREW MEMBER DETAIL, wired. Route /e/w3-crew-member/:id (the crew
@@ -120,7 +120,8 @@ export default function W3CrewMemberPage() {
         found: false,
         handle: known ? `@${known}` : DASH,
         isYou: false,
-        tint: AVATAR_TINTS[0],
+        tint: THEM_TINT,
+        avatar: null,
         period, windowChip: chip, rankLine: '',
         headlineKicker: '', headline: DASH, headlineSub: '',
         stats: [], bars: [], barsFilled: 0, barsTotal: 0, barsNote: '', barsEdges: null,
@@ -338,7 +339,11 @@ export default function W3CrewMemberPage() {
       found: true,
       handle: name,
       isYou: row.is_you,
-      tint: AVATAR_TINTS[(rank - 1) % AVATAR_TINTS.length],
+      // One tone for "the other rider", always. The board tint it used to take
+      // starts at the acid, so the top-ranked crewmate was painted in the
+      // colour that means YOU everywhere else on this screen.
+      tint: THEM_TINT,
+      avatar: row?.avatar ?? null,
       period,
       windowChip: chip,
       rankLine: `${rank}. von ${words(total)} · ${thisPeriod(period)}`,

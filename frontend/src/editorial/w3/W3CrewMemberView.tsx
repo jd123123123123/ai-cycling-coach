@@ -2,7 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Route as RouteIcon, CalendarCheck, Sparkles, Zap, HeartPulse, Gauge, Users, Bike } from 'lucide-react'
 import { T, FONT, EASE, grow, band, card } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
-import { type W3Period } from './w3crew'
+import { THEM_TINT, type W3Period } from './w3crew'
 import W3TabBar from './W3TabBar'
 import './w3.css'
 
@@ -19,7 +19,12 @@ import './w3.css'
  *
  * Pure function of `vm`; `W3CrewMemberPage` builds it from that rider's real
  * `StandingRow` in `GET /crews/me/standings?period=…` plus their rows in the
- * crew ride feed `GET /crews/me/rides`. There is no avatar in the crew payload,
+ * crew ride feed `GET /crews/me/rides`. The avatar DOES come down with the
+ * standings (`StandingRow.avatar`, a 96 px thumbnail) — this comment used to
+ * say there was none, and the screen drew a letter the size of the hero
+ * accordingly. It draws their collectible now, and falls back to the letter
+ * only when a rider has not made one.
+ * (Historic note kept because the old claim is still in git:
  * so the hero is the rider's board tint rather than a fabricated portrait, and
  * every value is either real or an explicit "—".
  */
@@ -81,6 +86,8 @@ export interface W3CrewMemberVm {
   handle: string          // "@mara" or "Du"
   isYou: boolean
   tint: string            // their colour on the crew board
+  /** Their collectible thumbnail. Null → the initial, never a stand-in face. */
+  avatar?: string | null
   period: W3Period
   windowChip: string      // "10.–16. AUG"
   rankLine: string        // "2. von sechs · diesen Monat"
@@ -115,7 +122,7 @@ const Tile = ({ s, i, reduce }: { s: W3CrewMemberStat; i: number; reduce: boolea
 }
 
 /** One duel axis: your value | split bar | their value, with the gap named. */
-const DuelRow = ({ r, tint, i, reduce }: { r: W3DuelRow; tint: string; i: number; reduce: boolean | null }) => {
+const DuelRow = ({ r, i, reduce }: { r: W3DuelRow; i: number; reduce: boolean | null }) => {
   const none = r.minePct <= 0 && r.theirsPct <= 0
   /* Your own number is never dimmed — being behind is a gap, not a verdict.
    * The acid stays on the headline, so the gap lines read ink / mid only. */
@@ -141,7 +148,12 @@ const DuelRow = ({ r, tint, i, reduce }: { r: W3DuelRow; tint: string; i: number
                 style={{ flexGrow: Math.max(0.03, r.minePct), flexBasis: 0, minWidth: 0, transformOrigin: 'right', borderRadius: 100, background: T.acid }} />
               <motion.div
                 initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(0.08 + i * 0.05)}
-                style={{ flexGrow: Math.max(0.03, r.theirsPct), flexBasis: 0, minWidth: 0, transformOrigin: 'left', borderRadius: 100, background: tint }} />
+                // THEIRS IS ALWAYS VIOLET, never their board tint. That tint
+                // came from a cycling list whose FIRST entry is the acid, so
+                // rider number one got a bar identical to yours and the duel
+                // became unreadable. Two fixed tones, and the legend above says
+                // which is which.
+                style={{ flexGrow: Math.max(0.03, r.theirsPct), flexBasis: 0, minWidth: 0, transformOrigin: 'left', borderRadius: 100, background: THEM_TINT }} />
             </>
           )}
         </div>
@@ -186,7 +198,9 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
         <div style={{ position: 'relative', height: 260, width: '100%', overflow: 'hidden', flex: 'none' }}>
           <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(120% 80% at 50% 18%, ${vm.tint}77, ${T.bg} 72%)` }} />
           <div style={{ position: 'absolute', inset: 0, background: `radial-gradient(90% 60% at 50% 12%, ${accent}2E, transparent 70%)` }} />
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 128, fontWeight: 800, letterSpacing: -6, color: T.d2, paddingBottom: 40 }}>{initial}</div>
+          {vm.avatar
+            ? <img src={vm.avatar} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 128, fontWeight: 800, letterSpacing: -6, color: T.d2, paddingBottom: 40 }}>{initial}</div>}
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(0deg, ${T.bg}, transparent)` }} />
           <div style={{ position: 'relative', padding: '10px 20px 0' }}>
             <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
@@ -246,14 +260,17 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
                         <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>Du</span>
                       </span>
                       <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 3, background: vm.tint, flex: 'none' }} />
+                        {/* The legend must paint what the BAR paints. It read
+                            `vm.tint` while the bar had moved to the fixed tone,
+                            which is a legend that lies. */}
+                        <span style={{ width: 10, height: 10, borderRadius: 3, background: THEM_TINT, flex: 'none' }} />
                         <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 10.5, fontWeight: 700, color: T.mid }}>{vm.duel.theirName}</span>
                       </span>
                     </div>
 
                     {/* The axes */}
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      {vm.duel.rows.map((r, i) => <DuelRow key={r.key} r={r} tint={vm.tint} i={i} reduce={reduce} />)}
+                      {vm.duel.rows.map((r, i) => <DuelRow key={r.key} r={r} i={i} reduce={reduce} />)}
                     </div>
 
                     <span style={{ fontSize: 11, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>{vm.duel.note}</span>
