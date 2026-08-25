@@ -13,6 +13,7 @@ import W3Loading from './W3Loading'
 import W3RideWrap, { type W3RideWrapVm, type W3WrapStat } from './W3RideWrap'
 import { T } from './w3tokens'
 import { splitVerdict } from '../data/verdictSplit'
+import { looksLikeRepeatSet } from './rideRepeats'
 
 /**
  * W3 · 07 RIDE DETAIL, wired to live data. Route /e/w3-ride/:id.
@@ -132,21 +133,6 @@ function pmcTriplet(pmc: PMCResponse | undefined) {
  * durations — tight means one hill repeated, loose means a ride with hills in
  * it — plus at least three of them, because two of anything is a coincidence.
  */
-const REPEAT_MIN = 3
-//: Coefficient of variation on duration. 0.25 keeps a set that drifted by a
-//: quarter and rejects a loop whose climbs differ by more than that.
-const REPEAT_MAX_SPREAD = 0.25
-
-export function looksLikeRepeatSet(durations: number[]): boolean {
-  if (durations.length < REPEAT_MIN) return false
-  const mean = durations.reduce((a, b) => a + b, 0) / durations.length
-  if (mean <= 0) return false
-  const sd = Math.sqrt(
-    durations.reduce((a, d) => a + (d - mean) ** 2, 0) / durations.length,
-  )
-  return sd / mean <= REPEAT_MAX_SPREAD
-}
-
 function toRepeats(d: RaceDebrief): { repeats: W3Repeat[]; score: string; sub: string; note: string } {
   const climbs = d.segments
     .filter((s) => s.kind === 'climb' && s.avg_power != null && s.duration_s >= 60)
