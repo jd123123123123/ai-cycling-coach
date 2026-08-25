@@ -1,4 +1,5 @@
 import W3RideWrap, { type W3RideWrapVm } from './W3RideWrap'
+import W3RideDetailPreview from './W3RideDetailPreview'
 import { T } from './w3tokens'
 
 /** Backend-free preview of the ride wrap — /e/w3-ride-wrap-preview, unguarded.
@@ -38,7 +39,10 @@ export default function W3RideWrapPreview() {
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ minHeight: '100dvh', background: T.bg }}>
+        {/* The composition the celebration route renders: the wrap is the lede
+            and the whole ride detail runs underneath it, one scroll. */}
         <W3RideWrap vm={VM} hero={<HeroStandIn />} />
+        <W3RideDetailPreview />
       </div>
     </div>
   )

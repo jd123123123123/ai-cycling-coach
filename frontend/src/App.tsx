@@ -469,7 +469,11 @@ function AppRoutes() {
           <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3Guard><W3BikerPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
           <Route path="/e/w3-first-bike" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />
-          <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
+          {/* ONE RIDE, ONE SCROLL. The celebration is the ride page with its wrap
+              on top — the same fetch, the same view model, and "scroll down for
+              everything" is literally true rather than a second navigation. */}
+          <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
+          <Route path="/e/w3-ride-points/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
           <Route path="/e/w3-ride-wrap-preview" element={<W3RideWrapPreview />} />
           <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />

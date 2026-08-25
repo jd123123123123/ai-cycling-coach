@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { usePMC } from '../../hooks/usePMC'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
@@ -10,6 +10,9 @@ import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
 import type { W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
+import W3RideWrap, { type W3RideWrapVm, type W3WrapStat } from './W3RideWrap'
+import { T } from './w3tokens'
+import { splitVerdict } from '../data/verdictSplit'
 
 /**
  * W3 · 07 RIDE DETAIL, wired to live data. Route /e/w3-ride/:id.
@@ -295,7 +298,72 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
  *  cover and nothing is offered. */
 const SCENE_STATUSES: W3SceneStatus[] = ['ok', 'not_generated', 'needs_rider', 'needs_bike', 'image_model_unavailable']
 
+/**
+ * THE WRAP'S VIEW MODEL, from the same debrief the detail below it reads.
+ *
+ * Pen frame `tN23S`. Distance leads because it is the number a rider quotes;
+ * time and climbing take two of the three tiles beside it, and the third is
+ * whichever of power or speed the ride actually recorded. A ride that carries
+ * no power meter does not get an empty tile — it gets its average speed, which
+ * it does have.
+ */
+function toWrapVm(d: RaceDebrief, activity: ActivityRead | null): W3RideWrapVm {
+  const h = d.header
+  const nf = (n: number, dp = 0) =>
+    n.toLocaleString('de-DE', { minimumFractionDigits: dp, maximumFractionDigits: dp })
+
+  // The coach's own sentence, broken where the coach broke it.
+  const line = d.verdict.went_well[0] ?? d.verdict.ai_verdict.split('.')[0] ?? ''
+  const { lead, emphasis } = splitVerdict(line)
+
+  const hrs = Math.floor(h.moving_time_s / 3600)
+  const mins = Math.floor((h.moving_time_s % 3600) / 60)
+
+  const stats: W3WrapStat[] = [
+    {
+      key: 'time', label: 'FAHRZEIT',
+      value: hrs > 0 ? `${hrs}:${String(mins).padStart(2, '0')}` : String(mins),
+      unit: hrs > 0 ? 'h' : 'min', note: null, fill: null,
+    },
+  ]
+  if (h.elevation_m != null) {
+    stats.push({
+      key: 'climb', label: 'HÖHENMETER', value: nf(Math.round(h.elevation_m)), unit: 'm',
+      note: null, fill: null,
+    })
+  }
+  if (h.np_watts != null) {
+    stats.push({ key: 'power', label: 'Ø LEISTUNG', value: String(Math.round(h.np_watts)), unit: 'W', note: null, fill: null })
+  } else if (h.distance_km != null && h.moving_time_s > 0) {
+    const kmh = h.distance_km / (h.moving_time_s / 3600)
+    stats.push({ key: 'speed', label: 'Ø TEMPO', value: nf(kmh, 1), unit: 'km/h', note: null, fill: null })
+  }
+
+  const started = activity?.started_at ? new Date(activity.started_at) : null
+
+  return {
+    // No conditions chip unless the ride carries something true to put in it.
+    chip: null,
+    chapter: '01',
+    route: (activity?.title ?? 'DEINE FAHRT').toUpperCase(),
+    when: started
+      ? `${started.toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' }).toUpperCase()} · ${started.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
+      : '',
+    lead: lead || 'Fahrt',
+    emphasis: emphasis ?? 'aufgezeichnet.',
+    heroValue: h.distance_km != null ? nf(h.distance_km, 1) : '—',
+    heroUnit: 'km',
+    stats,
+    ctaLabel: 'FAHRT TEILEN',
+  }
+}
+
 export default function W3RideDetailPage() {
+  // CELEBRATE MODE COMES FROM THE ROUTE, NOT A PROP. `lazyWithRetry` types every
+  // routed page as `ComponentType<unknown>`, so a page that takes props cannot
+  // be code-split — and this page must be. The path already says which of the
+  // two things it is.
+  const celebrate = useLocation().pathname.startsWith('/e/w3-ride-celebrate')
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const activityId = id ? Number(id) : undefined
@@ -342,8 +410,14 @@ export default function W3RideDetailPage() {
     [vm, scene.status, scene.image, scene.pending, routePending],
   )
 
+  const wrapVm = useMemo(
+    () => (celebrate && data ? toWrapVm(data, activity) : null),
+    [celebrate, data, activity],
+  )
+
   if (!vm || !heroVm) return <W3Loading label="Lade deine Fahrt…" />
-  return (
+
+  const detail = (
     <W3RideDetailView
       vm={{ ...vm, hero: heroVm }}
       scene={scene}
@@ -353,5 +427,26 @@ export default function W3RideDetailPage() {
       onShare={() => id && navigate(`/e/w3-share/${id}`)}
       onExpandMap={vm.hero.polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
     />
+  )
+
+  // ── ONE RIDE, ONE SCROLL ────────────────────────────────────────────────
+  // The celebration is not a second screen: the wrap is the lede and the whole
+  // ride detail runs underneath it, so "scroll down for everything" is literally
+  // true and there is one fetch, one view model and one page to keep right.
+  if (!wrapVm) return detail
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ minHeight: '100dvh', background: T.bg }}>
+        <W3RideWrap
+          vm={wrapVm}
+          hero={
+            scene.status === 'ok' && scene.image
+              ? <img src={scene.image} alt="" style={{ display: 'block', width: '100%', objectFit: 'cover' }} />
+              : undefined
+          }
+          onShare={() => id && navigate(`/e/w3-share/${id}`)} />
+        {detail}
+      </div>
+    </div>
   )
 }
