@@ -1,82 +1,107 @@
 import W3WinsView, { type W3WinsVm } from './W3WinsView'
 
-/** TEMP preview — pen-exact fixture, no backend. /e/w3-wins-preview is
- *  unguarded; remove before merge. Shows the full "Wins" reward concept —
- *  challenges, community pools and badges — that the live page marks as the
- *  unbuilt reward layer while keeping Personal records real. */
-
-// Month names always come from the locale, never a hand-written table.
-const monthBack = (n: number): string => {
-  const d = new Date()
-  d.setDate(1)
-  d.setMonth(d.getMonth() - n)
-  return d.toLocaleDateString('de-DE', { month: 'long' })
-}
+/**
+ * Backend-free preview of the REAL screen — /e/w3-wins-preview, unguarded.
+ *
+ * A fixture, not a lookalike: it feeds `W3WinsView` the same view model the
+ * live page builds, so the design flow can be reviewed without a session and
+ * the preview cannot drift into a second design. Every value below has a real
+ * counterpart in `/achievements/mine`, the wallet and the power curve.
+ */
 
 const FIXTURE: W3WinsVm = {
-  title: 'Erfolge',
-  subtitle: 'Jedes Abzeichen hier ist ein Trainingsergebnis. Nichts davon ist gekauft.',
-  balance: '315',
+  micro: 'ERFOLGE',
+  eyebrow: 'SAISON 2026 · AUGUST',
+  headline: 'Nichts hier ist',
+  headlineAccent: 'gekauft.',
+  deck: 'Jedes Abzeichen wird gefahren. Erkannt aus deinen eigenen Fahrten — Datum, Wert und Rest inklusive.',
 
-  challengesHeader: 'Deine Challenges',
-  challengesSub: 'Ziele, die du dir selbst setzt · jederzeit änderbar',
-  challengesChip: '4 AKTIV',
-  hero: {
-    title: 'Heißer Streak',
-    daysLeft: 'NOCH 19 TAGE',
-    body: `Triff an 20 Tagen im ${monthBack(0)} deine vorgegebene Einheit. Erholungstage zählen, wenn du sie nimmst.`,
-    lit: 9,
-    total: 20,
-    progressLabel: '9 von 20 Tagen',
-    reward: 'BELOHNUNG · 1.000 RIDECOIN',
+  ledger: [
+    { key: 'badges', value: '12', unit: 'von 34', label: 'ABZEICHEN' },
+    { key: 'active', value: '2', label: 'CHALLENGES LIVE' },
+    { key: 'rc', value: '1.315', unit: 'RC', label: 'RIDECOIN' },
+  ],
+
+  latestChapter: 'ZULETZT VERDIENT',
+  latestTitle: 'Dein letztes Abzeichen',
+  latest: {
+    icon: 'mountain',
+    title: 'Erster Century',
+    value: '133,1 km',
+    detail: 'Deine längste Fahrt — und die erste über 100 km. Gefahren am Stück, ohne Pause über 20 Minuten.',
+    dateLabel: '14. AUGUST',
+    fresh: true,
   },
+  latestEmpty: 'Deine erste gewertete Fahrt schaltet das erste Abzeichen frei. Es gibt keinen anderen Weg hinein.',
+  cabinetValue: '12 von 34',
+  cabinetLit: 12,
+  cabinetTotal: 34,
+  next: { label: 'Als Nächstes · 300 W FTP', value: 'noch 8 W' },
 
-  personalHeader: 'Persönliche Challenges',
-  personalSub: 'Ziele, die du dir selbst setzt · jederzeit änderbar',
-  challenges: [
-    { key: 'climb', title: '10 000 Hm sammeln', reward: '+500 RIDECOIN', sub: '6 240 von 10 000 m · noch 19 Tage', fill: 0.624 },
-    { key: 'dawn', title: 'Frühaufsteher ×8', reward: '+350 RIDECOIN', sub: '3 von 8 Fahrten vor 07:00 · noch 19 Tage', fill: 0.375 },
-    { key: 'zone', title: 'In der Zone bleiben', reward: '+300 RIDECOIN', sub: '14 von 20 Einheiten im Bereich', fill: 0.7 },
-  ],
-  newChallengeLabel: 'NEUE CHALLENGE',
-
-  recordsHeader: 'Persönliche Rekorde',
-  recordsSub: 'Der Balken zeigt, wie weit über deinem alten Bestwert du liegst',
-  records: [
-    { key: '5s', label: '5 SEK', value: '1.240 W', note: `+40 ggü. ${monthBack(3)}`, past: 0.16, best: false },
-    { key: '1m', label: '1 MIN', value: '620 W', note: `+8 ggü. ${monthBack(2)}`, past: 0.08, best: false },
-    { key: '12m', label: '12 MIN', value: '288 W', note: `BESTWERT · 12. ${monthBack(3).toUpperCase()}`, past: 1, best: true },
-    { key: '20m', label: '20 MIN', value: '276 W', note: `+3 ggü. ${monthBack(1)}`, past: 0.05, best: false },
-  ],
-
-  communityHeader: 'Community-Challenges',
-  communitySub: 'Alle Kilometer in einem Topf · dein Anteil zählt',
-  communityChip: '4 DABEI',
-  communityHero: {
-    title: 'Um die Welt ×2',
-    pct: '26 %',
-    sub: '20.840 von 80.150 km · noch 4 Wochen',
-    foot: 'Du hast 412 km beigetragen. Top 8 % der Community.',
-    fill: 0.26,
-  },
-  community: [
-    { key: 'everest', title: 'Alpen-Everesting', pct: '41 %', sub: '1,24 Mio. von 3,00 Mio. m · noch 6 Tage', you: 'DU 1 240 M · TOP 12 %', fill: 0.41 },
-    { key: 'aug1000', title: `${monthBack(0)} 1 000`, pct: '61 %', sub: '2,39 Mio. von 3,90 Mio. km · noch 19 Tage', you: 'DU 612 KM · TOP 22 %', fill: 0.61 },
-    { key: 'elbe', title: 'Elbe-Runde Staffel', pct: '78 %', sub: '312 von 400 Runden · noch 3 Tage', you: 'DU 9 RUNDEN · TOP 31 %', fill: 0.78 },
-  ],
-
-  badgesHeader: 'Abzeichen',
-  badgesCount: '12 von 34',
+  badgesChapter: 'DIE VITRINE',
+  badgesTitle: 'Abzeichen',
+  badgesSub: 'Verdiente zuerst, dann die, die am nächsten dran sind',
   badges: [
-    { key: 'century', icon: 'medal', name: 'Erster Century', caption: '200 KM', earned: true },
-    { key: '10k', icon: 'mountain', name: '10 000 Hm', caption: 'GESAMMELT', earned: true },
-    { key: 'dawn', icon: 'sunrise', name: 'Frühaufsteher', caption: '×14 FAHRTEN', earned: true },
-    { key: 'ftp', icon: 'lock', name: '300 W FTP', caption: 'NOCH 8 W', earned: false },
-    { key: 'streak', icon: 'lock', name: '30-Tage-Streak', caption: '17 VON 30', earned: false },
-    { key: 'everest', icon: 'lock', name: 'Everest', caption: 'NOCH 3.140 M', earned: false },
+    { key: 'century', icon: 'mountain', name: 'Erster Century', caption: '133,1 KM', earned: true, pct: null },
+    { key: '10k', icon: 'medal', name: '10 000 Hm', caption: 'GESAMMELT', earned: true, pct: null },
+    { key: 'dawn', icon: 'sunrise', name: 'Frühaufsteher', caption: '×14 FAHRTEN', earned: true, pct: null },
+    { key: 'cat4', icon: 'flame', name: 'Cat 4 Anstieg', caption: 'CAT 4', earned: true, pct: null },
+    { key: 'kj', icon: 'zap', name: '10 000 kJ Woche', caption: '10.240 KJ', earned: true, pct: null },
+    { key: 'streak7', icon: 'bike', name: '7-Tage-Streak', caption: '7 TAGE', earned: true, pct: null },
+    { key: 'ftp', icon: 'gauge', name: '300 W FTP', caption: 'NOCH 8 W', earned: false, pct: 0.97 },
+    { key: 'streak', icon: 'flame', name: '30-Tage-Streak', caption: '17 VON 30', earned: false, pct: 0.57 },
+    { key: 'everest', icon: 'mountain', name: 'Everesting', caption: 'NOCH 3.140 M', earned: false, pct: 0.65 },
   ],
+
+  recordsChapter: 'DEINE REKORDE',
+  recordsTitle: 'Persönliche Bestwerte',
+  recordsSub: 'Aus deiner eigenen Leistungskurve. Der Balken zeigt jede Dauer als Anteil deiner Spitzenleistung — die Form deiner Kurve.',
+  recordsEmpty: 'Noch keine Wattdaten. Eine einzige Fahrt mit Leistungsmessung reicht — dann steht deine Kurve hier.',
+  records: [
+    { key: '5s', label: '5 SEK', value: '1.240 W', wkg: '17,0 W/kg', frac: 1, pr: false },
+    { key: '1m', label: '1 MIN', value: '620 W', wkg: '8,5 W/kg', frac: 0.5, pr: true },
+    { key: '12m', label: '12 MIN', value: '288 W', wkg: '3,9 W/kg', frac: 0.232, pr: false },
+    { key: '20m', label: '20 MIN', value: '276 W', wkg: '3,8 W/kg', frac: 0.223, pr: false },
+  ],
+
+  lifeChapter: 'ALLE ZEITEN',
+  lifeTitle: 'Was zusammengekommen ist',
+  lifeSub: 'Alles, was der Coach je von dir gewertet hat',
+  life: [
+    { key: 'km', value: '14.208', unit: 'km', label: 'GEFAHREN INSGESAMT' },
+    { key: 'rides', value: '486', unit: '', label: 'FAHRTEN' },
+    { key: 'hours', value: '612', unit: 'h', label: 'IM SATTEL' },
+    { key: 'asc', value: '162.400', unit: 'hm', label: 'HÖHENMETER' },
+    { key: 'kj', value: '1.980.400', unit: 'kJ', label: 'ARBEIT' },
+  ],
+
+  ctaLabel: 'OFFENE CHALLENGES',
+  ctaCaption: '4 warten auf dich',
+}
+
+/** The cold-start shape, so the empty branches get looked at as often as the
+ *  full one: /e/w3-wins-preview?empty. A rider on day one sees this. */
+const EMPTY: W3WinsVm = {
+  ...FIXTURE,
+  ledger: [
+    { key: 'badges', value: '0', unit: 'von 34', label: 'ABZEICHEN' },
+    { key: 'active', value: '0', label: 'CHALLENGES LIVE' },
+    { key: 'rc', value: '0', unit: 'RC', label: 'RIDECOIN' },
+  ],
+  latestTitle: 'Noch nichts verdient',
+  latest: null,
+  cabinetValue: '0 von 34',
+  cabinetLit: 0,
+  cabinetTotal: 34,
+  next: null,
+  badges: [],
+  recordsSub: 'Aus deiner eigenen Leistungskurve, sobald es eine gibt.',
+  records: FIXTURE.records.map((r) => ({ ...r, value: '—', wkg: null, frac: null, pr: false })),
+  life: [],
+  ctaCaption: '9 warten auf dich',
 }
 
 export default function W3WinsPreview() {
-  return <W3WinsView vm={FIXTURE} />
+  const empty = typeof window !== 'undefined' && window.location.search.includes('empty')
+  return <W3WinsView vm={empty ? EMPTY : FIXTURE} />
 }
