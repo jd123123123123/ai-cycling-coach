@@ -1017,6 +1017,43 @@ export async function renderChallengeCard(d: ChallengeCardData): Promise<{ blob:
 const SW = 1080
 const SH = 1920
 
+// ─────────────────────────────────────────────────────────────────────────────
+// WHERE A STORY IS ACTUALLY ALLOWED TO PUT THINGS.
+//
+// Instagram draws its own furniture over this canvas: the profile row and the
+// close/menu buttons across the top, the reply bar across the bottom. A card
+// laid out to the frame edges puts its handle behind Instagram's avatar and its
+// footer behind "Nachricht senden" — which is exactly what this one did. Every
+// number below is content-inset, not canvas-inset.
+//
+// 250 / 310 are the figures Instagram's own creative guidance uses, and the
+// bottom is larger because the reply bar is taller than the header. Anything
+// that must be READ lives between them.
+const SAFE_TOP = 250
+const SAFE_BOTTOM = 310
+
+// THE SIDE MARGIN IS AN EDITORIAL DECISION, not a safety one. 64px on a 1080
+// frame is 6% and reads as a screenshot — type running toward the edge is what
+// makes a card look like a dashboard someone exported. 96px is 9%, where a
+// magazine sets a full-bleed page, and it gives the photograph room to be a
+// photograph rather than a background.
+const MX = 96
+
+/** The last baseline that will not sit under Instagram's reply bar. */
+const CONTENT_BOTTOM = SH - SAFE_BOTTOM
+
+/** Usable width between the margins. */
+const CW = SW - MX * 2
+
+/** The safe area, exported so it can be pinned by a test rather than trusted —
+ *  a card that has left the app cannot re-lay itself out when it turns out the
+ *  reply bar is sitting on its footer. */
+export const STORY_SAFE = {
+  width: SW, height: SH,
+  top: SAFE_TOP, bottom: SAFE_BOTTOM, side: MX,
+  contentBottom: CONTENT_BOTTOM,
+} as const
+
 export interface StoryStat { v: string; l: string }
 
 /**
@@ -1170,22 +1207,24 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     ctx.restore()
   }
 
+  // The footer sits ON the bottom safe line, not 74px from the canvas edge —
+  // where it used to be, it was behind Instagram's reply bar on every post.
   const markAndFooter = (footerColor = 'rgba(255,255,255,0.5)') => {
-    text(ctx, d.footer, 64, SH - 74, 24, '600', footerColor, 0.6)
-    text(ctx, 'w3.ride', SW - 64, SH - 74, 24, '700', accent, 0.6, 'right')
+    text(ctx, d.footer, MX, CONTENT_BOTTOM, 24, '600', footerColor, 0.6)
+    text(ctx, 'w3.ride', SW - MX, CONTENT_BOTTOM, 24, '700', accent, 0.6, 'right')
   }
 
   const strip = (top: number) => {
     if (d.series.length === 0) return
     const bars = d.series.slice(0, 48)
     const gap = 6
-    const bw = (SW - 128 - gap * (bars.length - 1)) / bars.length
+    const bw = (CW - gap * (bars.length - 1)) / bars.length
     for (let i = 0; i < bars.length; i++) {
       const hgt = Math.max(4, Math.min(1, bars[i]) * 74)
       // The quiet bars are the accent at low alpha, so a changed accent does not
       // leave a strip of the old one behind it.
       ctx.fillStyle = bars[i] >= 0.92 ? accent : accent + '6B'
-      roundRect(ctx, 64 + i * (bw + gap), top + (74 - hgt), bw, hgt, 3)
+      roundRect(ctx, MX + i * (bw + gap), top + (74 - hgt), bw, hgt, 3)
       ctx.fill()
     }
   }
@@ -1196,19 +1235,25 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
       ctx.font = `700 30px ${FONT}`
       // Clamped: a font that has not finished loading measures wider, and a card
       // that has left the app cannot re-lay itself out.
-      const w = Math.min(ctx.measureText(label).width + 66, SW - 128)
-      const left = Math.max(64, Math.min(align === 'right' ? x - w : x, SW - 64 - w))
+      // MEASURED THE WAY IT WILL BE DRAWN. The label is set with 1.2 of letter
+      // spacing, and `measureText` knows nothing about that — so the pill was
+      // sized to the unspaced string and every longer label ("W3 ANALYSE") ran
+      // out through its own right edge. Canvas has no letter-spacing metric, so
+      // the spaced width has to be summed the same way `text()` will lay it.
+      const spaced = [...label].reduce((acc, ch) => acc + ctx.measureText(ch).width + 1.2, 0) - 1.2
+      const w = Math.min(spaced + 78, CW)
+      const left = Math.max(MX, Math.min(align === 'right' ? x - w : x, SW - MX - w))
       ctx.fillStyle = lit ? accent : 'rgba(12,12,12,0.62)'
-      roundRect(ctx, left, 74, w, 68, 34)
+      roundRect(ctx, left, SAFE_TOP, w, 68, 34)
       ctx.fill()
       ctx.beginPath()
-      ctx.arc(left + 34, 108, 9, 0, Math.PI * 2)
+      ctx.arc(left + 34, SAFE_TOP + 34, 9, 0, Math.PI * 2)
       ctx.fillStyle = lit ? CARD.bg : accent
       ctx.fill()
-      text(ctx, label, left + 54, 119, 30, '700', lit ? CARD.bg : CARD.ink, 1.2)
+      text(ctx, label, left + 54, SAFE_TOP + 45, 30, '700', lit ? CARD.bg : CARD.ink, 1.2)
     }
-    chip(d.handle, 64, 'left', false)
-    chip(d.badge, SW - 64, 'right', true)
+    chip(d.handle, MX, 'left', false)
+    chip(d.badge, SW - MX, 'right', true)
   }
 
   // ── DIE SCHLAGZEILE (pen `iXYiI`) ──────────────────────────────────────
@@ -1222,24 +1267,27 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
       ctx.fillRect(0, 0, SW, inset.y)
       ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
     }
-    text(ctx, d.dateline ?? d.footer, 64, 130, 26, '700', CARD.mid, 2.4)
+    text(ctx, d.dateline ?? d.footer, MX, SAFE_TOP + 34, 26, '700', CARD.mid, 2.4)
     const name = (d.routeName ?? '').toUpperCase()
     let size = 128
     ctx.font = `700 ${size}px ${FONT}`
-    while (ctx.measureText(name).width > SW - 128 && size > 56) {
+    while (ctx.measureText(name).width > CW && size > 56) {
       size -= 4
       ctx.font = `700 ${size}px ${FONT}`
     }
-    text(ctx, name, 64, 250, size, '700', CARD.ink, -3)
+    text(ctx, name, MX, SAFE_TOP + 150, size, '700', CARD.ink, -3)
 
     // The ticker. Acid band, black type, running off both edges on purpose —
     // it reads as a strip of tape rather than a caption that happens to fit.
-    const bandY = SH - 250
+    // The band, its caption and the footer are three stacked lines and they were
+    // sharing 100px between them: the tape sat 8px above its own caption, which
+    // sat on top of the footer. Each gets its own step now.
+    const bandY = CONTENT_BOTTOM - 236
     ctx.fillStyle = accent
     ctx.fillRect(0, bandY, SW, 96)
     const line = [d.bigValue + ' ' + d.bigUnit.toUpperCase(), ...d.stats.map((x) => x.v + ' ' + x.l.split(' ')[0])].join('  —  ')
-    text(ctx, line, 40, bandY + 64, 44, '700', CARD.bg, 1)
-    if (d.ticker) text(ctx, d.ticker, 40, SH - 108, 26, '700', CARD.mid, 1.6)
+    text(ctx, line, MX - 24, bandY + 64, 44, '700', CARD.bg, 1)
+    if (d.ticker) text(ctx, d.ticker, MX, CONTENT_BOTTOM - 84, 26, '700', CARD.mid, 1.6)
     markAndFooter(CARD.quiet)
     return
   }
@@ -1257,32 +1305,33 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
 
     ctx.strokeStyle = accent
     ctx.lineWidth = 8
-    const b = 64, len = 86
-    for (const [cx, cy, dx, dy] of [[b, b, 1, 1], [SW - b, b, -1, 1], [b, SH - b, 1, -1], [SW - b, SH - b, -1, -1]] as const) {
+    const b = MX, len = 86
+    const bt = SAFE_TOP, bb = CONTENT_BOTTOM + 40
+    for (const [cx, cy, dx, dy] of [[b, bt, 1, 1], [SW - b, bt, -1, 1], [b, bb, 1, -1], [SW - b, bb, -1, -1]] as const) {
       ctx.beginPath()
       ctx.moveTo(cx, cy + dy * len); ctx.lineTo(cx, cy); ctx.lineTo(cx + dx * len, cy)
       ctx.stroke()
     }
-    ctx.beginPath(); ctx.arc(112, 118, 11, 0, Math.PI * 2)
+    ctx.beginPath(); ctx.arc(MX + 16, SAFE_TOP + 32, 11, 0, Math.PI * 2)
     ctx.fillStyle = CARD.warn; ctx.fill()
     ctx.font = `600 26px ${mono}`
-    text(ctx, `${d.footer.split(' · ')[0]}   ${(d.routeName ?? '').toUpperCase()}`, 140, 128, 26, '600', CARD.ink, 1.4)
+    text(ctx, `${d.footer.split(' · ')[0]}   ${(d.routeName ?? '').toUpperCase()}`, MX + 46, SAFE_TOP + 42, 26, '600', CARD.ink, 1.4)
 
-    const bl = SH - 430
+    const bl = CONTENT_BOTTOM - 300
     ctx.font = `700 150px ${FONT}`
     const w = ctx.measureText(d.bigValue).width
-    text(ctx, d.bigValue, 64, bl, 150, '700', CARD.ink, -6)
-    text(ctx, d.bigUnit.toUpperCase(), 64 + w + 16, bl, 40, '700', accent, 1)
+    text(ctx, d.bigValue, MX, bl, 150, '700', CARD.ink, -6)
+    text(ctx, d.bigUnit.toUpperCase(), MX + w + 16, bl, 40, '700', accent, 1)
     ctx.font = `600 26px ${mono}`
-    text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), 64, bl + 56, 26, '600', CARD.mid, 1.2)
+    text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), MX, bl + 56, 26, '600', CARD.mid, 1.2)
 
-    let rx = 64
+    let rx = MX
     for (const r of (d.readings ?? []).slice(0, 3)) {
       text(ctx, r.l.toUpperCase(), rx, bl + 130, 22, '600', CARD.quiet, 1.6)
       text(ctx, r.v, rx, bl + 180, 40, '700', CARD.ink, -0.5)
-      rx += 320
+      rx += CW / 3
     }
-    strip(SH - 170)
+    strip(CONTENT_BOTTOM - 120)
     return
   }
 
@@ -1307,23 +1356,23 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     scrimBot.addColorStop(1, 'rgba(0,0,0,0.96)')
     if (!bare) { ctx.fillStyle = scrimBot; ctx.fillRect(0, SH - 620, SW, 620) }
 
-    text(ctx, (d.dateline ?? d.footer).toUpperCase(), 64, 118, 24, '700', CARD.mid, 2)
-    let ey = 200
-    for (const line of wrap(ctx, d.lead, 66, '700', SW - 128)) {
-      text(ctx, line, 64, ey, 66, '700', CARD.ink, -1.6); ey += 80
+    text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, SAFE_TOP + 30, 24, '700', CARD.mid, 2)
+    let ey = SAFE_TOP + 112
+    for (const line of wrap(ctx, d.lead, 66, '700', CW)) {
+      text(ctx, line, MX, ey, 66, '700', CARD.ink, -1.6); ey += 80
     }
-    for (const line of wrap(ctx, d.emphasis, 66, '700', SW - 128)) {
-      text(ctx, line, 64, ey, 66, '700', accent, -1.6); ey += 80
+    for (const line of wrap(ctx, d.emphasis, 66, '700', CW)) {
+      text(ctx, line, MX, ey, 66, '700', accent, -1.6); ey += 80
     }
 
     // Four readings, evenly spread — this card is about how hard, so it carries
     // one more number than the others and none of them is bigger than the rest.
     const cells = [...(d.readings ?? []).slice(0, 3), { v: d.bigValue, l: d.bigUnit.toUpperCase() }]
-    const cw = (SW - 128) / Math.max(1, cells.length)
+    const cw = CW / Math.max(1, cells.length)
     cells.forEach((c, i) => {
-      const cx = 64 + cw * i
-      text(ctx, c.v, cx, SH - 300, 46, '700', CARD.ink, -1)
-      text(ctx, c.l.toUpperCase(), cx, SH - 262, 20, '700', CARD.quiet, 1.6)
+      const cx = MX + cw * i
+      text(ctx, c.v, cx, CONTENT_BOTTOM - 210, 46, '700', CARD.ink, -1)
+      text(ctx, c.l.toUpperCase(), cx, CONTENT_BOTTOM - 172, 20, '700', CARD.quiet, 1.6)
     })
 
     // The effort itself, as an area rather than bars: this is a shape over
@@ -1332,22 +1381,22 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
       const pts2 = d.series.slice(0, 96)
       const step = SW / (pts2.length - 1)
       ctx.beginPath()
-      ctx.moveTo(0, SH - 100)
-      pts2.forEach((v, i) => ctx.lineTo(i * step, SH - 100 - Math.min(1, v) * 130))
-      ctx.lineTo(SW, SH - 100)
+      ctx.moveTo(0, CONTENT_BOTTOM - 60)
+      pts2.forEach((v, i) => ctx.lineTo(i * step, CONTENT_BOTTOM - 60 - Math.min(1, v) * 130))
+      ctx.lineTo(SW, CONTENT_BOTTOM - 60)
       ctx.closePath()
       ctx.fillStyle = accent + '38'
       ctx.fill()
       ctx.beginPath()
       pts2.forEach((v, i) => {
-        const x = i * step, y = SH - 100 - Math.min(1, v) * 130
+        const x = i * step, y = CONTENT_BOTTOM - 60 - Math.min(1, v) * 130
         if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
       })
       ctx.strokeStyle = accent
       ctx.lineWidth = 5
       ctx.stroke()
     }
-    text(ctx, 'w3.ride', SW - 64, SH - 60, 24, '700', accent, 0.6, 'right')
+    text(ctx, 'w3.ride', SW - MX, CONTENT_BOTTOM, 24, '700', accent, 0.6, 'right')
     return
   }
 
@@ -1357,23 +1406,23 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   // for the ride whose picture is the point.
   if (layout === 'trace') {
     if (!bare) {
-      const bottom0 = ctx.createLinearGradient(0, SH - 700, 0, SH)
+      const bottom0 = ctx.createLinearGradient(0, SH - 760, 0, SH)
       bottom0.addColorStop(0, 'rgba(0,0,0,0)')
       bottom0.addColorStop(1, 'rgba(0,0,0,0.9)')
       ctx.fillStyle = bottom0
-      ctx.fillRect(0, SH - 700, SW, 700)
+      ctx.fillRect(0, SH - 760, SW, 760)
     }
     if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
     // Pen `i4lb4E`: the name in caps, ONE meta line under it, both hard left.
     // No chips, no big number — the line already said how far it went, and a
     // second statement of the same fact is what turns a card into a dashboard.
-    text(ctx, (d.routeName ?? '').toUpperCase(), 64, SH - 250, 58, '700', CARD.ink, -1.4)
+    text(ctx, (d.routeName ?? '').toUpperCase(), MX, CONTENT_BOTTOM - 120, 58, '700', CARD.ink, -1.4)
     const meta = [
       `${d.bigValue} ${d.bigUnit.toUpperCase()}`,
       ...d.stats.map((x) => x.v),
       d.dateline ?? '',
     ].filter(Boolean).join('  ·  ')
-    text(ctx, meta, 64, SH - 195, 26, '600', CARD.mid, 1)
+    text(ctx, meta, MX, CONTENT_BOTTOM - 66, 26, '600', CARD.mid, 1)
     markAndFooter(CARD.quiet)
     return
   }
@@ -1381,47 +1430,92 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   // ── DIE KARTE (pen `sYlFV` / `C6Xn06`) and OHNE WORTE (pen `abH9Z`) ─────
   // The same card; `silent` simply does not print the sentence. A rider posting
   // a mountain does not always want a line of prose across it.
-  const top = ctx.createLinearGradient(0, 0, 0, 420)
-  top.addColorStop(0, 'rgba(0,0,0,0.55)')
+  // ── THE STACK, BUILT UP FROM THE SAFE LINE ─────────────────────────────
+  // Everything here used to be positioned DOWN from the canvas bottom, so the
+  // footer sat 74px from the edge (behind Instagram's reply bar), the numbers
+  // at 250 (also behind it), and the headline at 470 — the only part of the
+  // card reliably visible. Measuring UP from `CONTENT_BOTTOM` puts the whole
+  // block where a story can actually show it, and makes the spacing a decision
+  // rather than a residue.
+  const FOOTER_GAP = 46
+  const STRIP_H = 74
+  const hasStrip = d.series.length > 0
+  const stripTop = CONTENT_BOTTOM - FOOTER_GAP - STRIP_H
+  const baseline = (hasStrip ? stripTop : CONTENT_BOTTOM - FOOTER_GAP) - 52
+
+  // The headline is measured before anything is drawn, so the scrim can start
+  // above the type block instead of at a fixed height that knows nothing about
+  // how many lines the coach wrote.
+  ctx.font = `700 62px ${FONT}`
+  const leadLines = layout === 'full' ? wrap(ctx, d.lead, 62, '700', CW) : []
+  const emphLines = layout === 'full' ? wrap(ctx, d.emphasis, 62, '700', CW) : []
+  const LINE_H = 76
+  // THE GAP IS THE BIG NUMBER'S OWN HEIGHT PLUS AIR. The figure is set at 128px
+  // and drawn on `baseline`, so its cap sits ~128 above that; the last headline
+  // line has to finish above THAT, not above the baseline. Getting this wrong
+  // is not a near miss — the headline lands on top of the number.
+  const NUM_CAP = 128
+  const TYPE_GAP = 44
+  const nLines = leadLines.length + emphLines.length
+  /** Baseline of the FIRST headline line. */
+  const typeFirst = baseline - NUM_CAP - TYPE_GAP - (nLines - 1) * LINE_H
+  const typeTop = typeFirst - 62
+
+  const top = ctx.createLinearGradient(0, SAFE_TOP - 90, 0, SAFE_TOP + 190)
+  top.addColorStop(0, 'rgba(0,0,0,0.62)')
   top.addColorStop(1, 'rgba(0,0,0,0)')
   ctx.fillStyle = top
-  ctx.fillRect(0, 0, SW, 420)
+  ctx.fillRect(0, 0, SW, SAFE_TOP + 190)
 
-  const bottom = ctx.createLinearGradient(0, SH - 1000, 0, SH)
+  // ── THE SCRIM RAMPS INTO THE TYPE, NOT ACROSS IT ────────────────────────
+  // It used to start 1000px up with its half-way stop at 0.45 — putting the
+  // WEAKEST part of the wash exactly where the headline sits, and the darkest
+  // part below the fold where it protected nothing. It now begins a fixed
+  // distance above the first line, reaches full strength BY that line, and
+  // holds from there down. Everything above the ramp is photograph.
+  const scrimTop = Math.max(SAFE_TOP + 220, typeTop - 260)
+  const bottom = ctx.createLinearGradient(0, scrimTop, 0, SH)
   bottom.addColorStop(0, 'rgba(0,0,0,0)')
-  bottom.addColorStop(0.45, 'rgba(0,0,0,0.72)')
-  bottom.addColorStop(1, 'rgba(0,0,0,0.94)')
+  bottom.addColorStop(0.55, 'rgba(0,0,0,0.78)')
+  bottom.addColorStop(0.8, 'rgba(0,0,0,0.9)')
+  bottom.addColorStop(1, 'rgba(0,0,0,0.9)')
   ctx.fillStyle = bottom
-  ctx.fillRect(0, SH - 1000, SW, 1000)
+  ctx.fillRect(0, scrimTop, SW, SH - scrimTop)
 
   chips()
 
-  let y = SH - 470
+  let y = typeFirst
   if (layout === 'full') {
     ctx.textAlign = 'left'
-    for (const line of wrap(ctx, d.lead, 62, '700', SW - 128)) {
-      text(ctx, line, 64, y, 62, '700', CARD.ink, -1.4); y += 74
+    for (const line of leadLines) {
+      text(ctx, line, MX, y, 62, '700', CARD.ink, -1.4); y += LINE_H
     }
-    for (const line of wrap(ctx, d.emphasis, 62, '700', SW - 128)) {
-      text(ctx, line, 64, y, 62, '700', accent, -1.4); y += 74
+    for (const line of emphLines) {
+      text(ctx, line, MX, y, 62, '700', accent, -1.4); y += LINE_H
     }
   }
 
-  const baseline = SH - 250
   ctx.font = `700 128px ${FONT}`
   const bigW = ctx.measureText(d.bigValue).width
-  text(ctx, d.bigValue, 64, baseline, 128, '700', CARD.ink, -5)
-  text(ctx, d.bigUnit, 64 + bigW + 14, baseline, 40, '700', accent, -0.5)
+  text(ctx, d.bigValue, MX, baseline, 128, '700', CARD.ink, -5)
+  text(ctx, d.bigUnit, MX + bigW + 14, baseline, 40, '700', accent, -0.5)
 
-  let sx = 64 + bigW + 150
-  for (const st of d.stats) {
-    text(ctx, st.v, sx, baseline - 30, 44, '700', CARD.ink, -1)
-    text(ctx, st.l, sx, baseline, 22, '700', 'rgba(255,255,255,0.55)', 1.6)
-    ctx.font = `700 44px ${FONT}`
-    sx += Math.max(ctx.measureText(st.v).width, 200) + 60
+  // THE SECONDARY STATS ARE ANCHORED RIGHT, not packed against the big number.
+  // They used to run left-to-right from wherever the figure happened to end, so
+  // a long distance pushed them off the frame and a short one stranded them
+  // mid-card. Against the right margin they read as supporting facts, which is
+  // what they are.
+  const shown = d.stats.filter((st) => st.v)
+  if (shown.length > 0) {
+    const colW = 250
+    shown.forEach((st, i) => {
+      const cx = SW - MX - colW * (shown.length - 1 - i)
+      text(ctx, st.v, cx, baseline - 34, 40, '700', CARD.ink, -1, 'right')
+      text(ctx, st.l, cx, baseline, 20, '700', 'rgba(255,255,255,0.55)', 1.4, 'right')
+    })
   }
 
-  strip(SH - 190)
+  if (hasStrip) strip(stripTop)
   markAndFooter()
 }
 
