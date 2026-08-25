@@ -45,6 +45,7 @@ const FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'trace', name: 'DIE SPUR', drops: 'DJJ0P — Foto, Strecke, drei Werte' },
   { id: 'headline', name: 'DIE SCHLAGZEILE', drops: 'iXYiI — Titel und Laufband' },
   { id: 'viewfinder', name: 'DER SUCHER', drops: 'oMRL7 — Telemetrie im Monospace' },
+  { id: 'effort', name: 'DER EFFORT', drops: 'ss70W — Satz oben, vier Werte, Fläche' },
 ]
 
 export default function W3StoryPreview() {
@@ -52,7 +53,12 @@ export default function W3StoryPreview() {
   useEffect(() => {
     let alive = true
     Promise.all(FORMATS.map(async (f) => {
-      const r = await renderStoryCard({ ...BASE, layout: f.id })
+      // `effort` is drawn in the pen's orange, which is also the proof that the
+      // accent is a control rather than a constant.
+      const r = await renderStoryCard({
+        ...BASE, layout: f.id,
+        accent: f.id === 'effort' ? T.warn : undefined,
+      })
       return [f.id, r.dataUrl] as const
     })).then((pairs) => { if (alive) setUrls(Object.fromEntries(pairs)) })
     return () => { alive = false }

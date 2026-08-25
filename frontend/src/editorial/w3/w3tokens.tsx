@@ -208,6 +208,19 @@ export const T: typeof DARK = new Proxy({} as typeof DARK, {
   }),
 })
 
+/**
+ * THE PALETTE A PRINTED ARTEFACT USES, whatever the app is wearing.
+ *
+ * `T` follows the rider's chosen room, which is right for every screen and
+ * wrong for the share cards: those are painted onto a dark photograph and then
+ * leave the app entirely. In light mode `T.ink` is near-black, so a card drawn
+ * through `T` printed dark type onto a dark picture and the words vanished —
+ * seen on `/e/w3-story-preview` the moment white mode landed.
+ *
+ * A card is not a screen. It pins here.
+ */
+export const CARD = DARK
+
 /** What the palette is currently answering with. */
 export function w3Mode(): W3Mode {
   return _mode

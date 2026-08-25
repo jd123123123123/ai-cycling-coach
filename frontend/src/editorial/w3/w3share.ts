@@ -1,4 +1,4 @@
-import { T, SHARE_SCENES, type ShareScene } from './w3tokens'
+import { T, CARD, SHARE_SCENES, type ShareScene } from './w3tokens'
 import {
   blocksHeight, fitBlocks, paintBlocks, usableBlocks,
   type BlockData, type BlockId,
@@ -1028,7 +1028,7 @@ export interface StoryStat { v: string; l: string }
  * All four keep the handle, the mark and the ground; that is what makes them a
  * family rather than four cards. Everything else is the rider's to spend.
  */
-export type StoryLayout = 'full' | 'silent' | 'trace' | 'headline' | 'viewfinder'
+export type StoryLayout = 'full' | 'silent' | 'trace' | 'headline' | 'viewfinder' | 'effort'
 
 export interface StoryData {
   /** Which of the five. Defaults to `full`. */
@@ -1093,13 +1093,21 @@ function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][],
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
   ctx.stroke()
+
+  // Where it started. One dot, because a rider reading their own loop wants to
+  // know which way round it went, and nothing else on a map card earns its ink.
+  const [lat0, lng0] = pts[0]
+  ctx.beginPath()
+  ctx.arc(ox + (lng0 - minX) * scale, oy + (maxY - lat0) * scale, 16, 0, Math.PI * 2)
+  ctx.fillStyle = accent
+  ctx.fill()
 }
 
 function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTMLImageElement | null) {
   const layout = d.layout ?? 'full'
   const mono = "'JetBrains Mono', ui-monospace, monospace"
-  const accent = d.accent || T.acid
-  ctx.fillStyle = T.bg
+  const accent = d.accent || CARD.acid
+  ctx.fillStyle = CARD.bg
   ctx.fillRect(0, 0, SW, SH)
 
   // ── The photograph. Every layout keeps it; only where it sits changes. The
@@ -1152,9 +1160,9 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
       ctx.fill()
       ctx.beginPath()
       ctx.arc(left + 34, 108, 9, 0, Math.PI * 2)
-      ctx.fillStyle = lit ? T.bg : accent
+      ctx.fillStyle = lit ? CARD.bg : accent
       ctx.fill()
-      text(ctx, label, left + 54, 119, 30, '700', lit ? T.bg : T.ink, 1.2)
+      text(ctx, label, left + 54, 119, 30, '700', lit ? CARD.bg : CARD.ink, 1.2)
     }
     chip(d.handle, 64, 'left', false)
     chip(d.badge, SW - 64, 'right', true)
@@ -1166,10 +1174,10 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
   // rather than sitting in tiles. The register is a newspaper, so nothing is
   // rounded and nothing glows.
   if (layout === 'headline') {
-    ctx.fillStyle = T.bg
+    ctx.fillStyle = CARD.bg
     ctx.fillRect(0, 0, SW, inset.y)
     ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
-    text(ctx, d.dateline ?? d.footer, 64, 130, 26, '700', T.mid, 2.4)
+    text(ctx, d.dateline ?? d.footer, 64, 130, 26, '700', CARD.mid, 2.4)
     const name = (d.routeName ?? '').toUpperCase()
     let size = 128
     ctx.font = `700 ${size}px ${FONT}`
@@ -1177,7 +1185,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
       size -= 4
       ctx.font = `700 ${size}px ${FONT}`
     }
-    text(ctx, name, 64, 250, size, '700', T.ink, -3)
+    text(ctx, name, 64, 250, size, '700', CARD.ink, -3)
 
     // The ticker. Acid band, black type, running off both edges on purpose —
     // it reads as a strip of tape rather than a caption that happens to fit.
@@ -1185,9 +1193,9 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     ctx.fillStyle = accent
     ctx.fillRect(0, bandY, SW, 96)
     const line = [d.bigValue + ' ' + d.bigUnit.toUpperCase(), ...d.stats.map((x) => x.v + ' ' + x.l.split(' ')[0])].join('  —  ')
-    text(ctx, line, 40, bandY + 64, 44, '700', T.bg, 1)
-    if (d.ticker) text(ctx, d.ticker, 40, SH - 108, 26, '700', T.mid, 1.6)
-    markAndFooter(T.quiet)
+    text(ctx, line, 40, bandY + 64, 44, '700', CARD.bg, 1)
+    if (d.ticker) text(ctx, d.ticker, 40, SH - 108, 26, '700', CARD.mid, 1.6)
+    markAndFooter(CARD.quiet)
     return
   }
 
@@ -1196,7 +1204,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
   // number set in the monospace the app uses for telemetry. It is the ride as
   // instrument readout, which is the opposite pitch to the broadsheet.
   if (layout === 'viewfinder') {
-    ctx.fillStyle = T.bg
+    ctx.fillStyle = CARD.bg
     ctx.fillRect(0, 0, SW, inset.y)
     ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
 
@@ -1209,25 +1217,91 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
       ctx.stroke()
     }
     ctx.beginPath(); ctx.arc(112, 118, 11, 0, Math.PI * 2)
-    ctx.fillStyle = T.warn; ctx.fill()
+    ctx.fillStyle = CARD.warn; ctx.fill()
     ctx.font = `600 26px ${mono}`
-    text(ctx, `${d.footer.split(' · ')[0]}   ${(d.routeName ?? '').toUpperCase()}`, 140, 128, 26, '600', T.ink, 1.4)
+    text(ctx, `${d.footer.split(' · ')[0]}   ${(d.routeName ?? '').toUpperCase()}`, 140, 128, 26, '600', CARD.ink, 1.4)
 
     const bl = SH - 430
     ctx.font = `700 150px ${FONT}`
     const w = ctx.measureText(d.bigValue).width
-    text(ctx, d.bigValue, 64, bl, 150, '700', T.ink, -6)
+    text(ctx, d.bigValue, 64, bl, 150, '700', CARD.ink, -6)
     text(ctx, d.bigUnit.toUpperCase(), 64 + w + 16, bl, 40, '700', accent, 1)
     ctx.font = `600 26px ${mono}`
-    text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), 64, bl + 56, 26, '600', T.mid, 1.2)
+    text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), 64, bl + 56, 26, '600', CARD.mid, 1.2)
 
     let rx = 64
     for (const r of (d.readings ?? []).slice(0, 3)) {
-      text(ctx, r.l.toUpperCase(), rx, bl + 130, 22, '600', T.quiet, 1.6)
-      text(ctx, r.v, rx, bl + 180, 40, '700', T.ink, -0.5)
+      text(ctx, r.l.toUpperCase(), rx, bl + 130, 22, '600', CARD.quiet, 1.6)
+      text(ctx, r.v, rx, bl + 180, 40, '700', CARD.ink, -0.5)
       rx += 320
     }
     strip(SH - 170)
+    return
+  }
+
+  // ── DER EFFORT (pen `ss70W`) ───────────────────────────────────────────
+  // The only layout that leads with TYPE rather than a picture: a kicker, then
+  // the sentence set large at the TOP of the frame, the photograph beneath it,
+  // and a row of four readings over an area chart at the foot.
+  //
+  // It is also the layout that proves the accent control is not decoration. The
+  // pen draws this one in orange, not acid — a card about time above threshold
+  // is not the same statement as a card about a personal best, and the colour
+  // is how a rider says which one they are making.
+  if (layout === 'effort') {
+    const scrimTop2 = ctx.createLinearGradient(0, 0, 0, 620)
+    scrimTop2.addColorStop(0, 'rgba(0,0,0,0.88)')
+    scrimTop2.addColorStop(1, 'rgba(0,0,0,0)')
+    ctx.fillStyle = scrimTop2
+    ctx.fillRect(0, 0, SW, 620)
+    const scrimBot = ctx.createLinearGradient(0, SH - 620, 0, SH)
+    scrimBot.addColorStop(0, 'rgba(0,0,0,0)')
+    scrimBot.addColorStop(0.5, 'rgba(0,0,0,0.82)')
+    scrimBot.addColorStop(1, 'rgba(0,0,0,0.96)')
+    ctx.fillStyle = scrimBot
+    ctx.fillRect(0, SH - 620, SW, 620)
+
+    text(ctx, (d.dateline ?? d.footer).toUpperCase(), 64, 118, 24, '700', CARD.mid, 2)
+    let ey = 200
+    for (const line of wrap(ctx, d.lead, 66, '700', SW - 128)) {
+      text(ctx, line, 64, ey, 66, '700', CARD.ink, -1.6); ey += 80
+    }
+    for (const line of wrap(ctx, d.emphasis, 66, '700', SW - 128)) {
+      text(ctx, line, 64, ey, 66, '700', accent, -1.6); ey += 80
+    }
+
+    // Four readings, evenly spread — this card is about how hard, so it carries
+    // one more number than the others and none of them is bigger than the rest.
+    const cells = [...(d.readings ?? []).slice(0, 3), { v: d.bigValue, l: d.bigUnit.toUpperCase() }]
+    const cw = (SW - 128) / Math.max(1, cells.length)
+    cells.forEach((c, i) => {
+      const cx = 64 + cw * i
+      text(ctx, c.v, cx, SH - 300, 46, '700', CARD.ink, -1)
+      text(ctx, c.l.toUpperCase(), cx, SH - 262, 20, '700', CARD.quiet, 1.6)
+    })
+
+    // The effort itself, as an area rather than bars: this is a shape over
+    // time, and bars count things.
+    if (d.series.length > 1) {
+      const pts2 = d.series.slice(0, 96)
+      const step = SW / (pts2.length - 1)
+      ctx.beginPath()
+      ctx.moveTo(0, SH - 100)
+      pts2.forEach((v, i) => ctx.lineTo(i * step, SH - 100 - Math.min(1, v) * 130))
+      ctx.lineTo(SW, SH - 100)
+      ctx.closePath()
+      ctx.fillStyle = accent + '38'
+      ctx.fill()
+      ctx.beginPath()
+      pts2.forEach((v, i) => {
+        const x = i * step, y = SH - 100 - Math.min(1, v) * 130
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+      })
+      ctx.strokeStyle = accent
+      ctx.lineWidth = 5
+      ctx.stroke()
+    }
+    text(ctx, 'w3.ride', SW - 64, SH - 60, 24, '700', accent, 0.6, 'right')
     return
   }
 
@@ -1242,18 +1316,17 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     ctx.fillStyle = bottom0
     ctx.fillRect(0, SH - 700, SW, 700)
     if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
-    chips()
-    text(ctx, `${(d.routeName ?? '').toUpperCase()} · ${d.dateline ?? ''}`, SW / 2, SH - 300, 24, '700', T.mid, 2, 'center')
-    const items = [{ v: d.bigValue, l: d.bigUnit }, ...d.stats.map((x) => ({ v: x.v, l: '' }))]
-    const step = SW / (items.length + 1)
-    items.forEach((it, i) => {
-      const cx = step * (i + 1)
-      ctx.font = `700 54px ${FONT}`
-      const vw = ctx.measureText(it.v).width
-      text(ctx, it.v, cx - vw / 2, SH - 210, 54, '700', T.ink, -1)
-      if (it.l) text(ctx, it.l, cx + vw / 2 + 8, SH - 210, 24, '700', T.quiet, 0)
-    })
-    markAndFooter()
+    // Pen `i4lb4E`: the name in caps, ONE meta line under it, both hard left.
+    // No chips, no big number — the line already said how far it went, and a
+    // second statement of the same fact is what turns a card into a dashboard.
+    text(ctx, (d.routeName ?? '').toUpperCase(), 64, SH - 250, 58, '700', CARD.ink, -1.4)
+    const meta = [
+      `${d.bigValue} ${d.bigUnit.toUpperCase()}`,
+      ...d.stats.map((x) => x.v),
+      d.dateline ?? '',
+    ].filter(Boolean).join('  ·  ')
+    text(ctx, meta, 64, SH - 195, 26, '600', CARD.mid, 1)
+    markAndFooter(CARD.quiet)
     return
   }
 
@@ -1279,7 +1352,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
   if (layout === 'full') {
     ctx.textAlign = 'left'
     for (const line of wrap(ctx, d.lead, 62, '700', SW - 128)) {
-      text(ctx, line, 64, y, 62, '700', T.ink, -1.4); y += 74
+      text(ctx, line, 64, y, 62, '700', CARD.ink, -1.4); y += 74
     }
     for (const line of wrap(ctx, d.emphasis, 62, '700', SW - 128)) {
       text(ctx, line, 64, y, 62, '700', accent, -1.4); y += 74
@@ -1289,12 +1362,12 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
   const baseline = SH - 250
   ctx.font = `700 128px ${FONT}`
   const bigW = ctx.measureText(d.bigValue).width
-  text(ctx, d.bigValue, 64, baseline, 128, '700', T.ink, -5)
+  text(ctx, d.bigValue, 64, baseline, 128, '700', CARD.ink, -5)
   text(ctx, d.bigUnit, 64 + bigW + 14, baseline, 40, '700', accent, -0.5)
 
   let sx = 64 + bigW + 150
   for (const st of d.stats) {
-    text(ctx, st.v, sx, baseline - 30, 44, '700', T.ink, -1)
+    text(ctx, st.v, sx, baseline - 30, 44, '700', CARD.ink, -1)
     text(ctx, st.l, sx, baseline, 22, '700', 'rgba(255,255,255,0.55)', 1.6)
     ctx.font = `700 44px ${FONT}`
     sx += Math.max(ctx.measureText(st.v).width, 200) + 60

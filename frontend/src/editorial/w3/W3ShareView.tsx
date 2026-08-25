@@ -83,6 +83,7 @@ const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'trace', name: 'Spur', drops: 'Foto + Strecke' },
   { id: 'headline', name: 'Schlagzeile', drops: 'Titel + Laufband' },
   { id: 'viewfinder', name: 'Sucher', drops: 'Telemetrie' },
+  { id: 'effort', name: 'Effort', drops: 'Satz oben' },
 ]
 
 export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickFormat, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
