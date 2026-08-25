@@ -53,6 +53,11 @@ export interface W3RiderHighlightsProps {
   badges: { unlocked: number; total: number; latest: string | null }
   onAllBadges?: () => void
   onRecord?: (key: string) => void
+  /** Sends a rider with no figurine to the avatar studio. Without it the empty
+   *  portrait is a dead end: the studio is reachable from the nav menu, but a
+   *  rider looking at their own blank profile should not have to go hunting for
+   *  the one action the screen is asking them to take. */
+  onCreateRider?: () => void
 }
 
 //: The bento's tints, in the order the cards are laid out. Acid leads because
@@ -114,11 +119,25 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
             transition={{ duration: 0.7, ease: EASE }}
             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
         ) : (
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: T.tintInk }}>
-              NOCH KEIN RIDER
+          <button
+            onClick={p.onCreateRider}
+            disabled={!p.onCreateRider}
+            style={{
+              position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', gap: 8,
+              background: 'transparent', border: 0, fontFamily: FONT,
+              cursor: p.onCreateRider ? 'pointer' : 'default',
+            }}>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 7 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1.4, color: T.tintInk }}>
+                NOCH KEIN RIDER
+              </span>
+              {p.onCreateRider && (
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.tintInk, opacity: 0.62 }}>
+                  Im Studio aufnehmen
+                </span>
+              )}
             </span>
-          </div>
+          </button>
         )}
 
         {/* The two lifetime figures, over the portrait, in the deck's own
@@ -161,18 +180,31 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
           display: 'flex', alignItems: 'center', gap: 16, padding: 16,
           borderRadius: 26, background: T.surface,
         }}>
+          {/* TWO RINGS, TWO DIFFERENT CLAIMS. Both used to be labelled STUFE
+              and the panel printed only ONE note — the milestone's, which
+              shadowed the level's — so the screen showed two identical
+              captions over two different percentages and never said how far
+              the next level was. Each ring is named for what it measures, and
+              each note is printed under its own. */}
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>
-              STUFE
+              DEIN STAND
             </span>
             <span style={{ fontSize: 19, fontWeight: 800, letterSpacing: -0.5, color: T.ink }}>
               {p.tier.label}
             </span>
-            <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>
-              {p.milestone?.note ?? p.tier.note}
-            </span>
+            {p.tier.note && (
+              <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>
+                {p.tier.note}
+              </span>
+            )}
+            {p.milestone?.note && (
+              <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>
+                {p.milestone.note}
+              </span>
+            )}
           </div>
-          <Ring pct={p.tier.pct} label="STUFE" />
+          <Ring pct={p.tier.pct} label="LEVEL" />
           {p.milestone && <Ring pct={p.milestone.pct} label={p.milestone.label.toUpperCase()} />}
         </div>
       </div>
