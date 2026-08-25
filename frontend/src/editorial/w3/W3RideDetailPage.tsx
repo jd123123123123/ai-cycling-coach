@@ -61,29 +61,99 @@ const durLabel = (s: number) => (s < 60 ? `${s} Sek` : `${Math.round(s / 60)} Mi
 function pmcTriplet(pmc: PMCResponse | undefined) {
   const e = pmc?.entries ?? []
   if (e.length === 0) {
-    return { fitness: DASH, fitnessD: '', fatigue: DASH, fatigueD: '', form: DASH, formD: '', hasTrend: false, ctlDelta: 0, tsbDelta: 0 }
+    return { fitness: DASH, fitnessD: '', fatigue: DASH, fatigueD: '', form: DASH, formD: '', shifts: [], hasTrend: false, ctlDelta: 0, tsbDelta: 0 }
   }
   const last = e[e.length - 1]
   const prev = e.length > 7 ? e[e.length - 8] : null
   const ctlDelta = prev ? last.ctl - prev.ctl : 0
   const atlDelta = prev ? last.atl - prev.atl : 0
   const tsbDelta = prev ? last.tsb - prev.tsb : 0
+  // ── THE THREE, AS MOVEMENTS ────────────────────────────────────────────
+  // Fitness, fatigue and form are the answer to "was das verändert", and they
+  // were three bare figures under a watts delta. A number with a "+3" beside it
+  // does not show a rider that their fatigue is now higher than their fitness,
+  // which is the whole point of looking. Each carries where it sits on its own
+  // scale and where it sat a week ago, so the section can draw the move.
+  //
+  // The scales are the ones these quantities actually live on: CTL and ATL run
+  // 0–120 for everybody short of a professional, and TSB is meaningful from
+  // about −40 (buried) to +25 (fresh). They are fixed on purpose — a scale that
+  // renormalises to each rider would make every ride look like the same ride.
+  const CTL_MAX = 120
+  const TSB_LO = -40
+  const TSB_HI = 25
+  const clamp01 = (x: number) => Math.max(0, Math.min(1, x))
+  const tsbFill = (v: number) => clamp01((v - TSB_LO) / (TSB_HI - TSB_LO))
+
   return {
     fitness: String(Math.round(last.ctl)), fitnessD: prev ? sgn(ctlDelta) : '',
     fatigue: String(Math.round(last.atl)), fatigueD: prev ? sgn(atlDelta) : '',
     form: sgn(last.tsb), formD: prev ? sgn(tsbDelta) : '',
+    shifts: [
+      {
+        key: 'fitness', label: 'FITNESS', value: String(Math.round(last.ctl)),
+        delta: prev ? sgn(ctlDelta) : '', up: ctlDelta >= 0, good: ctlDelta >= 0,
+        fill: clamp01(last.ctl / CTL_MAX),
+        was: prev ? clamp01(prev.ctl / CTL_MAX) : null,
+      },
+      {
+        key: 'fatigue', label: 'ERMÜDUNG', value: String(Math.round(last.atl)),
+        // Fatigue rising is not "good" and not "bad" — it is the cost of the
+        // ride. It is drawn in the warn tint and never in the acid, because
+        // acid on this screen means "you did something well".
+        delta: prev ? sgn(atlDelta) : '', up: atlDelta >= 0, good: false,
+        fill: clamp01(last.atl / CTL_MAX),
+        was: prev ? clamp01(prev.atl / CTL_MAX) : null,
+      },
+      {
+        key: 'form', label: 'FORM', value: sgn(last.tsb),
+        delta: prev ? sgn(tsbDelta) : '', up: tsbDelta >= 0, good: last.tsb >= -10,
+        fill: tsbFill(last.tsb),
+        was: prev ? tsbFill(prev.tsb) : null,
+      },
+    ],
     hasTrend: !!prev, ctlDelta, tsbDelta,
   }
 }
 
-/** The ride's climb segments read as hill repeats, each judged against the
- *  set's average holding power. Returns an empty list when the ride has fewer
- *  than two repeatable climbs, so the section is hidden. */
+/**
+ * HILL REPEATS, AND ONLY WHEN THE RIDE ACTUALLY WAS SOME.
+ *
+ * This asked "Hast du gehalten?" of every ride with two climbs in it, and
+ * judged each one against a target that was THE AVERAGE OF THOSE SAME CLIMBS.
+ * On a free ride outdoors that is a self-referential question — the target is
+ * made of the answer, so about half the efforts are "over target" by
+ * construction and the section says nothing. Worse, it says it first: it was
+ * chapter 01 on a screen about a ride nobody prescribed.
+ *
+ * A repeat SET has a shape that an ordinary ride does not: the same hill, done
+ * again, so the efforts are alike in length. Two unequal climbs on a Sunday loop
+ * are not repeats and are not asked about. The test is the spread of their
+ * durations — tight means one hill repeated, loose means a ride with hills in
+ * it — plus at least three of them, because two of anything is a coincidence.
+ */
+const REPEAT_MIN = 3
+//: Coefficient of variation on duration. 0.25 keeps a set that drifted by a
+//: quarter and rejects a loop whose climbs differ by more than that.
+const REPEAT_MAX_SPREAD = 0.25
+
+export function looksLikeRepeatSet(durations: number[]): boolean {
+  if (durations.length < REPEAT_MIN) return false
+  const mean = durations.reduce((a, b) => a + b, 0) / durations.length
+  if (mean <= 0) return false
+  const sd = Math.sqrt(
+    durations.reduce((a, d) => a + (d - mean) ** 2, 0) / durations.length,
+  )
+  return sd / mean <= REPEAT_MAX_SPREAD
+}
+
 function toRepeats(d: RaceDebrief): { repeats: W3Repeat[]; score: string; sub: string; note: string } {
   const climbs = d.segments
     .filter((s) => s.kind === 'climb' && s.avg_power != null && s.duration_s >= 60)
     .map((s) => ({ w: Math.round(s.avg_power as number), dur: s.duration_s }))
-  if (climbs.length < 2) return { repeats: [], score: '', sub: '', note: '' }
+  if (!looksLikeRepeatSet(climbs.map((c) => c.dur))) {
+    return { repeats: [], score: '', sub: '', note: '' }
+  }
 
   const target = Math.round(climbs.reduce((a, c) => a + c.w, 0) / climbs.length)
   const deltas = climbs.map((c) => c.w - target)
@@ -179,13 +249,28 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   })()
 
   const bestEffort = d.efforts.reduce((m, e) => (e.pct_of_best ?? 0) > (m?.pct_of_best ?? 0) ? e : m, d.efforts[0])
-  const ranks: W3Rank[] = d.efforts.slice(0, 5).map((e) => ({
-    dur: e.duration_s < 60 ? `${e.duration_s} SEK` : `${Math.round(e.duration_s / 60)} MIN`,
-    watts: `${e.ride_watts} W`,
-    note: e.is_pr ? 'NEUER BESTWERT' : e.best_watts != null ? `BESTWERT ${e.best_watts} W` : '',
-    pr: e.is_pr,
-    fill: e.pct_of_best != null ? Math.min(1, e.pct_of_best / (e.pct_of_best > 1 ? 100 : 1)) : 0.6,
-  }))
+  // EACH DURATION AS A BEAM AGAINST THE RECORD, not a row in a table. The
+  // question a rider has here is "how close was this to my best", and a table
+  // makes them do that subtraction in their head for five durations in a row.
+  // The bar is the ride, the track is the record, and the gap is the answer.
+  const ranks: W3Rank[] = d.efforts.slice(0, 5).map((e) => {
+    const best = e.best_watts ?? null
+    const gap = best != null ? e.ride_watts - best : null
+    return {
+      dur: e.duration_s < 60 ? `${e.duration_s} SEK` : `${Math.round(e.duration_s / 60)} MIN`,
+      watts: `${e.ride_watts} W`,
+      bestWatts: best != null ? `${best} W` : null,
+      pr: e.is_pr,
+      // The ride against the record. A new best fills the beam; anything else
+      // sits short of it by exactly the fraction it was short by.
+      fill: best != null && best > 0 ? Math.min(1, e.ride_watts / best) : 1,
+      note: e.is_pr
+        ? 'NEUER BESTWERT'
+        : gap != null
+          ? `${gap >= 0 ? '+' : '−'}${Math.abs(gap)} W`
+          : '',
+    }
+  })
 
   const rep = toRepeats(d)
   const ceil = toCeiling(d.efforts)
@@ -288,6 +373,7 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     zonesSub: `${Math.round(h.moving_time_s / 60)} Minuten aufgezeichnet.`, zones,
     ranksSub: 'Jede Dauer gegen deinen Bestwert.', ranks,
     onYouDelta: ceil.delta, ceilingLabel: ceil.label, ceilingBefore: ceil.before, ceilingAfter: ceil.after,
+    shifts: pmcT.shifts,
     fitness: pmcT.fitness, fitnessD: pmcT.fitnessD, fatigue: pmcT.fatigue, fatigueD: pmcT.fatigueD, form: pmcT.form, formD: pmcT.formD,
     changesBody,
   }

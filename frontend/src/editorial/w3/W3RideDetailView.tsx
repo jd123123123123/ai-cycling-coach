@@ -4,6 +4,7 @@ import { ChevronRight, Flame, Gauge, HeartPulse, Sparkles, Timer, Waves, Zap, ty
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
+import { TNUM } from './w3surfaces'
 import './w3.css'
 
 /**
@@ -19,7 +20,36 @@ import './w3.css'
 
 export interface W3Repeat { label: string; watts: string; delta: number; verdict: string }
 export interface W3Zone { z: string; name: string; min: string; pct: number; peak: boolean }
-export interface W3Rank { dur: string; watts: string; note: string; pr: boolean; fill: number }
+/** One of fitness, fatigue and form, as a position on its own scale plus where
+ *  it stood a week ago — so the section can draw the move this ride caused
+ *  rather than printing a signed number beside a bare figure. */
+export interface W3Shift {
+  key: string
+  label: string
+  value: string
+  delta: string
+  up: boolean
+  /** Whether this direction is a good thing. Fatigue is never "good": it is the
+   *  cost of the ride, and acid on this screen means you did something well. */
+  good: boolean
+  /** 0–1 on the quantity's own fixed scale. */
+  fill: number
+  /** Where it stood a week ago, same scale. Null with no history. */
+  was: number | null
+}
+
+export interface W3Rank {
+  dur: string
+  /** The ride's own figure. */
+  watts: string
+  /** The record for that duration, or null when there is no history yet. */
+  bestWatts: string | null
+  /** "−22 W" · "NEUER BESTWERT" — the distance to the record, already signed. */
+  note: string
+  pr: boolean
+  /** 0–1: the ride as a fraction of the record. The beam's lit part. */
+  fill: number
+}
 export interface W3StatCard { v: string; l: string; s: string }
 
 export interface MovedRow { label: string; delta: string; value: string; goal: string; beforePct: number; pct: number }
@@ -44,6 +74,7 @@ export interface W3RideVm {
   zonesSub: string; zones: W3Zone[]
   ranksSub: string; ranks: W3Rank[]
   onYouDelta: string; ceilingLabel: string; ceilingBefore: string; ceilingAfter: string
+  shifts: W3Shift[]
   fitness: string; fitnessD: string; fatigue: string; fatigueD: string; form: string; formD: string
   changesBody: string
 }
@@ -87,6 +118,28 @@ export interface W3RideDetailProps {
   onExpandMap?: () => void
 }
 
+/**
+ * THE ZONES, IN THE COLOURS EVERY CYCLIST ALREADY KNOWS.
+ *
+ * These were a ramp of white at rising alpha, with the ride's biggest zone in
+ * acid — so the chart's only colour marked "the one you spent most time in",
+ * which is the thing the bar lengths already say. A rider looking at a power
+ * distribution arrives knowing what the colours mean: grey is recovery, blue is
+ * endurance, green is tempo, yellow is threshold, orange is VO2, red is
+ * anaerobic. Spending the palette on that is spending it on comprehension.
+ *
+ * TOKENS, NOT TRAFFIC-LIGHT HEX. Every one of these is a colour the app already
+ * owns, so the chart belongs to this product rather than to a generic zone
+ * chart — `isolation.test` enforces it, and it is right to.
+ */
+const ZONE_TINT = [T.d3, T.cool, T.training, T.acid, T.warn, T.bad] as const
+
+/** Where the record beam starts. Efforts at these durations sit between about
+ *  three-quarters and all of a rider's best; a zero-based bar would jam every
+ *  one of them against the right-hand end and draw no difference at all. */
+const RANK_FLOOR = 0.7
+const zoneTint = (i: number) => ZONE_TINT[Math.min(i, ZONE_TINT.length - 1)]
+
 const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
   <div style={{ display: 'flex', gap: 12, paddingBottom: 4 }}>
     <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>{n}</span>
@@ -97,18 +150,6 @@ const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
   </div>
 )
 
-function SegGauge({ fill, on, delay }: { fill: number; on: boolean; delay: number }) {
-  const reduce = useReducedMotion()
-  return (
-    <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 10, width: '100%' }}>
-      {Array.from({ length: 20 }, (_, k) => {
-        const lit = k / 20 < fill
-        return <motion.div key={k} initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(delay + k * 0.01)}
-          style={{ flex: 1, height: lit ? (on ? 10 : 8) : 5, transformOrigin: 'bottom', borderRadius: 1, background: lit ? (on ? T.acid : T.d3) : T.rule }} />
-      })}
-    </div>
-  )
-}
 
 
 // Icon per stat card, matched by its label keyword — supports the storytelling.
@@ -356,16 +397,18 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
             <div style={{ display: 'flex', gap: 1, height: 16 }}>
               {vm.zones.map((z, i) => (
                 <motion.div key={z.z} initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.06)}
-                  style={{ flexGrow: Math.max(0.4, z.pct), transformOrigin: 'left', height: 16, background: z.peak ? T.acid : `rgba(255,255,255,${0.08 + i * 0.1})`,
+                  style={{ flexGrow: Math.max(0.4, z.pct), transformOrigin: 'left', height: 16, background: zoneTint(i),
                     borderRadius: i === 0 ? '4px 0 0 4px' : i === vm.zones.length - 1 ? '0 4px 4px 0' : 0 }} />
               ))}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {vm.zones.map((z) => (
+              {vm.zones.map((z, i) => (
                 <div key={z.z} style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '9px 0' }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 2, background: z.peak ? T.acid : 'rgba(255,255,255,.3)' }} />
+                  <span style={{ width: 9, height: 9, borderRadius: 2, background: zoneTint(i) }} />
                   <span style={{ width: 48, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{z.z}</span>
-                  <span style={{ width: 74, fontSize: 11.5, fontWeight: 700, color: z.peak ? T.acid : T.ink }}>{z.name}</span>
+                  {/* The zone the ride lived in is still called out — by WEIGHT
+                      now, not by colour, because colour has a job here. */}
+                  <span style={{ width: 74, fontSize: 11.5, fontWeight: z.peak ? 800 : 600, color: z.peak ? T.ink : T.mid }}>{z.name}</span>
                   <div style={{ flex: 1, height: 1, background: T.rule }} />
                   <span style={{ fontSize: 11, fontWeight: 700, color: T.mid }}>{z.min}</span>
                   <span style={{ width: 32, textAlign: 'right', fontSize: 10, fontWeight: 700, color: T.quiet }}>{z.pct}%</span>
@@ -379,18 +422,52 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
         <div style={{ ...band(28), gap: 12 }}>
           <SectionHead n="03" t="Wo sie steht" s={vm.ranksSub} />
           <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
-            {vm.ranks.map((r, i) => (
-              <div key={r.dur} style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '14px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet, width: 36 }}>{r.dur}</span>
-                    <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: r.pr ? T.acid : T.ink }}>{r.watts}</span>
+            {/* ── EACH DURATION AS A BEAM AGAINST THE RECORD ──────────────
+                This was a table: duration, watts, and a sentence saying what
+                the record was — which left the rider subtracting two numbers in
+                their head, five times, to answer the only question they came
+                with. The track IS the record and the lit part is this ride, so
+                the gap between them is the answer, drawn.
+
+                The scale is deliberately NOT zero-based: at threshold a rider
+                is never at 20% of their record, so a zero-based bar would put
+                every effort against the right-hand wall and show nothing. The
+                beam starts where the efforts live and the tick marks the
+                record — see `RANK_FLOOR`. */}
+            {vm.ranks.map((r, i) => {
+              const lit = Math.max(0, Math.min(1, (r.fill - RANK_FLOOR) / (1 - RANK_FLOOR)))
+              return (
+              <div key={r.dur} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '15px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet, width: 42, flex: 'none' }}>{r.dur}</span>
+                    <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: r.pr ? T.acid : T.ink, ...TNUM }}>{r.watts}</span>
                   </div>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: r.pr ? T.acid : T.quiet }}>{r.note}</span>
+                  <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: r.pr ? T.acid : T.mid, ...TNUM }}>{r.note}</span>
                 </div>
-                <SegGauge fill={r.fill} on={r.pr} delay={i * 0.03} />
+
+                <div style={{ position: 'relative', height: 10, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
+                  <motion.div
+                    initial={reduce ? false : { width: 0 }}
+                    animate={{ width: `${Math.round(lit * 100)}%` }}
+                    transition={grow(0.05 + i * 0.05)}
+                    style={{ height: '100%', borderRadius: 100, background: r.pr ? T.acid : T.d4 }} />
+                  {/* The record, standing at the end of the track. A PR has
+                      passed it, so it is not drawn against its own beam. */}
+                  {!r.pr && (
+                    <div style={{ position: 'absolute', right: 0, top: -2, bottom: -2, width: 2, background: T.acid, opacity: 0.9 }} />
+                  )}
+                </div>
+
+                {r.bestWatts && !r.pr && (
+                  <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: T.quiet, ...TNUM }}>
+                      BESTWERT {r.bestWatts}
+                    </span>
+                  </div>
+                )}
               </div>
-            ))}
+            )})}
           </div>
         </div>
 
@@ -409,16 +486,53 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               </div>
             </div>
             <div style={{ height: 1, background: T.rule }} />
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[['FITNESS', vm.fitness, vm.fitnessD], ['ERMÜDUNG', vm.fatigue, vm.fatigueD], ['FORM', vm.form, vm.formD]].map(([l, v, d]) => (
-                <div key={l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <div style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>{v}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: d.startsWith('-') ? T.cool : T.acid }}>{d}</span>
+
+            {/* ── THE THREE, DRAWN AS MOVEMENTS ──────────────────────────────
+                These were three bare figures with a signed number beside each.
+                A "+3" does not show a rider that their fatigue now stands above
+                their fitness, which is the thing you look at this for. Each one
+                sits on its own fixed scale with a tick where it stood a week
+                ago, so the ride's effect is the distance between the tick and
+                the bar — and the three bars can be read against each other.
+
+                Colour says what the direction MEANS, not which way it went:
+                fitness gaining is acid, form falling is cool, and fatigue is
+                always the warn tint because it is the price, never a win. */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+              {vm.shifts.map((sh, i) => {
+                const tint = sh.key === 'fatigue' ? T.warn : sh.good ? T.acid : T.cool
+                return (
+                  <div key={sh.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>{sh.label}</span>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                        <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: T.ink, ...TNUM }}>{sh.value}</span>
+                        {sh.delta && (
+                          <span style={{ fontSize: 10.5, fontWeight: 700, color: tint, ...TNUM }}>{sh.delta}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ position: 'relative', height: 9, borderRadius: 100, background: T.d1, overflow: 'visible' }}>
+                      <motion.div
+                        initial={reduce ? false : { width: 0 }}
+                        animate={{ width: `${Math.round(sh.fill * 100)}%` }}
+                        transition={grow(0.06 + i * 0.06)}
+                        style={{ height: '100%', borderRadius: 100, background: tint }} />
+                      {sh.was != null && (
+                        <div
+                          title="vor einer Woche"
+                          style={{
+                            position: 'absolute', left: `${Math.round(sh.was * 100)}%`, top: -3, bottom: -3,
+                            width: 2, marginLeft: -1, background: T.ink, opacity: 0.55, borderRadius: 2,
+                          }} />
+                      )}
+                    </div>
                   </div>
-                  <Kicker>{l}</Kicker>
-                </div>
-              ))}
+                )
+              })}
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.4, color: T.quiet }}>
+                Die helle Marke ist der Stand vor einer Woche.
+              </span>
             </div>
             <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.changesBody}</span>
           </div>

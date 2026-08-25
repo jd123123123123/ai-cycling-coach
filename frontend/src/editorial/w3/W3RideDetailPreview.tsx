@@ -85,13 +85,18 @@ const FIXTURE: W3RideVm = {
   ],
   ranksSub: 'Jede Dauer gegen deinen Bestwert. Zwanzig Sekunden bis zum Rekord.',
   ranks: [
-    { dur: '5 SEK', watts: '1.180 W', note: 'BESTWERT 1.240 IM MAI', pr: false, fill: 0.8 },
-    { dur: '1 MIN', watts: '598 W', note: 'BESTWERT 620 IM JUNI', pr: false, fill: 0.72 },
-    { dur: '5 MIN', watts: '342 W', note: 'NEUER BESTWERT · +7 W', pr: true, fill: 1 },
-    { dur: '12 MIN', watts: '279 W', note: 'BESTWERT 288 W · 12. MAI', pr: false, fill: 0.66 },
-    { dur: '20 MIN', watts: '268 W', note: 'BESTWERT 276 IM JULI', pr: false, fill: 0.58 },
+    { dur: '5 SEK', watts: '1.180 W', bestWatts: '1.240 W', note: '−60 W', pr: false, fill: 0.95 },
+    { dur: '1 MIN', watts: '598 W', bestWatts: '620 W', note: '−22 W', pr: false, fill: 0.96 },
+    { dur: '5 MIN', watts: '342 W', bestWatts: '335 W', note: 'NEUER BESTWERT', pr: true, fill: 1 },
+    { dur: '12 MIN', watts: '279 W', bestWatts: '288 W', note: '−9 W', pr: false, fill: 0.97 },
+    { dur: '20 MIN', watts: '268 W', bestWatts: '276 W', note: '−8 W', pr: false, fill: 0.97 },
   ],
   onYouDelta: '+14', ceilingLabel: 'CP', ceilingBefore: '328', ceilingAfter: '342',
+  shifts: [
+    { key: 'fitness', label: 'FITNESS', value: '78', delta: '+2', up: true, good: true, fill: 0.65, was: 0.63 },
+    { key: 'fatigue', label: 'ERMÜDUNG', value: '68', delta: '+14', up: true, good: false, fill: 0.57, was: 0.45 },
+    { key: 'form', label: 'FORM', value: '+10', delta: '−12', up: false, good: true, fill: 0.77, was: 0.95 },
+  ],
   fitness: '78', fitnessD: '+2', fatigue: '68', fatigueD: '+14', form: '+10', formD: '-12',
   changesBody: 'Die Form fällt für drei Tage. Das ist der Preis für den Bestwert — zahl ihn, und sie kommt höher zurück.',
 }
