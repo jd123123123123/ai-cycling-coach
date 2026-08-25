@@ -229,6 +229,19 @@ function SceneNote({ text, action, onClick }: { text: string; action?: string; o
 }
 
 export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap }: W3RideDetailProps) {
+  // ── THE CHAPTERS ARE NUMBERED BY WHAT ACTUALLY RENDERS ──────────────────
+  // These ordinals were hardcoded "01".."05", and two of the five are
+  // conditional — the repeat set and the season push. So a free outdoor ride,
+  // which is most rides, opened at chapter 02 with no 01 anywhere on the page.
+  // A sequence with a hole in it is worse than no sequence: it reads as a
+  // section that failed to load rather than one that was never relevant.
+  const chapters = [
+    vm.repeats.length > 0 && 'repeats',
+    'zones', 'ranks', 'changes',
+    vm.moved.length > 0 && 'moved',
+  ].filter(Boolean) as string[]
+  const ch = (key: string) => String(chapters.indexOf(key) + 1).padStart(2, '0')
+
   const reduce = useReducedMotion()
   const pMax = Math.max(1, ...vm.power)
   const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
@@ -356,7 +369,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
         {/* 01 Did you hold it */}
         {vm.repeats.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
-            <SectionHead n="01" t="Hast du gehalten?" s="Jede Wiederholung gegen ihr Ziel. Rechts der Linie heißt über Ziel." />
+            <SectionHead n={ch('repeats')} t="Hast du gehalten?" s="Jede Wiederholung gegen ihr Ziel. Rechts der Linie heißt über Ziel." />
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', paddingBottom: 4 }}>
               <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4 }}>
@@ -392,7 +405,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 02 What it asked of you */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n="02" t="Was sie dir abverlangt hat" s={vm.zonesSub} />
+          <SectionHead n={ch('zones')} t="Was sie dir abverlangt hat" s={vm.zonesSub} />
           <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 1, height: 16 }}>
               {vm.zones.map((z, i) => (
@@ -420,7 +433,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 03 Where it ranks */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n="03" t="Wo sie steht" s={vm.ranksSub} />
+          <SectionHead n={ch('ranks')} t="Wo sie steht" s={vm.ranksSub} />
           <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
             {/* ── EACH DURATION AS A BEAM AGAINST THE RECORD ──────────────
                 This was a table: duration, watts, and a sentence saying what
@@ -473,7 +486,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 04 What this changes */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n="04" t="Was das verändert" s="Die Fahrt ist vorbei. Das sind die Zahlen, die sie bewegt hat." />
+          <SectionHead n={ch('changes')} t="Was das verändert" s="Die Fahrt ist vorbei. Das sind die Zahlen, die sie bewegt hat." />
           <div style={{ ...card(), gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -541,7 +554,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
         {/* 05 What it moved you toward — this ride's push toward the season goals */}
         {vm.moved.length > 0 && (
           <div style={{ ...band(44), gap: 12 }}>
-            <SectionHead n="05" t="Worauf sie dich zubewegt hat" s={vm.movedSub} />
+            <SectionHead n={ch('moved')} t="Worauf sie dich zubewegt hat" s={vm.movedSub} />
             <div style={{ ...card(), gap: 18 }}>
               <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>AUF DAS JAHR</span>
               {vm.moved.map((m, i) => (

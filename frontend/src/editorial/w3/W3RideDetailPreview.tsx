@@ -102,6 +102,7 @@ const FIXTURE: W3RideVm = {
 }
 
 export default function W3RideDetailPreview() {
+  const free = typeof window !== 'undefined' && window.location.search.includes('free')
   // The cover demos the offer state: the rider has both a figure and a bike, so
   // composing is one tap away. Tapping it plays the real waiting choreography —
   // and, since a preview has no backend behind it, lands honestly on the failed
@@ -117,7 +118,12 @@ export default function W3RideDetailPreview() {
   }
   return (
     <W3RideDetailView
-      vm={FIXTURE}
+      // ?free renders what a FREE OUTDOOR RIDE sees: no prescribed set, so no
+      // "Hast du gehalten?". The default fixture is a hill-repeat session and
+      // keeps it, which is the only case where the question means anything.
+      // Without this variant the gate is invisible in the preview and reads as
+      // "the chapter was never removed".
+      vm={free ? { ...FIXTURE, repeats: [], repeatsScore: '', repeatsSub: '' } : FIXTURE}
       scene={scene}
       onCompose={compose}
       onOpenStudio={(kind) => console.log('studio', kind)}

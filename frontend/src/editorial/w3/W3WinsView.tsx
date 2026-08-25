@@ -116,6 +116,10 @@ export interface W3WinsVm {
   /** The REAL collection counts, for the segment meter. */
   cabinetLit: number
   cabinetTotal: number
+  /** Which badge the hero is celebrating. It is the ONE tile in the cabinet
+   *  that stays lit — see `ACCENT RATIONING` in the grid. Null when nothing has
+   *  been earned yet, and then no tile is lit. */
+  latestKey: string | null
   /** The inset row under the hero: the badge closest to falling. It carries
    *  the ONE fact that moves the rider, which a repeat of the count does not.
    *  Null when nothing is in progress. */
@@ -163,21 +167,33 @@ const OCTAGON = 'polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0
  * away, that one is a mountain you have not climbed". The lock moved to a seal
  * in the corner, which says the same thing without erasing the badge.
  */
-function Emblem({ size, icon, earned, glow = true }: { size: number; icon: W3BadgeIcon; earned: boolean; glow?: boolean }) {
+function Emblem({ size, icon, earned, glow = true, lit = true }: {
+  size: number; icon: W3BadgeIcon; earned: boolean; glow?: boolean
+  /** Acid, or the quieter earned metal. See `ACCENT RATIONING` in the grid. */
+  lit?: boolean
+}) {
   const Ic = ICONS[icon]
   const seal = Math.round(size * 0.34)
   return (
     <div style={{ width: size, height: size, position: 'relative', display: 'grid', placeItems: 'center', flex: 'none' }}>
-      {earned && glow && (
+      {earned && lit && glow && (
         <div style={{ position: 'absolute', width: size * 1.15, height: size * 1.15, background: T.acid, clipPath: OCTAGON, filter: `blur(${Math.round(size * 0.28)}px)`, opacity: 0.5 }} />
       )}
-      <div style={{ position: 'absolute', inset: 0, clipPath: OCTAGON, background: earned ? `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 48%, ${T.acidDeep})` : T.d1 }} />
+      <div style={{
+        position: 'absolute', inset: 0, clipPath: OCTAGON,
+        background: !earned ? T.d1
+          : lit ? `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 48%, ${T.acidDeep})`
+          // Earned, but not the one being celebrated: struck metal rather than
+          // a second acid light. Twelve acid octagons in a nine-tile grid is a
+          // wall, and a wall has no hierarchy.
+          : `linear-gradient(155deg, ${T.d4}, ${T.d3} 52%, ${T.d2})`,
+      }} />
       {earned && (
-        <div style={{ position: 'absolute', top: size * 0.08, left: size * 0.16, right: size * 0.3, height: size * 0.24, borderRadius: '50%', background: T.d3, filter: `blur(${Math.round(size * 0.06)}px)` }} />
+        <div style={{ position: 'absolute', top: size * 0.08, left: size * 0.16, right: size * 0.3, height: size * 0.24, borderRadius: '50%', background: lit ? T.d3 : T.d2, filter: `blur(${Math.round(size * 0.06)}px)` }} />
       )}
       {/* Positioned on purpose: absolutely-positioned siblings paint above a
           static child whatever the DOM order, so the mark would vanish. */}
-      <Ic size={Math.round(size * 0.42)} color={earned ? T.bg : T.mid} style={{ position: 'relative' }} />
+      <Ic size={Math.round(size * 0.42)} color={earned ? (lit ? T.bg : T.ink) : T.mid} style={{ position: 'relative' }} />
       {!earned && (
         <div style={{
           position: 'absolute', right: -seal * 0.12, bottom: -seal * 0.12,
@@ -382,11 +398,20 @@ export default function W3WinsView({ vm, onOpenChallenges }: {
                   padding: '16px 9px 14px', borderRadius: 20,
                   background: b.earned ? `linear-gradient(180deg, ${T.acidTop}, ${T.heroDock})` : T.heroDock,
                 }}>
-                  <Emblem size={50} icon={b.icon} earned={b.earned} />
+                  {/* ── ACCENT RATIONING ──────────────────────────────────
+                      Every earned badge was a lit acid octagon, and with six of
+                      them in a nine-tile grid the accent stopped being an accent
+                      — it was the field. A rider could not tell which of their
+                      badges was the new one, which is the only ranking this grid
+                      has to offer, because all six shouted equally.
+
+                      One is lit: the one the hero above is celebrating. The rest
+                      are struck metal — unmistakably earned, visibly not new. */}
+                  <Emblem size={50} icon={b.icon} earned={b.earned} lit={b.key === vm.latestKey} />
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', width: '100%' }}>
                     <span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, textAlign: 'center', color: b.earned ? T.ink : T.mid }}>{b.name}</span>
                     {!b.earned && b.pct != null && <Bar fill={b.pct} tint={T.acidDeep} reduce={reduce} delay={i * 0.03} h={4} />}
-                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.7, lineHeight: 1.3, textAlign: 'center', color: b.earned ? T.acid : T.quiet, ...TNUM }}>{b.caption}</span>
+                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.7, lineHeight: 1.3, textAlign: 'center', color: b.key === vm.latestKey ? T.acid : b.earned ? T.mid : T.quiet, ...TNUM }}>{b.caption}</span>
                   </div>
                 </div>
               ))}

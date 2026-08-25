@@ -62,7 +62,25 @@ export interface W3RiderHighlightsProps {
 
 //: The bento's tints, in the order the cards are laid out. Acid leads because
 //: the first record is the one the rider is proudest of.
-const CARD_TINT = [T.acid, T.tintLilac, T.tintMint, T.tintPeach]
+/**
+ * WHAT EACH RECORD IS, AS A MARK — not as the card it is printed on.
+ *
+ * These four were the card BACKGROUNDS: an acid slab, then lavender, mint and
+ * peach. They are the only pastel surfaces anywhere in this app, which is
+ * exactly why the profile stopped looking like the rest of it — a near-black
+ * product with one accent, interrupted by four bright rectangles.
+ *
+ * The bento itself was right: mixed sizes, the number enormous, the ride's own
+ * name under it. Only the surfaces were wrong. So the tints keep their job of
+ * telling the four records apart, at the size a mark needs rather than the size
+ * a wall needs, and the cards go back to the lit-not-framed dark the rest of
+ * the app is built from.
+ *
+ * The first record keeps the acid FILL: one headline on the page, and it is the
+ * furthest a rider has ever gone. Making all four shout is what made none of
+ * them read.
+ */
+const RECORD_MARK = [T.acid, T.tintLilac, T.tintMint, T.tintPeach]
 
 function Ring({ pct, size = 62, label }: { pct: number; size?: number; label: string }) {
   const r = (size - 10) / 2
@@ -149,7 +167,10 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
           {p.pills.map((s) => (
             <span key={s.l} style={{
               display: 'inline-flex', alignItems: 'baseline', gap: 6,
-              padding: '7px 12px', borderRadius: 100, background: 'rgba(19,19,21,0.72)',
+              padding: '7px 12px', borderRadius: 100, background: T.glass,
+              // Glass, like every other pill this app floats on art. Flat
+              // near-black over a helmet reads as a smudge, not a chip.
+              backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
             }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: T.ink, ...TNUM }}>{s.v}</span>
               <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, color: 'rgba(255,255,255,0.6)' }}>
@@ -160,9 +181,15 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
         </div>
 
         {/* The handle on the seam. */}
+        {/* THE SCRIM HAS TO CLEAR THE JERSEY, not just the bottom edge. The
+            portrait wears a W3 wordmark across the chest, and this gradient
+            reached 0.86 only at the very bottom — so the handle was set over
+            the middle of that wordmark and the two read as one smear. It starts
+            higher and lands opaque, which is the difference between type on a
+            picture and type in a picture. */}
         <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0, padding: '46px 20px 18px',
-          background: 'linear-gradient(180deg, rgba(11,11,12,0) 0%, rgba(11,11,12,0.86) 100%)',
+          position: 'absolute', left: 0, right: 0, bottom: 0, padding: '86px 20px 18px',
+          background: 'linear-gradient(180deg, rgba(11,11,12,0) 0%, rgba(11,11,12,0.72) 46%, rgba(11,11,12,0.96) 100%)',
           display: 'flex', flexDirection: 'column', gap: 3,
         }}>
           <span style={{ fontSize: 27, fontWeight: 800, letterSpacing: -0.9, color: T.ink }}>
@@ -226,7 +253,11 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
             const lead = i === 0
             if (!lead && (i - 1) % 2 !== 0) return null
             const pair = !lead ? shown[i + 1] : null
-            const card = (rec: HighlightRecord, idx: number, wide: boolean) => (
+            // The first record is the headline: one filled surface, and it is
+            // the furthest this rider has ever gone.
+            const card = (rec: HighlightRecord, idx: number, wide: boolean) => {
+              const hero = idx === 0
+              return (
               <motion.button
                 key={rec.key}
                 type="button"
@@ -236,31 +267,45 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
                 transition={{ duration: 0.45, ease: EASE, delay: 0.06 * idx }}
                 style={{
                   flex: 1, minWidth: 0, border: 0, cursor: 'pointer', textAlign: 'left',
-                  padding: wide ? '20px 22px' : '18px 18px', borderRadius: 30,
-                  background: CARD_TINT[idx] ?? T.tintPaper, fontFamily: FONT,
+                  padding: wide ? '18px 22px 20px' : '16px 18px 18px', borderRadius: 30,
+                  // The headline record is the one filled surface on the page.
+                  background: hero ? T.acid : T.surface, fontFamily: FONT,
                   display: 'flex', flexDirection: 'column', gap: wide ? 6 : 4,
                 }}>
+                {/* The mark: what used to be the whole card, at the size a mark
+                    needs. It is what still tells a climb from a long day. */}
+                {!hero && (
+                  <span style={{
+                    width: 26, height: 3, borderRadius: 100, marginBottom: 5,
+                    background: RECORD_MARK[idx] ?? T.d3,
+                  }} />
+                )}
                 <span style={{
-                  fontSize: 8.5, fontWeight: 800, letterSpacing: 1.2, color: 'rgba(19,19,21,0.55)',
+                  fontSize: 8.5, fontWeight: 800, letterSpacing: 1.2,
+                  color: hero ? 'rgba(19,19,21,0.55)' : T.quiet,
                 }}>{rec.label}</span>
                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
                   <span style={{
                     fontSize: wide ? 54 : 34, fontWeight: 800,
                     letterSpacing: wide ? -2.4 : -1.4, lineHeight: 0.9,
-                    color: T.tintInk, ...TNUM,
+                    color: hero ? T.tintInk : T.ink, ...TNUM,
                   }}>{rec.value}</span>
-                  <span style={{ fontSize: wide ? 17 : 13, fontWeight: 700, color: 'rgba(19,19,21,0.55)' }}>
+                  <span style={{
+                    fontSize: wide ? 17 : 13, fontWeight: 700,
+                    color: hero ? 'rgba(19,19,21,0.55)' : T.mid,
+                  }}>
                     {rec.unit}
                   </span>
                 </span>
                 {rec.ride && (
                   <span style={{
-                    fontSize: 11, fontWeight: 600, color: 'rgba(19,19,21,0.62)',
+                    fontSize: 11, fontWeight: 600,
+                    color: hero ? 'rgba(19,19,21,0.62)' : T.quiet,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                   }}>{rec.ride}{rec.when ? ` · ${rec.when}` : ''}</span>
                 )}
               </motion.button>
-            )
+            )}
             if (lead) return card(r, 0, true)
             return (
               <div key={r.key} style={{ display: 'flex', gap: 10 }}>

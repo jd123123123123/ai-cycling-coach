@@ -22,6 +22,7 @@ const FIXTURE: W3WinsVm = {
     { key: 'rc', value: '1.315', unit: 'RC', label: 'RIDECOIN' },
   ],
 
+  latestKey: 'century',
   latestChapter: 'ZULETZT VERDIENT',
   latestTitle: 'Dein letztes Abzeichen',
   latest: {
@@ -88,6 +89,7 @@ const EMPTY: W3WinsVm = {
     { key: 'active', value: '0', label: 'CHALLENGES LIVE' },
     { key: 'rc', value: '0', unit: 'RC', label: 'RIDECOIN' },
   ],
+  latestKey: null,
   latestTitle: 'Noch nichts verdient',
   latest: null,
   cabinetValue: '0 von 34',

@@ -159,6 +159,8 @@ export default function W3WinsPage() {
         { key: 'rc', value: wallet ? nf.format(wallet.balance) : DASH, unit: 'RC', label: 'RIDECOIN' },
       ],
 
+      // The hero's badge is the one tile the cabinet keeps lit.
+      latestKey: latest?.key ?? null,
       latestChapter: 'ZULETZT VERDIENT',
       latestTitle: latest ? 'Dein letztes Abzeichen' : 'Noch nichts verdient',
       latest: latest

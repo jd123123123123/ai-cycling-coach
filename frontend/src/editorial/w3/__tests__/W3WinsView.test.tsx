@@ -28,6 +28,7 @@ const VM: W3WinsVm = {
   headlineAccent: 'gekauft.',
   deck: 'Jedes Abzeichen wird gefahren.',
   ledger: [{ key: 'badges', value: '12', unit: 'von 34', label: 'ABZEICHEN' }],
+  latestKey: 'century',
   latestChapter: 'ZULETZT VERDIENT',
   latestTitle: 'Dein letztes Abzeichen',
   latest: {
@@ -117,5 +118,36 @@ describe('splitMeasure', () => {
   it('leaves a label that merely ends in a number alone', () => {
     expect(splitMeasure('Cat 4')).toEqual({ value: 'Cat 4', unit: null })
     expect(splitMeasure('486')).toEqual({ value: '486', unit: null })
+  })
+})
+
+describe('Erfolge · the accent is rationed', () => {
+  /** The acid gradient only ever appears on the badge the hero celebrates. */
+  const litCount = (container: HTMLElement) =>
+    [...container.querySelectorAll('div')]
+      .filter((d) => (d as HTMLElement).style.background.includes('linear-gradient')
+        && (d as HTMLElement).style.background.includes('191, 255, 60')).length
+
+  it('lights exactly one badge, however many are earned', () => {
+    const earned = (key: string) => ({
+      key, icon: 'medal' as const, name: key, caption: 'X', earned: true, pct: null,
+    })
+    const { container } = render(<W3WinsView vm={{
+      ...VM,
+      latestKey: 'b',
+      badges: [earned('a'), earned('b'), earned('c'), earned('d')],
+    }} />)
+    // The hero emblem above is lit too, so one in the cabinet plus one hero.
+    expect(litCount(container)).toBeLessThanOrEqual(2)
+  })
+
+  it('lights none in the cabinet when nothing has been earned yet', () => {
+    const { container } = render(<W3WinsView vm={{
+      ...VM,
+      latest: null,
+      latestKey: null,
+      badges: [{ key: 'x', icon: 'gauge', name: 'x', caption: 'NOCH 8 W', earned: false, pct: 0.9 }],
+    }} />)
+    expect(litCount(container)).toBe(0)
   })
 })
