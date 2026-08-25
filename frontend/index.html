@@ -34,10 +34,20 @@
          (560, 590, 620, 650) that only a real axis can render. Today those still
          snap to the nearest static cut. Do not re-derive this: the two URLs were
          fetched and diffed. ── -->
+    <!-- ── THE SWITCH TO media="all" HAPPENS IN main.tsx, NOT HERE ────────
+         This carried onload="this.media='all'" — the standard async-CSS trick —
+         and the app's CSP is a strict `script-src 'self'` with no
+         'unsafe-inline' and no 'unsafe-hashes', which blocks inline event
+         handlers. So the handler never ran, the sheet stayed media="print"
+         forever, and every screen in the app rendered in fallback fonts while
+         the CSS sat downloaded and unapplied. The console said so on every
+         load: "Executing inline event handler violates ... 'script-src self'".
+         The flip is done from the entry bundle instead, which is same-origin
+         and therefore allowed. Fonts still never block the first paint. ── -->
     <link
+      id="gfonts"
       rel="stylesheet"
       media="print"
-      onload="this.media='all'"
       href="https://fonts.googleapis.com/css2?family=Sora:wght@400..800&family=Inter:wght@400..700&family=Inter+Tight:wght@400..800&family=Archivo+Narrow:wght@400..700&family=JetBrains+Mono:wght@400..600&family=Anton&family=Instrument+Serif&family=Archivo:wght@400..800&display=swap"
     />
     <noscript>

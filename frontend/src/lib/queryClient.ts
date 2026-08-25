@@ -1,4 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
+import { hydratePersistedQueries } from './queryPersist'
 
 // Retry is 0 for 401s to avoid racing the axios 401 interceptor's refresh queue.
 // For other errors we allow 1 retry with exponential backoff.
@@ -36,3 +37,8 @@ export const queryClient = new QueryClient({
     },
   },
 })
+
+// Yesterday's answers, back before the first render. Module scope on purpose:
+// hydrating from an effect would paint the empty state first, which is the
+// exact wait this exists to remove. See `queryPersist` for what is kept.
+hydratePersistedQueries(queryClient)

@@ -21,7 +21,29 @@ interface AuthContextType {
   refreshUser: () => Promise<void>
 }
 
+import { queryClient } from '../lib/queryClient'
+import {
+  clearPersistedQueries, persistedUserId, setPersistUser,
+} from '../lib/queryPersist'
+
 const AuthContext = createContext<AuthContextType | null>(null)
+
+/**
+ * The persisted cache belongs to exactly one rider.
+ *
+ * It is hydrated before anyone knows who is signing in — that is the whole
+ * point of it, the data has to be on screen before the network answers — so
+ * the check happens the moment the session resolves. A shared phone, or a
+ * rider with two accounts, must never be shown the other one's numbers.
+ */
+function adoptOrDiscardCache(userId: number): void {
+  const owner = persistedUserId()
+  if (owner !== null && owner !== userId) {
+    clearPersistedQueries()
+    queryClient.clear()
+  }
+  setPersistUser(userId)
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -30,6 +52,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuth = useCallback(() => {
     setAccessToken(null)
     setUser(null)
+    // Signing out takes the rider's data off the device with it.
+    setPersistUser(null)
+    clearPersistedQueries()
+    queryClient.clear()
   }, [])
 
   // On mount: register the "auth cleared" callback so the interceptor can
@@ -48,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAccessToken(tokenResponse.access_token)
         const userData = await authApi.getMe()
         if (mounted) {
+          adoptOrDiscardCache(userData.id)
           setUser(userData)
         }
       } catch {
@@ -73,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokenResponse = await authApi.login(email, password)
     setAccessToken(tokenResponse.access_token)
     const userData = await authApi.getMe()
+    adoptOrDiscardCache(userData.id)
     setUser(userData)
   }, [])
 
@@ -80,6 +108,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokenResponse = await authApi.register(data)
     setAccessToken(tokenResponse.access_token)
     const userData = await authApi.getMe()
+    adoptOrDiscardCache(userData.id)
     setUser(userData)
   }, [])
 

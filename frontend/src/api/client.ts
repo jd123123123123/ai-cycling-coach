@@ -44,8 +44,27 @@ export function setAuthClearedCallback(cb: () => void): void {
   _onAuthCleared = cb
 }
 
+/**
+ * How long any request may hang before it is called dead.
+ *
+ * There was no default at all — axios's own default is 0, meaning wait
+ * forever. Individual slow calls set their own (the image renders ask for
+ * 180 s), but everything else, `/auth/refresh` and `/auth/me` included, had no
+ * bound. A request stalled by a phone changing networks never settled, and on
+ * boot that is unrecoverable: `AuthProvider` awaits the refresh before it
+ * clears `isLoading`, and `ProtectedRoute` shows the loading screen for the
+ * whole of it — so a single stalled socket is a black screen that only a manual
+ * reload escapes.
+ *
+ * 20 s is deliberately generous. It is not a latency budget; it is the line
+ * past which waiting has stopped being waiting. Anything genuinely slower
+ * overrides it per call, as those endpoints already do.
+ */
+const DEFAULT_TIMEOUT_MS = 20_000
+
 export const apiClient: AxiosInstance = axios.create({
   baseURL: BASE_URL,
+  timeout: DEFAULT_TIMEOUT_MS,
   withCredentials: true, // Required for httpOnly refresh token cookie
 })
 
