@@ -332,3 +332,34 @@ async def project_pmc_forward(
         "already_fresh": today_tsb >= FRESH_TSB,
         "basis": basis,
     }
+
+async def scoring_threshold_drift(db: AsyncSession, user_id: int, days: int = 90):
+    """How much the UNIT of this athlete's TSS moved across a window.
+
+    TSS is defined relative to a threshold, so a CTL series drawn across a
+    season in which the athlete improved 10% is comparing two different
+    measurements — the same watts score roughly 20% lower against the higher
+    FTP (audit §7.2). Nothing could previously say so, because the threshold
+    each ride was scored against was never recorded.
+
+    Now it is (`activities.ftp_watts_at_scoring`), and this reports the spread.
+    Use it to QUALIFY a longitudinal claim, or to decide whether to re-base a
+    series with `load_units.rebase_tss` before comparing. It deliberately does
+    not re-base anything itself: as-scored is the physiologically correct dose,
+    and rescoring history is an analysis choice, not a silent default.
+
+    `unlabelled` counts rides whose unit is unknowable — hrTSS rides have no FTP
+    behind their number at all.
+    """
+    from app.models.activity import Activity
+    from app.services.load_units import threshold_drift
+
+    since = today_local() - timedelta(days=days)
+    rows = await db.execute(
+        select(Activity.ftp_watts_at_scoring).where(
+            Activity.user_id == user_id,
+            Activity.tss.isnot(None),
+            Activity.started_at >= since,
+        )
+    )
+    return threshold_drift([r[0] for r in rows.all()])

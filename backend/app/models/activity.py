@@ -50,6 +50,19 @@ class Activity(Base):
 
     # Training load
     tss: Mapped[float | None] = mapped_column(Float, nullable=True)
+    #: THE UNIT `tss` IS MEASURED IN — the FTP this ride was scored against.
+    #:
+    #: TSS is defined relative to a threshold, so the number above means nothing
+    #: without this one. It used to be unrecorded: TSS was computed at ingestion
+    #: with whatever FTP was set that day and stored bare, so CTL was a 42-day
+    #: average of loads in drifting units and "CTL 85 in March" was not the same
+    #: training as "CTL 85 in August".
+    #:
+    #: NULL means the ride's unit is unknown — an hrTSS ride (no FTP behind its
+    #: number at all) or a row whose threshold could not be recovered. Callers
+    #: must leave such a TSS alone rather than convert it with a guessed unit;
+    #: see `services/load_units`.
+    ftp_watts_at_scoring: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     # Power metrics (cycling)
     normalized_power: Mapped[float | None] = mapped_column(Float, nullable=True)

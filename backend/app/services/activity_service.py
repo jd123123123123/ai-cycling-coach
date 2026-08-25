@@ -146,6 +146,25 @@ def _compute_hr_tss(
         return None
 
 
+
+def _scoring_ftp(data, profile, tss: float | None) -> float | None:
+    """The threshold `tss` was computed against, or None when it has none.
+
+    Recorded alongside every TSS because TSS is meaningless without its unit
+    (see `services/load_units` and `models/activity.ftp_watts_at_scoring`).
+    Derived by recovery rather than by assuming `profile.ftp_watts`: the power
+    path is not the only way a TSS gets made, and an hrTSS number has no FTP
+    behind it. If the arithmetic cannot vouch for the value, it stays NULL.
+    """
+    from app.services.load_units import derive_scoring_ftp
+
+    return derive_scoring_ftp(
+        tss,
+        getattr(data, "normalized_power", None) or getattr(data, "average_power", None),
+        getattr(data, "duration_seconds", None),
+    )
+
+
 def _compute_tss(
     data: ActivityCreate,
     profile: AthleteProfile,
@@ -275,6 +294,8 @@ async def create_activity(
         external_id=data.external_id,
         raw_data=getattr(data, "raw_data", None),
         tss=tss,
+        # The unit that TSS is expressed in — see models/activity.
+        ftp_watts_at_scoring=_scoring_ftp(data, profile, tss),
     )
 
     db.add(activity)
@@ -450,6 +471,7 @@ async def recompute_missing_tss(
         tss = _compute_tss(data, profile, resting_hr_fallback=resting_hr_fallback)
         if tss is not None:
             activity.tss = tss
+            activity.ftp_watts_at_scoring = _scoring_ftp(data, profile, tss)
             updated += 1
 
     if updated:
