@@ -56,11 +56,16 @@ const FIXTURE: W3RideVm = {
     { label: 'Fahrten erfasst', delta: '+1', value: '142', goal: '200', beforePct: 0.705, pct: 0.71 },
   ],
   movedFoot: 'Noch etwa 116 Fahrten wie diese, dann stehen die 12 000 km — du liegst auf Kurs für Oktober, nicht Dezember.',
+  // THE FIXTURE WAS A PAGE THAT NO LONGER EXISTS. Three of these four —
+  // Ø LEISTUNG, FAHRZEIT, Ø HF — are in the hero ninety pixels above, and the
+  // live page stopped repeating them some time ago. The preview did not, so
+  // every judgement of this screen was being made against a version of it that
+  // has not shipped for weeks. These are the four the page actually builds.
   stats: [
-    { v: '198 W', l: 'Ø LEISTUNG', s: '244 W normalisiert' },
-    { v: '2:04', l: 'FAHRZEIT', s: '62 km bei 30 km/h' },
-    { v: '124', l: 'BELASTUNG · TSS', s: 'höchste seit Juni' },
-    { v: '148', l: 'Ø HF · BPM', s: 'Spitze 176 in Wdh. 6' },
+    { v: '124', l: 'BELASTUNG · TSS', s: 'harter Tag' },
+    { v: '4,2 %', l: 'HF-DRIFT', s: 'aerob durchgehalten' },
+    { v: '1,04', l: 'VARIABILITÄT', s: 'sehr gleichmäßig getreten' },
+    { v: '3.640', l: 'ARBEIT · KJ', s: 'wie 14 Riegel' },
   ],
   execScore: '94', execTotal: '100',
   verdictHeadline: 'Du hast jede einzelne gehalten.',

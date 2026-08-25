@@ -75,6 +75,10 @@ export interface W3RideHeroVm {
   ifFill: number
   /** e.g. "82 % VON FTP · SCHWELLE" and "1.184 kcal". */
   effortLabel: string
+  /** DEPRECATED, and deliberately unread by this component: the work is in the
+   *  tiles below in kJ, and printing it here in kcal made one quantity look
+   *  like two. Kept on the vm so the page that builds it does not have to
+   *  change shape for a caption. */
   energyLabel: string
 }
 
@@ -407,10 +411,16 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               thing inside a box of its own. */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: S.md }}>
             <IntensityBeam fill={vm.ifFill} reduce={reduce} />
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: -S.sm }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>{vm.effortLabel}</span>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{vm.energyLabel}</span>
-            </div>
+            {/* THE BEAM'S CAPTION SAYS WHAT THE BEAM MEANS, and nothing else.
+                The right-hand slot carried the ride's energy in kcal while the
+                tiles below carry the same quantity in kJ — one number, two
+                units, ninety pixels apart, and the rider has to work out that
+                they are the same thing before they can ignore one of them. The
+                tile keeps it: it has room for a sub-line that says what the
+                work amounts to, and this caption does not. */}
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid, marginTop: -S.sm }}>
+              {vm.effortLabel}
+            </span>
           </div>
         </div>
       </div>
