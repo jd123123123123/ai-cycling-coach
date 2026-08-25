@@ -39,6 +39,8 @@ export interface W3ShareVm {
   availableValues?: { id: ValueId; label: string; value: string }[]
   /** The card's accent. Absent → the app's acid. */
   accent?: string
+  /** What the video path is doing right now, in the rider's language. */
+  videoNote?: string | null
 }
 export interface W3ShareActions {
   /** The rider's own photograph, already downscaled to a data URL. Null clears
@@ -47,6 +49,8 @@ export interface W3ShareActions {
   /** The rider rebuilt their card. Between MIN_BLOCKS and MAX_BLOCKS. */
   onPickValues?: (ids: ValueId[]) => void
   onPickAccent?: (hex: string) => void
+  /** The rider chose a clip. The overlay is burned into it frame by frame. */
+  onPickVideo?: (file: File) => void
   /** Which of the four story formats leaves the app. See `StoryLayout`. */
   onPickFormat?: (id: StoryLayout) => void
   onClose?: () => void
@@ -86,7 +90,7 @@ const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'effort', name: 'Effort', drops: 'Satz oben' },
 ]
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickFormat, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
@@ -193,7 +197,7 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
                 {vm.hasOwnPhoto ? 'Dein Foto ist drauf' : 'Eigenes Foto nehmen'}
               </span>
               <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
-                {vm.hasOwnPhoto ? 'Tippen zum Wechseln' : 'Bleibt auf deinem Gerät'}
+                {vm.videoNote ?? (vm.hasOwnPhoto ? 'Tippen zum Wechseln' : 'Bild oder Video · bleibt auf deinem Gerät')}
               </span>
             </span>
             {vm.hasOwnPhoto && (
@@ -208,13 +212,18 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
                 <X size={13} color={T.mid} />
               </button>
             )}
+            {/* IMAGES AND VIDEO, through one control. A story is as often a
+                clip as a photograph, and asking the rider which KIND of file
+                they are about to pick is a question their photo library already
+                answers. The page decides what to do with it. */}
             <input
-              type="file" accept="image/*" style={HIDDEN_FILE_INPUT}
+              type="file" accept="image/*,video/*" style={HIDDEN_FILE_INPUT}
               onChange={async (e) => {
                 const f = e.target.files?.[0]
                 // Reset first: picking the SAME file twice must still fire.
                 e.target.value = ''
                 if (!f) return
+                if (f.type.startsWith('video/')) { onPickVideo?.(f); return }
                 // 1440 rather than the studio's 1024 — this one is drawn at
                 // 1080 across and then cropped, so it needs the headroom.
                 onPickPhoto?.(await fileToDownscaledDataUrl(f, 1440).catch(() => null))

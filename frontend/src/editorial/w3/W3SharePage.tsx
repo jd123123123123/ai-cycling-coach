@@ -11,6 +11,9 @@ import {
   type ShareAngle, type PosterData,
 } from './w3share'
 import { VALUES, DEFAULT_VALUES, type ValueId } from './w3shareValues'
+import {
+  canRenderVideo, renderStoryVideo, videoPosterFrame, MAX_STORY_SECONDS,
+} from './w3share' 
 import { T } from './w3tokens'
 import W3ShareView, { type W3ShareVm, type ShareAngleChip } from './W3ShareView'
 
@@ -129,6 +132,27 @@ export default function W3SharePage() {
   // What the rider put on the card, in the order they tapped it.
   const [values, setValues] = useState<ValueId[]>(DEFAULT_VALUES)
   const [accent, setAccent] = useState<string>(T.acid)
+  // The rider's clip, and the still pulled out of it. The still is what the
+  // preview shows and what a browser that cannot record a canvas falls back to;
+  // the clip is what gets burned and shared when it can.
+  const [video, setVideo] = useState<{ url: string; poster: string } | null>(null)
+  const [burning, setBurning] = useState<number | null>(null)
+
+  const pickVideo = useCallback(async (f: File) => {
+    const url = URL.createObjectURL(f)
+    const poster = await videoPosterFrame(url)
+    // No frame means no readable video; say so rather than showing an empty card.
+    if (!poster) { URL.revokeObjectURL(url); setVideo(null); return }
+    setVideo((prev) => {
+      if (prev) URL.revokeObjectURL(prev.url)
+      return { url, poster }
+    })
+    setOwnPhoto(null)
+  }, [])
+
+  // Revoke on unmount: an object URL held after the screen closes is the whole
+  // clip pinned in memory.
+  useEffect(() => () => { if (video) URL.revokeObjectURL(video.url) }, [video])
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null)
   const [posterBlob, setPosterBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -273,13 +297,6 @@ export default function W3SharePage() {
       angle,
       handle,
       club: dateStr,
-      format,
-    values,
-    accent,
-    availableValues: debrief
-      ? VALUES.map((v) => ({ id: v.id, label: v.label, value: v.resolve(debrief, profile?.weight_kg ?? null) }))
-          .filter((v): v is { id: ValueId; label: string; value: string } => v.value != null)
-      : [],
       // The two blocks that were always on the card read their content from
       // the angle, so they are filled in here rather than above.
       // `blocks` is vestigial: it told the OLD poster painter which pieces to
@@ -311,34 +328,60 @@ export default function W3SharePage() {
     }
   }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile])
 
-  /** The story card's payload, from the same numbers the poster already has. */
+  /**
+   * The story card's payload.
+   *
+   * THE RIDER'S PICKED VALUES ARE THE STATS, in the order they tapped them —
+   * that is what makes the WERTE row a control rather than an ornament. The
+   * first pick leads (it is the card's big number), the next two fill the
+   * slots beside it, and a template that shows fewer simply uses fewer.
+   */
   const story = useMemo<StoryData | null>(() => {
-    if (!poster || !story) return null
+    if (!poster || !debrief) return null
+    const kg = profile?.weight_kg ?? null
+    const picked = values
+      .map((id) => VALUES.find((v) => v.id === id))
+      .filter((v): v is NonNullable<typeof v> => v != null)
+      .map((v) => ({ id: v.id, short: v.short, value: v.resolve(debrief, kg) }))
+      .filter((v): v is { id: ValueId; short: string; value: string } => v.value != null)
+
+    const [lead, ...rest] = picked
+    // The leading value is split into figure and unit so the card can set them
+    // at different sizes; a value with no unit keeps the whole string.
+    const cut = lead ? lead.value.lastIndexOf(' ') : -1
+    const bigValue = lead ? (cut > 0 ? lead.value.slice(0, cut) : lead.value) : poster.bigValue
+    const bigUnit = lead
+      ? (cut > 0 ? lead.value.slice(cut + 1) : lead.short.toLowerCase())
+      : poster.bigUnit
+
+    const pair = rest.slice(0, 2).map((v) => ({ v: v.value, l: v.short }))
+    while (pair.length < 2) pair.push({ v: '', l: '' })
+
+    const power = poster.blockData?.power ?? []
+    const peak = power.length ? Math.max(...power) : 0
+
     return {
       layout: format,
+      accent,
       handle: poster.handle,
       badge: 'W3 ANALYSE',
       lead: poster.sentence.split(/ — | – |: /)[0] ?? poster.sentence,
       emphasis: poster.sentence.split(/ — | – |: /).slice(1).join(' — '),
-      bigValue: poster.bigValue,
-      bigUnit: poster.bigUnit,
-      stats: [poster.stats[0], poster.stats[1]].map((x) => ({ v: x.v, l: x.l })) as [
-        { v: string; l: string }, { v: string; l: string },
-      ],
-      series: poster.blockData?.power?.length
-        ? poster.blockData.power.slice(0, 48).map((w) => Math.min(1, w / Math.max(1, Math.max(...poster.blockData.power))))
-        : [],
+      bigValue,
+      bigUnit,
+      stats: pair as [{ v: string; l: string }, { v: string; l: string }],
+      series: peak > 0 ? power.slice(0, 48).map((w) => Math.min(1, w / peak)) : [],
       footer: poster.footer,
-      // The rider's own picture first; failing that, the ride's composed scene —
-      // the machine on the road it actually rode. Never a stock image.
-      photo: ownPhoto ?? poster.sceneSrc ?? null,
+      // The rider's own picture first — a still they chose, or the frame pulled
+      // from their clip — then the ride's composed scene. Never a stock image.
+      photo: ownPhoto ?? video?.poster ?? poster.sceneSrc ?? null,
       polyline: poster.polyline,
       routeName: activity?.title ?? '',
       dateline: poster.footer,
       ticker: poster.sentence,
-      readings: poster.stats.map((x) => ({ v: x.v, l: x.l })),
+      readings: picked.map((v) => ({ v: v.value, l: v.short })),
     }
-  }, [poster, format, ownPhoto, activity])
+  }, [poster, debrief, profile, format, accent, values, ownPhoto, video, activity])
 
   // ── render whichever card is selected whenever the payload changes ──
   useEffect(() => {
@@ -357,7 +400,29 @@ export default function W3SharePage() {
     return `${poster.footer} — ${poster.sentence} #w3ride`
   }, [poster])
 
-  const onShare = useCallback(() => { void sharePoster(posterBlob, caption) }, [posterBlob, caption])
+  /**
+   * WHAT LEAVES THE APP. A still by default; the rider's own clip with the ride
+   * burned into it when they picked one and the browser can record a canvas.
+   *
+   * The encode is REAL TIME — `MediaRecorder` records the stream as it plays —
+   * so the rider is told what is happening and the still is always ready
+   * underneath as the answer if the burn fails or the browser refuses.
+   */
+  const onShare = useCallback(async () => {
+    if (video && story && canRenderVideo()) {
+      setBurning(0)
+      try {
+        const out = await renderStoryVideo(video.url, story, setBurning)
+        if (out?.blob) {
+          await sharePoster(out.blob, caption, 'w3-ride.mp4')
+          return
+        }
+      } catch { /* fall through to the still, which always exists */ } finally {
+        setBurning(null)
+      }
+    }
+    void sharePoster(posterBlob, caption)
+  }, [video, story, posterBlob, caption])
   const onDownload = useCallback(() => { if (posterBlob) downloadPoster(posterBlob) }, [posterBlob])
   const onLink = useCallback(async () => { try { if (navigator.clipboard) await navigator.clipboard.writeText(caption) } catch { /* ignore */ } }, [caption])
 
@@ -366,7 +431,25 @@ export default function W3SharePage() {
     generating,
     activeAngle: angle,
     canShare: shareable,
-    hasOwnPhoto: ownPhoto != null,
+    hasOwnPhoto: ownPhoto != null || video != null,
+    format,
+    values,
+    accent,
+    // What the video path is doing, in the rider's language. Real-time encoding
+    // is a wait, and a wait nobody explains reads as a hang.
+    videoNote: burning != null
+      ? `Video wird gerendert · ${Math.round(burning * 100)} %`
+      : video
+        ? (canRenderVideo()
+            ? `Video · bis ${MAX_STORY_SECONDS} Sekunden werden geteilt`
+            : 'Video · dieser Browser teilt daraus ein Standbild')
+        : null,
+    // Only what this ride recorded. A value it has no number for is not offered,
+    // so an empty slot can never be printed.
+    availableValues: debrief
+      ? VALUES.map((v) => ({ id: v.id, label: v.label, value: v.resolve(debrief, profile?.weight_kg ?? null) }))
+          .filter((v): v is { id: ValueId; label: string; value: string } => v.value != null)
+      : [],
     angles: [
       { id: 'rekord', label: 'Bestleistung', sub: 'Stärkster Push' },
       { id: 'fahrt', label: 'Ganze Fahrt', sub: activity?.title || 'Deine Runde' },
@@ -383,6 +466,7 @@ export default function W3SharePage() {
       onPickPhoto={setOwnPhoto}
       onPickValues={setValues}
       onPickAccent={setAccent}
+      onPickVideo={pickVideo}
       onPickFormat={setFormat}
       onShare={onShare}
       onStory={onShare}

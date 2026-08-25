@@ -680,9 +680,25 @@ export function canShareImage(): boolean {
  * LinkedIn / WhatsApp / …). Falls back to a PNG download + copied caption on
  * browsers without file-share support. Returns how it was handled.
  */
+/** The extension a blob's own type asks for. A file named `.png` that is really
+ *  an mp4 is rejected by every app worth sharing to. */
+function extensionFor(type: string): string {
+  if (type.startsWith('video/mp4')) return 'mp4'
+  if (type.startsWith('video/webm')) return 'webm'
+  if (type.startsWith('image/jpeg')) return 'jpg'
+  return 'png'
+}
+
 export async function sharePoster(blob: Blob | null, caption: string, filename = 'w3-ride.png'): Promise<'shared' | 'downloaded' | 'failed'> {
   if (!blob) return 'failed'
-  const file = new File([blob], filename, { type: 'image/png' })
+  // THE BLOB'S OWN TYPE DECIDES, not the default argument. This hardcoded
+  // `image/png` and a `.png` name, which was harmless while every card was a
+  // PNG and is not now: a moving card handed to the share sheet as a PNG is
+  // refused by the receiving app, and the rider is told nothing.
+  const type = blob.type || 'image/png'
+  const ext = extensionFor(type)
+  const named = filename.replace(/\.[a-z0-9]+$/i, '') + '.' + ext
+  const file = new File([blob], named, { type })
   if (typeof navigator !== 'undefined' && navigator.canShare?.({ files: [file] }) && navigator.share) {
     try {
       await navigator.share({ files: [file], text: caption, title: 'Ridr' })
@@ -692,7 +708,7 @@ export async function sharePoster(blob: Blob | null, caption: string, filename =
       if ((err as Error)?.name === 'AbortError') return 'shared'
     }
   }
-  downloadPoster(blob, filename)
+  downloadPoster(blob, named)
   try { if (navigator?.clipboard) await navigator.clipboard.writeText(caption) } catch { /* ignore */ }
   return 'downloaded'
 }
@@ -1103,7 +1119,17 @@ function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][],
   ctx.fill()
 }
 
-function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTMLImageElement | null) {
+/**
+ * What the card is painted OVER. A still or a frame of video — the overlay does
+ * not care which, and keeping it ignorant is what lets the same painter draw
+ * both the poster frame and every frame of a moving card.
+ *
+ * `w`/`h` are passed rather than read off the source because a video element
+ * carries its size on `videoWidth`/`videoHeight`, and an image on `width`.
+ */
+interface CardSource { src: CanvasImageSource; w: number; h: number }
+
+function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: CardSource | null) {
   const layout = d.layout ?? 'full'
   const mono = "'JetBrains Mono', ui-monospace, monospace"
   const accent = d.accent || CARD.acid
@@ -1116,14 +1142,14 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     : layout === 'viewfinder' ? { y: 210, h: 1000 }
     : { y: 0, h: SH }
   if (photo) {
-    const scale = Math.max(SW / photo.width, inset.h / photo.height)
-    const w = photo.width * scale
-    const h = photo.height * scale
+    const scale = Math.max(SW / photo.w, inset.h / photo.h)
+    const w = photo.w * scale
+    const h = photo.h * scale
     ctx.save()
     ctx.beginPath()
     ctx.rect(0, inset.y, SW, inset.h)
     ctx.clip()
-    ctx.drawImage(photo, (SW - w) / 2, inset.y + (inset.h - h) / 2, w, h)
+    ctx.drawImage(photo.src, (SW - w) / 2, inset.y + (inset.h - h) / 2, w, h)
     ctx.restore()
   }
 
@@ -1384,10 +1410,13 @@ export async function renderStoryCard(d: StoryData): Promise<{ blob: Blob | null
   const ctx = canvas.getContext('2d')
   if (!ctx) return { blob: null, dataUrl: '' }
 
-  let photo: HTMLImageElement | null = null
+  let photo: CardSource | null = null
   if (d.photo) {
     // A photo that will not decode must not cost the rider their card.
-    try { photo = await loadImage(d.photo) } catch { photo = null }
+    try {
+      const img = await loadImage(d.photo)
+      photo = { src: img, w: img.width, h: img.height }
+    } catch { photo = null }
   }
   paintStoryCard(ctx, d, photo)
 
@@ -1396,3 +1425,147 @@ export async function renderStoryCard(d: StoryData): Promise<{ blob: Blob | null
   return { blob, dataUrl }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// THE MOVING CARD
+//
+// A story is as often a video as a photograph, and a still grabbed out of one
+// is a worse post than the clip it came from. So the same overlay that paints
+// the still is painted onto every frame, and what leaves the app is a video
+// with the ride burned into it.
+//
+// WHY IT IS DONE IN THE BROWSER AND NOT ON THE SERVER. The rider's own footage
+// would have to be uploaded to be composited anywhere else — a video of their
+// morning, sent to a server, to get a caption on it. The whole point of the
+// photo picker is that the file never leaves the device, and that argument does
+// not weaken because the file is bigger.
+//
+// WHAT IT COSTS, HONESTLY: encoding is real time. Ten seconds of video takes
+// about ten seconds, because `MediaRecorder` records a stream as it plays. That
+// is why `onProgress` exists and why the cap is ten seconds rather than the
+// fifteen a story allows.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Longest clip we will burn. A story allows fifteen; ten keeps the wait sane. */
+export const MAX_STORY_SECONDS = 10
+
+/** The container the browser will actually give us, best first. */
+function pickMimeType(): string | null {
+  if (typeof MediaRecorder === 'undefined') return null
+  const wanted = [
+    'video/mp4;codecs=avc1',       // Safari, and what Instagram prefers
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm',
+  ]
+  return wanted.find((t) => MediaRecorder.isTypeSupported?.(t)) ?? null
+}
+
+/** Can this browser burn an overlay into a video at all? */
+export function canRenderVideo(): boolean {
+  return typeof HTMLCanvasElement !== 'undefined'
+    && typeof HTMLCanvasElement.prototype.captureStream === 'function'
+    && pickMimeType() != null
+}
+
+function loadVideo(url: string): Promise<HTMLVideoElement> {
+  return new Promise((resolve, reject) => {
+    const v = document.createElement('video')
+    v.preload = 'auto'
+    v.muted = true            // required, or playback needs its own gesture
+    v.playsInline = true
+    v.onloadeddata = () => resolve(v)
+    v.onerror = () => reject(new Error('video failed to load'))
+    v.src = url
+  })
+}
+
+/**
+ * ONE FRAME of the rider's video, as a data URL.
+ *
+ * The fallback everywhere `canRenderVideo()` is false, and the thumbnail the
+ * picker shows either way. Seeks a little way in on purpose: the first frame of
+ * a handheld clip is usually the ground or a blur.
+ */
+export async function videoPosterFrame(url: string, at = 0.5): Promise<string | null> {
+  try {
+    const v = await loadVideo(url)
+    await new Promise<void>((res) => {
+      v.onseeked = () => res()
+      v.currentTime = Math.min(at, Math.max(0, (v.duration || 1) - 0.05))
+    })
+    const c = document.createElement('canvas')
+    c.width = v.videoWidth
+    c.height = v.videoHeight
+    c.getContext('2d')?.drawImage(v, 0, 0)
+    return c.toDataURL('image/jpeg', 0.9)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * The rider's video with their ride painted over every frame. 1080 × 1920.
+ *
+ * Returns null when the browser cannot record a canvas — the caller falls back
+ * to `videoPosterFrame` and a still card, which is a worse post but never a
+ * broken one.
+ */
+export async function renderStoryVideo(
+  url: string,
+  d: StoryData,
+  onProgress?: (fraction: number) => void,
+): Promise<{ blob: Blob | null; type: string } | null> {
+  if (!canRenderVideo()) return null
+  const mimeType = pickMimeType()
+  if (!mimeType) return null
+
+  let video: HTMLVideoElement
+  try { video = await loadVideo(url) } catch { return null }
+
+  const canvas = document.createElement('canvas')
+  canvas.width = SW
+  canvas.height = SH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+
+  const source: CardSource = { src: video, w: video.videoWidth, h: video.videoHeight }
+  const duration = Math.min(video.duration || MAX_STORY_SECONDS, MAX_STORY_SECONDS)
+
+  const stream = canvas.captureStream(30)
+  const rec = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 8_000_000 })
+  const chunks: BlobPart[] = []
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data) }
+
+  const done = new Promise<Blob>((resolve) => {
+    rec.onstop = () => resolve(new Blob(chunks, { type: mimeType }))
+  })
+
+  let raf = 0
+  const draw = () => {
+    // The overlay is repainted every frame rather than composited once: the
+    // scrims are gradients over moving pixels, and a cached overlay would show
+    // the first frame's darkness for the whole clip.
+    paintStoryCard(ctx, d, source)
+    onProgress?.(Math.min(1, video.currentTime / duration))
+    if (video.currentTime >= duration || video.ended) {
+      cancelAnimationFrame(raf)
+      video.pause()
+      rec.stop()
+      return
+    }
+    raf = requestAnimationFrame(draw)
+  }
+
+  rec.start()
+  try {
+    await video.play()
+  } catch {
+    rec.stop()
+    return null      // autoplay refused; the caller falls back to a still
+  }
+  raf = requestAnimationFrame(draw)
+
+  const blob = await done
+  stream.getTracks().forEach((t) => t.stop())
+  return { blob, type: mimeType }
+}
