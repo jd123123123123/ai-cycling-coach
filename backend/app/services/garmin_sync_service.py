@@ -49,6 +49,7 @@ from app.services.stream_extraction import records_to_streams
 from app.services.stream_ingestion import has_gps, ingest_activity_streams
 from app.services.garmin_client import (
     GarminAuthError, GarminError, GarminProvider, GarminRateLimitError,
+    GarminTransientError,
 )
 from app.services.garmin_mapper import map_daily_metrics, map_garmin_activity
 from app.services.garmin_sleep_parser import apply_sleep_vitals, merge_raw_snapshots
@@ -90,6 +91,16 @@ METRICS_MIN_INTERVAL_MINUTES = 20
 #: minute, and the elevation backfill is deliberately unbounded over history.
 MAINTENANCE_MIN_INTERVAL_MINUTES = 360
 
+#: How many auth failures IN A ROW before we believe the credential is bad.
+#:
+#: One is not evidence. Measured 2026-08-25: two riders were disabled by an auth
+#: failure sixty seconds after the same credentials had authenticated and pulled
+#: seven rides — Garmin's login is behind a bot-detection layer that fails
+#: intermittently, and a login that worked a minute ago says far more about the
+#: password than a login that failed just now. Three consecutive failures, with
+#: a growing backoff between them, is a rider who really does need to reconnect.
+AUTH_FAILURES_BEFORE_DISABLE = 3
+
 # Max days per activity fetch chunk — avoids undocumented pagination limits
 ACTIVITY_CHUNK_DAYS = 30
 
@@ -129,23 +140,38 @@ async def create_garmin_client_for_user(credential: GarminCredential):
     try:
         await client.authenticate()
         return client
-    except GarminRateLimitError:
+    except (GarminRateLimitError, GarminTransientError):
         # ORDER MATTERS, AND IT IS THE WHOLE BUG. This clause did not exist,
         # `GarminRateLimitError` subclassed `GarminAuthError`, and so being
         # throttled fell into the branch below and turned the rider off for
-        # good. Throttling says nothing about the credential; the caller sets a
-        # backoff and we try again later.
+        # good. Neither of these says anything about the credential; the caller
+        # sets a backoff and we try again later.
         logger.warning(
-            "Garmin rate-limited during auth for user_id=%s — backing off, "
+            "Garmin unavailable during auth for user_id=%s — backing off, "
             "sync stays enabled", credential.user_id,
         )
         raise
     except GarminAuthError:
-        logger.error(
-            "Garmin auth failed for user_id=%s — disabling sync", credential.user_id
-        )
-        credential.sync_status = "auth_error"
-        credential.sync_enabled = False
+        # ONE FAILURE IS NOT A VERDICT. Garmin's login sits behind bot
+        # detection that refuses intermittently, so a single "auth failed" is
+        # far more likely to be a bad minute than a bad password. Count them,
+        # back off between attempts, and only disable once the credential has
+        # failed three times in a row without a success in between.
+        credential.auth_failures = (credential.auth_failures or 0) + 1
+        if credential.auth_failures >= AUTH_FAILURES_BEFORE_DISABLE:
+            logger.error(
+                "Garmin auth failed %d times running for user_id=%s — disabling sync",
+                credential.auth_failures, credential.user_id,
+            )
+            credential.sync_status = "auth_error"
+            credential.sync_enabled = False
+        else:
+            logger.warning(
+                "Garmin auth failed for user_id=%s (%d/%d) — backing off, sync stays enabled",
+                credential.user_id, credential.auth_failures, AUTH_FAILURES_BEFORE_DISABLE,
+            )
+            credential.sync_status = "auth_retry"
+            credential.backoff_until = _next_backoff(credential, datetime.now(timezone.utc))
         raise
 
 
@@ -603,13 +629,15 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
 
     try:
         client = await create_garmin_client_for_user(credential)
-    except GarminRateLimitError:
-        credential.sync_status = "rate_limited"
+    except (GarminRateLimitError, GarminTransientError) as exc:
+        credential.sync_status = (
+            "rate_limited" if isinstance(exc, GarminRateLimitError) else "unavailable"
+        )
         credential.backoff_until = _next_backoff(credential, datetime.now(timezone.utc))
         await db.commit()
         raise
     except GarminAuthError:
-        await db.commit()  # Persist auth_error status set in create_garmin_client_for_user
+        await db.commit()  # Persist the count/disable decision made above
         raise
 
     is_initial_sync = credential.last_sync_at is None
@@ -683,6 +711,7 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         credential.last_sync_at = datetime.now(timezone.utc)
         credential.sync_status = "ok"
         credential.backoff_until = None   # it worked; forget the last refusal
+        credential.auth_failures = 0      # ...and the run of failures before it
         await db.commit()
 
         # ── THE ONCE-IN-A-WHILE WORK ──────────────────────────────────────
@@ -796,12 +825,14 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         )
         return result
 
-    except GarminRateLimitError:
+    except (GarminRateLimitError, GarminTransientError) as exc:
         # THE RIDER STAYS ENABLED. This is the clause whose absence disabled
-        # every account in production: throttling is a fact about the next
-        # quarter of an hour, not about the credential.
+        # every account in production: throttling, and a network that dropped,
+        # are facts about the next quarter of an hour — not about the credential.
         await db.rollback()
-        credential.sync_status = "rate_limited"
+        credential.sync_status = (
+            "rate_limited" if isinstance(exc, GarminRateLimitError) else "unavailable"
+        )
         credential.backoff_until = _next_backoff(credential, datetime.now(timezone.utc))
         await db.commit()
         raise

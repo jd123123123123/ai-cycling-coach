@@ -35,6 +35,19 @@ class GarminAuthError(GarminError):
     """
 
 
+class GarminTransientError(GarminError):
+    """Garmin did not answer, and it said nothing about the credential.
+
+    A DNS blip, a reset connection, a Cloudflare interstitial, a JSON body that
+    was an HTML error page. The catch-all around `authenticate()` used to turn
+    every one of these into `GarminAuthError`, which the sync reads as "this
+    password is wrong" and disables the rider for good — so a single bad minute
+    on the network ended an account's sync. Measured 2026-08-25: two riders
+    whose credentials had authenticated and pulled seven rides sixty seconds
+    earlier were switched off by exactly this.
+    """
+
+
 class GarminRateLimitError(GarminError):
     """Raised when Garmin rate-limits the server IP.
 
@@ -131,8 +144,11 @@ class GarminHealthDataClient:
             logger.error("Garmin authentication failed for %s: %s", self._email, exc)
             raise GarminAuthError(f"Garmin auth failed: {exc}") from exc
         except Exception as exc:
+            # NOT GarminAuthError. Only the library saying "authentication
+            # failed" is evidence about the credential; everything else is
+            # evidence about the network, and the two must not share a verdict.
             logger.error("Unexpected error during Garmin auth for %s: %s", self._email, exc)
-            raise GarminAuthError(f"Garmin auth error: {exc}") from exc
+            raise GarminTransientError(f"Garmin unreachable: {exc}") from exc
 
     async def _ensure_auth(self) -> None:
         if self._api is None:

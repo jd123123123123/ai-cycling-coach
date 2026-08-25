@@ -53,6 +53,14 @@ class GarminCredential(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    #: Auth failures IN A ROW. Reset by any success. One failure is not
+    #: evidence about a password — Garmin's login sits behind bot detection
+    #: that refuses intermittently — so the sync only disables a rider once
+    #: this reaches `AUTH_FAILURES_BEFORE_DISABLE`.
+    auth_failures: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
+
     #: When the eight biometric endpoints were last asked about today. They are
     #: the bulk of a sync's upstream cost and they answer the same thing all
     #: day; the every-minute run is for catching a ride, not for re-reading

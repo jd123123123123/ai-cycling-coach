@@ -13,17 +13,19 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.services.garmin_client import (
-    GarminAuthError, GarminError, GarminRateLimitError,
+    GarminAuthError, GarminError, GarminRateLimitError, GarminTransientError,
 )
 
 
 class Cred:
     """Just the fields the backoff maths reads."""
 
-    def __init__(self, backoff_until=None, metrics_synced_at=None, maintenance_at=None):
+    def __init__(self, backoff_until=None, metrics_synced_at=None,
+                 maintenance_at=None, auth_failures=0):
         self.backoff_until = backoff_until
         self.metrics_synced_at = metrics_synced_at
         self.maintenance_at = maintenance_at
+        self.auth_failures = auth_failures
 
 
 NOW = datetime(2026, 8, 25, 12, 0, tzinfo=timezone.utc)
@@ -95,3 +97,86 @@ class TestTheGates:
         assert M >= 60
         assert _due(NOW - timedelta(minutes=59), NOW, M) is False
         assert _due(NOW - timedelta(minutes=M), NOW, M) is True
+
+
+class TestTransientIsNotACredentialVerdict:
+    """The second half of the same bug, one level down.
+
+    The client wrapped `authenticate()` in a bare `except Exception` and raised
+    `GarminAuthError` from it — so a dropped connection was indistinguishable
+    from a wrong password, and the sync disabled the rider. Production,
+    2026-08-25: two riders were switched off this way sixty seconds after those
+    credentials had authenticated and pulled seven rides.
+    """
+
+    def test_a_network_failure_is_not_an_auth_failure(self):
+        assert not issubclass(GarminTransientError, GarminAuthError)
+        assert issubclass(GarminTransientError, GarminError)
+
+    def test_it_earns_a_backoff_like_any_other_transient_refusal(self):
+        from app.services.garmin_sync_service import _next_backoff
+
+        assert _next_backoff(Cred(), NOW) == NOW + timedelta(minutes=15)
+
+
+class TestOneAuthFailureIsNotAVerdict:
+    """Drives `create_garmin_client_for_user` with a login that always refuses."""
+
+    @staticmethod
+    def _always_fails(monkeypatch, exc):
+        import app.services.garmin_client as gc
+
+        class Refuses:
+            def __init__(self, **kwargs):
+                pass
+
+            async def authenticate(self):
+                raise exc
+
+        monkeypatch.setattr(gc, "GarminHealthDataClient", Refuses)
+
+    async def _attempt(self, cred, monkeypatch, exc=None):
+        from app.services.garmin_client import GarminAuthError as AE
+        from app.services.garmin_sync_service import create_garmin_client_for_user
+
+        self._always_fails(monkeypatch, exc or AE("nope"))
+        with pytest.raises(Exception):
+            await create_garmin_client_for_user(cred)
+
+    async def test_the_first_two_failures_leave_the_rider_enabled(self, monkeypatch):
+        from app.services.garmin_sync_service import AUTH_FAILURES_BEFORE_DISABLE
+
+        cred = Cred()
+        cred.user_id, cred.sync_enabled, cred.sync_status = 1, True, "ok"
+        cred.encrypted_email = cred.encrypted_password = cred.token_store_path = "x"
+
+        for n in range(1, AUTH_FAILURES_BEFORE_DISABLE):
+            await self._attempt(cred, monkeypatch)
+            assert cred.auth_failures == n
+            assert cred.sync_enabled is True, (
+                f"failure {n} of {AUTH_FAILURES_BEFORE_DISABLE} switched the rider off"
+            )
+            assert cred.backoff_until is not None
+
+    async def test_the_third_one_disables(self, monkeypatch):
+        from app.services.garmin_sync_service import AUTH_FAILURES_BEFORE_DISABLE
+
+        cred = Cred(auth_failures=AUTH_FAILURES_BEFORE_DISABLE - 1)
+        cred.user_id, cred.sync_enabled, cred.sync_status = 1, True, "ok"
+        cred.encrypted_email = cred.encrypted_password = cred.token_store_path = "x"
+
+        await self._attempt(cred, monkeypatch)
+
+        assert cred.sync_enabled is False
+        assert cred.sync_status == "auth_error"
+
+    async def test_a_dropped_connection_never_counts_against_the_credential(self, monkeypatch):
+        cred = Cred()
+        cred.user_id, cred.sync_enabled, cred.sync_status = 1, True, "ok"
+        cred.encrypted_email = cred.encrypted_password = cred.token_store_path = "x"
+
+        for _ in range(5):
+            await self._attempt(cred, monkeypatch, GarminTransientError("reset by peer"))
+
+        assert cred.auth_failures == 0
+        assert cred.sync_enabled is True
