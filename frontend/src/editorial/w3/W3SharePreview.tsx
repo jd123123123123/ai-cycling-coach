@@ -131,7 +131,6 @@ export default function W3SharePreview() {
       onDownload={() => { if (blob) { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = 'w3-ride.png'; a.click(); URL.revokeObjectURL(u) } }}
       onSelectAngle={setAngle}
       onShare={() => {}}
-      onStory={() => {}}
       onCrew={() => { location.hash = '#/e/w3-crew' }}
       onLink={() => {}}
     />

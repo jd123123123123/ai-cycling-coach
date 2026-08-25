@@ -1,6 +1,6 @@
 import { type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Download, Camera, Users, Link2, Sticker, Share2, ImagePlus, X } from 'lucide-react'
+import { Download, Users, Link2, Sticker, Share2, ImagePlus, X } from 'lucide-react'
 import { T, FONT, EASE, HIDDEN_FILE_INPUT } from './w3tokens'
 import { TNUM } from './w3surfaces'
 import type { StoryLayout } from './w3share'
@@ -57,20 +57,36 @@ export interface W3ShareActions {
   onDownload?: () => void
   onSelectAngle?: (id: ShareAngle) => void
   onShare?: () => void
-  onStory?: () => void
   /** Save the overlay alone, transparent, to place by hand in Instagram. */
   onSticker?: () => void
   onCrew?: () => void
   onLink?: () => void
 }
 
+/**
+ * TWO ROUTES OUT, AND THEY GO TO DIFFERENT PLACES.
+ *
+ * The button below this row shares the FINISHED card — burned, one file, and it
+ * lands anywhere a file can: WhatsApp, iMessage, Signal, an Instagram post. That
+ * is the one most riders want most of the time, which is why it is the button
+ * and not a chip.
+ *
+ * `Sticker` is the Instagram-only route: the overlay alone on transparency,
+ * saved to the camera roll, placed by the rider over their own story. It exists
+ * because Instagram's photo sticker preserves alpha — the live draggable layer
+ * Strava gets needs a native wrapper we do not have.
+ *
+ * `Story` used to sit here too and called the same handler as the button, so
+ * the screen offered one action twice and explained neither. It went the way
+ * `Mehr` did.
+ *
+ * EVERY ONE CARRIES WHERE IT GOES. Four unlabelled glyphs is the problem this
+ * screen already had once.
+ */
 const ACTIONS = [
-  { id: 'story', label: 'Story', Icon: Camera },
-  // The sticker route: the overlay alone, on transparency, for a rider who
-  // wants to place it themselves in Instagram rather than accept ours.
-  { id: 'sticker', label: 'Sticker', Icon: Sticker },
-  { id: 'crew', label: 'Crew', Icon: Users },
-  { id: 'link', label: 'Link', Icon: Link2 },
+  { id: 'sticker', label: 'Sticker', sub: 'für Instagram', Icon: Sticker },
+  { id: 'crew', label: 'Crew', sub: 'in der App', Icon: Users },
+  { id: 'link', label: 'Link', sub: 'kopieren', Icon: Link2 },
 ] as const
 
 /** The four, in the order they give things up. See `StoryLayout` for why there
@@ -94,13 +110,12 @@ const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'effort', name: 'Effort', drops: 'Satz oben' },
 ]
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onShare, onStory, onSticker, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onShare, onSticker, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
   const onAction = (id: (typeof ACTIONS)[number]['id']) => {
-    if (id === 'story') onStory?.()
-    else if (id === 'sticker') onSticker?.()
+    if (id === 'sticker') onSticker?.()
     else if (id === 'crew') onCrew?.()
     else onLink?.()
   }
@@ -308,11 +323,14 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
 
         {/* Action row */}
         <div style={{ padding: '22px 20px 0', display: 'flex', justifyContent: 'space-between' }}>
-          {ACTIONS.map(({ id, label, Icon }) => (
+          {ACTIONS.map(({ id, label, sub, Icon }) => (
             <button key={id} onClick={() => onAction(id)}
               style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT }}>
               <div style={{ width: 58, height: 58, borderRadius: 100, background: T.surface, display: 'grid', placeItems: 'center' }}><Icon size={22} color={T.ink} /></div>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{label}</span>
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.ink }}>{label}</span>
+                <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{sub}</span>
+              </span>
             </button>
           ))}
         </div>
@@ -322,7 +340,17 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
           <button onClick={onShare} disabled={!vm.posterDataUrl}
             style={{ width: '100%', height: 58, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: vm.posterDataUrl ? 'pointer' : 'default', fontFamily: FONT, opacity: vm.posterDataUrl ? 1 : 0.6 }}>
             <Share2 size={19} color={T.ink} />
-            <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{vm.canShare ? 'Teilen' : 'Bild speichern & teilen'}</span>
+            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>
+                {vm.canShare ? 'Teilen' : 'Speichern & teilen'}
+              </span>
+              {/* WHERE IT GOES, because "Teilen" alone is the reason a rider
+                  hunts for an Instagram button that was never the point: this
+                  one file works in every app they already message in. */}
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.ink, opacity: 0.7 }}>
+                {vm.videoNote ?? 'WhatsApp, iMessage, Instagram — überall'}
+              </span>
+            </span>
           </button>
         </div>
       </div>

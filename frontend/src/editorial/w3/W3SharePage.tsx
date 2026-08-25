@@ -485,7 +485,6 @@ export default function W3SharePage() {
       onPickVideo={pickVideo}
       onPickFormat={setFormat}
       onShare={onShare}
-      onStory={onShare}
       onSticker={onSticker}
       onCrew={() => navigate('/e/w3-crew')}
       onLink={onLink}
