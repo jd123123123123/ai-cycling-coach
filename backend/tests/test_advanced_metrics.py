@@ -400,3 +400,35 @@ class TestWhyAmITired:
         assert causes[0]["label"] == "HRV suppressed"
         assert causes[0]["severity"] == "high"
         assert "HRV" in causes[0]["evidence"]
+
+
+# ─── Plews CV: the variability half of the HRV signal ───────────────────────
+# `readiness_score._hrv_component` implements a coefficient-of-variation
+# penalty and names it as core rationale ("slope > point"), but every
+# production caller passed `hrv_cv_pct=None`, so the penalty could never fire.
+# The mean alone smooths over exactly the day-to-day instability the penalty
+# exists to catch. `hrv_trend` already holds the window; it now reports its
+# dispersion too.
+
+class TestHrvCv:
+    def test_reports_cv_for_the_current_window(self):
+        from app.services.advanced_metrics import _hrv_cv_pct
+        # mean 50; SAMPLE sd (n-1) of [45,55,45,55] is 5.774, so CV = 11.55%.
+        # Sample rather than population sd on purpose: these readings are a
+        # sample of the athlete's current state, not the whole of it.
+        assert _hrv_cv_pct([45.0, 55.0, 45.0, 55.0]) == pytest.approx(11.55, abs=0.05)
+
+    def test_a_steady_athlete_has_near_zero_cv(self):
+        from app.services.advanced_metrics import _hrv_cv_pct
+        assert _hrv_cv_pct([50.0, 50.0, 50.0, 50.0]) == pytest.approx(0.0, abs=1e-9)
+
+    def test_too_few_readings_is_none_not_zero(self):
+        from app.services.advanced_metrics import _hrv_cv_pct
+        # One reading has no dispersion to report; zero would read as "rock
+        # steady" and hand out a clean bill of health on no evidence.
+        assert _hrv_cv_pct([50.0]) is None
+        assert _hrv_cv_pct([]) is None
+
+    def test_ignores_a_nonsense_baseline(self):
+        from app.services.advanced_metrics import _hrv_cv_pct
+        assert _hrv_cv_pct([0.0, 0.0, 0.0]) is None

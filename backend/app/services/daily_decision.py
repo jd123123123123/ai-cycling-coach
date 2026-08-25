@@ -381,7 +381,11 @@ async def _readiness_summary(db: AsyncSession, user_id: int) -> DailyDecisionRea
         report = compute_readiness(ReadinessInputs(
             hrv_7d_mean=hrv.get("current_mean"),
             hrv_28d_baseline=hrv.get("baseline_28d_mean"),
-            hrv_cv_pct=None,
+            # Plews' variability signal, now actually supplied: the mean
+            # says where the athlete is, the CV says how settled they are,
+            # and the penalty in `_hrv_component` was unreachable while
+            # this stayed None.
+            hrv_cv_pct=hrv.get("cv_pct"),
             rhr_7d_mean=rhr.get("current_mean"),
             rhr_28d_baseline=rhr.get("baseline_28d_mean"),
             sleep_score_last_night=sleep_score_last_night,

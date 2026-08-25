@@ -725,7 +725,7 @@ async def build_snapshot(
     readiness_inputs = ReadinessInputs(
         hrv_7d_mean=hrv_data.get("current_mean"),
         hrv_28d_baseline=hrv_data.get("baseline_28d_mean"),
-        hrv_cv_pct=None,  # not currently computed; placeholder for future Plews CV
+        hrv_cv_pct=hrv_data.get("cv_pct"),  # Plews CV — computed in hrv_trend
         rhr_7d_mean=rhr_data.get("current_mean"),
         rhr_28d_baseline=rhr_data.get("baseline_28d_mean"),
         sleep_score_last_night=(today_metric_row.sleep_score if today_metric_row else None),

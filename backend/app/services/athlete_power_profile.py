@@ -145,11 +145,28 @@ def fit_athlete_cp(curves: list[dict[int | str, float]]) -> CriticalPowerFit | N
     return fit_critical_power(build_sanitized_envelope(curves))
 
 
-def model_confidence(n_rides: int, r_squared: float | None) -> float:
-    """0–1 confidence in the modeled threshold: fit quality × data richness."""
+#: What an exact-by-construction fit is allowed to claim. A two-point CP fit
+#: has r² == 1.0 by arithmetic, so multiplying by r² used to award it FULL
+#: marks — the least identifiable fit scoring highest. It still returns a
+#: number; it may no longer call that number confident.
+_UNIDENTIFIABLE_CONFIDENCE_CAP = 0.35
+
+
+def model_confidence(
+    n_rides: int, r_squared: float | None, identifiable: bool = True
+) -> float:
+    """0–1 confidence in the modeled threshold: fit quality × data richness.
+
+    `identifiable` is False when the CP fit ran on two in-band points. r² is
+    then 1.0 for reasons that have nothing to do with the data being good, so
+    the score is capped rather than believed.
+    """
     n_factor = min(1.0, max(0, n_rides) / float(_CONFIDENCE_FULL_N_RIDES))
     r2 = max(0.0, min(1.0, r_squared if r_squared is not None else 0.0))
-    return round(n_factor * r2, 2)
+    conf = n_factor * r2
+    if not identifiable:
+        conf = min(conf, _UNIDENTIFIABLE_CONFIDENCE_CAP)
+    return round(conf, 2)
 
 
 def reconcile_threshold(

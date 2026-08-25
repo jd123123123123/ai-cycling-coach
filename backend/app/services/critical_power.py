@@ -30,7 +30,24 @@ import numpy as np
 
 CP_MIN_DURATION_S = 120
 CP_MAX_DURATION_S = 1200
+# TWO POINTS STILL FIT — BUT THEY NO LONGER LOOK CERTAIN.
+#
+# A least-squares line through two points is exact, so `r_squared` comes back
+# 1.0 however bad the data is, and `model_confidence` (which multiplies by r²)
+# therefore reported its HIGHEST confidence for the fit that is least
+# identifiable. One non-maximal effort could move CP with no trace in any
+# quality number.
+#
+# Raising the floor to three was the first fix and it was wrong: the CP band is
+# 120–1200 s, and a real athlete with a sparse MMP curve often has exactly two
+# points in it. Refusing to fit deleted their eFTP altogether — trading a
+# misleading number for no number. So the floor stays at two, and the fit now
+# carries `identifiable` (three points is where a residual first exists) and
+# `cp_se_watts` (undefined below that). Judge a fit by those, never by r².
 CP_MIN_POINTS = 2
+#: Below this many in-band points the fit is exact by construction: no residual,
+#: no standard error, no way to tell a good curve from a bad one.
+CP_IDENTIFIABLE_POINTS = 3
 
 
 @dataclass(frozen=True)
@@ -40,6 +57,15 @@ class CriticalPowerFit:
     eftp_watts: float   # modeled 60-min power = CP + W'/3600
     n_points: int       # number of MMP points used in the fit
     r_squared: float    # goodness of fit (1.0 = perfect line)
+    #: Standard error of the CP intercept, in watts — the honest width of the
+    #: estimate. R² saturates at 1.0 for a small clean-looking fit and says
+    #: nothing about how far CP could move; this does. None when n_points < 3
+    #: leaves no residual degrees of freedom.
+    cp_se_watts: float | None = None
+    #: False when the fit is exact by construction (2 points). The number is
+    #: still the best available estimate — it just carries no evidence about
+    #: its own quality, and nothing downstream may treat it as confident.
+    identifiable: bool = True
 
 
 def fit_critical_power(
@@ -76,6 +102,22 @@ def fit_critical_power(
     ss_tot = float(np.sum((powers - powers.mean()) ** 2))
     r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 1.0
 
+    # ── HOW WIDE IS THIS CP, REALLY ──────────────────────────────────────
+    # Standard error of the intercept in an ordinary least-squares fit:
+    #     SE(b0) = s * sqrt( 1/n + xbar^2 / Sxx )
+    # with s^2 the residual variance on n-2 degrees of freedom. Needs n >= 3;
+    # at n == 2 the residual is identically zero and the quantity is undefined,
+    # which is the whole reason the point floor moved.
+    cp_se: float | None = None
+    n = len(points)
+    if n >= 3:
+        dof = n - 2
+        s_sq = ss_res / dof
+        x_mean = float(np.mean(inv_t))
+        sxx = float(np.sum((inv_t - x_mean) ** 2))
+        if sxx > 0 and s_sq >= 0:
+            cp_se = float(np.sqrt(s_sq * (1.0 / n + (x_mean ** 2) / sxx)))
+
     eftp = cp + w_prime / 3600.0
     return CriticalPowerFit(
         cp_watts=round(cp, 1),
@@ -83,4 +125,6 @@ def fit_critical_power(
         eftp_watts=round(eftp, 1),
         n_points=len(points),
         r_squared=round(r_squared, 4),
+        cp_se_watts=round(cp_se, 2) if cp_se is not None else None,
+        identifiable=n >= CP_IDENTIFIABLE_POINTS,
     )

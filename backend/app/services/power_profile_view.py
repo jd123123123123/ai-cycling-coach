@@ -439,7 +439,11 @@ async def compute_power_profile_view(
         "eftp_watts": fit.eftp_watts if fit else None,
         "r_squared": fit.r_squared if fit else None,
         "cp_wkg": cp_wkg,
-        "confidence": model_confidence(len(curves), fit.r_squared if fit else None),
+        "confidence": model_confidence(
+            len(curves),
+            fit.r_squared if fit else None,
+            identifiable=fit.identifiable if fit else True,
+        ),
         "ftp_progression": ftp_progression(rides_dated, ftp),
         # Zones
         "zones": zones,

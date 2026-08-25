@@ -253,10 +253,37 @@ async def hrv_trend(db: AsyncSession, user_id: int, days: int = 7) -> dict:
         "current_mean": round(current_mean, 2) if current_mean is not None else None,
         "baseline_28d_mean": round(baseline_mean, 2) if baseline_mean is not None else None,
         "delta_pct": delta_pct,
+        # The dispersion of the SAME window the mean came from, so a caller
+        # never has to re-query to ask how settled the athlete is.
+        "cv_pct": _hrv_cv_pct(current_values),
         "samples_n": len(current_values),
         "latest_age_days": _latest_hrv_age_days(metrics_28),
         "direction": _trend_direction(current_mean, baseline_mean),
     }
+
+
+def _hrv_cv_pct(values: list[float]) -> float | None:
+    """Coefficient of variation (%) of an HRV window — the Plews signal.
+
+    The mean answers "where is this athlete"; the CV answers "how settled are
+    they", and the two dissociate. An athlete whose readings swing 45-55-45-55
+    has the same mean as one sitting flat at 50 and a very different autonomic
+    picture — day-to-day instability is the documented marker of accumulating
+    stress that a rolling mean is specifically designed to smooth away.
+
+    Sample SD (n-1): these readings are a sample of the athlete's current
+    state, not the population of it. None — never 0.0 — when there is nothing
+    to disperse: fewer than two readings, or a non-positive mean. Zero would
+    read downstream as "rock steady" and hand out a clean bill of health on no
+    evidence at all.
+    """
+    vals = [float(v) for v in values if v is not None]
+    if len(vals) < 2:
+        return None
+    m = statistics.mean(vals)
+    if m <= 0:
+        return None
+    return round(statistics.stdev(vals) / m * 100.0, 2)
 
 
 def _latest_hrv_age_days(metrics: list) -> int | None:

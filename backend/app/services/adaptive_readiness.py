@@ -21,7 +21,7 @@ from statistics import mean, pstdev
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ActivityStream, DailyMetric
+from app.models import Activity, ActivityStream, DailyMetric
 from app.services.athlete_time import today_local
 from app.services.goal_trajectory import _ctl_7d_delta
 from app.services.pmc_service import compute_user_pmc
@@ -381,10 +381,26 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
     sleep_score = srow.scalar_one_or_none()
 
     # Decoupling trend: latest ride vs median of prior rides.
+    #
+    # ORDERED BY RIDE TIME, and that is not a tidiness point. This query used to
+    # have no ORDER BY at all, and an unordered SELECT in PostgreSQL returns
+    # rows in unspecified order — so `decs[0]`, read below as "the latest ride",
+    # was an arbitrary row and `.limit(30)` an arbitrary sample of the athlete's
+    # history. `decoupling_delta` is the ONLY input to `durability_improving` /
+    # `durability_worse`, which decide whether an in-band athlete escalates
+    # (volume x1.12+) or merely pushes. A real prescription was being decided by
+    # row order. Ordering is on the ACTIVITY's start time rather than the
+    # stream's `created_at`, because a back-filled sync writes old rides late
+    # and ingestion order is not ride order.
     drows = await db.execute(
-        select(ActivityStream.decoupling_pct).where(
-            ActivityStream.user_id == user_id, ActivityStream.decoupling_pct.isnot(None)
-        ).limit(30)
+        select(ActivityStream.decoupling_pct)
+        .join(Activity, Activity.id == ActivityStream.activity_id)
+        .where(
+            ActivityStream.user_id == user_id,
+            ActivityStream.decoupling_pct.isnot(None),
+        )
+        .order_by(Activity.started_at.desc())
+        .limit(30)
     )
     decs = [float(r[0]) for r in drows.all()]
     decoupling_delta = None

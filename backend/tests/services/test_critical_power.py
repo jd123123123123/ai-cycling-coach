@@ -76,3 +76,58 @@ class TestSanitizedFitIntegration:
         fit_before = fit_athlete_cp([dict(base) for _ in range(3)])
         fit_after = fit_athlete_cp([dict(base) for _ in range(3)] + [breakthrough, confirm])
         assert fit_after.cp_watts > fit_before.cp_watts
+
+
+class TestFitIdentifiability:
+    """A two-point fit is a line through two points: exact by construction.
+
+    `r_squared` is then 1.0 no matter how bad the data is, so any downstream
+    "trust the fit if R² is high" check passes most eagerly in exactly the case
+    where CP and W' are least identifiable. The band must carry three points
+    before the model is allowed to speak.
+    """
+
+    def test_two_points_still_fit_but_are_not_identifiable(self):
+        # Coverage matters: a sparse MMP curve often has exactly two points in
+        # the 120-1200 s band, and refusing to fit deletes the athlete's eFTP.
+        # The fit is returned — it just may not claim to be trustworthy.
+        fit = fit_critical_power(_synthetic_mmp(250.0, 20000.0, [300, 1200]))
+        assert fit is not None
+        assert fit.identifiable is False
+        assert fit.cp_se_watts is None
+        assert fit.r_squared == 1.0   # exact by construction, and meaningless
+
+    def test_three_points_are_identifiable(self):
+        mmp = _synthetic_mmp(250.0, 20000.0, [300, 720, 1200])
+        fit = fit_critical_power(mmp)
+        assert fit is not None
+        assert fit.n_points == 3
+        assert fit.identifiable is True
+
+    def test_reports_a_standard_error_not_only_r_squared(self):
+        # Noisy data must be distinguishable from clean data. R² alone cannot
+        # do that at small n; the standard error of the CP intercept can.
+        clean = fit_critical_power(_synthetic_mmp(250.0, 20000.0, [180, 300, 720, 1200]))
+        noisy_mmp = _synthetic_mmp(250.0, 20000.0, [180, 300, 720, 1200])
+        noisy_mmp[720] = noisy_mmp[720] * 1.15   # one ride that was not maximal
+        noisy = fit_critical_power(noisy_mmp)
+        assert clean is not None and noisy is not None
+        assert clean.cp_se_watts is not None and noisy.cp_se_watts is not None
+        assert noisy.cp_se_watts > clean.cp_se_watts
+
+
+class TestConfidenceCannotBeFooled:
+    """`model_confidence` multiplies by r², so a two-point fit (r² == 1.0 by
+    arithmetic) used to score full marks — maximum confidence on the least
+    identifiable fit. Identifiability now caps it."""
+
+    def test_unidentifiable_fit_is_capped(self):
+        from app.services.athlete_power_profile import model_confidence
+        exact_but_blind = model_confidence(50, 1.0, identifiable=False)
+        genuinely_good = model_confidence(50, 1.0, identifiable=True)
+        assert exact_but_blind < genuinely_good
+        assert exact_but_blind <= 0.35
+
+    def test_identifiable_fit_is_unaffected(self):
+        from app.services.athlete_power_profile import model_confidence
+        assert model_confidence(50, 0.98) == model_confidence(50, 0.98, identifiable=True)

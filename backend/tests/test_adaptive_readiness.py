@@ -358,3 +358,48 @@ async def test_fewer_than_three_readings_this_week_is_unknown(_quiet_engine):
     sparse = [_hrv_row(today - _timedelta(days=4), 60.0), _hrv_row(today, 60.0)]
     d = await _badir(_adaptive_db(hrv_rows=dense + sparse), 1)
     assert d.hrv_state == "unknown"
+
+
+# ─── The decoupling query must ASK for an order ─────────────────────────────
+# `decoupling_delta = latest - median(prior)` took `decs[0]` as "the latest
+# ride". The query had no ORDER BY, and an unordered SELECT in PostgreSQL
+# returns rows in unspecified order — so "latest" was an arbitrary ride and
+# `.limit(30)` an arbitrary sample. That value is the sole input to
+# `durability_improving` / `durability_worse`, which decide whether an in-band
+# athlete escalates. A prescription was riding on row order.
+
+def _captured_statements():
+    stmts = []
+    db = _MagicMock()
+
+    async def execute(stmt):  # noqa: ANN001
+        stmts.append(stmt)
+        result = _MagicMock()
+        result.scalar_one_or_none.return_value = None
+        result.all.return_value = []
+        return result
+
+    db.execute = _AsyncMock(side_effect=execute)
+    return db, stmts
+
+
+@_pytest.mark.asyncio
+async def test_decoupling_query_is_ordered(monkeypatch):
+    import app.services.adaptive_readiness as _ar
+
+    async def _fake_pmc(db, user_id, days=90):  # noqa: ANN001
+        return {"total": []}
+
+    monkeypatch.setattr(_ar, "compute_user_pmc", _fake_pmc)
+
+    db, stmts = _captured_statements()
+    await _badir(db, 1)
+
+    sql = [str(s.compile(compile_kwargs={"literal_binds": True})) for s in stmts]
+    decoupling_sql = [q for q in sql if "decoupling_pct" in q]
+    assert decoupling_sql, "the decoupling query did not run"
+    for q in decoupling_sql:
+        assert "ORDER BY" in q.upper(), (
+            "the decoupling query must order by ride time — without it "
+            "'the latest ride' is whatever the database happened to return first"
+        )
