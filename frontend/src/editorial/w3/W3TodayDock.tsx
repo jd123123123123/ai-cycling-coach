@@ -63,6 +63,20 @@ function useCountUp(target: number, reduce: boolean | null, ms = 720) {
   return n
 }
 
+/** Seven bars, already normalised 0–1, plus the hue the last one lights in.
+ *  Structurally identical to the view's `W3Spark`, declared here rather than
+ *  imported because the view imports this file and a cycle helps nobody. */
+/** The card's fixed height. The row animates to it, so it lives beside the
+ *  card rather than as a number repeated in two places. */
+const STAT_CARD_H = 108
+
+/** What an absent series draws: a flat, dim track at the height the real bars
+ *  would occupy, so three cards stay the same size whether or not the rider
+ *  has history for all three. */
+const EMPTY_TRACK = [0.18, 0.18, 0.18, 0.18, 0.18, 0.18, 0.18]
+
+export interface W3DockSpark { bars: number[]; hi: string }
+
 export interface W3DockStat {
   /** The trend line under the value — "+9 auf den Basiswert". Optional: it is
    *  the evidence, and evidence we do not have is left out rather than dashed. */
@@ -72,6 +86,12 @@ export interface W3DockStat {
   label: string
   /** Already formatted and localised, or null → an em dash. Never a padded 0. */
   value: string | null
+  /** "ms" · "bpm" · "Std" — set small on the baseline beside the value. */
+  unit?: string | null
+  /** The metric's own last seven readings. NULL draws an empty track rather
+   *  than an invented shape: a card that fakes a trend is worse than a card
+   *  that admits it has none. */
+  spark?: W3DockSpark | null
 }
 
 export interface W3DockVm {
@@ -203,24 +223,48 @@ export default function W3TodayDock({ vm, onOpen }: {
           rather than merely transparent. */}
       {vm.showStats !== false && (
       <div style={{
-        display: 'flex', gap: 12, width: '100%',
-        height: open * 60, opacity: open, overflow: 'hidden',
-        marginTop: open * 2, pointerEvents: open > 0.6 ? 'auto' : 'none',
+        display: 'flex', gap: 10, width: '100%',
+        height: open * STAT_CARD_H, opacity: open, overflow: 'hidden',
+        marginTop: open * 4, pointerEvents: open > 0.6 ? 'auto' : 'none',
       }}>
         {vm.stats.map((s) => (
-          <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>{s.label}</span>
-            <span style={{
-              fontFamily: ARCHIVO, fontSize: 17, fontWeight: 700,
-              color: s.value ? T.ink : T.heroOff, fontVariantNumeric: 'tabular-nums',
-              minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{s.value ?? DASH}</span>
-            {/* The trend, so opening the panel gives the EVIDENCE and not just
-                the same three numbers a second time. This is what the separate
-                signal cards further down used to be for. */}
+          <div key={s.label} style={{
+            flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
+            gap: 7, padding: '11px 12px 10px', borderRadius: 16,
+            background: T.heroDock, height: STAT_CARD_H,
+          }}>
+            <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.heroMid }}>{s.label}</span>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, minWidth: 0 }}>
+              <span style={{
+                fontFamily: ARCHIVO, fontSize: 22, fontWeight: 700, lineHeight: 1,
+                color: s.value ? T.ink : T.heroOff, fontVariantNumeric: 'tabular-nums',
+                minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{s.value ?? DASH}</span>
+              {s.value && s.unit && (
+                <span style={{ fontSize: 10, fontWeight: 700, color: T.heroMid, flex: 'none' }}>{s.unit}</span>
+              )}
+            </div>
+            {/* THE TREND, DRAWN RATHER THAN DESCRIBED. The row printed the
+                delta as a sentence and nothing else, so three different shapes
+                of week — a steady climb, a crash and a rebound, a flat line —
+                all read as the same "+9". Seven bars say which it was before a
+                word is read, and the last one lights because today is the one
+                the rider is standing in. */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 22, flex: 'none' }}>
+              {(s.spark?.bars ?? EMPTY_TRACK).slice(-7).map((b, i, all) => (
+                <div key={i} style={{
+                  flex: 1, minWidth: 0, borderRadius: 2,
+                  height: Math.max(3, Math.round(b * 22)),
+                  background: s.spark
+                    ? (i === all.length - 1 ? (s.spark.hi ?? T.acid) : T.heroOff)
+                    : T.heroOff,
+                  opacity: s.spark ? 1 : 0.45,
+                }} />
+              ))}
+            </div>
             {s.note && (
               <span style={{
-                fontSize: 10, fontWeight: 600, lineHeight: 1.2,
+                fontSize: 9.5, fontWeight: 700, lineHeight: 1.2,
                 color: s.noteHue ?? T.heroMid, minWidth: 0,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{s.note}</span>

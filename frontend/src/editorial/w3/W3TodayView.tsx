@@ -6,6 +6,7 @@ import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
+import W3PickGoalCard from './W3PickGoalCard'
 import W3RideChest from './W3RideChest'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -14,7 +15,6 @@ import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3CoachCard from './W3CoachCard'
-import W3RouteCard from './W3RouteCard'
 import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayRank from './W3TodayRank'
@@ -127,6 +127,15 @@ export interface W3Vm {
   weekLoadLabel: string
   weekGoal: W3WeekGoal | null
   planWeeks: string
+  /**
+   * Whether a real training plan exists behind this week.
+   *
+   * FALSE MUST NOT LOOK LIKE TRUE. Without a plan the week still had a block
+   * heading ("Trainingsblock") and a "Ganzer Plan" card pointing into an empty
+   * screen — a rider was shown the furniture of coaching without any coaching
+   * in it, which is exactly the state in which they never go and set one up.
+   */
+  hasPlan: boolean
 
   weather: W3Weather
 
@@ -246,13 +255,16 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
                 // `earnRate` already carries its × (api/rewards formatMultiplier),
                 // so appending one here printed "1,4××".
                 bonus: vm.earnRate === DASH ? null : vm.earnRate,
+                // The unit is its own field now rather than glued into the
+                // value: the card sets it small on the baseline, and "71 ms"
+                // as one string cannot be typeset that way.
                 stats: [
-                  { label: 'HRV', value: vm.hrv ? `${vm.hrv.value} ${vm.hrv.unit}`.trim() : null,
-                    note: vm.hrv?.sub ?? null, noteHue: vm.hrv?.subHue },
-                  { label: 'RUHEPULS', value: vm.rhr ? vm.rhr.value : null,
-                    note: vm.rhr?.sub ?? null, noteHue: vm.rhr?.subHue },
-                  { label: 'SCHLAF', value: vm.sleep ? vm.sleep.value : null,
-                    note: vm.sleep?.sub ?? null, noteHue: vm.sleep?.subHue },
+                  { label: 'HRV', value: vm.hrv?.value ?? null, unit: vm.hrv?.unit ?? null,
+                    note: vm.hrv?.sub ?? null, noteHue: vm.hrv?.subHue, spark: vm.hrv?.spark ?? null },
+                  { label: 'RUHEPULS', value: vm.rhr?.value ?? null, unit: vm.rhr?.unit ?? null,
+                    note: vm.rhr?.sub ?? null, noteHue: vm.rhr?.subHue, spark: vm.rhr?.spark ?? null },
+                  { label: 'SCHLAF', value: vm.sleep?.value ?? null, unit: vm.sleep?.unit ?? null,
+                    note: vm.sleep?.sub ?? null, noteHue: vm.sleep?.subHue, spark: vm.sleep?.spark ?? null },
                 ],
                 // The first screen answers ONE question with one number and one
                 // meter. The overnight signals are the working behind it and
@@ -372,12 +384,12 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
              (i) ON the session header, several screens up — the answer now sits
              beside the question instead of below the fold. See `W3WhyButton`. */}
 
-        {/* ── Where to ride it. Directly under the week card, because that is
-             where "what am I doing today" has just been answered and "where"
-             is the next question a rider actually asks. Every road on it is one
-             they have ridden before — see `W3RouteCard`. Renders nothing on a
-             rest day, or before there is any GPS history to draw on. ── */}
-        <W3RouteCard />
+        {/* The "Empfohlene Route" card stood here. Removed 2026-08-25: it
+            answered a question Today does not ask. The screen's job is what to
+            do and whether the body is up to it; WHERE to ride is a decision a
+            rider makes with a map, and a single suggested loop under the
+            session read as the app filling space it had. W3RouteCard still
+            exists and is still mounted by W3NitroPreview. */}
 
         {/* ── Wo du stehst — fitness, fatigue and form as one reading. Below
              the day and the road, because it is the slow story: it answers
@@ -393,8 +405,15 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
         <W3WorkshopNudge />
 
         {/* ── Navigation, not week content: the season goal + the whole plan ── */}
-        <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
-          onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
+        {/* Navigation, not week content — but only when there is a plan to
+            navigate INTO. Without one the slot asks for the goal instead of
+            linking to an empty one. */}
+        {vm.hasPlan
+          ? (
+            <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
+              onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
+          )
+          : <W3PickGoalCard onPick={() => navigate('/e/w3-goal')} />}
 
 
         {/* ── The lower half arrives as you reach it ─────────────────────────

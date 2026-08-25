@@ -393,7 +393,7 @@ export default function W3TodayPage() {
     const hrv: W3Signal | null = isPresent(model.hrv)
       ? (() => {
           const { value, delta } = model.hrv.value
-          const s = delta == null ? { sub: null, subHue: NEUTRAL } : subOf(`${signed(delta)} ggü. Basiswert`, delta >= 0)
+          const s = delta == null ? { sub: null, subHue: NEUTRAL } : subOf(`${signed(delta)} zur Baseline`, delta >= 0)
           return { value: String(Math.round(value)), unit: 'ms', ...s, spark: sparkFrom(hrvSeries, T.hrv) }
         })()
       : null
@@ -405,9 +405,9 @@ export default function W3TodayPage() {
           const base = baselineOf(rhrSeries)
           // Lower resting HR is the favourable direction.
           const s = delta != null
-            ? subOf(`${signed(delta)} ggü. Basiswert`, delta <= 0)
+            ? subOf(`${signed(delta)} zur Baseline`, delta <= 0)
             : base != null
-              ? subOf(`${signed(value - base.mean)} ggü. ${base.n}-Tage-Ø`, value - base.mean <= 0)
+              ? subOf(`${signed(value - base.mean)} zum ${base.n}-Tage-Ø`, value - base.mean <= 0)
               : { sub: null, subHue: NEUTRAL }
           return { value: String(Math.round(value)), unit: 'bpm', ...s, spark: sparkFrom(rhrSeries, T.acid) }
         })()
@@ -424,7 +424,7 @@ export default function W3TodayPage() {
           // which is the unit a rider actually feels a night's difference in.
           const deltaMin = base != null ? Math.round((totalS - base.mean) / 60) : null
           const s = deltaMin != null && base != null
-            ? subOf(`${signed(deltaMin)} min ggü. ${base.n}-Tage-Ø`, deltaMin >= 0)
+            ? subOf(`${signed(deltaMin)} min zum Ø`, deltaMin >= 0)
             : { sub: null, subHue: NEUTRAL }
           return { value: `${hrs}:${String(mins).padStart(2, '0')}`, unit: 'h', ...s, spark: sparkFrom(sleepSeries, T.sleep) }
         })()
@@ -725,6 +725,12 @@ export default function W3TodayPage() {
       weekLoadLabel,
       weekGoal,
       planWeeks,
+      // A PLAN IS A MESO BLOCK OR A PRESCRIBED WEEK, and nothing softer. The
+      // week strip alone is not evidence: it lists the rider's own days whether
+      // or not anybody planned them, so a rider who simply rides would have
+      // counted as planned. `weekPlanned` counts days the plan actually spoke
+      // for.
+      hasPlan: meso != null || weekPlanned > 0,
 
       // REAL weather from /weather/today (buildWeather) — today only. Without a
       // forecast there are no numbers at all, just the honest reason why.

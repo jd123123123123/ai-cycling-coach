@@ -43,8 +43,8 @@ export const FIXTURE: W3Vm = {
   coachDate: 'Di, 12. Aug · Woche 6 von 16',
   coachLead: '88 ist grünes Licht. Dein Körper verarbeitet alles, was die heutige Einheit verlangt.',
   coachWhy: 'Alle drei Nachtwerte zeigen zum ersten Mal seit neun Tagen in dieselbe Richtung: HRV 71 ms (+9 auf den Basiswert), Ruhepuls 42 (−3), Schlaf 7:42 bei 91 Qualität.',
-  hrv: { value: '71', unit: 'ms', sub: '+9 ggü. Basiswert', subHue: T.acid, spark: spark([0.18, 0.45, 0.32, 0.68, 0.55, 0.82, 1], T.acid) },
-  rhr: { value: '42', unit: 'bpm', sub: '−3 ggü. Basiswert', subHue: T.acid, spark: spark([0.32, 0.45, 0.18, 0.6, 0.72, 0.72, 1], T.acid) },
+  hrv: { value: '71', unit: 'ms', sub: '+9 zur Baseline', subHue: T.acid, spark: spark([0.18, 0.45, 0.32, 0.68, 0.55, 0.82, 1], T.acid) },
+  rhr: { value: '42', unit: 'bpm', sub: '−3 zur Baseline', subHue: T.acid, spark: spark([0.32, 0.45, 0.18, 0.6, 0.72, 0.72, 1], T.acid) },
   sleep: { value: '7:42', unit: 'h', sub: '91 Qualität', subHue: T.acid, spark: spark([0.18, 0.55, 0.4, 1, 0.63, 0.82, 0.9], T.acid) },
   weekMeta: '486 von 620 TSS',
   weekBlockLabel: 'Aufbaublock · Woche 2',
@@ -52,6 +52,9 @@ export const FIXTURE: W3Vm = {
   weekLoadLabel: '65 von 540 TSS',
   weekGoal: { name: 'Harz Extrem Marathon · 212 km', right: 'in 8 Wochen', sub: '4. Okt' },
   planWeeks: '12 Wochen',
+  // The preview shows the planned state; ?noplan renders the ask instead, so
+  // the empty branch gets looked at as often as the full one.
+  hasPlan: !(typeof window !== 'undefined' && window.location.search.includes('noplan')),
   weekDays: [
     { letter: 'M', num: '11', actual: 62, planned: 60, status: 'hit', title: 'Grundlage · 2 Std.', dateLabel: 'Mo, 11. Aug.', weekday: 'Montag', targetW: '205 W', ftpPct: '70%', actualDurMin: 118, actualW: 198, actualHr: 132 },
     { letter: 'D', num: '12', actual: 0, planned: 112, status: 'today', title: '4 × 8 Schwelle', dateLabel: 'Di, 12. Aug.', weekday: 'Dienstag', targetW: '285 W', ftpPct: '98%' },
