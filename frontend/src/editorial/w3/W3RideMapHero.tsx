@@ -373,7 +373,15 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: EASE }}
               style={{
-                fontSize: 52, fontWeight: 700, lineHeight: 1, letterSpacing: -2.6, color: T.ink,
+                // ── THE DISPLAY TIER, THE W3:RIDE WAY ────────────────────
+                // The shipped app has NO BOLD — SemiBold is the heaviest weight
+                // in the product, and its display numerals run 44 to 109px. Big
+                // numbers get their presence from SIZE, never from weight, and
+                // that is why its reward screens read as confident rather than
+                // as shouting. This was 52px at 700: loud and small, the exact
+                // inversion. 88 at 600 is the same ink on the page arranged the
+                // other way round, and it is the one number this card is for.
+                fontSize: 88, fontWeight: 600, lineHeight: 1.02, letterSpacing: -4.4, color: T.ink,
                 fontVariantNumeric: 'tabular-nums',
               }}>{vm.duration}</motion.span>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>

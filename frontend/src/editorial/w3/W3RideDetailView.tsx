@@ -140,15 +140,54 @@ const ZONE_TINT = [T.d3, T.cool, T.training, T.acid, T.warn, T.bad] as const
 const RANK_FLOOR = 0.7
 const zoneTint = (i: number) => ZONE_TINT[Math.min(i, ZONE_TINT.length - 1)]
 
-const SectionHead = ({ n, t, s }: { n: string; t: string; s: string }) => (
-  <div style={{ display: 'flex', gap: 12, paddingBottom: 4 }}>
-    <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>{n}</span>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1 }}>
-      <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{t}</span>
-      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{s}</span>
+/**
+ * THE TITLE IS THE FINDING, NOT THE FILE NAME.
+ *
+ * Every chapter head on this page said what the section WAS — "Was sie dir
+ * abverlangt hat", "Wo sie steht", "Was das verändert" — at 21px, while the
+ * thing the section had actually found sat underneath it at 10.5 in the quiet
+ * grey: "Zone 4 nahm ein Drittel der Fahrt." "Zwanzig Sekunden bis zum Rekord."
+ *
+ * The finding was already written. It was set five sizes smaller than the
+ * filing label above it. So a rider skimming this page read four category names
+ * and learned nothing, and had to stop and read a caption to find out that they
+ * came within twenty seconds of a personal record.
+ *
+ * Swapped. The category becomes the chapter's eyebrow, where a category
+ * belongs; the finding is the headline; the method drops to the caption. Read
+ * only the four titles now and you have the ride.
+ */
+const SectionHead = ({ n, eyebrow, finding, method }: {
+  n: string; eyebrow: string; finding: string; method?: string
+}) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 4 }}>
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: T.acid, ...TNUM }}>{n}</span>
+      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>
+        — {eyebrow.toUpperCase()}
+      </span>
     </div>
+    {/* Set essentially solid, at the semibold ceiling. Every heading in the
+        shipped w3:ride app uses a ~1.056 line-height ratio and no weight above
+        SemiBold — a poster-like tightness that is most of why its screens look
+        designed rather than assembled. */}
+    <span style={{ fontSize: 25, fontWeight: 600, letterSpacing: -1, lineHeight: 1.06, color: T.ink }}>
+      {finding}
+    </span>
+    {method && (
+      <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>{method}</span>
+    )}
   </div>
 )
+
+/** "Method sentence. The finding." — the finding is the last sentence, which is
+ *  where these were already written; everything before it is how it was
+ *  measured. A single-sentence caption is all finding and has no method. */
+function splitFinding(sub: string): { finding: string; method?: string } {
+  const parts = sub.trim().split(/(?<=\.)\s+/).filter(Boolean)
+  if (parts.length < 2) return { finding: sub.trim() }
+  return { finding: parts[parts.length - 1], method: parts.slice(0, -1).join(' ') }
+}
 
 
 
@@ -329,6 +368,43 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           </div>
         )}
 
+        {/* ── THE ANSWER, BEFORE THE EVIDENCE ─────────────────────────────
+            Pyramid principle, and this page had it upside down: the coach's
+            sentence — the one thing on the screen that says what the ride WAS —
+            sat below four stat tiles, which are the supporting detail for it.
+            A rider had to read the evidence to reach the conclusion, which is
+            the order you write an investigation in and the opposite of the
+            order you present one in.
+
+            Answer first. Then the numbers that back it, then the chapters that
+            take it apart. */}
+        {/* Execution + AI verdict.
+
+            THE SCORE IS A GRADE AGAINST A PRESCRIPTION, so it appears on the
+            same terms as "Hast du gehalten?" — a free outdoor ride was not
+            executed WELL or BADLY, it was just ridden, and a 94/100 stamped on
+            it is a mark out of nothing. The coach's sentence stays either way;
+            that one is about the ride rather than about compliance. */}
+        <div style={{ ...band(28), gap: 12 }}>
+          {vm.repeats.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+            <span style={{ fontSize: 100, fontWeight: 600, letterSpacing: -4.5, lineHeight: 0.86, color: T.acid }}>{vm.execScore}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: T.quiet }}>/ {vm.execTotal}</span>
+              <Kicker>Ausführung</Kicker>
+            </div>
+          </div>
+          )}
+          {vm.repeats.length > 0 && (
+          <div style={{ height: 6, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
+            <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
+          </div>
+          )}
+          <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -1.1, lineHeight: 1.06, color: T.ink }}>{vm.verdictHeadline}</span>
+          <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
+          {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>KI-Urteil · {vm.aiModel}</span>}
+        </div>
+
         {/* Hero stats */}
         <div style={{ ...band(26), gap: 8 }}>
           {[[0, 1], [2, 3]].map((row, ri) => (
@@ -349,37 +425,12 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           ))}
         </div>
 
-        {/* Execution + AI verdict.
-
-            THE SCORE IS A GRADE AGAINST A PRESCRIPTION, so it appears on the
-            same terms as "Hast du gehalten?" — a free outdoor ride was not
-            executed WELL or BADLY, it was just ridden, and a 94/100 stamped on
-            it is a mark out of nothing. The coach's sentence stays either way;
-            that one is about the ride rather than about compliance. */}
-        <div style={{ ...band(28), gap: 12 }}>
-          {vm.repeats.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-            <span style={{ fontSize: 94, fontWeight: 700, letterSpacing: -4, lineHeight: 0.8, color: T.acid }}>{vm.execScore}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.quiet }}>/ {vm.execTotal}</span>
-              <Kicker>Ausführung</Kicker>
-            </div>
-          </div>
-          )}
-          {vm.repeats.length > 0 && (
-          <div style={{ height: 6, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
-            <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
-          </div>
-          )}
-          <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.25, color: T.ink }}>{vm.verdictHeadline}</span>
-          <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
-          {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>KI-Urteil · {vm.aiModel}</span>}
-        </div>
-
         {/* 01 Did you hold it */}
         {vm.repeats.length > 0 && (
           <div style={{ ...band(28), gap: 12 }}>
-            <SectionHead n={ch('repeats')} t="Hast du gehalten?" s="Jede Wiederholung gegen ihr Ziel. Rechts der Linie heißt über Ziel." />
+            <SectionHead n={ch('repeats')} eyebrow="Die Wiederholungen"
+              finding={vm.repeatsScore ? `${vm.repeatsScore} auf oder über Ziel.` : 'Jede Wiederholung gegen ihr Ziel.'}
+              method="Rechts der Linie heißt über Ziel." />
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', paddingBottom: 4 }}>
               <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4 }}>
@@ -415,7 +466,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 02 What it asked of you */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n={ch('zones')} t="Was sie dir abverlangt hat" s={vm.zonesSub} />
+          <SectionHead n={ch('zones')} eyebrow="Was sie dir abverlangt hat" {...splitFinding(vm.zonesSub)} />
           <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 1, height: 16 }}>
               {vm.zones.map((z, i) => (
@@ -448,7 +499,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 03 Where it ranks */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n={ch('ranks')} t="Wo sie steht" s={vm.ranksSub} />
+          <SectionHead n={ch('ranks')} eyebrow="Wo sie steht" {...splitFinding(vm.ranksSub)} />
           <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
             {/* ── EACH DURATION AS A BEAM AGAINST THE RECORD ──────────────
                 This was a table: duration, watts, and a sentence saying what
@@ -501,7 +552,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
 
         {/* 04 What this changes */}
         <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n={ch('changes')} t="Was das verändert" s="Die Fahrt ist vorbei. Das sind die Zahlen, die sie bewegt hat." />
+          <SectionHead n={ch('changes')} eyebrow="Was das verändert" {...splitFinding(vm.changesBody)} />
           <div style={{ ...card(), gap: 14 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -569,7 +620,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
         {/* 05 What it moved you toward — this ride's push toward the season goals */}
         {vm.moved.length > 0 && (
           <div style={{ ...band(44), gap: 12 }}>
-            <SectionHead n={ch('moved')} t="Worauf sie dich zubewegt hat" s={vm.movedSub} />
+            <SectionHead n={ch('moved')} eyebrow="Worauf sie dich zubewegt hat" {...splitFinding(vm.movedSub)} />
             <div style={{ ...card(), gap: 18 }}>
               <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>AUF DAS JAHR</span>
               {vm.moved.map((m, i) => (
