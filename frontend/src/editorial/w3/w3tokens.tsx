@@ -152,6 +152,30 @@ export const BOARD_TINTS = [
 /** The dark end of a board tint's gradient. */
 export const BOARD_BASE = '#16131F'
 export const FONT = '"Inter Tight", ui-sans-serif, system-ui, sans-serif'
+
+// ── THE COVER PLATES ──────────────────────────────────────────────────────
+// The auth screen is the app's COVER, and a cover prints in spot colour: one
+// ink per issue, carrying the field, the bike and the button alike. These are
+// the four inks. They are the one place in W3 that is not the near-black
+// ground -- justified because this screen is read before anyone is a rider,
+// where the job is to be unmistakable rather than to be quiet.
+//
+// `field` is the ink. `onField` is the only type colour allowed on top of it,
+// pre-checked for contrast so no caller has to guess. LIME is the BRAND lime
+// (`RIDR_LIME`), deliberately not the interface acid -- the cover is brand,
+// the app is interface. See `w3cover.ts` for how an issue is chosen.
+export const COVER_PLATES = [
+  { key: 'lime', name: 'LIME', field: '#C6F53C', onField: '#101110' },
+  { key: 'chili', name: 'CHILI', field: '#E8291E', onField: '#FFFFFF' },
+  { key: 'violett', name: 'VIOLETT', field: '#6B4EE6', onField: '#FFFFFF' },
+  { key: 'himmel', name: 'HIMMEL', field: '#48A6E6', onField: '#0E1A22' },
+] as const
+
+/** The display face. Used for ONE thing per screen -- the masthead -- and
+ *  never for prose; it has no lowercase presence at text sizes. */
+export const DISPLAY = 'Anton, "Archivo Narrow", Impact, sans-serif'
+/** The utility face: issue numbers, credits, plate names. Never prose. */
+export const MONO = '"JetBrains Mono", ui-monospace, SFMono-Regular, monospace'
 export const EASE = [0.22, 1, 0.36, 1] as const
 export const grow = (delay: number) => ({ duration: 0.55, ease: EASE, delay })
 export const DASH = '—'
