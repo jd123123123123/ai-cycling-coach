@@ -99,6 +99,27 @@ class ReadinessReport:
     ceiling: Ceiling                   # mapped category
     components: list[ComponentScore] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
+    #: Fraction of the total component weight that was actually available
+    #: (0.0-1.0). The score renormalises over whatever signals exist, so an
+    #: athlete with only Body Battery got a number on the same 0-100 scale, with
+    #: the same push/moderate/easy mapping, as one with the full set — the
+    #: construct changed silently while the output format did not. This is the
+    #: number that says so.
+    coverage: float = 1.0
+    #: How many components carried a value.
+    signals_present: int = 0
+
+    @property
+    def confidence(self) -> str:
+        """Plain-language reading of `coverage`, for copy that must not imply
+        more certainty than the inputs support."""
+        if self.signals_present == 0:
+            return "none"
+        if self.coverage >= 0.75:
+            return "high"
+        if self.coverage >= 0.45:
+            return "moderate"
+        return "low"
 
 
 # ----------------------------------------------------------------------
@@ -260,12 +281,35 @@ def _body_battery_component(inputs: ReadinessInputs) -> tuple[float | None, str]
 
 # Weights sum to 1.0 when all components present. Sleep + HRV + TSB lead
 # because they're the most-evidence-backed individual signals.
+# ── WHY ACWR IS NOT IN HERE ANY MORE (audit §4.4, §6.1) ────────────────
+# Two reasons, and the first is arithmetic rather than opinion.
+#
+# TSB = CTL − ATL. ACWR = ATL / CTL. They are two transforms of the SAME
+# two-dimensional state, so weighting both at 0.20 and 0.15 spent 35% of this
+# score on one signal seen twice, while the docstring claimed six independent
+# inputs. A load spike moved the score through two channels at once and the
+# composite was correspondingly overconfident.
+#
+# Second: the codebase held three incompatible positions on the metric —
+# `adaptive_readiness` called it discredited and warning-only, `safety_rails`
+# let it force a rest day, and this module scored it. The position is now one
+# position: descriptive, never a gate. It still produces a FLAG below, so the
+# information reaches the athlete without pretending to be an independent
+# measurement.
+#
+# The remaining weights are PRIORS, not findings, and are declared as such:
+# nothing here was fitted. HRV leads because it is the one signal in the set
+# with randomised-trial support. Sleep sits below it despite being the largest
+# weight before, because the input is a vendor composite whose derivation is
+# closed — the same objection this module already raised against Body Battery.
+# Body Battery stays lowest and is KNOWN to be partly redundant with HRV (it is
+# substantially HRV-derived); that redundancy is not resolved here, it is
+# declared, and resolving it is a job for the state-space model, not a weight.
 _COMPONENT_DEFS = [
-    ("sleep",        _sleep_component,        0.25),
-    ("hrv",          _hrv_component,          0.22),
-    ("tsb",          _tsb_component,          0.20),
-    ("acwr",         _acwr_component,         0.15),
-    ("rhr",          _rhr_component,          0.10),
+    ("hrv",          _hrv_component,          0.28),
+    ("tsb",          _tsb_component,          0.28),
+    ("sleep",        _sleep_component,        0.24),
+    ("rhr",          _rhr_component,          0.12),
     ("body_battery", _body_battery_component, 0.08),
 ]
 
@@ -305,18 +349,25 @@ def compute_readiness(inputs: ReadinessInputs) -> ReadinessReport:
             weighted_sum += score * weight
             weight_total += weight
 
+    total_possible = sum(w for _, _, w in _COMPONENT_DEFS)
     if weight_total == 0:
         overall = 50.0
         flags.append("no signals available — default neutral readiness")
     else:
         overall = weighted_sum / weight_total
 
+    # ACWR as a FLAG, never a weight: the information is worth surfacing, the
+    # ratio is not worth scoring. Suppressed below CTL 20 where it is
+    # mathematically unstable (Lolli 2019).
+    if inputs.ctl is not None and inputs.atl is not None and inputs.ctl >= 20.0:
+        ratio = inputs.atl / inputs.ctl
+        if ratio > 1.5:
+            flags.append(f"ACWR {ratio:.2f} — acute load well above chronic; descriptive only")
+
     # Severity flags for the UI / brief copy.
     for c in components:
         if c.score is None:
             continue
-        if c.name == "acwr" and c.score <= 40:
-            flags.append(f"ACWR red flag: {c.note}")
         if c.name == "tsb" and c.score <= 52:
             # fires in functional-overreach territory (TSB < -22) and deeper
             flags.append(f"TSB deep negative: {c.note}")
@@ -338,4 +389,6 @@ def compute_readiness(inputs: ReadinessInputs) -> ReadinessReport:
         ceiling=_ceiling_from_score(overall),
         components=components,
         flags=flags,
+        coverage=round(weight_total / total_possible, 3) if total_possible else 0.0,
+        signals_present=sum(1 for c in components if c.score is not None),
     )

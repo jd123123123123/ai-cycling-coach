@@ -23,11 +23,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Activity, ActivityStream, DailyMetric
 from app.services.athlete_time import today_local
+from app.services.hrv_state import HRV_BAND_SD, HRV_MAX_AGE_DAYS, estimate_hrv_state
 from app.services.goal_trajectory import _ctl_7d_delta
 from app.services.pmc_service import compute_user_pmc
-
-# Nuuttila 2022 validated band.
-HRV_BAND_SD = 0.5
 
 # ── Recency gates (stale-wearable fix, Jul 2026) ─────────────────────────────
 # A directive is a PRESENT-TENSE claim — "Heute zurückschalten." / "Grünes
@@ -49,9 +47,9 @@ HRV_BAND_SD = 0.5
 # `_rule_sleep_hrv` only fires on "below", and `_rule_green_upgrade` needs
 # `_green_streak`, which already requires HRV readings inside the last 3 days.
 # So an unknown state can neither downgrade nor upgrade a plan row.
-HRV_MAX_AGE_DAYS = 1          # today's or yesterday's morning; 2+ days is stale
-HRV_RECENT_WINDOW_DAYS = 7    # the "recent" mean is 7 CALENDAR days, not 7 rows
-HRV_BELOW_WINDOW_DAYS = 3     # "below the band N days running" = N calendar days
+# The HRV windows moved to `hrv_state` (one estimator, every consumer);
+# `HRV_MAX_AGE_DAYS` is re-exported there and imported below for the copy that
+# still explains staleness to the athlete.
 SLEEP_MAX_AGE_DAYS = 1        # last night, or the night before if today hasn't synced
 # Aggressive default: how many clean in-band blocks widen the push.
 DEFAULT_AMBITION = 1.0
@@ -239,10 +237,62 @@ def assess_adaptation(
     return d
 
 
+
+#: How close two rides' work totals must be before their decoupling figures are
+#: comparable. ±35% is wide enough to find neighbours in a normal training week
+#: and tight enough that a 5-hour ride is never judged against a coffee lap.
+DECOUPLING_KJ_TOLERANCE = 0.35
+#: Comparable rides required before a delta means anything.
+DECOUPLING_MIN_MATCHES = 3
+
+
+def decoupling_delta_matched(
+    rows: list[tuple[float, float | None]],
+) -> float | None:
+    """Latest ride's decoupling minus the median of COMPARABLE prior rides.
+
+    `rows` is (decoupling_pct, total_kj), newest first.
+
+    Aerobic decoupling scales with how long and how hard the ride was, and with
+    heat and fuelling. The previous version compared the latest ride against the
+    median of every other ride regardless of length, so a five-hour endurance
+    ride measured against a month of one-hour sessions reported a large positive
+    "durability worsening" that was really just duration. That figure gates
+    escalation, so the engine was reading ride length as fatigue.
+
+    The right metric is the post-kJ power drop in `durability.py` — a
+    matched-work comparison by construction — but it is not persisted per
+    activity yet, so it cannot be read cheaply here. Until it is, the confound
+    is CONTROLLED rather than ignored: only rides whose total work is within
+    `DECOUPLING_KJ_TOLERANCE` of the latest one are eligible, and when fewer
+    than `DECOUPLING_MIN_MATCHES` of those exist the honest answer is None —
+    no reading, rather than a reading about the weather.
+
+    None is inert downstream: it makes `durability_improving` and
+    `durability_worse` both false, so the engine neither escalates on it nor
+    counts it toward `concern`.
+    """
+    if len(rows) < 2:
+        return None
+    latest_pct, latest_kj = rows[0]
+    if latest_kj is None or latest_kj <= 0:
+        return None
+    lo = latest_kj * (1.0 - DECOUPLING_KJ_TOLERANCE)
+    hi = latest_kj * (1.0 + DECOUPLING_KJ_TOLERANCE)
+    comparable = sorted(
+        pct for pct, kj in rows[1:]
+        if kj is not None and lo <= kj <= hi
+    )
+    if len(comparable) < DECOUPLING_MIN_MATCHES:
+        return None
+    median = comparable[len(comparable) // 2]
+    return latest_pct - median
+
+
 async def _hrv_rows(
     db: AsyncSession, user_id: int, *, today: date, days: int = 35
 ) -> list[tuple[date, float]]:
-    """(calendar day, lnRMSSD) pairs, oldest first.
+    """(calendar day, raw RMSSD) pairs, oldest first.
 
     The DAY has to travel with the value. The previous version returned a bare
     list of floats, which is exactly why the callers could only slice it
@@ -265,7 +315,10 @@ async def _hrv_rows(
         d = day or (recorded_at.date() if recorded_at is not None else None)
         if d is None:
             continue
-        out.append((d, math.log(float(hrv))))  # lnRMSSD-style stabilisation
+        # RAW RMSSD. The log transform, the windows and the band all belong to
+        # `hrv_state.estimate_hrv_state` now — this function's only job is to
+        # get (calendar day, value) pairs out of the database.
+        out.append((d, float(hrv)))
     out.sort(key=lambda t: t[0])
     return out
 
@@ -323,8 +376,6 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
 
     today = today_local()
     rows = await _hrv_rows(db, user_id, today=today)
-    ln = [v for _, v in rows]
-    hrv_age_days = (today - rows[-1][0]).days if rows else None
 
     # The baseline is a 4-week rolling mean — a slow-moving reference, still
     # meaningful when the last few days are missing — so it keeps using every
@@ -333,26 +384,19 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
     # inside the last HRV_RECENT_WINDOW_DAYS calendar days AND only when the
     # newest of them is at most HRV_MAX_AGE_DAYS old. Fail either test and it
     # stays None → hrv_state "unknown" → TSB fallback, never a green light.
-    baseline_window = ln[-28:] if len(ln) >= 10 else ln
-    hrv_baseline = mean(baseline_window) if len(baseline_window) >= 10 else None
-    hrv_sd = pstdev(baseline_window) if len(baseline_window) >= 10 else None
-
-    hrv_recent = None
-    if hrv_age_days is not None and hrv_age_days <= HRV_MAX_AGE_DAYS:
-        recent_window = [v for d, v in rows if (today - d).days < HRV_RECENT_WINDOW_DAYS]
-        if len(recent_window) >= 3:
-            hrv_recent = mean(recent_window[-7:])
-
-    # "HRV N Tage unter deiner Basislinie" must count CALENDAR days, not rows:
-    # `ln[-3:]` on a sparse series happily reported three readings spread over
-    # three weeks as a three-day fatigue streak, which deloads the athlete.
-    below_days = 0
-    if hrv_recent is not None and hrv_baseline is not None and hrv_sd:
-        low = hrv_baseline - HRV_BAND_SD * hrv_sd
-        below_days = sum(
-            1 for d, v in rows
-            if (today - d).days < HRV_BELOW_WINDOW_DAYS and v < low
-        )
+    # ONE ESTIMATOR. The windows, the log transform, the band and the
+    # calendar-day streak count all live in `hrv_state` now, so this module,
+    # `plan_adaptation_engine`, the readiness composite and the safety rails
+    # describe the same athlete from the same readings. It also de-nests the
+    # baseline: the reference window is the one PRECEDING the recent window
+    # rather than a 28-day slice containing it, which used to attenuate every
+    # deviation toward "in band" — toward permitting load — and let a sustained
+    # suppression quietly drag its own reference down until it vanished.
+    hrv = estimate_hrv_state(rows, today=today)
+    hrv_recent = hrv.ln_recent if hrv.usable else None
+    hrv_baseline = hrv.ln_baseline
+    hrv_sd = hrv.baseline_sd
+    below_days = hrv.below_days
 
     pmc = (await compute_user_pmc(db, user_id, days=90)).get("total") or []
     tsb = float(pmc[-1].get("tsb", 0.0)) if pmc else 0.0
@@ -393,7 +437,7 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
     # stream's `created_at`, because a back-filled sync writes old rides late
     # and ingestion order is not ride order.
     drows = await db.execute(
-        select(ActivityStream.decoupling_pct)
+        select(ActivityStream.decoupling_pct, ActivityStream.total_kj)
         .join(Activity, Activity.id == ActivityStream.activity_id)
         .where(
             ActivityStream.user_id == user_id,
@@ -402,19 +446,15 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
         .order_by(Activity.started_at.desc())
         .limit(30)
     )
-    decs = [float(r[0]) for r in drows.all()]
-    decoupling_delta = None
-    if len(decs) >= 4:
-        latest = decs[0]
-        prior = sorted(decs[1:])
-        base = prior[len(prior) // 2]
-        decoupling_delta = latest - base
+    decoupling_delta = decoupling_delta_matched(
+        [(float(pct), float(kj) if kj is not None else None) for pct, kj in drows.all()]
+    )
 
     directive = assess_adaptation(
         hrv_recent=hrv_recent, hrv_baseline=hrv_baseline, hrv_sd=hrv_sd, hrv_below_days=below_days,
         tsb=tsb, decoupling_delta=decoupling_delta, sleep_score=(float(sleep_score) if sleep_score is not None else None),
         load_ramp=load_ramp, lang=lang, ambition=ambition, push_level=push_level,
-        hrv_age_days=hrv_age_days,
+        hrv_age_days=hrv.age_days,
     )
     return await _apply_day_gates(db, user_id, directive, lang)
 

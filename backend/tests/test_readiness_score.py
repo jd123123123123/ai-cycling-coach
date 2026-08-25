@@ -75,28 +75,65 @@ class TestMenstrualDelta:
         assert r.overall <= 100
 
 
-class TestAcwrComponent:
-    """Bourdon 2017 thresholds: sweet-spot 0.8-1.3 = high score; >1.5 = penalty
-    band; >2.0 = severe red flag."""
+class TestAcwrIsAFlagNotAWeight:
+    """TSB = CTL − ATL and ACWR = ATL / CTL are two transforms of one state.
+    Weighting both spent 35% of the composite on one signal seen twice while
+    the module claimed six independent inputs. ACWR now informs without
+    scoring."""
 
-    def _score_with_acwr(self, atl: float, ctl: float = 50.0) -> float | None:
-        r = compute_readiness(ReadinessInputs(ctl=ctl, atl=atl))
-        for c in r.components:
-            if c.name == "acwr":
-                return c.score
-        return None
+    def _component_names(self) -> set[str]:
+        r = compute_readiness(ReadinessInputs(ctl=50.0, atl=50.0))
+        return {c.name for c in r.components}
 
-    def test_sweet_spot_high_score(self):
-        # ATL 50 / CTL 50 = 1.0 — middle of sweet spot
-        assert (self._score_with_acwr(50.0) or 0) >= 90
+    def test_acwr_is_no_longer_a_scored_component(self):
+        assert "acwr" not in self._component_names()
 
-    def test_above_1_5_drops_below_70(self):
-        # 80/50 = 1.6 — caution
-        assert (self._score_with_acwr(80.0) or 100) < 70
+    def test_load_is_represented_once(self):
+        # TSB survives as the single load channel.
+        assert "tsb" in self._component_names()
 
-    def test_above_2_0_minimal_score(self):
-        # 110/50 = 2.2 — severe
-        assert (self._score_with_acwr(110.0) or 100) < 15
+    def test_a_high_ratio_still_reaches_the_athlete_as_a_flag(self):
+        r = compute_readiness(ReadinessInputs(ctl=50.0, atl=90.0, tsb=-40.0))
+        assert any("acwr" in f.lower() for f in r.flags)
+
+    def test_the_flag_is_suppressed_at_low_chronic_load(self):
+        # Lolli 2019: the ratio is unstable when the denominator is small.
+        r = compute_readiness(ReadinessInputs(ctl=10.0, atl=24.0, tsb=-14.0))
+        assert not any("acwr" in f.lower() for f in r.flags)
+
+    def test_the_ratio_no_longer_moves_the_score(self):
+        # Same TSB, wildly different ratio: the score must not care.
+        a = compute_readiness(ReadinessInputs(tsb=-5.0, ctl=50.0, atl=55.0)).overall
+        b = compute_readiness(ReadinessInputs(tsb=-5.0, ctl=25.0, atl=30.0)).overall
+        assert a == b
+
+
+class TestCoverageIsReported:
+    """The score renormalises over whatever signals are present, so a single
+    vendor number and a full sensor set produced identical-looking output.
+    Coverage is the field that stops that being invisible."""
+
+    def test_full_coverage_when_everything_is_present(self):
+        r = compute_readiness(ReadinessInputs(
+            hrv_7d_mean=60.0, hrv_28d_baseline=60.0,
+            rhr_7d_mean=50.0, rhr_28d_baseline=50.0,
+            sleep_score_last_night=80, avg_nightly_debt_h=0.0,
+            tsb=-5.0, ctl=50.0, atl=55.0, body_battery_wake=70,
+        ))
+        assert r.coverage == 1.0
+        assert r.confidence == "high"
+        assert r.signals_present == 5
+
+    def test_a_lone_vendor_signal_is_marked_low_confidence(self):
+        r = compute_readiness(ReadinessInputs(body_battery_wake=70))
+        assert r.signals_present == 1
+        assert r.coverage < 0.2
+        assert r.confidence == "low"
+
+    def test_no_signals_at_all_is_not_dressed_up(self):
+        r = compute_readiness(ReadinessInputs())
+        assert r.confidence == "none"
+        assert r.coverage == 0.0
 
 
 class TestTsbComponent:

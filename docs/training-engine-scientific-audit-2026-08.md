@@ -189,7 +189,7 @@ maximally sensitive to a single corrupt MMP value. **Fix:** require ≥3, prefer
 
 ## 4. Statistical and methodological problems
 
-### 4.1 The recent window is nested inside its own baseline [METHOD — high confidence]
+### 4.1 The recent window is nested inside its own baseline [METHOD — high confidence] — **FIXED**
 
 Both HRV models compare a 7-day mean against a 28-day baseline that *contains
 those same 7 days*:
@@ -235,7 +235,7 @@ either way. The defensible thesis position is: replicate the convention, *and*
 report alongside it a variance-correct alternative (§9.3), and show empirically
 whether the two disagree on real athletes and in which direction.
 
-### 4.3 Two different tests against one threshold [METHOD — high confidence]
+### 4.3 Two different tests against one threshold [METHOD — high confidence] — **FIXED**
 
 `hrv_state` is decided by comparing the **7-day mean** to `low`. Two lines
 later, `below_days` counts **individual daily readings** below the same `low`:
@@ -251,7 +251,7 @@ means is unremarkable; here two such days trigger `deload` (volume ×0.55). The
 threshold that governs the most aggressive intervention in the system is the
 one applied to the noisiest statistic.
 
-### 4.4 The composite's "six independent signals" are not independent [METHOD — high confidence]
+### 4.4 The composite's "six independent signals" are not independent [METHOD — high confidence] — **FIXED**
 
 `readiness_score.py:15–17` states the design rationale as combining "six
 independent biological + load signals". Two collapses:
@@ -291,7 +291,7 @@ grounds. **[VERIFY]** the current state of that literature before defending
 any ACWR use; the safe position is the one `adaptive_readiness` already takes —
 warning only — which brings us to §6.1.
 
-### 4.6 No uncertainty anywhere in the decision path [METHOD — high confidence]
+### 4.6 No uncertainty anywhere in the decision path [METHOD — high confidence] — **PARTIALLY ADDRESSED**
 
 Nothing in the chain carries a variance. Specifically:
 
@@ -367,7 +367,7 @@ and timing regularity) over the *inferred composite*, since duration is the
 component consumer devices estimate most reliably and the one the performance
 literature most directly supports.
 
-### 5.3 Decoupling is the wrong durability signal, and the right one is already in the repo [METHOD — high confidence]
+### 5.3 Decoupling is the wrong durability signal, and the right one is already in the repo [METHOD — high confidence] — **CONFOUND CONTROLLED**
 
 The escalate gate turns on `decoupling_delta`: the latest ride's Pw:HR
 decoupling minus the median of prior rides. Aerobic decoupling is strongly
@@ -438,7 +438,7 @@ These matter more than any single threshold, because they mean the system gives
 different answers about the same athlete on the same morning depending on which
 code path is asked.
 
-### 6.1 ACWR is simultaneously discredited, weighted, and a hard rail [CODE — certain]
+### 6.1 ACWR is simultaneously discredited, weighted, and a hard rail [CODE — certain] — **RESOLVED**
 
 | Module | Treatment of ACWR |
 |---|---|
@@ -457,7 +457,7 @@ composite, and replace its role with the load-derivative signal that is already
 there and better founded (`tsb_velocity_2d`, `safety_rails.py:78`) plus the
 uncertainty-aware ramp term of §9.
 
-### 6.2 Three different HRV rules can disagree on one morning [CODE — certain]
+### 6.2 Three different HRV rules can disagree on one morning [CODE — certain] — **RESOLVED** (there were four)
 
 - `adaptive_readiness`: ln-transformed, 7-day mean vs 28-day mean ± 0.5 SD.
 - `readiness_score._hrv_component`: **raw** (untransformed) % change vs 28-day
@@ -792,10 +792,39 @@ with the strongest claim to originality.
 **Still open — correctness.** §3.3, now scoped as a feature (see the correction
 in that section).
 
-**Next — coherence (weeks).** §6.1 pick one ACWR position and enforce it across
-all three modules; §6.2 one HRV state estimator, one producer; §6.3 invert the
-FTP/eFTP relationship so divergence flags the load model; §5.3 switch the
-durability gate to post-kJ power drop; §4.1 de-nest the baseline windows.
+**Done — coherence (2026-08-25).**
+
+- **§6.2 + §4.1 + §4.2 + §4.3 — one HRV estimator.** New `hrv_state.py` owns
+  the log transform, the windows, the band and the streak count. There were
+  **four** constructs, not three: `plan_adaptation_engine._green_streak` had its
+  own `ln_all[-28:]` band, and that one hands out MORE training when cleared.
+  All four now read one estimate. The baseline is the PRECEDING 28 days and
+  never overlaps the window it judges; `z_mean` (variance-correct) is reported
+  beside the convention verdict so the two can be compared on real athletes
+  rather than argued about; `below_days` is documented as the daily-scale test
+  it always was. A stuck sensor (zero dispersion) is now `unknown` rather than
+  "in band" — no dispersion, no scale, no claim.
+- **§6.1 + §4.4 — one ACWR position: descriptive, never a gate.** Removed from
+  the `safety_rails` cascade (it could force a rest day) and from the readiness
+  composite (where it double-counted TSB: the two are transforms of one
+  `(CTL, ATL)` state, so 35% of the score was one signal seen twice). It
+  survives as a flag. Nothing protective was dropped, and that is *tested* rather
+  than asserted: an athlete at ACWR 2.0 sits at TSB ≈ −CTL and is still capped by
+  the −30 rail, with `tsb_velocity_2d` catching the spike as it happens.
+- **§4.6 — partially.** `ReadinessReport` now carries `coverage` and
+  `confidence`, so a score built from one vendor number no longer looks
+  identical to one built from the full sensor set. Component-level uncertainty
+  still awaits the estimator of §9.
+- **§5.3 — confound controlled, not yet solved.** The sound metric (post-kJ
+  power drop) is not persisted per activity, so it cannot be read cheaply here.
+  Until it is, decoupling is compared only against rides of **comparable work**
+  (±35% kJ, ≥3 matches, else no reading). The old unmatched median routinely
+  judged a five-hour ride against a month of one-hour sessions and reported
+  duration as fatigue — there is a test showing the two methods disagree in
+  *sign* on a realistic training week.
+
+**Still open — coherence.** §6.3 invert the FTP/eFTP relationship so divergence
+flags the load model; §7.1/§7.2 threshold updating and re-basing.
 
 **Then — measurement (months).** Study 10.2. Do not build §9 before running it:
 if the composite does not beat TSB alone, the state-space model must be

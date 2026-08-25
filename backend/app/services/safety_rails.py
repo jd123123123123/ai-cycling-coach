@@ -33,7 +33,9 @@ class RailContext:
     days_since_rest: int       # consecutive days with TSS > 20
     # Optional with defaults so existing call sites keep working — the new
     # ACWR + TSB-velocity guards activate only when these are populated.
-    acwr: float | None = None              # ATL / CTL (Bourdon 2017)
+    #: ATL / CTL. DESCRIPTIVE ONLY — never gates a ceiling (see the note in
+    #: `intensity_ceiling`). Kept on the context so surfaces can still show it.
+    acwr: float | None = None
     tsb_velocity_2d: float | None = None   # TSB drop per day, avg over last 2d
     readiness_score: int | None = None     # 0-100 composite (readiness_score module)
 
@@ -74,20 +76,41 @@ def intensity_ceiling(ctx: RailContext) -> str:
     signals first). Hard rules take precedence over the soft readiness score.
 
         1. injury_flag                          → 'rest'
-        2. ACWR > 2.0                           → 'rest'   (Bourdon 2017)
-        3. tsb_velocity_2d <= -5/day (2d)       → 'easy'   (Banister NFOR predictor)
-        4. ACWR > 1.8                           → 'easy'
-        5. hrv_delta_pct < -10                  → 'easy'   (Altini acute-suppression)
-        6. tsb < -30                            → 'easy'
-        7. ACWR > 1.5                           → 'moderate'  (injury risk doubles)
-        8. tsb < -25                            → 'moderate'  (deep end of the grey
+        2. tsb_velocity_2d <= -5/day (2d)       → 'easy'   (Banister NFOR predictor)
+        3. hrv_delta_pct < -10                  → 'easy'   (Altini acute-suppression)
+        4. tsb < -30                            → 'easy'
+        5. tsb < -25                            → 'moderate'  (deep end of the grey
            zone — TSB -10..-25 is *productive* fatigue, the state build blocks
            are meant to be ridden in, so intensity there is governed by the
            acute recovery markers above, not by the calendar TSB number)
-        9. days_since_rest >= 10                → 'moderate' (forced mini-recovery)
-       10. readiness_score < 35                 → 'easy'   (composite floor)
-       11. readiness_score < 55                 → 'moderate' (composite caution)
-       12. default                              → 'push'
+        6. days_since_rest >= 10                → 'moderate' (forced mini-recovery)
+        7. readiness_score < 35                 → 'easy'   (composite floor)
+        8. readiness_score < 55                 → 'moderate' (composite caution)
+        9. default                              → 'push'
+
+    ── ACWR IS NOT A RAIL ANY MORE ──────────────────────────────────────
+    It used to be three of them: >2.0 forced rest, >1.8 easy, >1.5 moderate.
+    Meanwhile `adaptive_readiness` documents the same metric as "used only as a
+    warning, never a causal threshold (discredited)", and the readiness
+    composite gave it 15% of a score. One codebase held three incompatible
+    positions on one number, and this was the module where the position had
+    teeth — it could force a rest day.
+
+    The position is now one position: ACWR is descriptive, never a gate. The
+    coupled ratio (its acute term is inside its chronic term) has a known
+    mathematical-coupling problem, and the risk multipliers attached to its
+    thresholds have not replicated. It is also not the quantity those
+    thresholds were derived for: this codebase's chronic term is a 42-day EWMA,
+    while the published bands come from 7:28 rolling averages.
+
+    NOTHING PROTECTIVE WAS DROPPED, and that is checked rather than asserted
+    (`test_safety_rails_acwr.py`). A genuine acute spike large enough to push
+    ACWR past 2.0 drives ATL far above CTL, which is the same (CTL, ATL) state
+    the TSB rails already read: an athlete at ACWR 2.0 sits at TSB ≈ −CTL, well
+    past the −30 'easy' rail, and `tsb_velocity_2d` catches the spike while it
+    is happening. What changes is that the ceiling comes from the better-founded
+    expression of the same information, and 'rest' is no longer prescribed off a
+    threshold nobody can defend.
 
     Order matters — the hard rails fire first; composite readiness only
     contributes at the margin. This is intentional: a single dangerous
@@ -101,19 +124,12 @@ def intensity_ceiling(ctx: RailContext) -> str:
     # denominators (CTL < ~20). Below that floor the absolute load is
     # genuinely small and the ratio carries no injury-risk signal; we
     # suppress the ACWR rules entirely and lean on TSB / HRV / readiness.
-    acwr_eligible = ctx.acwr is not None and ctx.ctl >= 20.0
-    if acwr_eligible and ctx.acwr > 2.0:
-        return "rest"
     if ctx.tsb_velocity_2d is not None and ctx.tsb_velocity_2d <= -5.0:
-        return "easy"
-    if acwr_eligible and ctx.acwr > 1.8:
         return "easy"
     if ctx.hrv_delta_pct < -10:
         return "easy"
     if ctx.tsb < -30:
         return "easy"
-    if acwr_eligible and ctx.acwr > 1.5:
-        return "moderate"
     if ctx.tsb < -25:
         return "moderate"
     if ctx.days_since_rest >= 10:
@@ -136,20 +152,10 @@ def _block_reason(option_intensity: str, ctx: RailContext, ceiling: str) -> str:
             "Blocked: injury flag is set. Rest or very-easy movement only; "
             "resolve the injury before returning to this intensity."
         )
-    if ctx.acwr is not None and ctx.acwr > 2.0:
-        return (
-            f"Blocked: ACWR is {ctx.acwr:.2f} (>2.0 = severe overload). "
-            "Bourdon 2017 — injury/illness risk multiplies. Rest day."
-        )
     if ctx.tsb_velocity_2d is not None and ctx.tsb_velocity_2d <= -5.0:
         return (
             f"Blocked: TSB dropping {abs(ctx.tsb_velocity_2d):.1f}/day for 2d — "
             "non-functional overreach predictor (Banister). Easy day."
-        )
-    if ctx.acwr is not None and ctx.acwr > 1.8:
-        return (
-            f"Blocked: ACWR {ctx.acwr:.2f} (>1.8) — Bourdon 2017 injury-risk "
-            "zone. Cap at easy until ratio recovers."
         )
     if ctx.hrv_delta_pct < -10:
         return (
@@ -160,11 +166,6 @@ def _block_reason(option_intensity: str, ctx: RailContext, ceiling: str) -> str:
         return (
             f"Blocked: TSB is {round(ctx.tsb, 1)} (< -30 = overreach territory). "
             f"Prioritize recovery."
-        )
-    if ctx.acwr is not None and ctx.acwr > 1.5:
-        return (
-            f"Blocked: ACWR {ctx.acwr:.2f} (>1.5) — Bourdon 2017 caution zone. "
-            "Cap at moderate today."
         )
     if ctx.tsb < -10:
         return (

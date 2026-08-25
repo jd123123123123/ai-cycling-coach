@@ -51,6 +51,7 @@ from app.models.mesocycle_plan import MesocyclePlan
 from app.models.plan_adaptation import PlanAdaptation
 from app.models.planned_workout import PlannedWorkout
 from app.services.adaptive_readiness import build_adaptive_directive
+from app.services.hrv_state import estimate_hrv_state
 from app.services.athlete_time import (
     day_local_window,
     local_date_of,
@@ -76,7 +77,7 @@ SHORT_SLEEP_HOURS = 6.0          # Frontiers 2025 meta: acute restriction hurts 
 POOR_SLEEP_SCORE = 55            # matches adaptive_readiness poor-sleep gate
 GREEN_SLEEP_SCORE = 65
 GREEN_STREAK_DAYS = 3            # multi-day trend, not single-day noise
-HRV_BAND_SD = 0.5                # Nuuttila band (mirrors adaptive_readiness)
+# The band lives in `hrv_state` now — this module no longer keeps its own copy.
 EXTRA_LOAD_FACTOR = 1.3          # day-TSS >30 % over plan counts as extra load
 UNPLANNED_MIN_TSS = 40.0         # same floor plan_absorption uses
 WEEK_OVER_TOLERANCE = 1.05       # trim only when the week projects >105 % of budget
@@ -632,18 +633,25 @@ async def _rule_extra_load(db: AsyncSession, snap: _Snapshot) -> dict | None:
 def _green_streak(snap: _Snapshot) -> bool:
     """3+ recent days with HRV at/above the lower band and decent sleep —
     the multi-day trend the give-rule requires."""
-    ln_all = [
-        math.log(float(m.hrv_status))
+    # ONE ESTIMATOR, shared with `adaptive_readiness`, the readiness composite
+    # and the safety rails. This function used to build its own band from
+    # `ln_all[-28:]` — a positional slice that (a) could span months on a sparse
+    # series and (b) NESTED the days it was judging inside the reference it
+    # judged them against. Both errors ran in the same direction: they made the
+    # band easier to clear, and this rule hands out MORE training when it is
+    # cleared. See `hrv_state` for the correction.
+    rows = [
+        (m.date, float(m.hrv_status))
         for m in snap.metrics
-        if m.hrv_status is not None and float(m.hrv_status) > 0
+        if m.date is not None and m.hrv_status is not None and float(m.hrv_status) > 0
     ]
-    if len(ln_all) < 10:
+    state = estimate_hrv_state(rows, today=snap.today)
+    if not state.usable:
         return False
-    window = ln_all[-28:]
-    sd = pstdev(window)
-    if sd <= 0:
+    # No day inside the streak window sat below the daily band. `below_days` is
+    # the calendar-day count the estimator already computes for exactly this.
+    if state.below_days > 0:
         return False
-    low = mean(window) - HRV_BAND_SD * sd
 
     recent = [
         m for m in snap.metrics
@@ -654,8 +662,6 @@ def _green_streak(snap: _Snapshot) -> bool:
         return False
     for m in recent:
         if m.hrv_status is None or float(m.hrv_status) <= 0:
-            return False
-        if math.log(float(m.hrv_status)) < low:
             return False
         if m.sleep_score is not None and int(m.sleep_score) < GREEN_SLEEP_SCORE:
             return False

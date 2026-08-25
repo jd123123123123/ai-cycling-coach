@@ -343,9 +343,14 @@ async def test_extra_load_within_budget_changes_nothing(monkeypatch):
 def _green_metrics():
     """Stable baseline (ending 3 days ago) + 3 clearly-green recent days
     (high HRV, good sleep) — the multi-day trend R6 requires."""
+    # The reference period must sit OUTSIDE the recent window and carry enough
+    # readings to mean something — `hrv_state` requires 10 in the preceding 28
+    # days. The old fixture stopped at TODAY-14, which under the de-nested
+    # baseline leaves only 8 reference readings, and the rule now (correctly)
+    # declines to hand out MORE training off a reference that thin.
     hist = [
-        _metric(TODAY - timedelta(days=14 - i), hrv=60.0 + (i % 3))
-        for i in range(12)  # TODAY-14 .. TODAY-3
+        _metric(TODAY - timedelta(days=34 - i), hrv=60.0 + (i % 3))
+        for i in range(32)  # TODAY-34 .. TODAY-3
     ]
     recent = [
         _metric(TODAY - timedelta(days=2), sleep_score=85, hrv=72.0),
@@ -543,3 +548,24 @@ async def test_user_authored_rows_are_never_auto_downgraded(monkeypatch):
     assert out["changes"] == []
     assert today_user.template_id == "vo2_5x4"
     assert today_user.blocks_source == "user_modified"
+
+
+@pytest.mark.asyncio
+async def test_green_streak_will_not_upgrade_on_a_thin_baseline(monkeypatch):
+    """The give-rule hands out MORE training, so it needs a reference worth
+    trusting. With only a handful of readings outside the recent window there
+    is no band to clear, and `hrv_state` reports "unknown" rather than a
+    flattering one — the rule must decline, not guess."""
+    _patch_directive(monkeypatch, _directive(directive="push", ceiling="hard", hrv_state="above"))
+    thin = [
+        _metric(TODAY - timedelta(days=2), sleep_score=85, hrv=72.0),
+        _metric(TODAY - timedelta(days=1), sleep_score=82, hrv=71.0),
+        _metric(TODAY, sleep_score=88, hrv=73.0),
+    ]
+    thu = _pw(TODAY + timedelta(days=1), "z2_endurance_60")
+    db = _db(profile=_profile(), plans=[thu], metrics=thin,
+             meso=_meso(targets=(400, 400, 400, 200)))
+
+    out = await engine.run_for_user(db, USER_ID, now_utc=NOW)
+
+    assert [c["rule"] for c in out["changes"]] == []
