@@ -162,3 +162,149 @@ async def repair_my_streak(
     # 2. Honest re-evaluation against real activities + the plan.
     result = await repair_streak(db, current_user.id, prior_break_day)
     return StreakRepairResult(synced=synced, **result)
+
+
+# ── THE THRESHOLD PROPOSAL ───────────────────────────────────────────────
+# FTP is the unit every other number in this app is measured in — zones, TSS,
+# CTL, every prescribed interval. So the system may NOTICE that it moved, must
+# SHOW its working, and must ASK. It never writes the number by itself.
+# See `services/threshold_proposal` and audit §7.1.
+
+
+class ThresholdEvidenceRead(BaseModel):
+    kind: str
+    watts: float
+    text: str
+
+
+class ThresholdProposalRead(BaseModel):
+    available: bool
+    current_watts: int | None = None
+    proposed_watts: int | None = None
+    delta_watts: int | None = None
+    delta_pct: float | None = None
+    direction: str | None = None
+    confidence: str | None = None
+    headline: str | None = None
+    body: str | None = None
+    evidence: list[ThresholdEvidenceRead] = []
+
+
+class ThresholdDecision(BaseModel):
+    watts: int
+
+
+async def _threshold_proposal(db: AsyncSession, user_id: int, profile):
+    """Gather the evidence and build the proposal, or None."""
+    from app.services.athlete_power_profile import compute_athlete_power_profile
+    from app.services.threshold_proposal import build_proposal
+
+    pp = await compute_athlete_power_profile(db, user_id, profile=profile) or {}
+    curve = pp.get("mmp_curve") or {}
+    # The classic field test lives at 20 minutes. `mmp_curve` keys may arrive as
+    # ints or strings depending on the JSON round-trip.
+    best_20 = curve.get(1200) or curve.get("1200")
+
+    goals = dict(getattr(profile, "goals", None) or {})
+    dismissed = (goals.get("threshold_proposal") or {}).get("dismissed_watts")
+
+    return build_proposal(
+        current_ftp=getattr(profile, "ftp_watts", None),
+        best_20min_w=float(best_20) if best_20 else None,
+        eftp_w=pp.get("eftp_watts"),
+        cp_se_w=pp.get("cp_se_watts"),
+        cp_identifiable=bool(pp.get("identifiable")),
+        model_rides=int(pp.get("n_rides") or 0),
+        dismissed_watts=float(dismissed) if dismissed else None,
+    )
+
+
+@router.get("/me/threshold-proposal", response_model=ThresholdProposalRead)
+async def get_threshold_proposal(
+    locale: str = "de",
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> ThresholdProposalRead:
+    """Does the evidence say this athlete's threshold has moved?
+
+    `available: false` is the normal answer and carries nothing else — no
+    proposal is the honest state most of the time.
+    """
+    profile = await get_or_create_profile(db, current_user.id)
+    p = await _threshold_proposal(db, current_user.id, profile)
+    if p is None:
+        return ThresholdProposalRead(available=False)
+    de = str(locale).lower().startswith("de")
+    return ThresholdProposalRead(
+        available=True,
+        current_watts=p.current_watts,
+        proposed_watts=p.proposed_watts,
+        delta_watts=p.delta_watts,
+        delta_pct=p.delta_pct,
+        direction=p.direction,
+        confidence=p.confidence,
+        headline=p.headline_de if de else p.headline_en,
+        body=p.body_de if de else p.body_en,
+        evidence=[
+            ThresholdEvidenceRead(kind=e.kind, watts=round(e.watts, 1), text=(e.de if de else e.en))
+            for e in p.evidence
+        ],
+    )
+
+
+@router.post("/me/threshold-proposal/accept", response_model=AthleteProfileRead)
+async def accept_threshold_proposal(
+    payload: ThresholdDecision,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> AthleteProfileRead:
+    """The athlete said yes. THIS is the only path that writes `ftp_watts` from
+    the model — and it runs because a human pressed it.
+
+    The value is re-derived server-side rather than trusted from the client: the
+    proposal is evidence-gated, and accepting one must not become a way to set
+    an arbitrary threshold. A body that disagrees with the current evidence is
+    refused.
+    """
+    from fastapi import HTTPException
+
+    profile = await get_or_create_profile(db, current_user.id)
+    p = await _threshold_proposal(db, current_user.id, profile)
+    if p is None or p.proposed_watts != payload.watts:
+        raise HTTPException(
+            status_code=409,
+            detail="That proposal is no longer current — reload it before accepting.",
+        )
+
+    goals = dict(profile.goals or {})
+    goals["threshold_proposal"] = {
+        "accepted_watts": p.proposed_watts,
+        "previous_watts": p.current_watts,
+        "accepted_at": date_type.today().isoformat(),
+    }
+    profile.goals = goals
+    flag_modified(profile, "goals")
+    # Past activities keep the unit they were scored in — see
+    # `activities.ftp_watts_at_scoring`. Only future rides use the new number.
+    updated = await update_profile(db, current_user.id, {"ftp_watts": p.proposed_watts})
+    return updated
+
+
+@router.post("/me/threshold-proposal/dismiss", response_model=ThresholdProposalRead)
+async def dismiss_threshold_proposal(
+    payload: ThresholdDecision,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> ThresholdProposalRead:
+    """"Not now." Remembered, so the same number is not raised again tomorrow —
+    a genuinely different one still will be."""
+    profile = await get_or_create_profile(db, current_user.id)
+    goals = dict(profile.goals or {})
+    goals["threshold_proposal"] = {
+        "dismissed_watts": payload.watts,
+        "dismissed_at": date_type.today().isoformat(),
+    }
+    profile.goals = goals
+    flag_modified(profile, "goals")
+    await db.commit()
+    return ThresholdProposalRead(available=False)

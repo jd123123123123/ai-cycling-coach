@@ -13,6 +13,7 @@ import W3TabBar from './W3TabBar'
 import { useHeroPanel } from './W3HeroShell'
 import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
+import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3CoachCard from './W3CoachCard'
 import W3FormCard from './W3FormCard'
@@ -350,6 +351,14 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
           restNote={todayIsRest && vm.readiness != null
             ? `Ruhetag — die ${vm.readiness} beschreibt deinen Körper, nicht den Plan. Heute wird die Erholung angelegt, nicht ausgegeben.`
             : null} />
+
+        {/* ── "Deine Schwelle hat sich bewegt" ───────────────────────────
+             Above the recovery nudge, and only because it needs an ANSWER:
+             everything else on this screen is read, this one is pressed. It
+             renders nothing on the days there is no evidence, which is nearly
+             all of them. FTP is the unit every other number here is measured
+             in, so the engine asks rather than writing it. ── */}
+        <W3ThresholdProposal />
 
         {/* ── Recovery nudge: the real "Erholungssignal / Gute Erholung" morning
              signal (HRV/sleep/RHR vs baseline), replacing the long coach text ── */}

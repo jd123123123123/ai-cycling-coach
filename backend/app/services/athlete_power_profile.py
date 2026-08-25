@@ -254,7 +254,15 @@ async def compute_athlete_power_profile(
         "eftp_watts": fit.eftp_watts,
         "n_rides": len(curves),
         "r_squared": fit.r_squared,
-        "confidence": model_confidence(len(curves), fit.r_squared),
+        # `identifiable` must travel: without it `model_confidence` multiplies
+        # by an r² that is 1.0 by construction on a two-point fit, and awards
+        # its highest score to the least identifiable estimate.
+        "confidence": model_confidence(len(curves), fit.r_squared, identifiable=fit.identifiable),
+        #: The honest width of the CP estimate, and whether the fit can vouch
+        #: for itself at all. Read by `threshold_proposal` — a loose or
+        #: exact-by-construction fit may not move an athlete's training.
+        "cp_se_watts": fit.cp_se_watts,
+        "identifiable": fit.identifiable,
         **reconciled,
         # Power-duration envelope (sanitized best W at each duration across
         # rides), sorted by duration — the data for a power-duration curve UI.
