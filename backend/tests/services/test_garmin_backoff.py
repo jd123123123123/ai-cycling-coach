@@ -180,3 +180,42 @@ class TestOneAuthFailureIsNotAVerdict:
 
         assert cred.auth_failures == 0
         assert cred.sync_enabled is True
+
+
+class TestNobodyIsDisabledWithoutACount:
+    """The invariant production violated after the first fix shipped.
+
+    `sync_enabled = false` with `auth_failures = 0` means something switched a
+    rider off without counting — which is precisely the terminal handler that
+    ran `db.rollback()` (discarding the count) and then disabled them anyway.
+    """
+
+    def test_recording_a_failure_always_leaves_a_count_behind(self):
+        from app.services.garmin_sync_service import (
+            AUTH_FAILURES_BEFORE_DISABLE, _record_auth_failure,
+        )
+
+        cred = Cred()
+        cred.user_id, cred.sync_enabled, cred.sync_status = 1, True, "ok"
+
+        for n in range(1, AUTH_FAILURES_BEFORE_DISABLE + 2):
+            _record_auth_failure(cred, NOW)
+            assert cred.auth_failures == n
+            if cred.sync_enabled is False:
+                assert cred.auth_failures >= AUTH_FAILURES_BEFORE_DISABLE, (
+                    "a rider was disabled without reaching the threshold"
+                )
+
+    def test_a_success_wipes_the_run(self):
+        from app.services.garmin_sync_service import _record_auth_failure
+
+        cred = Cred()
+        cred.user_id, cred.sync_enabled, cred.sync_status = 1, True, "ok"
+        _record_auth_failure(cred, NOW)
+        assert cred.auth_failures == 1
+
+        # what the success path does
+        cred.auth_failures = 0
+        cred.backoff_until = None
+        _record_auth_failure(cred, NOW)
+        assert cred.auth_failures == 1, "an old failure must not compound a new one"

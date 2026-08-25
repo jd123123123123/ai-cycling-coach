@@ -157,21 +157,7 @@ async def create_garmin_client_for_user(credential: GarminCredential):
         # far more likely to be a bad minute than a bad password. Count them,
         # back off between attempts, and only disable once the credential has
         # failed three times in a row without a success in between.
-        credential.auth_failures = (credential.auth_failures or 0) + 1
-        if credential.auth_failures >= AUTH_FAILURES_BEFORE_DISABLE:
-            logger.error(
-                "Garmin auth failed %d times running for user_id=%s — disabling sync",
-                credential.auth_failures, credential.user_id,
-            )
-            credential.sync_status = "auth_error"
-            credential.sync_enabled = False
-        else:
-            logger.warning(
-                "Garmin auth failed for user_id=%s (%d/%d) — backing off, sync stays enabled",
-                credential.user_id, credential.auth_failures, AUTH_FAILURES_BEFORE_DISABLE,
-            )
-            credential.sync_status = "auth_retry"
-            credential.backoff_until = _next_backoff(credential, datetime.now(timezone.utc))
+        _record_auth_failure(credential, datetime.now(timezone.utc))
         raise
 
 
@@ -580,6 +566,33 @@ async def invalidate_coach_brief_cache(db: AsyncSession, user_id: int) -> None:
         await db.rollback()
 
 
+def _record_auth_failure(credential: GarminCredential, now: datetime) -> None:
+    """Count one auth failure and decide whether it is the last straw.
+
+    ONE PLACE, because there are two of them: a login can be refused while the
+    client is being built, or later, when a fetch hits `_wrap`. The second path
+    used to disable the rider outright — and it ran `db.rollback()` first, which
+    threw away the count the first path had just made, so a rider could be
+    switched off reading `auth_failures = 0`. That combination is exactly what
+    production showed after the first fix deployed.
+    """
+    credential.auth_failures = (credential.auth_failures or 0) + 1
+    if credential.auth_failures >= AUTH_FAILURES_BEFORE_DISABLE:
+        logger.error(
+            "Garmin auth failed %d times running for user_id=%s — disabling sync",
+            credential.auth_failures, credential.user_id,
+        )
+        credential.sync_status = "auth_error"
+        credential.sync_enabled = False
+    else:
+        logger.warning(
+            "Garmin auth failed for user_id=%s (%d/%d) — backing off, sync stays enabled",
+            credential.user_id, credential.auth_failures, AUTH_FAILURES_BEFORE_DISABLE,
+        )
+        credential.sync_status = "auth_retry"
+        credential.backoff_until = _next_backoff(credential, now)
+
+
 def _next_backoff(credential: GarminCredential, now: datetime) -> datetime:
     """When to try this rider again after Garmin refused.
 
@@ -841,9 +854,14 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         # A failed flush/commit leaves the session in a pending-rollback state;
         # roll back first or the status-reset commit itself raises
         # PendingRollbackError and the credential stays stuck at "syncing".
+        #
+        # THE ROLLBACK IS ALSO WHY THE COUNT IS TAKEN AFTER IT. This handler
+        # used to set `sync_enabled = False` on the spot, which made the run of
+        # failures meaningless: one refused fetch, anywhere in the sync, and the
+        # rider was off — reading `auth_failures = 0`, because the rollback had
+        # just discarded the increment.
         await db.rollback()
-        credential.sync_status = "auth_error"
-        credential.sync_enabled = False
+        _record_auth_failure(credential, datetime.now(timezone.utc))
         await db.commit()
         raise
 
