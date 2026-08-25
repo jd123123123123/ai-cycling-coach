@@ -4,7 +4,7 @@ import { ChevronLeft, Share2, CircleCheck, Maximize2 } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { W3_MAP } from './w3map'
 import { GRADE_LEGEND, gradeColours } from './gradeColours'
-import { S, lux } from './w3surfaces'
+import { S } from './w3surfaces'
 
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
 
@@ -377,35 +377,36 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
             </span>
           </div>
 
-          {/* Three equal columns, no rules and no per-stat icon. The icons were
-              three acid marks competing with the one acid mark that matters on
-              this card — the beam. */}
-          <div style={{ display: 'flex' }}>
-            {vm.stats.map((s) => (
-              <HeroStat key={s.label} label={s.label} value={s.value} unit={s.unit} />
+          {/* ── ONE GRID, NOT TWO GROUPS ────────────────────────────────
+              What you covered and what it cost were an open row of three and a
+              BOXED panel of three: same numbers, same job, two surfaces. Making
+              the type match was half the fix — the card still read as two cards
+              because one group had walls and the other did not.
+
+              Six measurements on one ground now, three across and two down, in
+              a single treatment. The hierarchy is carried entirely by SIZE and
+              ORDER: the duration above at 52, these at 22, the beam beneath as
+              the one instrument. Nothing on this card is separated by a border,
+              which is the house rule — depth from light and a tone step, never
+              from a drawn line.
+
+              The rows are ordered, not merely arranged: what the ride WAS on
+              top (distance, tempo, climbing), what it TOOK underneath (power,
+              heart rate, intensity). A rider reads across, then down. */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', rowGap: S.xl, columnGap: 0 }}>
+            {vm.stats.map((st) => (
+              <HeroStat key={st.label} label={st.label} value={st.value} unit={st.unit} />
+            ))}
+            {([['LEISTUNG', vm.watts, 'W'], ['HERZFREQUENZ', vm.bpm, 'bpm'], ['INTENSITÄT', vm.ifValue, 'IF']] as const).map(([label, value, unit]) => (
+              <HeroStat key={label} label={label} value={value} unit={unit} />
             ))}
           </div>
 
-          {/* Leistung — one flat panel, `lux()`, no border and no gradient. It
-              is the only boxed thing on the card because its three numbers only
-              mean anything together. */}
-          <div style={{ ...lux(24), padding: `${S.lg}px ${S.lg + 2}px`, gap: S.lg }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              {/* THE SAME PRIMITIVE AS THE THREE ABOVE. These were drawn as
-                  icon + number + unit on one line at 17px, while distance,
-                  tempo and height were label-over-number columns at 22px — two
-                  type scales, two arrangements and two container treatments for
-                  six numbers that are all just measurements of one ride. The
-                  card read as two cards. Rank is expressed by ORDER and by the
-                  panel around the effort block, never by inventing a second
-                  way to set a number. */}
-              {([['LEISTUNG', vm.watts, 'W'], ['HERZFREQUENZ', vm.bpm, 'bpm'], ['INTENSITÄT', vm.ifValue, 'IF']] as const).map(([label, value, unit]) => (
-                <HeroStat key={label} label={label} value={value} unit={unit} />
-              ))}
-            </div>
-
+          {/* The one instrument on the card, full width and unboxed — it reads
+              as the summary of the six numbers above rather than as a fourth
+              thing inside a box of its own. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: S.md }}>
             <IntensityBeam fill={vm.ifFill} reduce={reduce} />
-
             <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: -S.sm }}>
               <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>{vm.effortLabel}</span>
               <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{vm.energyLabel}</span>
