@@ -47,7 +47,9 @@ from app.services.daily_metric_service import upsert_daily_metric
 from app.services.garmin_details_parser import garmin_details_to_records
 from app.services.stream_extraction import records_to_streams
 from app.services.stream_ingestion import has_gps, ingest_activity_streams
-from app.services.garmin_client import GarminAuthError, GarminProvider
+from app.services.garmin_client import (
+    GarminAuthError, GarminError, GarminProvider, GarminRateLimitError,
+)
 from app.services.garmin_mapper import map_daily_metrics, map_garmin_activity
 from app.services.garmin_sleep_parser import apply_sleep_vitals, merge_raw_snapshots
 from app.services.intraday_sync_service import sync_intraday_samples_for_day
@@ -69,6 +71,24 @@ SYNC_BUFFER_HOURS = 2
 
 # Seconds to pause between daily metric API calls (rate-limit protection)
 INTER_REQUEST_DELAY = 0.3
+
+#: How long a rate-limited rider is left alone, and how it grows.
+#:
+#: Garmin's own guidance for a throttled IP is "wait 15–30 minutes". The first
+#: refusal buys 15 minutes; each further one while still backed off doubles it,
+#: to a ceiling of four hours. It resets the moment a sync succeeds.
+BACKOFF_BASE_MINUTES = 15
+BACKOFF_MAX_MINUTES = 240
+
+#: The eight biometric endpoints answer the same thing all day. A ride can land
+#: any minute; last night's sleep cannot change sixty times an hour. This is the
+#: single biggest saving in the sync — it takes the per-run upstream cost from
+#: eleven-to-nineteen calls down to one, on all but a handful of runs an hour.
+METRICS_MIN_INTERVAL_MINUTES = 20
+
+#: The backfills and the weigh-in fetch. None of them is why a sync runs every
+#: minute, and the elevation backfill is deliberately unbounded over history.
+MAINTENANCE_MIN_INTERVAL_MINUTES = 360
 
 # Max days per activity fetch chunk — avoids undocumented pagination limits
 ACTIVITY_CHUNK_DAYS = 30
@@ -109,6 +129,17 @@ async def create_garmin_client_for_user(credential: GarminCredential):
     try:
         await client.authenticate()
         return client
+    except GarminRateLimitError:
+        # ORDER MATTERS, AND IT IS THE WHOLE BUG. This clause did not exist,
+        # `GarminRateLimitError` subclassed `GarminAuthError`, and so being
+        # throttled fell into the branch below and turned the rider off for
+        # good. Throttling says nothing about the credential; the caller sets a
+        # backoff and we try again later.
+        logger.warning(
+            "Garmin rate-limited during auth for user_id=%s — backing off, "
+            "sync stays enabled", credential.user_id,
+        )
+        raise
     except GarminAuthError:
         logger.error(
             "Garmin auth failed for user_id=%s — disabling sync", credential.user_id
@@ -391,8 +422,8 @@ async def sync_daily_metrics(
         # Wrapped independently so a Garmin intraday API failure doesn't abort daily sync.
         try:
             await sync_intraday_samples_for_day(db, client, user_id, current_day)
-        except GarminAuthError:
-            raise  # Auth errors propagate to abort the whole sync
+        except GarminError:
+            raise  # Auth and rate-limit both abort the whole sync
         except Exception as exc:
             logger.warning(
                 "Intraday sync failed for user_id=%s date=%s (non-fatal): %s",
@@ -436,8 +467,10 @@ async def _safe_fetch(fetch_fn, day: date, name: str, user_id: int):
     """
     try:
         return await fetch_fn(day)
-    except GarminAuthError:
-        raise  # Auth errors must propagate — sync should be disabled
+    except GarminError:
+        # Auth AND rate limit propagate. A throttled endpoint answering "None"
+        # would be written down as "this rider had no sleep last night".
+        raise
     except Exception as exc:
         logger.warning(
             "Failed to fetch %s for user_id=%s date=%s: %s",
@@ -521,6 +554,25 @@ async def invalidate_coach_brief_cache(db: AsyncSession, user_id: int) -> None:
         await db.rollback()
 
 
+def _next_backoff(credential: GarminCredential, now: datetime) -> datetime:
+    """When to try this rider again after Garmin refused.
+
+    Doubles while the rider is STILL inside a backoff — that is what tells a
+    one-off refusal from a server whose IP is genuinely in the doghouse — and
+    starts fresh otherwise, so an unlucky minute six hours ago costs nothing.
+    """
+    minutes = BACKOFF_BASE_MINUTES
+    if credential.backoff_until and credential.backoff_until > now:
+        remaining = (credential.backoff_until - now).total_seconds() / 60
+        minutes = min(BACKOFF_MAX_MINUTES, max(BACKOFF_BASE_MINUTES, remaining * 2))
+    return now + timedelta(minutes=minutes)
+
+
+def _due(stamp: datetime | None, now: datetime, minutes: int) -> bool:
+    """Has `minutes` passed since `stamp`? Never having run counts as due."""
+    return stamp is None or (now - stamp) >= timedelta(minutes=minutes)
+
+
 async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> dict:
     """Orchestrate full Garmin data sync for a single user.
 
@@ -551,6 +603,11 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
 
     try:
         client = await create_garmin_client_for_user(credential)
+    except GarminRateLimitError:
+        credential.sync_status = "rate_limited"
+        credential.backoff_until = _next_backoff(credential, datetime.now(timezone.utc))
+        await db.commit()
+        raise
     except GarminAuthError:
         await db.commit()  # Persist auth_error status set in create_garmin_client_for_user
         raise
@@ -605,15 +662,40 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
                 db, user_id, client, activity_start, activity_end
             )
 
-        # Daily metrics sync (day-by-day with per-day commit at end)
-        metrics_days = await sync_daily_metrics(
-            db, user_id, client, metrics_start, activity_end
-        )
+        # Daily metrics sync (day-by-day with per-day commit at end).
+        #
+        # NOT EVERY RUN. Eight endpoints per day in the window is the whole cost
+        # of a sync — at one run a minute that was ~16 000 calls per rider per
+        # day against an unofficial API, which is how the rate limit that
+        # disabled everybody got hit in the first place. A ride can land any
+        # minute and still does; last night's sleep cannot.
+        now = datetime.now(timezone.utc)
+        metrics_due = _due(credential.metrics_synced_at, now, METRICS_MIN_INTERVAL_MINUTES)
+        if metrics_due:
+            metrics_days = await sync_daily_metrics(
+                db, user_id, client, metrics_start, activity_end
+            )
+            credential.metrics_synced_at = now
+        else:
+            metrics_days = 0
 
         # Update sync metadata
         credential.last_sync_at = datetime.now(timezone.utc)
         credential.sync_status = "ok"
+        credential.backoff_until = None   # it worked; forget the last refusal
         await db.commit()
+
+        # ── THE ONCE-IN-A-WHILE WORK ──────────────────────────────────────
+        # Two DB backfills and an upstream weigh-in call, all of which used to
+        # run on every single minute-ly sync. The elevation one is deliberately
+        # unbounded over the rider's whole history. None of it is why this job
+        # runs often, and a new activity is reason enough to do it now.
+        maintenance_due = (
+            total_activities > 0
+            or _due(credential.maintenance_at, now, MAINTENANCE_MIN_INTERVAL_MINUTES)
+        )
+        if maintenance_due:
+            credential.maintenance_at = now
 
         # Backfill TSS for the last 90 days of NULL-tss activities — a sync
         # may have delivered HR-only sessions whose thresholds only now
@@ -621,7 +703,8 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         try:
             from app.services.activity_service import recompute_missing_tss
 
-            await recompute_missing_tss(db, user_id, days=90)
+            if maintenance_due:
+                await recompute_missing_tss(db, user_id, days=90)
         except Exception:  # noqa: BLE001 — backfill must never break a sync
             logger.warning(
                 "recompute_missing_tss failed after sync (user_id=%s) — non-fatal",
@@ -646,7 +729,8 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         try:
             from app.services.activity_service import backfill_missing_elevation
 
-            await backfill_missing_elevation(db, user_id, days=None)
+            if maintenance_due:
+                await backfill_missing_elevation(db, user_id, days=None)
         except Exception:  # noqa: BLE001 — backfill must never break a sync
             logger.warning(
                 "backfill_missing_elevation failed after sync (user_id=%s) — non-fatal",
@@ -665,8 +749,9 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         try:
             from app.services.garmin_weight import apply_weigh_ins, parse_weigh_ins
 
-            payload = await client.get_weigh_ins(metrics_start, activity_end)
-            await apply_weigh_ins(db, user_id, parse_weigh_ins(payload))
+            if maintenance_due:
+                payload = await client.get_weigh_ins(metrics_start, activity_end)
+                await apply_weigh_ins(db, user_id, parse_weigh_ins(payload))
         except Exception:  # noqa: BLE001 — weight must never break a sync
             logger.warning("weight fetch failed (user_id=%s) — non-fatal", user_id)
 
@@ -710,6 +795,16 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
             "Garmin sync complete for user_id=%s: %s", user_id, result
         )
         return result
+
+    except GarminRateLimitError:
+        # THE RIDER STAYS ENABLED. This is the clause whose absence disabled
+        # every account in production: throttling is a fact about the next
+        # quarter of an hour, not about the credential.
+        await db.rollback()
+        credential.sync_status = "rate_limited"
+        credential.backoff_until = _next_backoff(credential, datetime.now(timezone.utc))
+        await db.commit()
+        raise
 
     except GarminAuthError:
         # A failed flush/commit leaves the session in a pending-rollback state;

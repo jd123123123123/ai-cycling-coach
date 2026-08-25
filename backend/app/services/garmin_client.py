@@ -22,12 +22,32 @@ from typing import Protocol
 logger = logging.getLogger(__name__)
 
 
-class GarminAuthError(Exception):
-    """Raised when Garmin Connect authentication fails."""
+class GarminError(Exception):
+    """Anything Garmin refused to do. The two below are the reasons why."""
 
 
-class GarminRateLimitError(GarminAuthError):
-    """Raised when Garmin rate-limits the server IP."""
+class GarminAuthError(GarminError):
+    """Raised when Garmin Connect authentication fails.
+
+    A PERMANENT fact about the credential: the password changed, MFA was turned
+    on, the account was locked. Catching this disables the rider's sync, because
+    nothing we can do will make the next attempt work.
+    """
+
+
+class GarminRateLimitError(GarminError):
+    """Raised when Garmin rate-limits the server IP.
+
+    A TRANSIENT fact about right now, and it used to subclass `GarminAuthError`
+    — so the sync heard "slow down" and read it as "your password is wrong",
+    set `sync_enabled = False`, and switched the rider off for good. Measured
+    2026-08-25: all three riders in production were disabled this way, their
+    last automatic sync between five and fourteen days earlier, while the manual
+    sync button kept working and kept resetting `sync_status` to "ok" — which is
+    why nothing looked broken.
+
+    It is a sibling now, never a subclass. Being throttled earns a backoff.
+    """
 
 
 class GarminProvider(Protocol):

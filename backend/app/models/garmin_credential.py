@@ -38,9 +38,34 @@ class GarminCredential(Base):
     last_sync_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    #: Only a PERMANENT failure clears this — a wrong password, a locked
+    #: account. It is not the switch for "Garmin is busy": being throttled is a
+    #: fact about the next few minutes, and it used to turn riders off for good.
+    #: See `backoff_until`.
     sync_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    # Sync status: "ok" | "auth_error" | "syncing" | None (never synced)
+    # Sync status: "ok" | "auth_error" | "rate_limited" | "syncing" | None (never synced)
     sync_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    #: Set when Garmin rate-limits us. The scheduled sweep skips this rider
+    #: until it passes; the rider stays enabled throughout, so the sync resumes
+    #: on its own instead of needing the account reconnected.
+    backoff_until: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    #: When the eight biometric endpoints were last asked about today. They are
+    #: the bulk of a sync's upstream cost and they answer the same thing all
+    #: day; the every-minute run is for catching a ride, not for re-reading
+    #: last night's sleep sixty times an hour.
+    metrics_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+    #: When the once-in-a-while work last ran — the TSS and elevation backfills
+    #: and the weigh-in fetch. None of it is why a sync runs every minute.
+    maintenance_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Timestamps
     created_at: Mapped[datetime] = mapped_column(

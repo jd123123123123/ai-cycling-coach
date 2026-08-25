@@ -1,23 +1,30 @@
 """APScheduler setup for background Garmin sync.
 
-Runs a job every 15 minutes that iterates over all users with sync_enabled=True
-and calls sync_user_garmin for each one.  Individual user failures are logged
-and skipped so one bad credential never blocks the rest.
+Runs a job every minute that iterates over the users with sync_enabled=True who
+are not currently backed off, and calls sync_user_garmin for each one.
+Individual user failures are logged and skipped so one bad credential never
+blocks the rest.
+
+The minute-ly interval is for CATCHING A RIDE. It is not licence to re-ask
+Garmin everything every minute: `sync_user_garmin` gates the eight biometric
+endpoints and the backfills behind their own intervals, because doing all of it
+sixty times an hour is what got this server's IP rate-limited — and, until
+2026-08-25, every rider's sync switched off as a result.
 
 Design notes:
 - Uses AsyncIOScheduler (same event loop as FastAPI).
 - DB sessions are opened with async_session_maker directly — this is a system-level
   job, not a user request, so RLS is intentionally bypassed.  All queries inside
   sync_user_garmin are already scoped by user_id (WHERE user_id = ...).
-- misfire_grace_time=600 allows the job to run up to 10 minutes late after a
-  server restart without being counted as a missed execution.
+- misfire_grace_time is set per job in `main`; for the sync it is 45 s, because
+  a run more than one interval late has been superseded by the next one.
 """
 
 import logging
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.database import async_session_maker
 from app.models.athlete_profile import AthleteProfile
@@ -37,9 +44,18 @@ async def run_all_user_syncs() -> None:
     failed = 0
 
     async with async_session_maker() as db:
+        # A rider Garmin has told us to leave alone is skipped in the QUERY, not
+        # by disabling them. `backoff_until` expires on its own, so the sync
+        # comes back without anybody reconnecting an account — which is the
+        # whole difference between this and the flag that switched everyone off.
+        now = datetime.now(timezone.utc)
         result = await db.execute(
             select(GarminCredential).where(
-                GarminCredential.sync_enabled == True  # noqa: E712 — SQLAlchemy requires == True
+                GarminCredential.sync_enabled == True,  # noqa: E712 — SQLAlchemy requires == True
+                or_(
+                    GarminCredential.backoff_until.is_(None),
+                    GarminCredential.backoff_until <= now,
+                ),
             )
         )
         credentials = result.scalars().all()

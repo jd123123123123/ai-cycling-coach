@@ -215,6 +215,11 @@ async def test_new_activity_sync_busts_the_brief_cache():
         user_id=1,
         last_sync_at=datetime.now(timezone.utc) - timedelta(hours=1),  # incremental
         sync_status="ok",
+        # The stand-in has to carry what the real credential carries: the sync
+        # reads these to decide whether the biometrics and the backfills are due.
+        backoff_until=None,
+        metrics_synced_at=None,
+        maintenance_at=None,
     )
     db = _sync_db()
     with _sync_patches(activity_count=2):
@@ -227,6 +232,9 @@ async def test_metrics_only_sync_does_not_bust_the_brief_cache():
         user_id=1,
         last_sync_at=datetime.now(timezone.utc) - timedelta(hours=1),
         sync_status="ok",
+        backoff_until=None,
+        metrics_synced_at=None,
+        maintenance_at=None,
     )
     db = _sync_db()
     with _sync_patches(activity_count=0):  # sleep/HRV/RHR only, no new ride
