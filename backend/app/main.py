@@ -308,7 +308,6 @@ async def health_check() -> dict:
 from pathlib import Path as _Path  # noqa: E402
 
 from fastapi.responses import FileResponse  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 import os as _os  # noqa: E402
 
@@ -319,7 +318,15 @@ _DIST = _Path(
     or (_Path(__file__).resolve().parent.parent.parent / "frontend" / "dist")
 )
 if (_DIST / "index.html").is_file():
-    app.mount("/assets", StaticFiles(directory=str(_DIST / "assets")), name="assets")
+    # ── NO StaticFiles MOUNT ON /assets, AND THAT IS THE POINT ────────────
+    # There was one, and Starlette matches mounts BEFORE the catch-all route,
+    # so it shadowed `spa()` — including the `assets/` branch six lines below
+    # that sets the immutable header. `StaticFiles` sends no Cache-Control at
+    # all, so every content-hashed chunk fell back to heuristic freshness and
+    # the browser revalidated all ~30 of them on every single load. The right
+    # answer was written and unreachable; `spa()` serves these files now, with
+    # the same path-traversal guard and the header this comment always claimed.
+    # `tests/test_spa_asset_caching.py` pins it.
 
     # index.html MUST NOT be cached by browsers — it references content-hashed
     # asset filenames that change every deploy. If the browser caches index.html
