@@ -7,8 +7,14 @@ dawn road after actually going out in the dark, the coast road after a long one.
 That is why these are unlocked by ride facts and not sold for RideCoin: the
 garage already has a shop, and a picture you bought says nothing about you.
 
-Two are open from the start, because a rider on day one must still be able to
-choose. Everything else is earned once and kept forever.
+The studios and the starter roads are open from the start, because a rider on
+day one must still be able to choose. Everything else is earned once and kept
+forever.
+
+THE TWO STUDIOS ARE ALSO THE APP'S TWO MODES. `studio_black` is the near-black
+room every screen has always been; `studio_white` is the same room with the
+lights on, and choosing it turns the whole app white. The ground the machine
+stands on is the ground the app stands on — see `W3ModeProvider` on the client.
 
 WHAT A BACKDROP IS NOT. It is not a place we invent for the rider. The `place`
 in a RIDE scene comes from real GPS through `ride_scene.scene_descriptor` and
@@ -56,6 +62,18 @@ _ALL: list[Backdrop] = [
             "falling away on every side, with a soft pool of light on the ground beneath the "
             "wheels and a gentle falloff into black at the edges of frame. The only colour in the "
             "picture is the machine itself"
+        ),
+    ),
+    Backdrop(
+        id="studio_white",
+        name_de="Weißes Studio",
+        unlock_de="",
+        prose=(
+            "a bright white studio — a seamless paper cyclorama with no horizon and no corner "
+            "anywhere in it, lit high and soft from the front so the machine casts one clean "
+            "contact shadow on the floor beneath its tyres and nothing else. The walls fall away "
+            "to pure white at the edges of frame. The only colour in the picture is the machine "
+            "itself"
         ),
     ),
     Backdrop(

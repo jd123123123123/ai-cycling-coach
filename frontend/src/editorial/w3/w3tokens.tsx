@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
 
 /** Shared W3 tokens + tiny primitives, so W3TodayView and W3Sections render
  *  from one source. Values transcribed from `w3.pen`. */
-export const T = {
+const DARK = {
   bg: '#0B0B0B', surface: '#161616', surface2: '#202020',
   // Surface LEVELS for the lit-card treatment (see w3surfaces.ts). They belong
   // in the palette, not inline in a style: `editorial` forbids raw hex in code
@@ -36,7 +36,11 @@ export const T = {
   heroBg: '#0B0B0C',         // the frame ground — blue-black, not neutral
   heroChip: '#2A2A2C',       // floating corner chips + the round icon button
   heroDock: '#1A1A1C',       // the readiness dock, flat, no border
-  heroInk: '#111114',        // text ON acid (the handle pill)
+  heroInk: '#111114',
+  // The floating tab bar and the home indicator on it. Tokens because white
+  // mode has to reach them too — a dark bar under a white app is the one place
+  // the old room shows through.
+  bar: '#0B0B0BF2', handle: '#FFFFFF59',        // text ON acid (the handle pill)
   heroMid: '#8E8E96',        // dock kickers
   heroOff: '#3A3A3F',        // an unfilled meter segment
   lilac: '#EFD6FE',          // the RideCoin asterisk, and only that
@@ -117,6 +121,104 @@ export const T = {
   // set because they are meaningless apart.
   nightHi: '#2A3340', nightMid: '#1B2330', nightLo: '#14181F',
 }
+
+/**
+ * WHITE MODE — the same app with the lights on.
+ *
+ * Selected by standing the bike on the white studio backdrop, which is the
+ * point: the ground the machine sits on IS the ground the app sits on, so a
+ * rider changes the whole room by choosing where to park.
+ *
+ * DECLARED AS OVERRIDES, NOT AS A SECOND PALETTE. Sixty-five tokens hand-copied
+ * would drift the first time somebody added a sixty-sixth, and most of them
+ * should not change at all: the bike's studio lights (`stage*`) light a machine
+ * the same way in either mode, the pastel `tint*` fills are already light, and
+ * the chart hues are a language of their own. Only the ground, the ink, the
+ * dividers and the accent are actually a function of which mode you are in.
+ */
+const LIGHT: typeof DARK = {
+  ...DARK,
+
+  // ── The ground, and the surfaces that lift off it ──────────────────────
+  // Inverted in RELATIONSHIP, not in value: a card is lighter than the ground
+  // in both modes, so the ground is paper and the cards are white.
+  bg: '#F2F2EE', ground: '#EDEDE9',
+  surface: '#FFFFFF', surface2: '#F6F6F2',
+  cardTop: '#FFFFFF', cardMid: '#FBFBF8', cardBot: '#F6F6F2',
+  sheet: '#FFFFFF', tile: '#FFFFFF', card: '#FFFFFF', lift: '#FFFFFF',
+  chip: '#E8E8E2',
+  glass: '#FFFFFFC4',
+  acidTop: '#F4FBE4',          // the warm-lit top of a card that has EARNED it
+
+  // ── Ink ────────────────────────────────────────────────────────────────
+  ink: '#0B0B0B', mid: '#5A6068', quiet: '#868C94',
+
+  // ── Today's hero keeps its own small palette, one mode over ────────────
+  heroBg: '#F2F2EE', heroChip: '#E4E4DE', heroDock: '#FFFFFF',
+  heroMid: '#6B7079', heroOff: '#C9C9C2',
+  // Text set ON the accent. The accent is dark in this mode, so this flips.
+  heroInk: '#FFFFFF',
+  bar: '#FFFFFFF2', handle: '#0B0B0B40',
+
+  // ── Dividers. White-on-black becomes black-on-white at the same alphas ──
+  rule: '#0B0B0B14', stroke: '#0B0B0B1A',
+  d1: '#0B0B0B14', d2: '#0B0B0B33', d3: '#0B0B0B4D', d4: '#0B0B0B8C',
+  shadowSoft: '#0000002E',
+
+  // ── THE ACCENT GOES DEEPER, AND THIS IS THE ONE REAL COMPROMISE ─────────
+  // `T.acid` is both a fill and a text colour across 121 files, and one value
+  // has to serve both. #BFFF3C on white is about 1.4:1 — illegible as type — so
+  // white mode runs a deeper lime that clears 4.5:1 as text and still reads as
+  // the same hue when it fills a button. The alternative was auditing every
+  // accent in the app for whether it paints or writes, which is a bigger change
+  // than this whole mode.
+  acid: '#5F8A00', acidDeep: '#456300', acidLite: '#7FAE12', acidHi: '#6E9C05',
+  acidDim: '#5F8A0018',
+
+  // ── Chart hues that only worked because the ground was black ────────────
+  training: '#0F9E5E', warn: '#B87200', bad: '#D32741',
+  hrv: '#0090A6', rem: '#0090A6', rhr: '#D14A68', sleep: '#B01BC0',
+  zone5: '#D24E15', orbit: '#6F5BC9', cool: '#3E60CE', evening: '#5B41D6',
+}
+
+export type W3Mode = 'dark' | 'light'
+
+let _mode: W3Mode = 'dark'
+
+/**
+ * The palette, read live.
+ *
+ * A PROXY, and the reason matters. Every surface in this app writes its colours
+ * inline — `style={{ color: T.ink }}` — and there are ninety-one distinct token
+ * reads across a hundred and twenty-one files. Rewriting those to CSS custom
+ * properties would have been the textbook answer and it breaks two things this
+ * codebase does constantly: alpha is composed by string concatenation
+ * (`${T.acid}26`), and the share cards paint into a canvas, where `var(--x)` is
+ * not a colour. A proxy keeps every existing call site correct, in both modes,
+ * in the DOM and on the canvas.
+ */
+export const T: typeof DARK = new Proxy({} as typeof DARK, {
+  get: (_t, k: string) => (_mode === 'light' ? LIGHT : DARK)[k as keyof typeof DARK],
+  // The traps below exist so `Object.keys(T)` and a spread still behave. Nothing
+  // does either today; a palette that breaks when somebody tries is a trap.
+  ownKeys: () => Reflect.ownKeys(DARK),
+  has: (_t, k) => k in DARK,
+  getOwnPropertyDescriptor: (_t, k) => ({
+    ...Object.getOwnPropertyDescriptor(DARK, k), configurable: true,
+  }),
+})
+
+/** What the palette is currently answering with. */
+export function w3Mode(): W3Mode {
+  return _mode
+}
+
+/** Set the palette. The tree has to re-render for this to be seen — see
+ *  `W3ModeProvider`, which is the only thing that should call it. */
+export function setW3Mode(mode: W3Mode): void {
+  _mode = mode
+}
+
 
 /**
  * Per-rider board colours, in board order (rank 1 first).

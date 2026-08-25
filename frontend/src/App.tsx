@@ -9,6 +9,7 @@ import W3WeekReviewGate from './editorial/w3/W3WeekReviewGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import W3Guard from './editorial/w3/W3Guard'
 import ScrollToTop from './components/ScrollToTop'
+import { W3ModeProvider } from './editorial/w3/W3ModeProvider'
 import ErrorBoundary from './components/ErrorBoundary'
 import AppLoading from './components/AppLoading'
 import PageTransition from './components/PageTransition'
@@ -146,11 +147,16 @@ function App() {
       <ScrollToTop />
       <AuthProvider>
         <LocaleProvider>
+        {/* OUTSIDE the routed tree on purpose: white mode is the whole app, not
+            a screen, and the provider re-keys everything under it when the
+            rider moves the bike onto the white studio floor. */}
+        <W3ModeProvider>
         <CelebrationProvider>
         <ErrorBoundary>
         <AppRoutes />
         </ErrorBoundary>
         </CelebrationProvider>
+        </W3ModeProvider>
         </LocaleProvider>
       </AuthProvider>
     </BrowserRouter>

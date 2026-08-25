@@ -7,6 +7,14 @@
 .w3-root {
   /* Palette — pen `w-*` variables, verbatim. */
   --w-bg: #0B0B0B;
+}
+
+/* WHITE MODE. `W3ModeProvider` stamps this on <html> when the rider stands the
+   bike on the white studio floor. Only the ground lives here — every other
+   colour in the app comes from the palette in `w3tokens`, which switches with
+   it. Kept in step by hand, which is why there is exactly one value. */
+:root[data-w3-mode='light'] {
+  --w-bg: #F2F2EE;
   --w-surface: #161616;
   --w-surface-2: #202020;
   /* `--w-acid` and `--w-acid-deep` lived here and were read by nobody: W3
