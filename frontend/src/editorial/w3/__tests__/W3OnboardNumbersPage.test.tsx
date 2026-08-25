@@ -72,3 +72,54 @@ describe('W3 · Deine Zahlen · weiter', () => {
     expect(updateProfile).toHaveBeenCalled()
   })
 })
+
+describe('W3 · Deine Zahlen · eine Zahl, die nicht sein kann', () => {
+  const openFtp = () => fireEvent.click(screen.getByText('FTP'))
+  const openWeight = () => fireEvent.click(screen.getByText('Gewicht'))
+  const ftpField = () => screen.getByPlaceholderText('FTP in Watt')
+  const weightField = () => screen.getByPlaceholderText('Gewicht in kg')
+
+  it('an FTP nobody holds for an hour is refused, with the ceiling named', () => {
+    renderPage()
+    openFtp()
+    fireEvent.change(ftpField(), { target: { value: '5000' } })
+    expect(screen.getByText(/600/)).toBeTruthy()
+    expect(cta().disabled).toBe(true)
+  })
+
+  it('an FTP under the plan engine floor is refused, with the reason', () => {
+    renderPage()
+    openFtp()
+    fireEvent.change(ftpField(), { target: { value: '95' } })
+    expect(screen.getByText(/100 Watt/)).toBeTruthy()
+    expect(cta().disabled).toBe(true)
+  })
+
+  it('a weight outside the range the starter model trusts is refused', () => {
+    renderPage()
+    openWeight()
+    fireEvent.change(weightField(), { target: { value: '700' } })
+    expect(screen.getByText(/30.?200/)).toBeTruthy()
+    expect(cta().disabled).toBe(true)
+  })
+
+  it('text that is not a number is never quietly swapped for a starter value', () => {
+    renderPage()
+    openWeight()
+    fireEvent.change(weightField(), { target: { value: 'schwer' } })
+    expect(screen.getByText(/nicht als Zahl/)).toBeTruthy()
+    expect(cta().disabled).toBe(true)
+  })
+
+  it('correcting the number lets the rider continue, and posts the corrected one', async () => {
+    renderPage()
+    openFtp()
+    fireEvent.change(ftpField(), { target: { value: '5000' } })
+    expect(cta().disabled).toBe(true)
+    fireEvent.change(ftpField(), { target: { value: '245' } })
+    expect(cta().disabled).toBe(false)
+    fireEvent.click(cta())
+    await waitFor(() => expect(updateProfile).toHaveBeenCalled())
+    expect(updateProfile.mock.calls[0][0]).toMatchObject({ ftp_watts: 245 })
+  })
+})

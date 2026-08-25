@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Check, Pencil, Scale, Zap } from 'lucide-react'
+import { AlertTriangle, Check, Pencil, Scale, Zap } from 'lucide-react'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateProfile } from '../../api/athletes'
@@ -53,6 +53,49 @@ const ARCHIVO = 'Archivo, "Inter Tight", sans-serif'
 function decimal(raw: string): number | null {
   const n = Number(raw.trim().replace(',', '.'))
   return Number.isFinite(n) && n > 0 ? n : null
+}
+
+/**
+ * The bounds a typed number has to sit inside — and why exactly these.
+ *
+ * Nothing was checking them. `AthleteProfileUpdate` declares `ftp_watts: int |
+ * None` with no `ge`/`le` at all, so a fat-fingered `2450` saved, became this
+ * rider's zone ladder, and the plan engine then prescribed intervals off a
+ * number no human holds. The mistake does not surface here; it surfaces a week
+ * later as workouts nobody can finish.
+ *
+ * The FTP floor is not a taste call. `mesocycle_generator` RAISES below it —
+ * "Athlete ftp_watts=… is below minimum 100 W for mesocycle generation" — so a
+ * rider who types 95 clears this screen and lands on a plan that cannot be
+ * built, with nothing anywhere telling them why. The ceiling is a typo guard:
+ * 600 W is past what the best riders in the world hold for an hour. The weight
+ * range is the one `starterFtp` already trusts (30–200) and the one
+ * `rehearsal.py` validates against — not a fourth opinion.
+ */
+const BOUNDS = { ftp: { min: 100, max: 600 }, weight: { min: 30, max: 200 } } as const
+
+/** What is wrong with the FTP as typed, in the rider's words — or `null`. */
+function ftpProblem(raw: string): string | null {
+  const val = raw.trim()
+  if (val === '') return null
+  const n = Number(val.replace(',', '.'))
+  if (!Number.isFinite(n)) return 'Die FTP lesen wir nicht als Zahl — nur Ziffern, z. B. 245.'
+  if (n < BOUNDS.ftp.min)
+    return `Unter ${BOUNDS.ftp.min} Watt kann der Trainingsplan nicht rechnen. Trag deine FTP ein — oder lass uns unten einen Startwert schätzen.`
+  if (n > BOUNDS.ftp.max)
+    return `Über ${BOUNDS.ftp.max} Watt hält niemand eine Stunde — schau nochmal auf die Zahl.`
+  return null
+}
+
+/** What is wrong with the weight as typed — or `null`. */
+function weightProblem(raw: string): string | null {
+  const val = raw.trim()
+  if (val === '') return null
+  const n = Number(val.replace(',', '.'))
+  if (!Number.isFinite(n)) return 'Das Gewicht lesen wir nicht als Zahl — nur Ziffern, z. B. 72,5.'
+  if (n < BOUNDS.weight.min || n > BOUNDS.weight.max)
+    return `Wir rechnen mit ${BOUNDS.weight.min}–${BOUNDS.weight.max} kg — schau nochmal auf die Zahl.`
+  return null
 }
 
 const FITNESS: { key: StarterFitness; label: string; sub: string }[] = [
@@ -116,17 +159,26 @@ export default function W3OnboardNumbersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [profile])
 
-  const weight = decimal(weightInput) ?? profile?.weight_kg ?? null
-  const typedFtp = decimal(ftpInput)
+  // A number the rider can see in the field must never be quietly replaced by
+  // a different one behind it. While the field holds something impossible, it
+  // counts as no number at all: the hero reads DASH, the fallbacks stay shut,
+  // and the note below the rows says what is wrong.
+  const ftpNote = ftpProblem(ftpInput)
+  const weightNote = weightProblem(weightInput)
+  const note = ftpNote ?? weightNote
+
+  const weight = weightNote ? null : decimal(weightInput) ?? profile?.weight_kg ?? null
+  const typedFtp = ftpNote ? null : decimal(ftpInput)
   const starter = starterFtp(weight, fitness)
-  const ftp = typedFtp ?? profile?.ftp_watts ?? est?.watts ?? starter ?? null
+  const ftp = ftpNote ? null : typedFtp ?? profile?.ftp_watts ?? est?.watts ?? starter ?? null
   // WHERE THE NUMBER CAME FROM, ranked by how much it is worth. These are
   // different claims and the screen must not let them look alike.
   const source: 'typed' | 'profile' | 'rides' | 'starter' | 'none' =
-    typedFtp ? 'typed'
-      : profile?.ftp_watts != null ? 'profile'
-        : est ? 'rides'
-          : starter ? 'starter' : 'none'
+    ftp == null ? 'none'
+      : typedFtp ? 'typed'
+        : profile?.ftp_watts != null ? 'profile'
+          : est ? 'rides'
+            : starter ? 'starter' : 'none'
   const sourceLine = {
     typed: 'von dir eingetragen',
     profile: 'aus deinem Profil',
@@ -136,8 +188,10 @@ export default function W3OnboardNumbersPage() {
   }[source]
   const wkg = ftp && weight ? ftp / weight : null
 
+  const off = ftp == null || note != null || busy
+
   const onContinue = async () => {
-    if (ftp == null) return
+    if (ftp == null || note) return
     setBusy(true); setError(null)
     try {
       // Consent and profile together — see the note at the top of this file.
@@ -260,6 +314,16 @@ export default function W3OnboardNumbersPage() {
           ) : (
             <Row label="Gewicht" value={weight ? String(Math.round(Number(weight))) : ''} unit="kg" onEdit={() => setEditing('weight')} />
           )}
+
+          {/* ── WHAT IS WRONG WITH THE NUMBER ────────────────────────────
+               Under the rows, because that is what it is about — not down by
+               the CTA, where it would read as a failed save. */}
+          {note && (
+            <div role="alert" style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 16, background: T.tile }}>
+              <AlertTriangle size={15} color={T.warn} style={{ flex: 'none', marginTop: 1 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, color: T.mid, lineHeight: 1.4 }}>{note}</span>
+            </div>
+          )}
         </div>
 
         {/* ── NO RIDES YET: say how you ride ───────────────────────────── */}
@@ -274,7 +338,7 @@ export default function W3OnboardNumbersPage() {
                 so without a weight there is nothing to multiply and the CTA
                 stays disabled — a rider who is not told that just sees a dead
                 button and no reason for it. */}
-            {!weight && (
+            {!weight && !weightNote && (
               <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start', padding: '12px 14px', borderRadius: 16, background: T.tile }}>
                 <Scale size={15} color={T.warn} style={{ flex: 'none', marginTop: 1 }} />
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.mid, lineHeight: 1.4 }}>
@@ -311,13 +375,15 @@ export default function W3OnboardNumbersPage() {
         )}
 
         <div style={{ ...band(24) }}>
-          <button onClick={onContinue} disabled={ftp == null || busy}
+          {/* One condition, named once: the acid pill is only ever live when a
+              real number is on screen and nothing about it is wrong. */}
+          <button onClick={onContinue} disabled={off}
             style={{
               width: '100%', height: 58, borderRadius: 100, border: 0,
-              background: ftp == null || busy ? T.tile : T.acid,
-              color: ftp == null || busy ? T.quiet : T.heroInk,
+              background: off ? T.tile : T.acid,
+              color: off ? T.quiet : T.heroInk,
               fontFamily: FONT, fontSize: 15, fontWeight: 700, letterSpacing: 0.3,
-              cursor: ftp == null || busy ? 'default' : 'pointer',
+              cursor: off ? 'default' : 'pointer',
             }}>
             {busy ? 'Einen Moment…' : source === 'starter' ? 'Mit Startwerten loslegen' : 'Passt so'}
           </button>
