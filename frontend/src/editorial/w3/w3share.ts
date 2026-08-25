@@ -1137,10 +1137,17 @@ function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][],
   }
   const spanX = Math.max(1e-6, maxX - minX)
   const spanY = Math.max(1e-6, maxY - minY)
-  const box = SW - 260
+  // ── WHERE THE TRACE SITS, AND WHY NOT IN THE MIDDLE ────────────────────
+  // It was centred on the frame, which put it straight across the rider's face
+  // on every portrait — the one part of a photograph nobody wants a line drawn
+  // over. The card's own scrim already darkens the lower third for the caption,
+  // and that is where a route can be read without ruining the picture. Smaller
+  // too: at `SW - 260` it filled the frame edge to edge and competed with the
+  // photo instead of annotating it.
+  const box = SW - 420
   const scale = Math.min(box / spanX, box / spanY)
   const ox = SW / 2 - (spanX * scale) / 2
-  const oy = SH / 2 - (spanY * scale) / 2
+  const oy = SH * 0.60 - (spanY * scale) / 2
 
   ctx.beginPath()
   pts.forEach(([lat, lng], i) => {
@@ -1287,6 +1294,27 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     ctx.fillRect(0, bandY, SW, 96)
     const line = [d.bigValue + ' ' + d.bigUnit.toUpperCase(), ...d.stats.map((x) => x.v + ' ' + x.l.split(' ')[0])].join('  —  ')
     text(ctx, line, MX - 24, bandY + 64, 44, '700', CARD.bg, 1)
+
+    // ── THE RULE, AS THE RIDE ────────────────────────────────────────────
+    // This was the one layout with no graphic on it: a title, a photograph and
+    // a strip of tape. A broadsheet does not want a chart pasted into it, but
+    // it does want a RULE under its masthead — so the rule IS the ride. Full
+    // bleed like the tape above it, each division one bar of the effort, the
+    // hardest ones at full height and the easy ones a hairline. Read as
+    // ornament from across a room and as the shape of the ride up close, which
+    // is what a printed page does with a graphic.
+    if (d.series.length > 1) {
+      const bars = d.series.slice(0, 64)
+      const bw = SW / bars.length
+      const ruleY = bandY + 96
+      for (let i = 0; i < bars.length; i++) {
+        const v = Math.max(0, Math.min(1, bars[i]))
+        const h = 3 + v * 21
+        ctx.fillStyle = v >= 0.92 ? accent : accent + '59'
+        ctx.fillRect(i * bw, ruleY + (24 - h), Math.max(1, bw - 2), h)
+      }
+    }
+
     if (d.ticker) text(ctx, d.ticker, MX, CONTENT_BOTTOM - 84, 26, '700', CARD.mid, 1.6)
     markAndFooter(CARD.quiet)
     return
