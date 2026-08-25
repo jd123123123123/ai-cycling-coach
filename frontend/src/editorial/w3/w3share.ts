@@ -999,7 +999,46 @@ const SH = 1920
 
 export interface StoryStat { v: string; l: string }
 
+/**
+ * FOUR WAYS TO SAY THE SAME RIDE, and each is defined by what it DROPS.
+ *
+ * Strava's share is one layout with everything on it — a photo, four stats, a
+ * map, a badge — and it looks the same for a 20 km commute as for an alpine
+ * epic. A rider posting a picture of a mountain does not want four numbers
+ * printed across it; a rider posting a personal best does not want a landscape
+ * behind it. So the choice is the design, and there are only four because a
+ * fifth would be a variation rather than a different sentence:
+ *
+ *   `full`   — the photograph, the coach's line, the number, two stats, the
+ *              strip. The whole card (pen `sYlFV`). Nothing is missing, which
+ *              is exactly why it is not always the right one.
+ *   `figure` — the photograph and ONE number, enormous. No sentence, no stats,
+ *              no strip. The most confident thing a rider can post, and the one
+ *              Strava cannot bring itself to make because it always adds a row.
+ *   `line`   — the coach's sentence alone, two weights, and NO NUMBERS AT ALL.
+ *              A ride as language. For the day that was about how it felt.
+ *   `trace`  — the route as a single acid line on the ground colour. No photo,
+ *              no map tiles, no type but the mark. The shape of where you went,
+ *              which for some rides is the only thing worth showing.
+ *
+ * All four keep the handle, the mark and the ground; that is what makes them a
+ * family rather than four cards. Everything else is the rider's to spend.
+ */
+export type StoryLayout = 'full' | 'silent' | 'trace' | 'headline' | 'viewfinder'
+
 export interface StoryData {
+  /** Which of the five. Defaults to `full`. */
+  layout?: StoryLayout
+  /** "RHEINSCHLEIFE" — the route's name, for the broadsheet and the viewfinder. */
+  routeName?: string
+  /** "AUSFAHRT NR. 1284 · 24.08.2026" — the broadsheet's dateline. */
+  dateline?: string
+  /** The ticker's second line: "— SCHNELLSTE SEIT MAI — NEUE BESTZEIT". */
+  ticker?: string
+  /** Three labelled readings for the viewfinder and the trace card. */
+  readings?: { v: string; l: string }[]
+  /** The ride's track, for `trace`. Null falls back to the strip. */
+  polyline?: [number, number][] | null
   handle: string
   /** "W3 ANALYSE" — the chip that says where the numbers came from. */
   badge: string
@@ -1018,20 +1057,197 @@ export interface StoryData {
   photo: string | null
 }
 
+function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][]) {
+  // The route, drawn as ONE line and nothing else. No tiles, no north arrow, no
+  // start pin: a rider recognises their own road from its shape, and every
+  // other mark on a map card is furniture.
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const [lat, lng] of pts) {
+    minX = Math.min(minX, lng); maxX = Math.max(maxX, lng)
+    minY = Math.min(minY, lat); maxY = Math.max(maxY, lat)
+  }
+  const spanX = Math.max(1e-6, maxX - minX)
+  const spanY = Math.max(1e-6, maxY - minY)
+  const box = SW - 260
+  const scale = Math.min(box / spanX, box / spanY)
+  const ox = SW / 2 - (spanX * scale) / 2
+  const oy = SH / 2 - (spanY * scale) / 2
+
+  ctx.beginPath()
+  pts.forEach(([lat, lng], i) => {
+    const x = ox + (lng - minX) * scale
+    const y = oy + (maxY - lat) * scale
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
+  })
+  ctx.strokeStyle = T.acid
+  ctx.lineWidth = 10
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
+  ctx.stroke()
+}
+
 function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTMLImageElement | null) {
+  const layout = d.layout ?? 'full'
+  const mono = "'JetBrains Mono', ui-monospace, monospace"
   ctx.fillStyle = T.bg
   ctx.fillRect(0, 0, SW, SH)
 
-  // ── The photograph, filling the frame ──
+  // ── The photograph. Every layout keeps it; only where it sits changes. The
+  //    broadsheet and the viewfinder inset it so their own furniture has room.
+  const inset = layout === 'headline' ? { y: 300, h: 1180 }
+    : layout === 'viewfinder' ? { y: 210, h: 1000 }
+    : { y: 0, h: SH }
   if (photo) {
-    const scale = Math.max(SW / photo.width, SH / photo.height)
+    const scale = Math.max(SW / photo.width, inset.h / photo.height)
     const w = photo.width * scale
     const h = photo.height * scale
-    ctx.drawImage(photo, (SW - w) / 2, (SH - h) / 2, w, h)
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, inset.y, SW, inset.h)
+    ctx.clip()
+    ctx.drawImage(photo, (SW - w) / 2, inset.y + (inset.h - h) / 2, w, h)
+    ctx.restore()
   }
 
-  // ── The scrim. Top for the chips, bottom for the type, clear through the
-  //    middle so the picture survives being posted over. ──
+  const markAndFooter = (footerColor = 'rgba(255,255,255,0.5)') => {
+    text(ctx, d.footer, 64, SH - 74, 24, '600', footerColor, 0.6)
+    text(ctx, 'w3.ride', SW - 64, SH - 74, 24, '700', T.acid, 0.6, 'right')
+  }
+
+  const strip = (top: number) => {
+    if (d.series.length === 0) return
+    const bars = d.series.slice(0, 48)
+    const gap = 6
+    const bw = (SW - 128 - gap * (bars.length - 1)) / bars.length
+    for (let i = 0; i < bars.length; i++) {
+      const hgt = Math.max(4, Math.min(1, bars[i]) * 74)
+      ctx.fillStyle = bars[i] >= 0.92 ? T.acid : 'rgba(191,255,60,0.42)'
+      roundRect(ctx, 64 + i * (bw + gap), top + (74 - hgt), bw, hgt, 3)
+      ctx.fill()
+    }
+  }
+
+  const chips = () => {
+    const chip = (label: string, x: number, align: CanvasTextAlign, accent: boolean) => {
+      ctx.textAlign = 'left'
+      ctx.font = `700 30px ${FONT}`
+      // Clamped: a font that has not finished loading measures wider, and a card
+      // that has left the app cannot re-lay itself out.
+      const w = Math.min(ctx.measureText(label).width + 66, SW - 128)
+      const left = Math.max(64, Math.min(align === 'right' ? x - w : x, SW - 64 - w))
+      ctx.fillStyle = accent ? T.acid : 'rgba(12,12,12,0.62)'
+      roundRect(ctx, left, 74, w, 68, 34)
+      ctx.fill()
+      ctx.beginPath()
+      ctx.arc(left + 34, 108, 9, 0, Math.PI * 2)
+      ctx.fillStyle = accent ? T.bg : T.acid
+      ctx.fill()
+      text(ctx, label, left + 54, 119, 30, '700', accent ? T.bg : T.ink, 1.2)
+    }
+    chip(d.handle, 64, 'left', false)
+    chip(d.badge, SW - 64, 'right', true)
+  }
+
+  // ── DIE SCHLAGZEILE (pen `iXYiI`) ──────────────────────────────────────
+  // A broadsheet: dateline, the route's name set as large as it will go, the
+  // photograph beneath it, and the numbers running along the bottom as a ticker
+  // rather than sitting in tiles. The register is a newspaper, so nothing is
+  // rounded and nothing glows.
+  if (layout === 'headline') {
+    ctx.fillStyle = T.bg
+    ctx.fillRect(0, 0, SW, inset.y)
+    ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+    text(ctx, d.dateline ?? d.footer, 64, 130, 26, '700', T.mid, 2.4)
+    const name = (d.routeName ?? '').toUpperCase()
+    let size = 128
+    ctx.font = `700 ${size}px ${FONT}`
+    while (ctx.measureText(name).width > SW - 128 && size > 56) {
+      size -= 4
+      ctx.font = `700 ${size}px ${FONT}`
+    }
+    text(ctx, name, 64, 250, size, '700', T.ink, -3)
+
+    // The ticker. Acid band, black type, running off both edges on purpose —
+    // it reads as a strip of tape rather than a caption that happens to fit.
+    const bandY = SH - 250
+    ctx.fillStyle = T.acid
+    ctx.fillRect(0, bandY, SW, 96)
+    const line = [d.bigValue + ' ' + d.bigUnit.toUpperCase(), ...d.stats.map((x) => x.v + ' ' + x.l.split(' ')[0])].join('  —  ')
+    text(ctx, line, 40, bandY + 64, 44, '700', T.bg, 1)
+    if (d.ticker) text(ctx, d.ticker, 40, SH - 108, 26, '700', T.mid, 1.6)
+    markAndFooter(T.quiet)
+    return
+  }
+
+  // ── DER SUCHER (pen `oMRL7`) ───────────────────────────────────────────
+  // The card as a viewfinder: corner brackets, a recording dot, and every
+  // number set in the monospace the app uses for telemetry. It is the ride as
+  // instrument readout, which is the opposite pitch to the broadsheet.
+  if (layout === 'viewfinder') {
+    ctx.fillStyle = T.bg
+    ctx.fillRect(0, 0, SW, inset.y)
+    ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+
+    ctx.strokeStyle = T.acid
+    ctx.lineWidth = 8
+    const b = 64, len = 86
+    for (const [cx, cy, dx, dy] of [[b, b, 1, 1], [SW - b, b, -1, 1], [b, SH - b, 1, -1], [SW - b, SH - b, -1, -1]] as const) {
+      ctx.beginPath()
+      ctx.moveTo(cx, cy + dy * len); ctx.lineTo(cx, cy); ctx.lineTo(cx + dx * len, cy)
+      ctx.stroke()
+    }
+    ctx.beginPath(); ctx.arc(112, 118, 11, 0, Math.PI * 2)
+    ctx.fillStyle = T.warn; ctx.fill()
+    ctx.font = `600 26px ${mono}`
+    text(ctx, `${d.footer.split(' · ')[0]}   ${(d.routeName ?? '').toUpperCase()}`, 140, 128, 26, '600', T.ink, 1.4)
+
+    const bl = SH - 430
+    ctx.font = `700 150px ${FONT}`
+    const w = ctx.measureText(d.bigValue).width
+    text(ctx, d.bigValue, 64, bl, 150, '700', T.ink, -6)
+    text(ctx, d.bigUnit.toUpperCase(), 64 + w + 16, bl, 40, '700', T.acid, 1)
+    ctx.font = `600 26px ${mono}`
+    text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), 64, bl + 56, 26, '600', T.mid, 1.2)
+
+    let rx = 64
+    for (const r of (d.readings ?? []).slice(0, 3)) {
+      text(ctx, r.l.toUpperCase(), rx, bl + 130, 22, '600', T.quiet, 1.6)
+      text(ctx, r.v, rx, bl + 180, 40, '700', T.ink, -0.5)
+      rx += 320
+    }
+    strip(SH - 170)
+    return
+  }
+
+  // ── DIE SPUR (pen `DJJ0P`) ─────────────────────────────────────────────
+  // The most minimal of them: the photograph, the route drawn over it as one
+  // line, and three readings under a hairline. No headline, no big number —
+  // for the ride whose picture is the point.
+  if (layout === 'trace') {
+    const bottom0 = ctx.createLinearGradient(0, SH - 700, 0, SH)
+    bottom0.addColorStop(0, 'rgba(0,0,0,0)')
+    bottom0.addColorStop(1, 'rgba(0,0,0,0.9)')
+    ctx.fillStyle = bottom0
+    ctx.fillRect(0, SH - 700, SW, 700)
+    if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline)
+    chips()
+    text(ctx, `${(d.routeName ?? '').toUpperCase()} · ${d.dateline ?? ''}`, SW / 2, SH - 300, 24, '700', T.mid, 2, 'center')
+    const items = [{ v: d.bigValue, l: d.bigUnit }, ...d.stats.map((x) => ({ v: x.v, l: '' }))]
+    const step = SW / (items.length + 1)
+    items.forEach((it, i) => {
+      const cx = step * (i + 1)
+      ctx.font = `700 54px ${FONT}`
+      const vw = ctx.measureText(it.v).width
+      text(ctx, it.v, cx - vw / 2, SH - 210, 54, '700', T.ink, -1)
+      if (it.l) text(ctx, it.l, cx + vw / 2 + 8, SH - 210, 24, '700', T.quiet, 0)
+    })
+    markAndFooter()
+    return
+  }
+
+  // ── DIE KARTE (pen `sYlFV` / `C6Xn06`) and OHNE WORTE (pen `abH9Z`) ─────
+  // The same card; `silent` simply does not print the sentence. A rider posting
+  // a mountain does not always want a line of prose across it.
   const top = ctx.createLinearGradient(0, 0, 0, 420)
   top.addColorStop(0, 'rgba(0,0,0,0.55)')
   top.addColorStop(1, 'rgba(0,0,0,0)')
@@ -1045,41 +1261,19 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
   ctx.fillStyle = bottom
   ctx.fillRect(0, SH - 1000, SW, 1000)
 
-  // ── Who, and where the numbers are from ──
-  const chip = (label: string, x: number, align: CanvasTextAlign, accent: boolean) => {
-    ctx.textAlign = 'left'
-    ctx.font = `700 30px ${FONT}`
-    // CLAMPED TO THE FRAME. A right-aligned chip is positioned from its own
-    // measured width, and a font that has not finished loading measures wider —
-    // so on a cold first paint the badge ran off the edge of the card. The card
-    // leaves the app; it does not get a second chance to lay itself out.
-    const w = Math.min(ctx.measureText(label).width + 66, SW - 128)
-    const left = Math.max(64, Math.min(align === 'right' ? x - w : x, SW - 64 - w))
-    ctx.fillStyle = accent ? T.acid : 'rgba(12,12,12,0.62)'
-    roundRect(ctx, left, 74, w, 68, 34)
-    ctx.fill()
-    ctx.beginPath()
-    ctx.arc(left + 34, 108, 9, 0, Math.PI * 2)
-    ctx.fillStyle = accent ? T.bg : T.acid
-    ctx.fill()
-    text(ctx, label, left + 54, 119, 30, '700', accent ? T.bg : T.ink, 1.2)
-  }
-  chip(d.handle, 64, 'left', false)
-  chip(d.badge, SW - 64, 'right', true)
+  chips()
 
-  // ── The ride, in the rider's own language ──
   let y = SH - 470
-  ctx.textAlign = 'left'
-  for (const line of wrap(ctx, d.lead, 62, '700', SW - 128)) {
-    text(ctx, line, 64, y, 62, '700', T.ink, -1.4)
-    y += 74
-  }
-  for (const line of wrap(ctx, d.emphasis, 62, '700', SW - 128)) {
-    text(ctx, line, 64, y, 62, '700', T.acid, -1.4)
-    y += 74
+  if (layout === 'full') {
+    ctx.textAlign = 'left'
+    for (const line of wrap(ctx, d.lead, 62, '700', SW - 128)) {
+      text(ctx, line, 64, y, 62, '700', T.ink, -1.4); y += 74
+    }
+    for (const line of wrap(ctx, d.emphasis, 62, '700', SW - 128)) {
+      text(ctx, line, 64, y, 62, '700', T.acid, -1.4); y += 74
+    }
   }
 
-  // ── The number, and the two that fit beside it ──
   const baseline = SH - 250
   ctx.font = `700 128px ${FONT}`
   const bigW = ctx.measureText(d.bigValue).width
@@ -1094,22 +1288,8 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTML
     sx += Math.max(ctx.measureText(st.v).width, 200) + 60
   }
 
-  // ── The ride's own shape ──
-  if (d.series.length > 0) {
-    const bars = d.series.slice(0, 48)
-    const gap = 6
-    const bw = (SW - 128 - gap * (bars.length - 1)) / bars.length
-    const top0 = SH - 190
-    for (let i = 0; i < bars.length; i++) {
-      const hgt = Math.max(4, Math.min(1, bars[i]) * 74)
-      ctx.fillStyle = bars[i] >= 0.92 ? T.acid : 'rgba(191,255,60,0.42)'
-      roundRect(ctx, 64 + i * (bw + gap), top0 + (74 - hgt), bw, hgt, 3)
-      ctx.fill()
-    }
-  }
-
-  text(ctx, d.footer, 64, SH - 74, 24, '600', 'rgba(255,255,255,0.5)', 0.6)
-  text(ctx, 'w3.ride', SW - 64, SH - 74, 24, '700', T.acid, 0.6, 'right')
+  strip(SH - 190)
+  markAndFooter()
 }
 
 /** The rider's photograph with their ride written over it. 1080 × 1920. */

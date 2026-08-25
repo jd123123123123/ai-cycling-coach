@@ -2,6 +2,7 @@ import { type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Download, Camera, Users, Link2, MoreHorizontal, Share2, ImagePlus, X } from 'lucide-react'
 import { T, FONT, EASE, HIDDEN_FILE_INPUT } from './w3tokens'
+import type { StoryLayout } from './w3share'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import type { ShareAngle } from './w3share'
@@ -22,6 +23,8 @@ import './w3.css'
 
 export interface ShareAngleChip { id: ShareAngle; label: string; sub: string }
 export interface W3ShareVm {
+  /** Which of the four story formats is selected. Absent → the full card. */
+  format?: StoryLayout
   posterDataUrl: string | null
   generating: boolean
   angles: ShareAngleChip[]
@@ -38,6 +41,8 @@ export interface W3ShareActions {
   onPickPhoto?: (dataUrl: string | null) => void
   /** The rider rebuilt their card. Between MIN_BLOCKS and MAX_BLOCKS. */
   onPickBlocks?: (ids: BlockId[]) => void
+  /** Which of the four story formats leaves the app. See `StoryLayout`. */
+  onPickFormat?: (id: StoryLayout) => void
   onClose?: () => void
   onDownload?: () => void
   onSelectAngle?: (id: ShareAngle) => void
@@ -54,7 +59,17 @@ const ACTIONS = [
   { id: 'more', label: 'Mehr', Icon: MoreHorizontal },
 ] as const
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickBlocks, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+/** The four, in the order they give things up. See `StoryLayout` for why there
+ *  are exactly four and not five. */
+const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
+  { id: 'full', name: 'Karte', drops: 'Satz + Zahlen' },
+  { id: 'silent', name: 'Ohne Worte', drops: 'Nur Zahlen' },
+  { id: 'trace', name: 'Spur', drops: 'Foto + Strecke' },
+  { id: 'headline', name: 'Schlagzeile', drops: 'Titel + Laufband' },
+  { id: 'viewfinder', name: 'Sucher', drops: 'Telemetrie' },
+]
+
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickBlocks, onPickFormat, onShare, onStory, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
@@ -89,6 +104,35 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
                 <span style={{ fontSize: 10, fontWeight: 700, color: T.acid }}>rendert…</span>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* ── WIE DU ES ZEIGST ────────────────────────────────────────────
+            The format is the design decision, not a setting. Strava posts one
+            layout for every ride — a photo with four numbers over it, the same
+            for a commute and for an alpine day — and the reason it can never
+            offer this row is that each of these four is defined by what it
+            REFUSES to print. A rider posting a mountain does not want four
+            numbers across it; a rider posting a personal best does not want a
+            landscape behind it. ── */}
+        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WIE DU ES ZEIGST</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {STORY_FORMATS.map((f) => {
+              const on = f.id === (vm.format ?? 'full')
+              return (
+                <button key={f.id} type="button" onClick={() => onPickFormat?.(f.id)}
+                  style={{
+                    flex: 1, minWidth: 0, padding: '11px 8px 10px', borderRadius: 14,
+                    border: `1px solid ${on ? T.acid : 'transparent'}`,
+                    background: on ? T.acidDim : T.surface, cursor: 'pointer',
+                    fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 3,
+                  }}>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, color: on ? T.acid : T.ink }}>{f.name}</span>
+                  <span style={{ fontSize: 8.5, fontWeight: 600, lineHeight: 1.25, color: T.quiet }}>{f.drops}</span>
+                </button>
+              )
+            })}
           </div>
         </div>
 

@@ -7,7 +7,8 @@ import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage, useRenderRideScene, useRideScene } from '../../hooks/useGarage'
 import {
-  renderSharePoster, sharePoster, downloadPoster, canShareImage,
+  renderSharePoster, renderStoryCard, sharePoster, downloadPoster, canShareImage,
+  type StoryLayout, type StoryData,
   type ShareAngle, type PosterData,
 } from './w3share'
 import W3ShareView, { type W3ShareVm, type ShareAngleChip } from './W3ShareView'
@@ -135,6 +136,11 @@ export default function W3SharePage() {
   const { data: garage } = useGarage()
 
   const [angle, setAngle] = useState<ShareAngle>('fahrt')
+  // WHICH OF THE FIVE LEAVES THE APP. The in-app card ('card') is the app's own
+  // artefact; the other five are the 9:16 story templates the pen draws. The
+  // format is the design decision, so it lives beside the angle rather than
+  // behind a menu.
+  const [format, setFormat] = useState<StoryLayout | 'card'>('card')
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null)
   const [posterBlob, setPosterBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
@@ -280,6 +286,7 @@ export default function W3SharePage() {
       handle,
       club: dateStr,
       blocks: chosen ?? ANGLE_BLOCKS[angle],
+    format,
       // The two blocks that were always on the card read their content from
       // the angle, so they are filled in here rather than above.
       blockData: { ...blockData, stats: data.stats, pills: data.pills },
@@ -306,16 +313,46 @@ export default function W3SharePage() {
     }
   }, [activity, debrief, angle, user, scene, garage, ownPhoto, profile, chosen])
 
-  // ── render the poster whenever the payload changes ──
+  /** The story card's payload, from the same numbers the poster already has. */
+  const story = useMemo<StoryData | null>(() => {
+    if (!poster || format === 'card') return null
+    return {
+      layout: format,
+      handle: poster.handle,
+      badge: 'W3 ANALYSE',
+      lead: poster.sentence.split(/ — | – |: /)[0] ?? poster.sentence,
+      emphasis: poster.sentence.split(/ — | – |: /).slice(1).join(' — '),
+      bigValue: poster.bigValue,
+      bigUnit: poster.bigUnit,
+      stats: [poster.stats[0], poster.stats[1]].map((x) => ({ v: x.v, l: x.l })) as [
+        { v: string; l: string }, { v: string; l: string },
+      ],
+      series: poster.blockData?.power?.length
+        ? poster.blockData.power.slice(0, 48).map((w) => Math.min(1, w / Math.max(1, Math.max(...poster.blockData.power))))
+        : [],
+      footer: poster.footer,
+      // The rider's own picture first; failing that, the ride's composed scene —
+      // the machine on the road it actually rode. Never a stock image.
+      photo: ownPhoto ?? poster.sceneSrc ?? null,
+      polyline: poster.polyline,
+      routeName: activity?.title ?? '',
+      dateline: poster.footer,
+      ticker: poster.sentence,
+      readings: poster.stats.map((x) => ({ v: x.v, l: x.l })),
+    }
+  }, [poster, format, ownPhoto, activity])
+
+  // ── render whichever card is selected whenever the payload changes ──
   useEffect(() => {
     if (!poster) return
     let alive = true
     setGenerating(true)
-    renderSharePoster(poster)
+    const job = story ? renderStoryCard(story) : renderSharePoster(poster)
+    job
       .then((out) => { if (alive) { setPosterDataUrl(out.dataUrl || null); setPosterBlob(out.blob) } })
       .finally(() => { if (alive) setGenerating(false) })
     return () => { alive = false }
-  }, [poster])
+  }, [poster, story])
 
   const caption = useMemo(() => {
     if (!poster) return 'w3.ride'
@@ -348,6 +385,7 @@ export default function W3SharePage() {
       onSelectAngle={setAngle}
       onPickPhoto={setOwnPhoto}
       onPickBlocks={pickBlocks}
+      onPickFormat={setFormat}
       onShare={onShare}
       onStory={onShare}
       onCrew={() => navigate('/e/w3-crew')}
