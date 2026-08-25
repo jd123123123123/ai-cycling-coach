@@ -9,9 +9,14 @@ vi.mock('../W3TopBar', () => ({ default: () => null }))
 vi.mock('../W3TabBar', () => ({ default: () => null }))
 vi.mock('motion/react', () => ({
   useReducedMotion: () => true,
+  // The animated target is folded into `style` rather than dropped: a bar's
+  // whole meaning is the width it animates TO, and a mock that throws `animate`
+  // away makes that value untestable.
   motion: new Proxy({}, { get: () => ({ children, ...rest }: Record<string, unknown> & { children?: React.ReactNode }) => {
     const p: Record<string, unknown> = { ...rest }
+    const animate = p.animate as Record<string, unknown> | undefined
     delete p.initial; delete p.animate; delete p.exit; delete p.transition
+    p.style = { ...(p.style as object), ...(animate ?? {}) }
     return <div {...p}>{children}</div>
   } }),
 }))
@@ -84,6 +89,22 @@ describe('Erfolge · honesty', () => {
     expect(screen.getByText(VM.latestEmpty)).toBeTruthy()
     expect(screen.queryByText('NEU')).toBeNull()
     expect(screen.queryByText('14. AUGUST')).toBeNull()
+  })
+})
+
+describe('Erfolge · a locked badge draws its REAL remaining progress', () => {
+  it('draws the bar at the fraction it was given, not a hundredth of it', () => {
+    // `/achievements/mine` sends `pct` as 0–1 (achievement_service clamps it
+    // there). W3WinsPage divided it by 100 once, which drew an FTP badge eight
+    // watts from falling as an empty bar. The view takes 0–1; this pins it.
+    const { container } = render(<W3WinsView vm={{
+      ...VM,
+      badges: [{ key: 'ftp', icon: 'gauge', name: '300 W FTP', caption: 'NOCH 8 W', earned: false, pct: 0.97 }],
+    }} />)
+    const widths = [...container.querySelectorAll('div')]
+      .map((d) => (d as HTMLElement).style.width)
+      .filter((w) => w.endsWith('%'))
+    expect(widths).toContain('97%')
   })
 })
 

@@ -94,7 +94,11 @@ export default function W3WinsPage() {
             earned: false,
             // A locked badge shows how close it is, or it shows nothing —
             // never a bar at an invented width.
-            pct: p.pct != null ? Math.max(0, Math.min(1, p.pct / 100)) : null,
+            // `pct` ARRIVES AS 0–1, not 0–100 (achievement_service clamps it
+            // to that range). Dividing by 100 here drew every locked badge's
+            // bar at one hundredth of its true width — a rider eight watts off
+            // a 300 W FTP got a bar that looked empty.
+            pct: p.pct != null ? Math.max(0, Math.min(1, p.pct)) : null,
           })),
         ].slice(0, 9)
       : []
@@ -174,7 +178,7 @@ export default function W3WinsPage() {
       // What is next, not a second copy of the count. `inProgress` is already
       // sorted by how close each one is, so [0] IS the nearest.
       next: nearest
-        ? { label: `Als Nächstes · ${nearest.title}`, value: nearest.progress?.label ?? `${Math.round(nearest.pct ?? 0)} %` }
+        ? { label: `Als Nächstes · ${nearest.title}`, value: nearest.progress?.label ?? `${Math.round((nearest.pct ?? 0) * 100)} %` }
         : null,
 
       badgesChapter: 'DIE VITRINE',
