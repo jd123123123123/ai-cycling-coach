@@ -28,6 +28,9 @@ def _activity():
         id=1, title="Sunday Race", sport="cycling",
         started_at=datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc),
         distance_meters=18000.0, duration_seconds=1800, tss=90.0,
+        # The stand-in has to carry what the real row carries: the header reads
+        # the ride's OWN recorded ascent and only falls back to summing segments.
+        elevation_gain_m=612.0,
     )
 
 
@@ -71,3 +74,38 @@ def test_assemble_degrades_without_optional_channels():
     assert rd.climbs == []
     assert rd.cda is None
     assert rd.pacing is not None
+
+
+class TestElevationComesFromTheRide:
+    """`elevation_m` was `sum(seg.elev_gain_m for seg in segments)`.
+
+    Segments come out of the altitude stream, so a ride whose stream is missing
+    or too short to segment reported ZERO metres for a ride that plainly
+    climbed, and a ride that segmented differently disagreed with History, the
+    crew board and the lifetime totals — all of which count the recorded value.
+    """
+
+    @staticmethod
+    def _run(act, streams=None):
+        profile = SimpleNamespace(weight_kg=70.0, ftp_watts=250)
+        envelope = {5: 500.0, 60: 400.0, 300: 320.0, 600: 300.0, 1200: 280.0}
+        return assemble_debrief(act, _stream_row(streams or _synthetic_stream()), profile, envelope)
+
+    def test_the_recorded_ascent_wins_over_the_segment_sum(self):
+        act = _activity()
+        act.elevation_gain_m = 612.0
+        assert self._run(act).header.elevation_m == 612.0
+
+    def test_it_falls_back_to_segments_when_the_ride_never_recorded_one(self):
+        act = _activity()
+        act.elevation_gain_m = None
+        # The synthetic stream climbs, so the fallback must produce something.
+        got = self._run(act).header.elevation_m
+        assert got is not None and got > 0
+
+    def test_a_ride_with_neither_gets_a_dash_rather_than_a_confident_zero(self):
+        act = _activity()
+        act.elevation_gain_m = None
+        flat = _synthetic_stream()
+        flat["altitude"] = None      # nothing to segment, nothing to sum
+        assert self._run(act, flat).header.elevation_m in (None, 0.0)

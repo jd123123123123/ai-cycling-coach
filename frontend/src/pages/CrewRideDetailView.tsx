@@ -326,7 +326,7 @@ export default function CrewRideDetailView() {
               <div className="flex items-stretch">
                 {[
                   { value: `${header.distance_km.toFixed(1)}`, unit: 'km', label: de ? 'Distanz' : 'Distance' },
-                  { value: `${Math.round(header.elevation_m)}`, unit: 'm', label: de ? 'Höhe' : 'Climbing' },
+                  { value: header.elevation_m != null ? `${Math.round(header.elevation_m)}` : '—', unit: 'm', label: de ? 'Höhe' : 'Climbing' },
                   { value: fmtDuration(header.moving_time_s), unit: '', label: de ? 'Zeit' : 'Time' },
                   { value: `${header.avg_speed_kmh.toFixed(1)}`, unit: 'km/h', label: de ? 'Schnitt' : 'Avg spd' },
                 ].map((s, i) => (

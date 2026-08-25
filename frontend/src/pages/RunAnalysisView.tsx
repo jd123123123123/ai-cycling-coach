@@ -215,7 +215,7 @@ export default function RunAnalysisView() {
   const distKm = header?.distance_km ?? (act?.distance_meters ?? 0) / 1000
   const movingS = header?.moving_time_s ?? act?.duration_seconds ?? 0
   const streamElev = hasStreams && sa?.elevation ? sa.elevation.gain_m : null
-  const elevation = streamElev ?? (header && header.elevation_m > 0 ? header.elevation_m : null)
+  const elevation = streamElev ?? (header && (header.elevation_m ?? 0) > 0 ? header.elevation_m : null)
   const streamAvgHr = (() => {
     const hr = (data?.story?.hr ?? []).filter((h): h is number => h != null)
     return hr.length ? hr.reduce((a, b) => a + b, 0) / hr.length : null

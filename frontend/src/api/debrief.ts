@@ -2,7 +2,7 @@ import { apiClient } from './client'
 
 export interface DebriefHeader {
   title: string; date: string; sport: string
-  distance_km: number; elevation_m: number; moving_time_s: number
+  distance_km: number; elevation_m: number | null; moving_time_s: number
   np_watts: number; if_: number | null; tss: number; total_kj: number; avg_speed_kmh: number
 }
 export interface DebriefVerdict {

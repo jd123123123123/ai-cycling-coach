@@ -309,7 +309,24 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
     header = dict(
         title=activity.title or "Race", date=activity.started_at.isoformat(),
         sport=activity.sport, distance_km=dist_km,
-        elevation_m=round(sum(seg.elev_gain_m for seg in segments), 0),
+        # THE RIDE'S OWN RECORDED ASCENT, not a sum of derived segments.
+        #
+        # This was `sum(seg.elev_gain_m for seg in segments)`, and segments come
+        # out of the altitude stream: a ride whose stream is missing, flat-lined
+        # or too short to segment produced ZERO metres of climbing for a ride
+        # that plainly climbed, and one whose segmentation split differently
+        # produced a number that disagreed with every other screen in the app.
+        # `activity.elevation_gain_m` is what the head unit's barometer recorded
+        # and what History, the crew board and the lifetime totals all count.
+        #
+        # The segment sum stays as the fallback for a row that never got one —
+        # better a derived figure than none — and `None` when there is neither,
+        # so the frontend can print an honest dash instead of a confident 0.
+        elevation_m=(
+            round(float(activity.elevation_gain_m), 0)
+            if activity.elevation_gain_m is not None
+            else (round(sum(seg.elev_gain_m for seg in segments), 0) if segments else None)
+        ),
         moving_time_s=moving_time_s, np_watts=round(np_watts, 1), if_=if_val,
         tss=float(activity.tss or 0.0), total_kj=total_kj, avg_speed_kmh=avg_speed_kmh,
     )

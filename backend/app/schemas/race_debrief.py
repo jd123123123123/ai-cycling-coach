@@ -16,7 +16,10 @@ class DebriefHeader(BaseModel):
     date: str
     sport: str
     distance_km: float
-    elevation_m: float
+    #: Nullable: a ride with no recorded ascent AND no segments has no honest
+    #: number to give, and a confident 0 on a ride that climbed is worse than a
+    #: dash. See `race_debrief` for why this stopped being a segment sum.
+    elevation_m: float | None
     moving_time_s: int
     np_watts: float
     if_: float | None = None

@@ -171,7 +171,7 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
   // Achievement-first framing: celebrate what was conquered before judging how it
   // was executed, so the grade lands as context, not a verdict on the effort.
   const achievements: string[] = []
-  if (!hideElevation && header.elevation_m > 0) achievements.push(`${Math.round(header.elevation_m).toLocaleString(de ? 'de' : 'en')} ${de ? 'Hm bezwungen' : 'm climbed'}`)
+  if (!hideElevation && (header.elevation_m ?? 0) > 0) achievements.push(`${Math.round(header.elevation_m!).toLocaleString(de ? 'de' : 'en')} ${de ? 'Hm bezwungen' : 'm climbed'}`)
   if (prCount > 0) achievements.push(de ? `${prCount} neue Bestwerte` : `${prCount} new bests`)
   achievements.push(`${header.distance_km.toFixed(0)} km`)
 
@@ -276,7 +276,10 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
             <Stat label="kJ" value={`${Math.round(header.total_kj)}`}
               hint={de ? 'Verrichtete Arbeit ≈ verbrannte Kalorien' : 'Work done ≈ calories burned'} />
             <Stat label={de ? 'GESCHW.' : 'AVG SPEED'} value={`${header.avg_speed_kmh.toFixed(1)} km/h`} />
-            {!hideElevation && (
+            {/* A ride that recorded no ascent has nothing to say here — an
+                unknown climb and a flat ride are different, and `0 m` claims
+                the second when it only knows the first. */}
+            {!hideElevation && header.elevation_m != null && (
               <Stat label={de ? 'HÖHENMETER' : 'ELEVATION'} value={`${Math.round(header.elevation_m)} m`} />
             )}
           </div>

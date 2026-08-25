@@ -1,6 +1,6 @@
 import { Suspense, lazy, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ChevronLeft, Share2, CircleCheck, Gauge, Zap, HeartPulse, Maximize2 } from 'lucide-react'
+import { ChevronLeft, Share2, CircleCheck, Maximize2 } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { W3_MAP } from './w3map'
 import { GRADE_LEGEND, gradeColours } from './gradeColours'
@@ -155,6 +155,34 @@ export interface W3RideMapHeroProps {
   onExpandMap?: () => void
   /** Rendered over the scene: the compose affordance, a note, or nothing. */
   sceneOverlay?: React.ReactNode
+}
+
+/**
+ * ONE WAY TO SET A NUMBER ON THIS CARD.
+ *
+ * Label above in the quiet caps, the figure at 22 with tabular numerals, the
+ * unit on its baseline. Every measurement on the hero uses it — what you
+ * covered and what it cost — so the card reads as one instrument instead of
+ * two panels that happened to land on the same screen.
+ *
+ * An absent value greys the figure rather than hiding the column: a rider
+ * should see that the app HAS a slot for their heart rate and did not get one.
+ */
+function HeroStat({ label, value, unit }: { label: string; value: string; unit: string }) {
+  const absent = value === DASH || value === ''
+  return (
+    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {label}
+      </span>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 3, minWidth: 0 }}>
+        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1, color: absent ? T.quiet : T.ink, fontVariantNumeric: 'tabular-nums' }}>
+          {absent ? DASH : value}
+        </span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{unit}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneOverlay }: W3RideMapHeroProps) {
@@ -354,17 +382,7 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               this card — the beam. */}
           <div style={{ display: 'flex' }}>
             {vm.stats.map((s) => (
-              <div key={s.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, whiteSpace: 'nowrap' }}>
-                  {s.label}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
-                  <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1, color: s.value === DASH ? T.quiet : T.ink, fontVariantNumeric: 'tabular-nums' }}>
-                    {s.value}
-                  </span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{s.unit}</span>
-                </div>
-              </div>
+              <HeroStat key={s.label} label={s.label} value={s.value} unit={s.unit} />
             ))}
           </div>
 
@@ -373,12 +391,16 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
               mean anything together. */}
           <div style={{ ...lux(24), padding: `${S.lg}px ${S.lg + 2}px`, gap: S.lg }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              {([[Zap, vm.watts, 'W'], [HeartPulse, vm.bpm, 'bpm'], [Gauge, 'IF', vm.ifValue]] as const).map(([Icon, a, b], i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Icon size={14} color={T.mid} />
-                  <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: i === 2 ? T.quiet : T.ink, fontVariantNumeric: 'tabular-nums' }}>{a}</span>
-                  <span style={{ fontSize: i === 2 ? 17 : 11, fontWeight: 700, color: i === 2 ? T.ink : T.quiet, fontVariantNumeric: 'tabular-nums' }}>{b}</span>
-                </div>
+              {/* THE SAME PRIMITIVE AS THE THREE ABOVE. These were drawn as
+                  icon + number + unit on one line at 17px, while distance,
+                  tempo and height were label-over-number columns at 22px — two
+                  type scales, two arrangements and two container treatments for
+                  six numbers that are all just measurements of one ride. The
+                  card read as two cards. Rank is expressed by ORDER and by the
+                  panel around the effort block, never by inventing a second
+                  way to set a number. */}
+              {([['LEISTUNG', vm.watts, 'W'], ['HERZFREQUENZ', vm.bpm, 'bpm'], ['INTENSITÄT', vm.ifValue, 'IF']] as const).map(([label, value, unit]) => (
+                <HeroStat key={label} label={label} value={value} unit={unit} />
               ))}
             </div>
 
