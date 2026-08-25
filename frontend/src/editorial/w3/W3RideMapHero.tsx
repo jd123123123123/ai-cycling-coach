@@ -239,12 +239,21 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
             position: 'absolute', top: 10, left: 16, right: 16,
             display: 'flex', justifyContent: 'space-between', alignItems: 'center',
           }}>
-            <NavButton label="Zurück" onClick={onBack}><ChevronLeft size={19} color={T.ink} /></NavButton>
+            {/* CONDITIONAL, because this hero is mounted twice in one scroll.
+                Under the celebration wrap the page already carries a back
+                affordance and a share CTA, and drawing them again a few hundred
+                pixels below the first pair reads as two screens stacked rather
+                than one page. Absent handler, absent button. */}
+            {onBack
+              ? <NavButton label="Zurück" onClick={onBack}><ChevronLeft size={19} color={T.ink} /></NavButton>
+              : <span />}
             <div style={{ display: 'flex', gap: 10 }}>
               {onExpandMap && (
                 <NavButton label="Karte öffnen" onClick={onExpandMap}><Maximize2 size={17} color={T.ink} /></NavButton>
               )}
-              <NavButton label="Teilen" onClick={onShare}><Share2 size={18} color={T.ink} /></NavButton>
+              {onShare && (
+                <NavButton label="Teilen" onClick={onShare}><Share2 size={18} color={T.ink} /></NavButton>
+              )}
             </div>
           </div>
         </div>

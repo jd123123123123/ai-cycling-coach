@@ -188,16 +188,30 @@ function drawRoute(
   dot(path[0], T.ink); dot(path[path.length - 1], theme.acid)
 }
 
-function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, weight: string, color: string, spacing = 0, align: CanvasTextAlign = 'left') {
+/** Exported for its own test: the spaced branch has alignment logic of its own
+ *  and a card that has already left the app cannot re-lay itself out. */
+export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, weight: string, color: string, spacing = 0, align: CanvasTextAlign = 'left') {
   ctx.font = `${weight} ${size}px ${FONT}`
   ctx.fillStyle = color
   ctx.textAlign = align
   ctx.textBaseline = 'alphabetic'
   if (spacing === 0) { ctx.fillText(s, x, y); return ctx.measureText(s).width }
-  // letter-spaced
-  let cx = x
+
+  // ── LETTER-SPACED, AND IT HAS TO HONOUR `align` ITSELF ──────────────────
+  // This branch drew character by character from `x` rightwards whatever the
+  // caller asked for, so `align: 'right'` silently became left-aligned and the
+  // string ran off the edge — which is exactly how the story card's `w3.ride`
+  // mark ended up clipped. Canvas has no letter-spacing, so the width has to be
+  // measured before the first character is drawn and the origin moved back.
+  const spacedWidth = [...s].reduce((w, ch) => w + ctx.measureText(ch).width + spacing, 0) - spacing
+  let cx = align === 'right' ? x - spacedWidth
+    : align === 'center' ? x - spacedWidth / 2
+    : x
+  // Per character the alignment must be left, or each glyph would be placed
+  // against the same anchor and the string would stack on itself.
+  ctx.textAlign = 'left'
   for (const ch of s) { ctx.fillText(ch, cx, y); cx += ctx.measureText(ch).width + spacing }
-  return cx - x
+  return spacedWidth
 }
 
 function wrap(ctx: CanvasRenderingContext2D, s: string, size: number, weight: string, maxW: number): string[] {
@@ -963,3 +977,157 @@ export async function renderChallengeCard(d: ChallengeCardData): Promise<{ blob:
     return { blob: null, dataUrl: '' }
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE STORY CARD — pen frame `sYlFV`, 1080 × 1920.
+//
+// A DIFFERENT OBJECT FROM THE POSTER ABOVE, on purpose. That card is the app's
+// own artefact: near-black, its own scenery, the numbers arranged in blocks the
+// rider picked. This one is a photograph the rider took, with the ride written
+// over it — the format Instagram actually shows full-bleed, and the one people
+// post. Sharing them through the same painter would mean one of the two always
+// being the wrong shape.
+//
+// THE PHOTO IS THE CARD. Everything drawn on top is either a chip on glass or
+// type on a scrim, and the scrim is a gradient rather than a flat wash so the
+// middle of the picture — where a rider's face or a bike usually is — stays
+// legible instead of being fogged to make room for text that sits at the edges.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SW = 1080
+const SH = 1920
+
+export interface StoryStat { v: string; l: string }
+
+export interface StoryData {
+  handle: string
+  /** "W3 ANALYSE" — the chip that says where the numbers came from. */
+  badge: string
+  /** The coach's line, already split. `emphasis` goes acid. */
+  lead: string
+  emphasis: string
+  bigValue: string
+  bigUnit: string
+  /** Two, beside the big one. Three numbers is a card; six is a spreadsheet. */
+  stats: [StoryStat, StoryStat]
+  /** 0–1 per bar — the ride's own shape. Empty draws no strip. */
+  series: number[]
+  footer: string
+  /** The rider's photograph. Without one the card falls back to the ground
+   *  colour and the type carries it alone — never invented scenery. */
+  photo: string | null
+}
+
+function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: HTMLImageElement | null) {
+  ctx.fillStyle = T.bg
+  ctx.fillRect(0, 0, SW, SH)
+
+  // ── The photograph, filling the frame ──
+  if (photo) {
+    const scale = Math.max(SW / photo.width, SH / photo.height)
+    const w = photo.width * scale
+    const h = photo.height * scale
+    ctx.drawImage(photo, (SW - w) / 2, (SH - h) / 2, w, h)
+  }
+
+  // ── The scrim. Top for the chips, bottom for the type, clear through the
+  //    middle so the picture survives being posted over. ──
+  const top = ctx.createLinearGradient(0, 0, 0, 420)
+  top.addColorStop(0, 'rgba(0,0,0,0.55)')
+  top.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = top
+  ctx.fillRect(0, 0, SW, 420)
+
+  const bottom = ctx.createLinearGradient(0, SH - 1000, 0, SH)
+  bottom.addColorStop(0, 'rgba(0,0,0,0)')
+  bottom.addColorStop(0.45, 'rgba(0,0,0,0.72)')
+  bottom.addColorStop(1, 'rgba(0,0,0,0.94)')
+  ctx.fillStyle = bottom
+  ctx.fillRect(0, SH - 1000, SW, 1000)
+
+  // ── Who, and where the numbers are from ──
+  const chip = (label: string, x: number, align: CanvasTextAlign, accent: boolean) => {
+    ctx.textAlign = 'left'
+    ctx.font = `700 30px ${FONT}`
+    // CLAMPED TO THE FRAME. A right-aligned chip is positioned from its own
+    // measured width, and a font that has not finished loading measures wider —
+    // so on a cold first paint the badge ran off the edge of the card. The card
+    // leaves the app; it does not get a second chance to lay itself out.
+    const w = Math.min(ctx.measureText(label).width + 66, SW - 128)
+    const left = Math.max(64, Math.min(align === 'right' ? x - w : x, SW - 64 - w))
+    ctx.fillStyle = accent ? T.acid : 'rgba(12,12,12,0.62)'
+    roundRect(ctx, left, 74, w, 68, 34)
+    ctx.fill()
+    ctx.beginPath()
+    ctx.arc(left + 34, 108, 9, 0, Math.PI * 2)
+    ctx.fillStyle = accent ? T.bg : T.acid
+    ctx.fill()
+    text(ctx, label, left + 54, 119, 30, '700', accent ? T.bg : T.ink, 1.2)
+  }
+  chip(d.handle, 64, 'left', false)
+  chip(d.badge, SW - 64, 'right', true)
+
+  // ── The ride, in the rider's own language ──
+  let y = SH - 470
+  ctx.textAlign = 'left'
+  for (const line of wrap(ctx, d.lead, 62, '700', SW - 128)) {
+    text(ctx, line, 64, y, 62, '700', T.ink, -1.4)
+    y += 74
+  }
+  for (const line of wrap(ctx, d.emphasis, 62, '700', SW - 128)) {
+    text(ctx, line, 64, y, 62, '700', T.acid, -1.4)
+    y += 74
+  }
+
+  // ── The number, and the two that fit beside it ──
+  const baseline = SH - 250
+  ctx.font = `700 128px ${FONT}`
+  const bigW = ctx.measureText(d.bigValue).width
+  text(ctx, d.bigValue, 64, baseline, 128, '700', T.ink, -5)
+  text(ctx, d.bigUnit, 64 + bigW + 14, baseline, 40, '700', T.acid, -0.5)
+
+  let sx = 64 + bigW + 150
+  for (const st of d.stats) {
+    text(ctx, st.v, sx, baseline - 30, 44, '700', T.ink, -1)
+    text(ctx, st.l, sx, baseline, 22, '700', 'rgba(255,255,255,0.55)', 1.6)
+    ctx.font = `700 44px ${FONT}`
+    sx += Math.max(ctx.measureText(st.v).width, 200) + 60
+  }
+
+  // ── The ride's own shape ──
+  if (d.series.length > 0) {
+    const bars = d.series.slice(0, 48)
+    const gap = 6
+    const bw = (SW - 128 - gap * (bars.length - 1)) / bars.length
+    const top0 = SH - 190
+    for (let i = 0; i < bars.length; i++) {
+      const hgt = Math.max(4, Math.min(1, bars[i]) * 74)
+      ctx.fillStyle = bars[i] >= 0.92 ? T.acid : 'rgba(191,255,60,0.42)'
+      roundRect(ctx, 64 + i * (bw + gap), top0 + (74 - hgt), bw, hgt, 3)
+      ctx.fill()
+    }
+  }
+
+  text(ctx, d.footer, 64, SH - 74, 24, '600', 'rgba(255,255,255,0.5)', 0.6)
+  text(ctx, 'w3.ride', SW - 64, SH - 74, 24, '700', T.acid, 0.6, 'right')
+}
+
+/** The rider's photograph with their ride written over it. 1080 × 1920. */
+export async function renderStoryCard(d: StoryData): Promise<{ blob: Blob | null; dataUrl: string }> {
+  const canvas = document.createElement('canvas')
+  canvas.width = SW; canvas.height = SH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return { blob: null, dataUrl: '' }
+
+  let photo: HTMLImageElement | null = null
+  if (d.photo) {
+    // A photo that will not decode must not cost the rider their card.
+    try { photo = await loadImage(d.photo) } catch { photo = null }
+  }
+  paintStoryCard(ctx, d, photo)
+
+  const dataUrl = canvas.toDataURL('image/png')
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+  return { blob, dataUrl }
+}
+

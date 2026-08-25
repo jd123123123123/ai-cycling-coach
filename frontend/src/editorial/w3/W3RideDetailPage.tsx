@@ -423,8 +423,10 @@ export default function W3RideDetailPage() {
       scene={scene}
       onCompose={() => { if (activityId != null && !compose.isPending) compose.mutate(activityId) }}
       onOpenStudio={(kind) => navigate(kind === 'rider' ? '/e/w3-avatar-onboard' : '/e/w3-bike-studio')}
-      onBack={() => navigate(-1)}
-      onShare={() => id && navigate(`/e/w3-share/${id}`)}
+      // In celebrate mode the wrap above already carries both, and a second
+      // pair a few hundred pixels down reads as two screens stacked.
+      onBack={celebrate ? undefined : () => navigate(-1)}
+      onShare={celebrate ? undefined : () => id && navigate(`/e/w3-share/${id}`)}
       onExpandMap={vm.hero.polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
     />
   )
