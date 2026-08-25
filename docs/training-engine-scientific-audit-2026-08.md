@@ -509,7 +509,7 @@ improving athlete this systematically **over-**estimates TSS (rides are scored
 against a too-low threshold), inflating CTL and ATL and biasing the fatigue
 signals toward caution.
 
-### 7.2 Historical TSS is never re-based [CODE]
+### 7.2 Historical TSS is never re-based [CODE] — **FIXED, and the decision is now documented**
 
 `recompute_missing_tss` (`activity_service.py:397`) recomputes only rows where
 TSS is NULL. When FTP is updated, past TSS is left as computed under the old
@@ -525,6 +525,35 @@ Both re-basing policies are defensible (recompute all history against current
 FTP; or store FTP-at-time and normalise at read). Neither is implemented, and
 the choice is not documented. **This is a genuine thesis-level modelling
 decision**, and either choice is defensible if argued.
+
+**RESOLVED, 2026-08-25 — and the history turned out not to be lost, only
+unlabelled.** `normalized_power`, `average_power` and `duration_seconds` are
+already stored per activity, so the scoring threshold can be RECOVERED by
+inverting the arithmetic that produced the stored TSS:
+
+```
+TSS = dur × NP² / (FTP² × 3600) × 100   ⟹   FTP = NP × √(dur / (36 × TSS))
+```
+
+That is exact, not an estimate — it returns the very number that was used, and
+the tests round-trip it through the app's own `calculate_cycling_tss` rather
+than a re-derived formula. `activities.ftp_watts_at_scoring` records the unit
+from now on, and migration `gc4f1a8b6d2e` backfills every power-scored ride. An
+hrTSS ride has no FTP behind its number and stays NULL, as does any row whose
+recovered value falls outside 50–600 W: **NULL means "unit unknown, do not
+convert"**, because a fabricated unit would silently corrupt every re-basing
+that followed.
+
+**The policy chosen, explicitly.** The load model keeps **as-scored** dose, and
+no athlete's CTL moved as a result. A ride at 250 W when the threshold was 250 W
+*was* threshold work; rescoring it later against a higher FTP would
+misrepresent the stress it imposed. Re-basing is what you want for *comparing*
+across time — an analysis, not the load model — so it is now possible on
+purpose: `load_units.rebase_tss` converts between thresholds (TSS scales as
+1/FTP², so only the ratio is needed, and an unlabelled TSS is returned
+unchanged), and `pmc_service.scoring_threshold_drift` reports how far the unit
+moved across a window and how many rides it could not label, so a season chart
+can be qualified instead of quietly comparing two different measurements.
 
 ### 7.3 The ambition multiplier moves a safety-relevant boundary [CODE + METHOD]
 
@@ -823,8 +852,15 @@ in that section).
   duration as fatigue — there is a test showing the two methods disagree in
   *sign* on a realistic training week.
 
-**Still open — coherence.** §6.3 invert the FTP/eFTP relationship so divergence
-flags the load model; §7.1/§7.2 threshold updating and re-basing.
+**Done — §6.3** (divergence now flags the load model instead of hiding CP/W′)
+**and §7.2** (the TSS unit is recorded, recovered for history, and re-basable on
+purpose).
+
+**Still open — coherence.** §7.1: nothing writes `ftp_watts` from the model, so
+the threshold still only changes when the athlete types it. The evidence for
+doing so now exists (`divergence_pct`, `suggested_threshold_watts`, `cp_se_watts`,
+`identifiable`); what remains is a product decision about whether a system may
+change an athlete's own number, and on what strength of evidence.
 
 **Then — measurement (months).** Study 10.2. Do not build §9 before running it:
 if the composite does not beat TSB alone, the state-space model must be
