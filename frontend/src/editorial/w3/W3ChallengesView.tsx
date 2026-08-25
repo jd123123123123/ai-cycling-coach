@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Plus, Share2, Check } from 'lucide-react'
+import { ArrowLeft, MoreHorizontal, Plus, Share2, Check } from 'lucide-react'
 import {
   CHALLENGE_METRICS,
   type RewardChallenge, type ChallengeMetric,
@@ -56,13 +56,15 @@ const TIER_DE: Record<string, string> = { bronze: 'BRONZE', silver: 'SILBER', go
 
 // ── The lead: one challenge, its month, and the way to show it off ──────────
 
-function Lead({ c, period, days, onShare, sharing }: {
+function Lead({ c, period, days, onShare, sharing, onEdit }: {
   c: RewardChallenge; period: string
   /** One number per day of the month. Empty while it is still in flight — the
    *  strip holds its space rather than drawing a month of zeros, which would
    *  read as a month in which nothing happened. */
   days: number[]
   onShare: () => void; sharing: boolean
+  /** Present only for an in-flight challenge the rider wrote themselves. */
+  onEdit?: () => void
 }) {
   const reduce = useReducedMotion()
   const { todayIndex } = monthFacts(period)
@@ -93,6 +95,16 @@ function Lead({ c, period, days, onShare, sharing }: {
             <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>{left} in diesem Monat</span>
           )}
         </div>
+        {onEdit && (
+          <button
+            type="button" onClick={onEdit} aria-label="Challenge bearbeiten"
+            style={{
+              width: 36, height: 36, flex: 'none', borderRadius: 100, border: 0,
+              background: T.surface2, display: 'grid', placeItems: 'center', cursor: 'pointer',
+            }}>
+            <MoreHorizontal size={16} color={T.mid} />
+          </button>
+        )}
         <button
           type="button" onClick={onShare} disabled={sharing}
           aria-label="Challenge teilen"
@@ -224,8 +236,17 @@ export interface W3ChallengesViewProps {
   onJoin: (key: string) => void
   onBoard: (c: { key: string; title: string; unit: string }) => void
   onCreate: () => void
+  /** Reopen the editor on a challenge the rider set themselves. Only a custom
+   *  one that is still running is editable — a finished challenge has already
+   *  paid out, and moving its line afterwards would rewrite a settled reward. */
+  onEdit: (c: RewardChallenge) => void
   onShare: () => void
 }
+
+/** A rider's own challenge, still running — the only kind whose title and
+ *  target can still move. */
+const isEditable = (c: RewardChallenge): boolean =>
+  c.key.startsWith('custom:') && !c.completed
 
 /** The next win leads: least complete among the unfinished, and only when
  *  everything is done does a finished one take the top. A rider opens this
@@ -285,7 +306,8 @@ export default function W3ChallengesView(p: W3ChallengesViewProps) {
             {lead && (
               <div style={{ ...band(26) }}>
                 <Lead c={lead} period={p.period} days={p.leadDays}
-                  onShare={p.onShare} sharing={p.sharing} />
+                  onShare={p.onShare} sharing={p.sharing}
+                  onEdit={isEditable(lead) ? () => p.onEdit(lead) : undefined} />
               </div>
             )}
 
@@ -307,6 +329,8 @@ export default function W3ChallengesView(p: W3ChallengesViewProps) {
                     // "noch 7 Tage" under GESCHAFFT is a countdown to nothing.
                     deadline: c.completed ? null : daysLeftLabel(p.period),
                     participants: c.participants,
+                    editable: isEditable(c),
+                    onEdit: () => p.onEdit(c),
                     onBoard: c.key.startsWith('custom:')
                       ? undefined
                       : () => p.onBoard({ key: c.key, title: c.title, unit: UNIT[c.metric] ?? '' }),

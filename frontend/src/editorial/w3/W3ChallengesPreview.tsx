@@ -37,6 +37,10 @@ const ACTIVE: RewardChallenge[] = [
       detail: '600 Kilometer, bevor der Monat um ist.' }),
   c({ key: 'show_up_20', title: '20× auftauchen', metric: 'active_days',
       target: 20, value: 14, pct: 70, tier: 'silver', participants: 128 }),
+  // A rider's own challenge, still running — the one state that carries the
+  // edit control, so the preview has to hold it or nobody ever looks at it.
+  c({ key: 'custom:9', title: 'Vier Sonnenaufgänge', metric: 'rides',
+      target: 4, value: 2, pct: 50, tier: 'bronze', reward_rc: 300, custom: true }),
   c({ key: 'custom:7', title: 'Jeden Dienstag Berge', metric: 'rides',
       target: 4, value: 4, pct: 100, tier: 'bronze', reward_rc: 300,
       completed: true, awarded_rc: 300, custom: true }),
@@ -89,6 +93,7 @@ export default function W3ChallengesPreview() {
         setBoard(b)
       }}
       onCreate={() => {}}
+      onEdit={() => {}}
       onShare={() => {}} />
 
     {board && (

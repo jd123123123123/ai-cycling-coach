@@ -5,7 +5,8 @@ import {
   useRewardChallenges, useJoinChallenge, useChallengeDays,
 } from '../../hooks/useRewardChallenges'
 import {
-  CHALLENGE_METRICS, fetchChallengeDays, type ChallengeMetric,
+  CHALLENGE_METRICS, fetchChallengeDays,
+  type ChallengeMetric, type RewardChallenge,
 } from '../../api/rewardChallenges'
 import { useAuth } from '../../contexts/AuthContext'
 import { monthFacts } from './w3challengeMonth'
@@ -40,7 +41,12 @@ export default function W3ChallengesPage() {
 
   const [joining, setJoining] = useState<string | null>(null)
   const [board, setBoard] = useState<{ key: string; title: string; unit: string } | null>(null)
-  const [editor, setEditor] = useState(false)
+  // `false` = closed, `true` = create, a challenge = edit that one. The edit
+  // branch is why `W3ChallengeEditor` takes an `existing` at all: the Wins
+  // screen used to own it, and when that screen dropped its challenge section
+  // the only way to change or delete a challenge you had set yourself went
+  // with it.
+  const [editor, setEditor] = useState<boolean | RewardChallenge>(false)
   const [poster, setPoster] = useState<string | null>(null)
   const [sharing, setSharing] = useState(false)
 
@@ -109,6 +115,7 @@ export default function W3ChallengesPage() {
         }}
         onBoard={setBoard}
         onCreate={() => setEditor(true)}
+        onEdit={setEditor}
         onShare={share} />
 
       <AnimatePresence>
@@ -118,7 +125,11 @@ export default function W3ChallengesPage() {
         )}
       </AnimatePresence>
 
-      {editor && <W3ChallengeEditor onClose={() => setEditor(false)} />}
+      {editor && (
+        <W3ChallengeEditor
+          existing={typeof editor === 'object' ? editor : null}
+          onClose={() => setEditor(false)} />
+      )}
 
       {/* The poster, once, so the rider sees what left the app. Tapping it away
           is the only control it needs — the share sheet already happened. */}
