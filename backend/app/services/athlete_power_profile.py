@@ -182,14 +182,31 @@ def reconcile_threshold(
     ftp = float(ftp_watts) if ftp_watts else None
     eftp = float(eftp_watts) if eftp_watts else None
     if ftp and ftp > 0:
+        divergence = (eftp - ftp) / ftp if eftp is not None else None
         model_valid = (
-            eftp is not None
-            and abs(eftp - ftp) / ftp <= FTP_MODEL_AGREEMENT_TOLERANCE
+            divergence is not None
+            and abs(divergence) <= FTP_MODEL_AGREEMENT_TOLERANCE
         )
         return {
             "threshold_watts": round(ftp),
             "threshold_source": "manual",
             "model_valid": model_valid,
+            # ── THE DISAGREEMENT IS A FINDING, NOT A NUISANCE ──────────────
+            # `model_valid=False` was consumed as "hide CP/W′". Consider what
+            # that meant: the model had been fitted to the athlete's OWN maximal
+            # efforts and concluded their threshold was 20% away from a number
+            # they typed months ago — while every TSS, every zone, every CTL
+            # value and every prescribed interval is scaled by that typed
+            # number. The system detected the error in its own input and
+            # responded by hiding the evidence of it.
+            #
+            # A large, persistent CP-vs-FTP divergence is the single most
+            # valuable diagnostic this system produces about itself. These
+            # fields say so out loud; `model_valid` is kept only so existing
+            # callers do not change behaviour underneath this release.
+            "divergence_pct": round(divergence * 100.0, 1) if divergence is not None else None,
+            "load_model_warning": bool(divergence is not None and abs(divergence) > FTP_MODEL_AGREEMENT_TOLERANCE),
+            "suggested_threshold_watts": round(eftp) if eftp is not None else None,
         }
     if eftp and eftp > 0:
         return {

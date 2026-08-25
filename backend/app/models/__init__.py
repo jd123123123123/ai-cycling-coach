@@ -20,6 +20,7 @@ from app.models.crew_challenge import CrewChallenge  # noqa: F401
 from app.models.crew_event import CrewEvent, CrewEventAttendee  # noqa: F401
 from app.models.crew_social import CrewMessage, CrewReaction  # noqa: F401
 from app.models.activity_stream import ActivityStream  # noqa: F401
+from app.models.engine_decision import EngineDecision  # noqa: F401
 from app.models.plan_adaptation import PlanAdaptation  # noqa: F401
 from app.models.ride_feedback import RideFeedback  # noqa: F401
 from app.models.custom_workout import CustomWorkout  # noqa: F401
@@ -41,7 +42,7 @@ __all__ = [
     "User", "AthleteProfile", "ConsentRecord", "Activity", "GarminCredential",
     "WahooCredential", "CorosCredential",
     "DailyMetric", "PlannedWorkout", "DailyMetricSample", "CoachBrief",
-    "PlanAdaptation",
+    "EngineDecision", "PlanAdaptation",
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
     "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge",
     "CrewEvent", "CrewEventAttendee", "CrewMessage", "CrewReaction", "ActivityStream",

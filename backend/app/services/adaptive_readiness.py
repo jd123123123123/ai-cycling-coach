@@ -94,6 +94,15 @@ class Directive:
     headline: str
     signals: list[Signal] = field(default_factory=list)
     confidence: str = "moderate"
+    #: WHAT THIS VERDICT WAS MADE FROM. Populated by `build_adaptive_directive`
+    #: (the pure `assess_adaptation` leaves it empty, as it should).
+    #:
+    #: It exists so the decision can be RECORDED without a second round of
+    #: queries — see `decision_log`. The engine's inputs used to be computed,
+    #: rendered and thrown away, which is why no study of its accuracy could
+    #: ever be run retrospectively. Anything read here is evidence, never a
+    #: decision: nothing downstream may branch on it.
+    evidence: dict = field(default_factory=dict)
 
 
 def _de(lang: str) -> bool:
@@ -456,6 +465,22 @@ async def build_adaptive_directive(db: AsyncSession, user_id: int, lang: str = "
         load_ramp=load_ramp, lang=lang, ambition=ambition, push_level=push_level,
         hrv_age_days=hrv.age_days,
     )
+    # Carry the inputs out with the verdict, so recording the decision costs no
+    # extra queries. `hrv` is the whole estimate — including `z_mean`, the
+    # variance-correct statistic the band verdict does NOT use — because the
+    # open question is whether the two agree on real athletes.
+    ctl = float(pmc[-1].get("ctl", 0.0)) if pmc else None
+    atl = float(pmc[-1].get("atl", 0.0)) if pmc else None
+    directive.evidence = {
+        "hrv": hrv,
+        "tsb": tsb,
+        "ctl": ctl,
+        "atl": atl,
+        "sleep_score": float(sleep_score) if sleep_score is not None else None,
+        "decoupling_delta": decoupling_delta,
+        "load_ramp": load_ramp,
+        "push_intensity": push_level,
+    }
     return await _apply_day_gates(db, user_id, directive, lang)
 
 

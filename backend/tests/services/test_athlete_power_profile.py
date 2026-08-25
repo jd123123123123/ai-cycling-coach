@@ -125,11 +125,13 @@ class TestRejectUncorroboratedPeaks:
 class TestReconcileThreshold:
     def test_manual_ftp_wins(self):
         rec = reconcile_threshold(240, 250.0)
-        assert rec == {
-            "threshold_watts": 240,
-            "threshold_source": "manual",
-            "model_valid": True,
-        }
+        # The athlete's number is still the displayed threshold; the record now
+        # also carries what the MODEL thinks, so a disagreement is visible
+        # rather than silently suppressed.
+        assert rec["threshold_watts"] == 240
+        assert rec["threshold_source"] == "manual"
+        assert rec["model_valid"] is True
+        assert rec["load_model_warning"] is False
 
     def test_model_suppressed_beyond_10pct_disagreement(self):
         rec = reconcile_threshold(240, 300.0)
@@ -200,3 +202,36 @@ class TestComputeAthletePowerProfile:
         poisoned = await compute_athlete_power_profile(_db_with_curves(corrupt), 1)
         assert abs(poisoned["cp_watts"] - clean["cp_watts"]) < 3.0
         assert poisoned["mmp_curve"][1200] <= 260.0
+
+
+class TestDisagreementIsSurfacedNotHidden:
+    """`model_valid=False` was consumed as "hide CP/W′". The model had been fit
+    to the athlete's own maximal efforts and concluded their threshold was far
+    from the number they typed — while every TSS, zone and CTL value is scaled
+    by that typed number. Hiding the model hid the evidence that the load model
+    was wrong."""
+
+    def test_a_large_divergence_warns_about_the_load_model(self):
+        from app.services.athlete_power_profile import reconcile_threshold
+        r = reconcile_threshold(250, 300.0)   # model says +20%
+        assert r["load_model_warning"] is True
+        assert r["divergence_pct"] == 20.0
+        assert r["suggested_threshold_watts"] == 300
+
+    def test_agreement_raises_no_warning(self):
+        from app.services.athlete_power_profile import reconcile_threshold
+        r = reconcile_threshold(250, 255.0)
+        assert r["load_model_warning"] is False
+
+    def test_the_athletes_number_still_wins_as_the_displayed_threshold(self):
+        # Surfacing the disagreement is not the same as overriding the athlete.
+        from app.services.athlete_power_profile import reconcile_threshold
+        r = reconcile_threshold(250, 300.0)
+        assert r["threshold_watts"] == 250
+        assert r["threshold_source"] == "manual"
+
+    def test_no_model_means_no_claim_either_way(self):
+        from app.services.athlete_power_profile import reconcile_threshold
+        r = reconcile_threshold(250, None)
+        assert r["load_model_warning"] is False
+        assert r["divergence_pct"] is None

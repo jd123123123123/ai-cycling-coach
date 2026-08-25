@@ -877,6 +877,32 @@ async def compute_daily_decision(
             logger.exception("adaptive directive failed inside daily_decision (user_id=%s)", user_id)
             directive = None
 
+    # ── RECORD WHAT THE ENGINE SAID, AND WHAT IT SAW ─────────────────────
+    # The audit's central finding was that no part of this engine has ever been
+    # tested against an outcome — and that study cannot be run on data nobody
+    # kept. Until now the verdict and its inputs were computed, rendered and
+    # discarded. This is best-effort and cannot fail the decision; see
+    # `decision_log.log_decision`.
+    try:
+        from app.services.decision_log import build_record, log_decision
+
+        ev = getattr(directive, "evidence", None) or {}
+        await log_decision(db, build_record(
+            user_id=user_id,
+            day=today,
+            directive=directive,
+            readiness=readiness,
+            hrv=ev.get("hrv"),
+            tsb=ev.get("tsb"),
+            ctl=ev.get("ctl"),
+            atl=ev.get("atl"),
+            sleep_score=ev.get("sleep_score"),
+            decoupling_delta=ev.get("decoupling_delta"),
+            push_intensity=ev.get("push_intensity"),
+        ))
+    except Exception:  # pragma: no cover — instrumentation never breaks a decision
+        logger.exception("decision_log: skipped (user_id=%s)", user_id)
+
     decision = decide(
         today=today,
         status_state=status_state,

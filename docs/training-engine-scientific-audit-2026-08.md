@@ -474,7 +474,7 @@ the discipline `daily_decision.py:357` already applies to the readiness score
 ("the daily decision is the single producer; every surface must see one score").
 Extend that principle one level down.
 
-### 6.3 A model/athlete disagreement suppresses the model [CODE — certain]
+### 6.3 A model/athlete disagreement suppresses the model [CODE — certain] — **FIXED (backend)**
 
 `athlete_power_profile.reconcile_threshold` (line 155): manual FTP always wins;
 when the model's eFTP disagrees by more than 10%, `model_valid` goes False and
@@ -540,7 +540,7 @@ system's output is not a function of the athlete's state alone, and any
 evaluation must stratify on `push_intensity` or it will confound preference
 with response.
 
-### 7.4 The team knows how to validate — just not here [CODE]
+### 7.4 The team knows how to validate — just not here [CODE] — **INSTRUMENTED**
 
 `tests/services/rehearsal/test_verdict_vs_actual.py` and
 `test_band_calibration.py` exist: the route-rehearsal subsystem is tested by
@@ -829,6 +829,22 @@ flags the load model; §7.1/§7.2 threshold updating and re-basing.
 **Then — measurement (months).** Study 10.2. Do not build §9 before running it:
 if the composite does not beat TSB alone, the state-space model must be
 justified on different grounds, and you need to know that first.
+
+**The instrument now exists (2026-08-25).** `engine_decisions` records one row
+per athlete-day: the directive, the ceiling, the volume modifier, the readiness
+score and tier, and — in a JSONB `evidence` blob — the full HRV estimate
+(including `z_mean`, which no decision uses), the load state, sleep, the matched
+decoupling delta, the readiness `coverage`, and the evidence tier of every
+signal the engine cited. `engine_version` is stamped at write time so a cohort
+can never silently mix decision rules, and `push_intensity` is first-class
+because §7.3 means a study that does not stratify on it confounds preference
+with response.
+
+This closes the gap that made §10.2 impossible rather than merely unstarted: the
+verdict and its inputs were previously computed, rendered and discarded, so
+there was nothing to analyse retrospectively no matter how long the product ran.
+The outcome side needs no new storage — activities are already recorded, so the
+next-day execution endpoint is a join. From the first deploy, the clock starts.
 
 **Then — architecture.** §9.1–9.4, with §7.2's re-basing decision made and
 documented as part of it.
