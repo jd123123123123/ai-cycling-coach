@@ -78,6 +78,66 @@ export interface W3WrappedVm {
  *  number, short enough that the deck keeps moving — Wrapped runs about five. */
 const SLIDE_MS = 5200
 
+/**
+ * EVERY SLIDE IS ITS OWN POSTER.
+ *
+ * The first build of this deck drew type on the app's near-black and it was
+ * dead on the screen — correct, honest, and boring, which for a thing whose
+ * entire purpose is to be screenshotted is the same as broken. Wrapped's visual
+ * argument is not decoration: each card is a SATURATED FIELD, they alternate
+ * light-on-dark with dark-on-light, and no two in a row look alike. That
+ * variety is what makes a deck feel like an event instead of a report.
+ *
+ * The colours are the w3:ride art direction, which was never near-black — the
+ * Cycl:R series is hot violet, cobalt, acid and orange on vivid grounds. Every
+ * value below is a token, so `isolation.test` still holds: this is the app's
+ * own palette turned up, not a second palette smuggled in.
+ *
+ * `ink` flips with the ground. A slide is only legible if the type was chosen
+ * for the field it sits on, and half of these fields are bright.
+ */
+interface Scene { ground: string; ink: string; accent: string; orb: string }
+
+const SCENES: Record<string, Scene> = {
+  // Night, opening. Violet bloom on black — anticipation, nothing stated yet.
+  open: {
+    ground: `linear-gradient(165deg, ${T.evening}59, ${T.bg} 62%)`,
+    ink: T.ink, accent: T.acid, orb: T.evening,
+  },
+  // The loud one. Acid field, black type — the slide people screenshot.
+  km: {
+    ground: `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 55%, ${T.acidDeep})`,
+    ink: T.bg, accent: T.bg, orb: T.acidHi,
+  },
+  // Deep violet, white type. The counterweight to the acid slide before it.
+  saddle: {
+    ground: `linear-gradient(200deg, ${T.evening}, ${T.nightLo} 78%)`,
+    ink: T.ink, accent: T.lilac, orb: T.evening,
+  },
+  // Heat. Peak power gets the only warm field in the deck.
+  peak: {
+    ground: `linear-gradient(150deg, ${T.warn}, ${T.bad} 72%)`,
+    ink: T.bg, accent: T.bg, orb: T.warn,
+  },
+  // Cobalt, for the named ride — the broadsheet slide.
+  best: {
+    ground: `linear-gradient(185deg, ${T.cool}, ${T.nightLo} 80%)`,
+    ink: T.ink, accent: T.acid, orb: T.cool,
+  },
+  // Green: the plan kept, or not.
+  plan: {
+    ground: `linear-gradient(165deg, ${T.training}, ${T.nightLo} 76%)`,
+    ink: T.ink, accent: T.acid, orb: T.training,
+  },
+  // The poster. Acid over violet — both accents, once, at the end.
+  finale: {
+    ground: `linear-gradient(200deg, ${T.evening} 8%, ${T.bg} 52%, ${T.acidDeep})`,
+    ink: T.ink, accent: T.acid, orb: T.acid,
+  },
+}
+
+const sceneFor = (key: string): Scene => SCENES[key] ?? SCENES.open
+
 function Bars({ series, tint, reduce }: { series: number[]; tint: string; reduce: boolean | null }) {
   if (series.length === 0) return null
   const peak = Math.max(...series, 0.0001)
@@ -98,17 +158,31 @@ function Bars({ series, tint, reduce }: { series: number[]; tint: string; reduce
   )
 }
 
-function Slide({ s, tint, reduce }: { s: W3WrappedSlide; tint: string; reduce: boolean | null }) {
+/** The display size that keeps a figure and its unit inside a 390 card. */
+function figureSize(value: string): number {
+  const glyphs = value.length
+  if (glyphs <= 3) return 132
+  if (glyphs === 4) return 116
+  if (glyphs === 5) return 96
+  return 82
+}
+
+function Slide({ s, sc, reduce }: { s: W3WrappedSlide; sc: Scene; reduce: boolean | null }) {
   const rise = reduce ? {} : { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 } }
 
   return (
     <div style={{
+      // CENTRED, NOT BOTTOM-STACKED. Every slide sat on the floor of the frame
+      // with two-thirds of a saturated field empty above it — which reads as a
+      // caption on a colour swatch rather than as a poster. Wrapped's cards put
+      // their type where the eye already is and let the field run past it on
+      // both sides.
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-      justifyContent: s.kind === 'open' ? 'center' : 'flex-end',
-      gap: 18, padding: '0 26px 40px',
+      justifyContent: 'center',
+      gap: 16, padding: '0 26px 20px',
     }}>
       <motion.span {...rise} transition={{ duration: 0.5, ease: EASE }}
-        style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.6, color: tint }}>
+        style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.6, color: sc.accent, opacity: 0.85 }}>
         {s.eyebrow.toUpperCase()}
       </motion.span>
 
@@ -116,14 +190,21 @@ function Slide({ s, tint, reduce }: { s: W3WrappedSlide; tint: string; reduce: b
           that range is for — one number a week, arriving on its own slide. */}
       {s.value && (
         <motion.div {...rise} transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
-          style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, maxWidth: '100%' }}>
           <span style={{
-            fontSize: s.kind === 'figure' ? 104 : 68, fontWeight: 600,
-            letterSpacing: s.kind === 'figure' ? -5 : -3, lineHeight: 0.86,
-            color: T.ink, ...TNUM,
+            // BIG, BUT INSIDE THE FRAME. 124 is the size a number wants to be
+            // before it stops reading as a statistic and starts being the
+            // picture — and at five or six glyphs it pushed its own unit off
+            // the right edge of a 390 card. The figure steps down as it gets
+            // longer so "214,6 km" and "9" both fill the width instead of one
+            // of them overflowing it.
+            fontSize: s.kind === 'figure' ? figureSize(s.value ?? '') : 74,
+            fontWeight: 600,
+            letterSpacing: s.kind === 'figure' ? -6 : -3.2, lineHeight: 0.84,
+            color: sc.ink, ...TNUM,
           }}>{s.value}</span>
           {s.unit && (
-            <span style={{ fontSize: s.kind === 'figure' ? 30 : 22, fontWeight: 600, color: tint }}>
+            <span style={{ fontSize: s.kind === 'figure' ? 30 : 22, fontWeight: 600, color: sc.accent }}>
               {s.unit}
             </span>
           )}
@@ -135,22 +216,22 @@ function Slide({ s, tint, reduce }: { s: W3WrappedSlide; tint: string; reduce: b
           style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           {/* Last week is the only fair opponent, so it is drawn as the track
               and this week as the fill. The gap IS the story. */}
-          <div style={{ height: 12, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
+          <div style={{ height: 12, borderRadius: 100, background: `${sc.ink}1F`, overflow: 'hidden' }}>
             <motion.div
               initial={reduce ? false : { width: 0 }}
               animate={{ width: `${Math.round(Math.max(0, Math.min(1.4, s.versus.frac)) / 1.4 * 100)}%` }}
               transition={{ duration: 0.9, ease: EASE, delay: 0.2 }}
-              style={{ height: '100%', borderRadius: 100, background: tint }} />
+              style={{ height: '100%', borderRadius: 100, background: sc.ink }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: tint, ...TNUM }}>{s.versus.thisWeek}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, ...TNUM }}>{s.versus.lastWeek}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: sc.ink, ...TNUM }}>{s.versus.thisWeek}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: sc.ink, opacity: 0.55, ...TNUM }}>{s.versus.lastWeek}</span>
           </div>
         </motion.div>
       )}
 
       {s.series && s.series.length > 0 && (
-        <Bars series={s.series} tint={tint} reduce={reduce} />
+        <Bars series={s.series} tint={sc.ink} reduce={reduce} />
       )}
 
       {/* The sentence, set solid at the w3:ride heading ratio. */}
@@ -158,19 +239,19 @@ function Slide({ s, tint, reduce }: { s: W3WrappedSlide; tint: string; reduce: b
         style={{ display: 'flex', flexDirection: 'column' }}>
         <span style={{
           fontSize: s.kind === 'broadsheet' ? 44 : 30, fontWeight: 600,
-          letterSpacing: s.kind === 'broadsheet' ? -1.8 : -1.1, lineHeight: 1.06, color: T.ink,
+          letterSpacing: s.kind === 'broadsheet' ? -1.8 : -1.1, lineHeight: 1.06, color: sc.ink,
         }}>{s.lead}</span>
         {s.accent && (
           <span style={{
             fontSize: s.kind === 'broadsheet' ? 44 : 30, fontWeight: 600,
-            letterSpacing: s.kind === 'broadsheet' ? -1.8 : -1.1, lineHeight: 1.06, color: tint,
+            letterSpacing: s.kind === 'broadsheet' ? -1.8 : -1.1, lineHeight: 1.06, color: sc.accent,
           }}>{s.accent}</span>
         )}
       </motion.div>
 
       {s.foot && (
         <motion.span {...rise} transition={{ duration: 0.6, ease: EASE, delay: 0.22 }}
-          style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>
+          style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: sc.ink, opacity: 0.62 }}>
           {s.foot}
         </motion.span>
       )}
@@ -222,9 +303,8 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
     }
   }, [i, held, last, go, elapsedMs])
 
-  // The accent rotates by slide so the deck has movement without a second
-  // palette: acid for the volume slides, violet for the ones about effort.
-  const tint = slide.kind === 'effort' || slide.kind === 'compare' ? T.evening : T.acid
+  // Each slide brings its own field, ink and accent — see `SCENES`.
+  const sc = sceneFor(slide.key)
 
   return (
     <div className="w3-root">
@@ -232,43 +312,57 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
         fontFamily: FONT, background: T.bg, minHeight: '100dvh',
         display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden',
       }}>
-        {/* The slide's own light. One bloom, tinted by the slide. */}
-        <div aria-hidden style={{
-          position: 'absolute', left: '50%', top: '18%', width: 520, height: 520,
-          transform: 'translateX(-50%)', borderRadius: '50%', pointerEvents: 'none',
-          background: `radial-gradient(circle, ${tint}22, transparent 62%)`,
-          transition: 'background 600ms ease',
-        }} />
+        {/* THE FIELD. Full bleed, and it changes with every slide — this is the
+            difference between a deck and a report. Cross-faded rather than cut
+            so the colour arrives as a mood change, not a flash. */}
+        <motion.div aria-hidden key={slide.key}
+          initial={reduce ? false : { opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.55, ease: EASE }}
+          style={{ position: 'absolute', inset: 0, background: sc.ground, pointerEvents: 'none' }} />
+
+        {/* One soft orb, off-centre, in the slide's own colour. Wrapped's cards
+            are never flat fills — there is always a shape behind the type. */}
+        <motion.div aria-hidden key={`${slide.key}-orb`}
+          initial={reduce ? false : { opacity: 0, scale: 0.82 }}
+          animate={{ opacity: 0.5, scale: 1 }}
+          transition={{ duration: 0.9, ease: EASE }}
+          style={{
+            position: 'absolute', left: '-18%', top: '14%', width: 460, height: 460,
+            borderRadius: '50%', pointerEvents: 'none',
+            background: `radial-gradient(circle, ${sc.orb}, transparent 66%)`,
+            filter: 'blur(18px)',
+          }} />
 
         {/* Progress — one bar per slide, the one Wrapped taught everybody. */}
         <div style={{ display: 'flex', gap: 4, padding: '14px 20px 0', position: 'relative' }}>
           {vm.slides.map((s, idx) => (
-            <div key={s.key} style={{ flex: 1, height: 2.5, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
+            <div key={s.key} style={{ flex: 1, height: 2.5, borderRadius: 100, background: `${sc.ink}2E`, overflow: 'hidden' }}>
               <motion.div
                 initial={false}
                 animate={{ width: idx < i ? '100%' : idx === i ? '100%' : '0%' }}
                 transition={idx === i && !held
                   ? { duration: Math.max(0, SLIDE_MS - elapsedMs) / 1000, ease: 'linear' }
                   : { duration: 0.2 }}
-                style={{ height: '100%', background: T.ink, borderRadius: 100 }} />
+                style={{ height: '100%', background: sc.ink, borderRadius: 100 }} />
             </div>
           ))}
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px 0', position: 'relative' }}>
-          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.4, color: T.quiet }}>
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.4, color: sc.ink, opacity: 0.6 }}>
             {vm.weekLabel.toUpperCase()}
           </span>
           <button onClick={onClose} aria-label="Schließen"
             style={{ width: 34, height: 34, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-            <X size={18} color={T.mid} />
+            <X size={18} color={sc.ink} />
           </button>
         </div>
 
         {/* Tap zones. Left third goes back, the rest goes forward — the
             convention every story UI shares, so nobody has to learn it. */}
         <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
-          <Slide s={slide} tint={tint} reduce={reduce} />
+          <Slide s={slide} sc={sc} reduce={reduce} />
           <div style={{ position: 'absolute', inset: 0, display: 'flex' }}>
             <button aria-label="Zurück" onClick={() => go(-1)}
               onPointerDown={() => setHeld(true)} onPointerUp={() => setHeld(false)} onPointerLeave={() => setHeld(false)}
@@ -300,7 +394,7 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
 
         {!last && (
           <div style={{ display: 'flex', justifyContent: 'center', paddingBottom: 'calc(18px + env(safe-area-inset-bottom))', position: 'relative' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600, color: T.quiet }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, fontWeight: 600, color: sc.ink, opacity: 0.5 }}>
               Tippen <ChevronRight size={11} />
             </span>
           </div>
