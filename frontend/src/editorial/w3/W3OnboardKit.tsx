@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
-import { Zap, ArrowRight } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
+import RidrMark, { RIDR_LIME } from '../../components/RidrMark'
 import { T, FONT } from './w3tokens'
 
 /**
@@ -9,13 +10,24 @@ import { T, FONT } from './w3tokens'
  * only their own hero + copy. Pure presentational primitives.
  */
 
-/** Top bar: the W3.RIDE wordmark on the left, an optional SKIP on the right. */
+/**
+ * Top bar: the Ridr wordmark on the left, an optional SKIP on the right.
+ *
+ * It read "W3.RIDE" beside a lucide lightning bolt — the internal name of the
+ * design system, and a stock icon standing in for a logo the app owns. This is
+ * the FIRST screen a new rider sees, so it was also the first thing the app
+ * told them it was called, and it was telling them the wrong name.
+ *
+ * The mark is the app's own, in the logo's lime rather than the interface's
+ * acid: `RidrMark` documents that difference, and a wordmark is the one place
+ * the logo's colour outranks the accent.
+ */
 export function W3OnboardTopBar({ onSkip }: { onSkip?: () => void }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 20px 0', height: 40 }}>
       <div style={{ display: 'flex', gap: 7, alignItems: 'center' }}>
-        <Zap size={19} color={T.acid} fill={T.acid} strokeWidth={1.5} />
-        <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 2, color: T.ink }}>W3.RIDE</span>
+        <RidrMark size={19} color={RIDR_LIME} />
+        <span style={{ fontSize: 15, fontWeight: 800, letterSpacing: 2, color: T.ink }}>RIDR</span>
       </div>
       {onSkip && (
         <button
