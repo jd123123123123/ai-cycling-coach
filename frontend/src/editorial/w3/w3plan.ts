@@ -19,9 +19,26 @@ export const DE_MONTHS_SHORT = ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 
 export const DE_WD = ['M', 'D', 'M', 'D', 'F', 'S', 'S'] // Mon→Sun single letters
 export const DE_WD2 = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
 
-/** Local Date from an ISO YYYY-MM-DD (no UTC shift). */
-export function parseISO(d: string): Date {
+/** Local Date from an ISO YYYY-MM-DD (no UTC shift).
+ *
+ * TOTAL ON PURPOSE. This is called from twenty places, several of them inside
+ * components that mount on EVERY `/e/w3-*` screen — the weekly-review gate
+ * among them. It used to do `d.slice(0, 10)` with nothing in front of it, so a
+ * single missing date anywhere in any payload did not blank one card: it threw
+ * through the whole render tree and replaced the entire app with the error
+ * card, on every screen, until that payload changed. A date is precisely the
+ * field a partial, older or half-migrated payload is most likely to be missing,
+ * and the type says `string` only because TypeScript cannot police what the
+ * server actually sent.
+ *
+ * Bad input yields an INVALID Date rather than a plausible wrong one. Callers
+ * that format it get "NaN"-free handling through the existing DASH paths, and
+ * anything that needs to know can ask `Number.isNaN(d.getTime())` — a question
+ * you cannot ask of an exception that already unmounted the page. */
+export function parseISO(d: string | null | undefined): Date {
+  if (typeof d !== 'string' || d === '') return new Date(NaN)
   const [y, m, day] = d.slice(0, 10).split('-').map(Number)
+  if (!Number.isFinite(y)) return new Date(NaN)
   return new Date(y, (m ?? 1) - 1, day ?? 1)
 }
 /** "So, 4. Oktober" */

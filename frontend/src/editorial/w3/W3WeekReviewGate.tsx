@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { recapHasStory } from './useWeekReviewVm'
 import { useWeeklyRecap } from '../../hooks/useWeeklyRecap'
 
 /**
@@ -80,7 +81,10 @@ export default function W3WeekReviewGate() {
     if (firedRef.current || !eligible || !recap) return
 
     // Nothing to review: no ride, and no plan to have missed.
-    const hasStory = recap.totals.sessions > 0 || (recap.planned_tss ?? 0) > 0
+    // One copy of this rule, and it is `recapHasStory` — this gate had its own
+    // inline duplicate, which is how the guarded version and the unguarded one
+    // came to disagree.
+    const hasStory = recapHasStory(recap)
     if (!hasStory) { firedRef.current = true; return }
 
     let seen: string | null = null

@@ -333,7 +333,12 @@ function buildVm(
   // next Monday as part of this week.
   const thisMonday = addDays(new Date(), -((new Date().getDay() + 6) % 7))
   const thisSundayMs = addDays(thisMonday, 6).getTime()
-  const planRows = (week?.days ?? []).filter((d) => parseISO(d.date).getTime() <= thisSundayMs)
+  // A day without a usable date cannot be placed on the week, so it is dropped
+  // rather than allowed to poison the row it lands in.
+  const planRows = (week?.days ?? []).filter((d) => {
+    const t = parseISO(d.date).getTime()
+    return Number.isFinite(t) && t <= thisSundayMs
+  })
   const planDays: W3ReviewPlanDay[] = planRows.map((d) => {
     const dt = parseISO(d.date)
     const rest = d.category === 'rest'
@@ -378,7 +383,9 @@ function isoWeek(d: Date): number {
  *  popup - an empty celebration is worse than silence. */
 export function recapHasStory(recap: WeeklyRecap | undefined): boolean {
   if (!recap) return false
-  return recap.totals.sessions > 0 || (recap.planned_tss ?? 0) > 0
+  // `totals` guarded too: this decides whether a GLOBAL gate fires, so a recap
+  // that arrives without it must mean "no story", never an exception.
+  return (recap.totals?.sessions ?? 0) > 0 || (recap.planned_tss ?? 0) > 0
 }
 
 /** The ONE read of the weekly story. Fetches the five sources, builds the vm. */
