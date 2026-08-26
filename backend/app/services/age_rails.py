@@ -55,7 +55,14 @@ class AgeRails:
 
 #: Under this age nothing is restricted — these are the general-athlete rules
 #: the generator already used, expressed here so there is one source for them.
-_DEFAULT = AgeRails(max_hard_per_week=3, min_recovery_days=1, ramp_cap_pct=0.08, note=None)
+#: `min_recovery_days=0` is deliberate and load-bearing: the spacing check is
+#: `gap <= min_recovery_days`, and two distinct days are always at least one
+#: apart, so zero means the rule never fires. The general athlete must come out
+#: of this module with EXACTLY the week they had before it existed. Setting it
+#: to 1 here — as the first draft did — quietly banned back-to-back hard days
+#: for every rider in the app and broke four dual-sport tests that depend on the
+#: bike week's hard-day pattern. Restrictions start at 50, not at birth.
+_DEFAULT = AgeRails(max_hard_per_week=3, min_recovery_days=0, ramp_cap_pct=0.08, note=None)
 
 
 def age_years(date_of_birth: str | None, today: date | None = None) -> int | None:

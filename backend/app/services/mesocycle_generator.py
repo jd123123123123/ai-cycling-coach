@@ -916,6 +916,15 @@ def build_week_drafts(
     # Per-day plan entries: dict with date/session_type/template/flags.
     plan: list[dict] = []
 
+    # How many hard days this rider's age allows, and how far apart. Read once
+    # per week rather than per day; an athlete with no birth date on file gets
+    # the general-athlete rails, never the cautious ones.
+    from app.services.age_rails import rails_for_profile
+
+    _age_rails = rails_for_profile(getattr(athlete, "date_of_birth", None))
+    hard_placed = 0
+    last_hard_dow: int | None = None
+
     for dow in range(7):  # 0=Mon, 6=Sun
         day_date = week_start + timedelta(days=dow)
 
@@ -1018,6 +1027,41 @@ def build_week_drafts(
         # swap roles with), it becomes endurance instead.
         if dow in blackout_dows and session_type in _HARD_TYPES:
             session_type = "endurance"
+
+        # ── AGE RAILS: HOW OFTEN, AND HOW FAR APART ────────────────────────
+        # The same downgrade the blackout rule uses, for the same reason: the
+        # week is built one day at a time, so the only way to hold a weekly
+        # invariant is to check it as each day is placed.
+        #
+        # Recovery from high-intensity work takes longer with age — it is the
+        # best-established age effect in the literature, and it is about the
+        # SPACING of hard days, not their existence. A rider always keeps
+        # `max_hard_per_week` of them; what changes is that a 25-year-old may
+        # get three and an 85-year-old gets one, with three days around it.
+        #
+        # Intensity is never removed entirely: `age_rails` guarantees at least
+        # one hard session at every age, and a test asserts it from 25 to 95.
+        #
+        # KNOWN LIMIT — IT REDUCES, IT DOES NOT REDISTRIBUTE. The week is built
+        # Mon→Sun in one pass, so a hard day that falls too close to the
+        # previous one is downgraded where it stands rather than moved to a day
+        # that would satisfy the spacing. A 65-year-old whose rails allow two
+        # hard days two apart therefore gets ONE when the generator's natural
+        # candidates are Tue and Thu — Tue and Fri would have honoured both
+        # rules. That is under-prescribing, not over-prescribing, so it is the
+        # safe direction to be wrong in; relocating sessions needs a second
+        # pass over the placed week and is the next piece of this.
+        if session_type in _HARD_TYPES:
+            too_many = hard_placed >= _age_rails.max_hard_per_week
+            too_soon = (
+                last_hard_dow is not None
+                and (dow - last_hard_dow) <= _age_rails.min_recovery_days
+            )
+            if too_many or too_soon:
+                session_type = "endurance"
+            else:
+                hard_placed += 1
+                last_hard_dow = dow
 
         available_min = base_available_min
         # For the long ride or key sessions: use a longer window

@@ -110,3 +110,83 @@ class TestTheRailsActuallyReachThePlan:
             ctl=60.0, phase="build", block_position="accumulation", weekly_hours=8.0,
         )
         assert self._ramp(rails_for_profile(None).ramp_cap_pct) == default
+
+
+class TestTheRailsShapeARealWeek:
+    """Not "does the rule compute" but "does a built week obey it".
+
+    `build_week_drafts` places one day at a time, so a weekly invariant only
+    holds if it is checked as each day lands. These drive the real builder and
+    read the field it actually emits — `template_id`. An earlier version of this
+    test read `session_type`, which drafts do not carry, so it saw zero hard
+    days everywhere and would have passed against a completely broken rail.
+    """
+
+    #: Hard work, by the prefix the real templates use: threshold, VO₂, sweet
+    #: spot, tempo. Everything else on a draft is z2_* or rest_day.
+    HARD_PREFIXES = ("thr_", "vo2_", "ss_", "tempo_")
+
+    @classmethod
+    def _hard_days(cls, dob):
+        from datetime import date
+        from types import SimpleNamespace
+        from app.services.mesocycle_generator import build_week_drafts
+
+        athlete = SimpleNamespace(
+            id=1, user_id=1, ftp_watts=250, primary_sport="cycling",
+            target_event_date=None, target_event_type=None,
+            weekly_hours_available=10.0, secondary_sports=[],
+            date_of_birth=dob,
+        )
+        drafts = build_week_drafts(
+            athlete=athlete, week_start=date(2026, 9, 7), phase="build2",
+            weekly_tss_target_val=450, block_position="accumulation", ftp_w=250,
+        )
+        return [
+            i for i, d in enumerate(drafts)
+            if str(getattr(d, "template_id", "")).startswith(cls.HARD_PREFIXES)
+        ]
+
+    def test_the_fixture_produces_hard_days_at_all(self):
+        # Guard: without this the assertions below pass vacuously on zero.
+        assert len(self._hard_days(None)) >= 2
+
+    def test_an_85_year_old_gets_at_most_one_hard_day(self):
+        assert len(self._hard_days("1941-01-01")) <= 1
+
+    def test_but_still_gets_one(self):
+        # Spacing, never removal — a week with no intensity would be the plan
+        # quietly giving up on an older rider.
+        assert len(self._hard_days("1941-01-01")) >= 1
+
+    def test_a_60_something_keeps_two_days_at_least_two_apart(self):
+        hard = self._hard_days("1961-01-01")
+        assert len(hard) <= 2
+        gaps = [b - a for a, b in zip(hard, hard[1:])]
+        assert all(g > 2 for g in gaps), f"hard days too close together: {hard}"
+
+    def test_a_rider_with_no_birthday_keeps_the_full_week(self):
+        assert len(self._hard_days(None)) > len(self._hard_days("1941-01-01"))
+
+
+class TestTheDefaultIsATrueNoOp:
+    """The regression this module caused on its first run.
+
+    The spacing check is `gap <= min_recovery_days`. The first draft gave the
+    DEFAULT rails `min_recovery_days=1`, and since two distinct days are always
+    at least one apart, that silently banned back-to-back hard days for EVERY
+    rider in the app — not just older ones. Four dual-sport tests caught it,
+    because the quality-run placer reads the bike week's hard-day pattern.
+    """
+
+    def test_a_general_athlete_has_no_spacing_rule_at_all(self):
+        assert rails_for_age(30).min_recovery_days == 0
+        assert rails_for_age(None).min_recovery_days == 0
+
+    def test_back_to_back_hard_days_stay_legal_by_default(self):
+        # gap of 1 (Tue then Wed) must not trip `gap <= min_recovery_days`
+        assert 1 > rails_for_age(None).min_recovery_days
+
+    def test_restrictions_begin_at_fifty_not_at_birth(self):
+        assert rails_for_age(49) == rails_for_age(None)
+        assert rails_for_age(50) != rails_for_age(None)
