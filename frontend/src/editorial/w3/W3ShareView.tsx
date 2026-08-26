@@ -6,6 +6,7 @@ import { TNUM } from './w3surfaces'
 import type { StoryLayout } from './w3share'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
+import W3LaufbandBands from './W3LaufbandBands'
 import type { ShareAngle } from './w3share'
 import { fileToDownscaledDataUrl } from './w3photo'
 import { MAX_VALUES, type ValueId } from './w3shareValues'
@@ -41,6 +42,51 @@ export interface W3ShareVm {
   accent?: string
   /** What the video path is doing right now, in the rider's language. */
   videoNote?: string | null
+  /** The two Laufband strings, built by `laufbandStrings` so the belt that
+   *  scrolls here and the one burned into the PNG are the same tape. */
+  laufband?: { figures: string; verdicts: string }
+  /** What the rider has typed over the card's own words. Absent fields mean
+   *  "whatever the ride said"; the placeholder shows that value. */
+  edits?: Partial<Record<EditField, string>>
+  /** The card's own words, for the placeholders — what each field says when the
+   *  rider has not overridden it. */
+  defaults?: Partial<Record<EditField, string>>
+}
+
+/**
+ * THE FIVE THINGS A RIDER MAY REWRITE.
+ *
+ * Not "edit the card": the numbers are the ride and are not the rider's to
+ * retype — a share sheet that lets you type 300 W over a 240 W ride is a lie
+ * generator, and it is also why nobody trusts a screenshot. What IS theirs is
+ * the LANGUAGE: what the route is called, what the day was, and the sentence
+ * the card makes about it. Those five below, and nothing else.
+ */
+export type EditField = 'routeName' | 'dateline' | 'lead' | 'emphasis' | 'ticker'
+
+/** Which words each layout actually prints — asking a rider to fill in a field
+ *  the format drops is how a settings screen grows. */
+const EDITABLE: Record<StoryLayout, { id: EditField; label: string; hint: string }[]> = {
+  headline: [
+    { id: 'routeName', label: 'Titel', hint: 'Der große Name' },
+    { id: 'dateline', label: 'Zeile darüber', hint: 'Ausfahrt & Datum' },
+    { id: 'ticker', label: 'Laufband', hint: 'Läuft unten schwarz durch' },
+  ],
+  viewfinder: [
+    { id: 'routeName', label: 'Titel', hint: 'Neben dem roten Punkt' },
+    { id: 'dateline', label: 'Zeile unter der Zahl', hint: 'Werte & Datum' },
+  ],
+  effort: [
+    { id: 'dateline', label: 'Kicker', hint: 'Die kleine Zeile oben' },
+    { id: 'lead', label: 'Satz', hint: 'Weiß' },
+    { id: 'emphasis', label: 'Betonung', hint: 'In deiner Farbe' },
+  ],
+  full: [
+    { id: 'lead', label: 'Satz', hint: 'Weiß' },
+    { id: 'emphasis', label: 'Betonung', hint: 'In deiner Farbe' },
+  ],
+  silent: [],
+  trace: [{ id: 'routeName', label: 'Titel', hint: 'Über der Strecke' }],
 }
 export interface W3ShareActions {
   /** The rider's own photograph, already downscaled to a data URL. Null clears
@@ -53,6 +99,9 @@ export interface W3ShareActions {
   onPickVideo?: (file: File) => void
   /** Which of the four story formats leaves the app. See `StoryLayout`. */
   onPickFormat?: (id: StoryLayout) => void
+  /** The rider rewrote one of the card's words. Empty string clears the
+   *  override and hands the field back to the ride. */
+  onEditText?: (field: EditField, value: string) => void
   onClose?: () => void
   onDownload?: () => void
   onSelectAngle?: (id: ShareAngle) => void
@@ -110,7 +159,7 @@ const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'effort', name: 'Effort', drops: 'Satz oben' },
 ]
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onShare, onSticker, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onEditText, onShare, onSticker, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
   const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
 
@@ -129,9 +178,24 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
         <W3TopBar title="Fahrt teilen" onBack={onClose}
           extra={<button onClick={onDownload} aria-label="Bild speichern" style={iconBtn}><Download size={17} color={T.ink} /></button>} />
 
-        {/* Poster preview (the exact bitmap that gets shared) */}
+        {/* ── THE PREVIEW TILE (pen `C6Xn06`, "Preview · Story A") ──────────
+            9:16, AND THAT IS THE FIX. This box was `1080 / 1720` — the old
+            poster's ratio — while every card it shows is rendered at
+            1080 × 1920. With `objectFit: cover` on top of that, the preview
+            cropped 200px off a story and did it silently: the rider approved a
+            card whose foot they had never seen, and the two Laufband bands, the
+            HUD's bar strip and the Effort-Kurve's readings all live in exactly
+            that missing strip. It is the single reason the app looked least
+            like the drawings.
+
+            The corner and the shadow are the pen's own, scaled from its 196-wide
+            artboard: r14 → 26, and a 30-blur drop at 10 down → 55 at 18. ── */}
         <div style={{ padding: '10px 20px 4px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{ width: '100%', maxWidth: 360, aspectRatio: '1080 / 1720', borderRadius: 26, overflow: 'hidden', background: T.surface, border: `1px solid ${T.stroke}`, position: 'relative' }}>
+          <div style={{
+            width: '100%', maxWidth: 360, aspectRatio: '1080 / 1920', borderRadius: 26,
+            overflow: 'hidden', background: T.surface, border: `1px solid ${T.stroke}`,
+            position: 'relative', boxShadow: '0 18px 55px rgba(0,0,0,0.65)',
+          }}>
             {vm.posterDataUrl
               ? <motion.img key={vm.activeAngle} src={vm.posterDataUrl} alt="Teilbares Bild deiner Fahrt"
                   initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35, ease: EASE }}
@@ -139,8 +203,14 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
               : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>Bild wird erstellt…</span>
                 </div>}
+            {/* The Laufband runs — see `W3LaufbandBands` for why this replaces
+                the painted bands rather than sitting over them. It waits for the
+                bitmap so the belt cannot be moving on an empty tile. */}
+            {(vm.format ?? 'full') === 'headline' && vm.laufband && vm.posterDataUrl && (
+              <W3LaufbandBands figures={vm.laufband.figures} verdicts={vm.laufband.verdicts} accent={vm.accent ?? T.acid} />
+            )}
             {vm.generating && vm.posterDataUrl && (
-              <div style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 100, background: '#000000A0' }}>
+              <div style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 100, background: 'rgba(0,0,0,0.63)' }}>
                 <span style={{ fontSize: 10, fontWeight: 700, color: T.acid }}>rendert…</span>
               </div>
             )}
@@ -157,24 +227,76 @@ export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, on
             landscape behind it. ── */}
         <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WIE DU ES ZEIGST</span>
-          <div style={{ display: 'flex', gap: 8 }}>
+          {/* SIX CHIPS DO NOT FIT IN 390, and dividing the width by six does not
+              make them fit — it clips them: "Schlagzeile" came out as
+              "Schlagzei" and its subline broke over three lines. The row scrolls
+              instead, each chip as wide as its own word, which is also what says
+              there are more formats than the ones on screen. */}
+          <div style={{
+            display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
+            margin: '0 -20px', padding: '0 20px',
+          }}>
             {STORY_FORMATS.map((f) => {
               const on = f.id === (vm.format ?? 'full')
               return (
                 <button key={f.id} type="button" onClick={() => onPickFormat?.(f.id)}
                   style={{
-                    flex: 1, minWidth: 0, padding: '11px 8px 10px', borderRadius: 14,
+                    flex: 'none', padding: '11px 13px 10px', borderRadius: 14,
                     border: `1px solid ${on ? T.acid : 'transparent'}`,
                     background: on ? T.acidDim : T.surface, cursor: 'pointer',
                     fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 3,
                   }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, color: on ? T.acid : T.ink }}>{f.name}</span>
-                  <span style={{ fontSize: 8.5, fontWeight: 600, lineHeight: 1.25, color: T.quiet }}>{f.drops}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap', color: on ? T.acid : T.ink }}>{f.name}</span>
+                  <span style={{ fontSize: 8.5, fontWeight: 600, lineHeight: 1.25, whiteSpace: 'nowrap', color: T.quiet }}>{f.drops}</span>
                 </button>
               )
             })}
           </div>
         </div>
+
+        {/* ── WAS DRAUFSTEHT ───────────────────────────────────────────────
+            THE WORDS ARE THE RIDER'S, THE NUMBERS ARE THE RIDE'S.
+            Every field here is language — the route's name, the dateline, the
+            sentence, the ticker. None of them is a measurement, and that is a
+            rule and not an oversight: a share sheet where you can retype the
+            wattage is a lie generator, and it is the reason a screenshot of a
+            training app persuades nobody.
+
+            Empty gives the field back to the ride rather than printing nothing,
+            so a rider can always undo by clearing — which is the one gesture
+            they will try before looking for a reset. ── */}
+        {EDITABLE[vm.format ?? 'full'].length > 0 && (
+          <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WAS DRAUFSTEHT</span>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {EDITABLE[vm.format ?? 'full'].map((f) => (
+                <label key={f.id} style={{
+                  display: 'flex', flexDirection: 'column', gap: 3,
+                  padding: '9px 14px 10px', borderRadius: 14,
+                  background: T.surface, border: `1px solid ${vm.edits?.[f.id] ? T.acid : T.stroke}`,
+                }}>
+                  <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, color: vm.edits?.[f.id] ? T.acid : T.quiet }}>
+                      {f.label.toUpperCase()}
+                    </span>
+                    <span style={{ fontSize: 9, fontWeight: 600, color: T.quiet }}>{f.hint}</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={vm.edits?.[f.id] ?? ''}
+                    placeholder={vm.defaults?.[f.id] ?? ''}
+                    onChange={(e) => onEditText?.(f.id, e.target.value)}
+                    className="w3-share-edit"
+                    style={{
+                      width: '100%', border: 0, outline: 'none', background: 'transparent',
+                      fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.ink, padding: 0,
+                      ['--w3-ph' as string]: T.quiet,
+                    } as CSSProperties} />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Was du zeigst — angle chips */}
         <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>

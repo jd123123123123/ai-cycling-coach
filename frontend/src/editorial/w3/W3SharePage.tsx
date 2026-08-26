@@ -6,7 +6,7 @@ import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage, useRenderRideScene, useRideScene } from '../../hooks/useGarage'
 import {
-  renderStoryCard, sharePoster, downloadPoster, canShareImage,
+  renderStoryCard, sharePoster, downloadPoster, canShareImage, laufbandStrings,
   type StoryLayout, type StoryData,
   type ShareAngle, type PosterData,
 } from './w3share'
@@ -15,7 +15,7 @@ import {
   canRenderVideo, renderStoryVideo, videoPosterFrame, renderStoryOverlay, MAX_STORY_SECONDS,
 } from './w3share' 
 import { T } from './w3tokens'
-import W3ShareView, { type W3ShareVm, type ShareAngleChip } from './W3ShareView'
+import W3ShareView, { type W3ShareVm, type ShareAngleChip, type EditField } from './W3ShareView'
 
 /**
  * W3 · FAHRT TEILEN, wired to real data. Routes /e/w3-share and /e/w3-share/:id.
@@ -129,6 +129,9 @@ export default function W3SharePage() {
   // templates are the screens now, and keeping a sixth "our own card" option
   // beside them would be the old design surviving as a preference.
   const [format, setFormat] = useState<StoryLayout>('full')
+  // The rider's overrides for the card's WORDS — see `EDITABLE` in the view for
+  // why the numbers are not in here. Keyed per field, cleared by emptying.
+  const [edits, setEdits] = useState<Partial<Record<EditField, string>>>({})
   // What the rider put on the card, in the order they tapped it.
   const [values, setValues] = useState<ValueId[]>(DEFAULT_VALUES)
   const [accent, setAccent] = useState<string>(T.acid)
@@ -383,17 +386,41 @@ export default function W3SharePage() {
     }
   }, [poster, debrief, profile, format, accent, values, ownPhoto, video, activity])
 
+  /**
+   * THE RIDE'S OWN WORDS, AND THEN THE RIDER'S ON TOP.
+   *
+   * Kept as a separate layer rather than folded into `story` so that clearing a
+   * field is a real gesture: an empty override falls back to what the ride
+   * said, which is the undo every rider tries first. Folding the edits into the
+   * memo above would make "" a legitimate value and print a blank headline.
+   */
+  const edited = useMemo<StoryData | null>(() => {
+    if (!story) return story
+    const on = (k: EditField) => {
+      const v = edits[k]
+      return v != null && v.trim() !== '' ? v : undefined
+    }
+    return {
+      ...story,
+      routeName: on('routeName') ?? story.routeName,
+      dateline: on('dateline') ?? story.dateline,
+      lead: on('lead') ?? story.lead,
+      emphasis: on('emphasis') ?? story.emphasis,
+      ticker: on('ticker') ?? story.ticker,
+    }
+  }, [story, edits])
+
   // ── render whichever card is selected whenever the payload changes ──
   useEffect(() => {
-    if (!story) return
+    if (!edited) return
     let alive = true
     setGenerating(true)
-    const job = renderStoryCard(story)
+    const job = renderStoryCard(edited)
     job
       .then((out) => { if (alive) { setPosterDataUrl(out.dataUrl || null); setPosterBlob(out.blob) } })
       .finally(() => { if (alive) setGenerating(false) })
     return () => { alive = false }
-  }, [poster, story])
+  }, [poster, edited])
 
   const caption = useMemo(() => {
     if (!poster) return 'w3.ride'
@@ -409,10 +436,10 @@ export default function W3SharePage() {
    * underneath as the answer if the burn fails or the browser refuses.
    */
   const onShare = useCallback(async () => {
-    if (video && story && canRenderVideo()) {
+    if (video && edited && canRenderVideo()) {
       setBurning(0)
       try {
-        const out = await renderStoryVideo(video.url, story, setBurning)
+        const out = await renderStoryVideo(video.url, edited, setBurning)
         if (out?.blob) {
           await sharePoster(out.blob, caption, 'w3-ride.mp4')
           return
@@ -422,7 +449,7 @@ export default function W3SharePage() {
       }
     }
     void sharePoster(posterBlob, caption)
-  }, [video, story, posterBlob, caption])
+  }, [video, edited, posterBlob, caption])
   /**
    * THE STICKER ROUTE. The overlay alone, transparent, saved to the camera roll
    * — the rider opens their own story in Instagram, adds their photo or video
@@ -434,10 +461,10 @@ export default function W3SharePage() {
    * lands in Instagram as a post, not as a sticker.
    */
   const onSticker = useCallback(async () => {
-    if (!story) return
-    const out = await renderStoryOverlay(story)
+    if (!edited) return
+    const out = await renderStoryOverlay(edited)
     if (out.blob) downloadPoster(out.blob, 'w3-sticker.png')
-  }, [story])
+  }, [edited])
 
   const onDownload = useCallback(() => { if (posterBlob) downloadPoster(posterBlob) }, [posterBlob])
   const onLink = useCallback(async () => { try { if (navigator.clipboard) await navigator.clipboard.writeText(caption) } catch { /* ignore */ } }, [caption])
@@ -466,6 +493,16 @@ export default function W3SharePage() {
       ? VALUES.map((v) => ({ id: v.id, label: v.label, value: v.resolve(debrief, profile?.weight_kg ?? null) }))
           .filter((v): v is { id: ValueId; label: string; value: string } => v.value != null)
       : [],
+    // The belt the preview scrolls is built by the same function the canvas
+    // paints with, so the two cannot drift apart.
+    laufband: edited ? laufbandStrings(edited) : undefined,
+    edits,
+    // The placeholders: what each field says when the rider has not typed over
+    // it. Shown as placeholder rather than as value, so an untouched field is
+    // visibly the ride's word and not something they already edited.
+    defaults: story
+      ? { routeName: story.routeName, dateline: story.dateline, lead: story.lead, emphasis: story.emphasis, ticker: story.ticker }
+      : undefined,
     angles: [
       { id: 'rekord', label: 'Bestleistung', sub: 'Stärkster Push' },
       { id: 'fahrt', label: 'Ganze Fahrt', sub: activity?.title || 'Deine Runde' },
@@ -484,6 +521,7 @@ export default function W3SharePage() {
       onPickAccent={setAccent}
       onPickVideo={pickVideo}
       onPickFormat={setFormat}
+      onEditText={(field, value) => setEdits((prev) => ({ ...prev, [field]: value }))}
       onShare={onShare}
       onSticker={onSticker}
       onCrew={() => navigate('/e/w3-crew')}

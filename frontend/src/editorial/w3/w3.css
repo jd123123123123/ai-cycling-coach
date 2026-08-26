@@ -72,5 +72,35 @@
 
 /* Coach-chat streaming spinner. */
 @keyframes w3-spin { to { transform: rotate(360deg); } }
+
+/* The share card's Laufband (`W3LaufbandBands`). Two copies of the string sit
+   side by side and the pair travels exactly half its own width, so the second
+   copy is where the first was at the moment the loop restarts and the belt
+   never snaps back. `translate3d` keeps it on the compositor — a band that
+   repaints text every frame is the one thing that would make the share sheet
+   feel slower than the card it is previewing. */
+@keyframes w3-laufband-run {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.w3-laufband-run {
+  animation-name: w3-laufband-run;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+@media (prefers-reduced-motion: reduce) { .w3-laufband-run { animation: none; } }
 .w3-spin { animation: w3-spin 0.9s linear infinite; }
 @media (prefers-reduced-motion: reduce) { .w3-spin { animation: none; } }
+
+/* The share sheet's text fields (`W3ShareView`, "WAS DRAUFSTEHT"). An empty
+   field shows the RIDE's own word as its placeholder, so it has to read as a
+   placeholder: at the browser default it sits close enough to the typed colour
+   that a rider cannot tell what they have already changed, which is the one
+   thing the section has to make obvious.
+
+   The colour arrives as `--w3-ph`, set on the element from the token in TS.
+   `::placeholder` cannot be written inline and the W3 palette is not exposed as
+   CSS custom properties, so the alternative would be a hex literal in this file
+   — which is the thing `isolation.test.ts` exists to stop. */
+.w3-share-edit::placeholder { color: var(--w3-ph); font-weight: 600; opacity: 1; }

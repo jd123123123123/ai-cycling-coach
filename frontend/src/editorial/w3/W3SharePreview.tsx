@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { STARTER_BIKE } from './starterBike'
-import { renderStoryCard, canShareImage, type ShareAngle, type PosterData } from './w3share'
-import W3ShareView, { type W3ShareVm } from './W3ShareView'
+import {
+  renderStoryCard, canShareImage, laufbandStrings,
+  type ShareAngle, type PosterData, type StoryData, type StoryLayout,
+} from './w3share'
+import W3ShareView, { type W3ShareVm, type EditField } from './W3ShareView'
 import { T } from './w3tokens'
 
 /** TEMP preview harness — renders W3ShareView with a pen-faithful fixture, no
@@ -76,27 +79,48 @@ export default function W3SharePreview() {
   const [dataUrl, setDataUrl] = useState<string | null>(null)
   const [blob, setBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
+  // The harness drives the REAL controls. It used to pin `format: 'full'` and
+  // pass no `onPickFormat`, which meant the one screen that exists to exercise
+  // this view could not reach five of its six layouts — and the Laufband, whose
+  // whole point is that it moves, was unreachable in the only place it moves.
+  const [format, setFormat] = useState<StoryLayout>('headline')
+  const [edits, setEdits] = useState<Partial<Record<EditField, string>>>({})
+
+  //: The card the harness is currently describing. Held as data rather than
+  //: rebuilt inside the effect so the Laufband strings and the bitmap are
+  //: built from one object.
+  const story = useMemo<StoryData>(() => {
+    const p = build(angle)
+    const on = (k: EditField, fallback: string) => {
+      const v = edits[k]
+      return v != null && v.trim() !== '' ? v : fallback
+    }
+    return {
+      layout: format,
+      handle: p.handle, badge: 'W3 ANALYSE',
+      lead: on('lead', p.sentence.split(' — ')[0] ?? p.sentence),
+      emphasis: on('emphasis', p.sentence.split(' — ').slice(1).join(' — ')),
+      bigValue: p.bigValue, bigUnit: p.bigUnit,
+      stats: [{ v: p.stats[0].v, l: p.stats[0].l }, { v: p.stats[1].v, l: p.stats[1].l }],
+      series: Array.from({ length: 48 }, (_, i) => 0.34 + 0.6 * Math.abs(Math.sin(i / 4.3))),
+      footer: p.footer, photo: null, polyline: p.polyline,
+      routeName: on('routeName', 'Harzrunde'),
+      dateline: on('dateline', p.footer),
+      ticker: on('ticker', p.sentence),
+      readings: [{ v: '29,2 km/h', l: 'Ø Tempo' }, { v: '234', l: 'Ø Leistung' }, { v: '172', l: 'Puls Ø' }],
+    }
+  }, [angle, format, edits])
 
   useEffect(() => {
     let alive = true
     setGenerating(true)
     // The STORY card, not the retired poster — the harness must show the same
     // object the real screen sends, or it is a preview of nothing.
-    const p = build(angle)
-    renderStoryCard({
-      layout: 'full',
-      handle: p.handle, badge: 'W3 ANALYSE',
-      lead: p.sentence.split(' — ')[0] ?? p.sentence,
-      emphasis: p.sentence.split(' — ').slice(1).join(' — '),
-      bigValue: p.bigValue, bigUnit: p.bigUnit,
-      stats: [{ v: p.stats[0].v, l: p.stats[0].l }, { v: p.stats[1].v, l: p.stats[1].l }],
-      series: [], footer: p.footer, photo: null, polyline: p.polyline,
-      routeName: 'Harzrunde', dateline: p.footer,
-    })
+    renderStoryCard(story)
       .then((o) => { if (alive) { setDataUrl(o.dataUrl || null); setBlob(o.blob) } })
       .finally(() => { if (alive) setGenerating(false) })
     return () => { alive = false }
-  }, [angle])
+  }, [story])
 
   const vm: W3ShareVm = {
     posterDataUrl: dataUrl,
@@ -106,7 +130,13 @@ export default function W3SharePreview() {
     canShare: canShareImage(),
     // The four controls the real screen now offers, so the harness exercises
     // them rather than the retired block picker.
-    format: 'full',
+    format,
+    laufband: laufbandStrings(story),
+    edits,
+    defaults: {
+      routeName: 'Harzrunde', dateline: story.footer, lead: story.lead,
+      emphasis: story.emphasis, ticker: story.ticker,
+    },
     accent: T.acid,
     values: ['distance', 'time', 'ascent'],
     availableValues: [
@@ -130,6 +160,8 @@ export default function W3SharePreview() {
       onClose={() => history.back()}
       onDownload={() => { if (blob) { const u = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = u; a.download = 'w3-ride.png'; a.click(); URL.revokeObjectURL(u) } }}
       onSelectAngle={setAngle}
+      onPickFormat={setFormat}
+      onEditText={(field, value) => setEdits((prev) => ({ ...prev, [field]: value }))}
       onShare={() => {}}
       onCrew={() => { location.assign('/e/w3-crew') }}
       onLink={() => {}}

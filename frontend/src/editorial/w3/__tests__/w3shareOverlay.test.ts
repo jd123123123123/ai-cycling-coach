@@ -25,6 +25,13 @@ function recordingCanvas() {
     arc: () => {}, closePath: () => {}, stroke: () => {},
     fill: function () { fills.push({ style: this._fill, rect: null }) },
     save: () => {}, restore: () => {}, clip: () => {}, rect: () => {},
+    // `star()` translates before it draws, and until the Effort-Kurve grew its
+    // brand mark no layout in this sweep reached it — so the stub had never been
+    // asked for these. A missing method here fails as "is not a function" from
+    // inside the painter, which reads like a card bug rather than a stub gap.
+    translate: () => {}, rotate: () => {}, scale: () => {},
+    quadraticCurveTo: () => {}, bezierCurveTo: () => {},
+    set globalAlpha(_v: number) {}, get globalAlpha() { return 1 },
     drawImage: () => {},
     createLinearGradient: () => ({ addColorStop: () => {} }),
     createRadialGradient: () => ({ addColorStop: () => {} }),

@@ -43,9 +43,9 @@ const FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
   { id: 'full', name: 'DIE KARTE', drops: 'sYlFV · C6Xn06 — Satz, Zahl, Werte, Verlauf' },
   { id: 'silent', name: 'OHNE WORTE', drops: 'abH9Z — dieselbe Karte, ohne den Satz' },
   { id: 'trace', name: 'DIE SPUR', drops: 'DJJ0P — Foto, Strecke, drei Werte' },
-  { id: 'headline', name: 'DIE SCHLAGZEILE', drops: 'iXYiI — Titel und Laufband' },
-  { id: 'viewfinder', name: 'DER SUCHER', drops: 'oMRL7 — Telemetrie im Monospace' },
-  { id: 'effort', name: 'DER EFFORT', drops: 'ss70W — Satz oben, vier Werte, Fläche' },
+  { id: 'headline', name: 'M3 · LAUFBAND', drops: 'D1SQI — Titel, zwei laufende Bänder' },
+  { id: 'viewfinder', name: 'M1 · TELEMETRIE-HUD', drops: 'BMzgQ — Raster, Ticks, Monospace' },
+  { id: 'effort', name: 'K3 · EFFORT-KURVE', drops: 'pi5Hm — Satz oben, vier Werte, Fläche' },
 ]
 
 export default function W3StoryPreview() {

@@ -87,6 +87,21 @@ const W = 1080
 const H = 1720
 const FONT = "'Inter Tight', ui-sans-serif, system-ui, sans-serif"
 
+// THE STORY CARDS SET THREE FACES, NOT ONE, and the pen picks per card rather
+// than per element: `D1SQI` (Laufband) is Archivo Narrow throughout because a
+// route name has to run the full column at 138px and a ticker has to fit twice
+// as many characters as it has room for; `pi5Hm` (Effort-Kurve) is Archivo,
+// which is the same family at normal width, because its sentence is the subject
+// and a condensed face would make it look like a headline instead of a verdict;
+// `BMzgQ` (Telemetrie-HUD) is JetBrains Mono end to end because it is pretending
+// to be an instrument. Inter Tight stays the kicker face on all three.
+//
+// All four are already loaded (index.html, one Google Fonts request). A face
+// named here that is NOT in that request would silently fall back and the card
+// would export at the wrong width — that is the only real risk in this list.
+const NARROW = "'Archivo Narrow', 'Inter Tight', sans-serif"
+const ARCHIVO = "Archivo, 'Inter Tight', sans-serif"
+
 function loadImage(src: string, crossOrigin?: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -194,11 +209,16 @@ function drawRoute(
 
 /** Exported for its own test: the spaced branch has alignment logic of its own
  *  and a card that has already left the app cannot re-lay itself out. */
-export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, weight: string, color: string, spacing = 0, align: CanvasTextAlign = 'left') {
-  ctx.font = `${weight} ${size}px ${FONT}`
+export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: number, size: number, weight: string, color: string, spacing = 0, align: CanvasTextAlign = 'left', family = FONT, baseline: CanvasTextBaseline = 'alphabetic') {
+  ctx.font = `${weight} ${size}px ${family}`
   ctx.fillStyle = color
   ctx.textAlign = align
-  ctx.textBaseline = 'alphabetic'
+  // THE PEN GIVES TEXT BOXES, NOT BASELINES. Every `y` in `D1SQI`, `BMzgQ` and
+  // `pi5Hm` is the TOP of a text box, so transcribing those cards against an
+  // alphabetic baseline means adding a guessed ascent to each of forty numbers
+  // — forty chances to be a few pixels out in a different direction. Those
+  // three pass `'top'` and use the pen's own figure.
+  ctx.textBaseline = baseline
   if (spacing === 0) { ctx.fillText(s, x, y); return ctx.measureText(s).width }
 
   // ── LETTER-SPACED, AND IT HAS TO HONOUR `align` ITSELF ──────────────────
@@ -218,8 +238,8 @@ export function text(ctx: CanvasRenderingContext2D, s: string, x: number, y: num
   return spacedWidth
 }
 
-function wrap(ctx: CanvasRenderingContext2D, s: string, size: number, weight: string, maxW: number): string[] {
-  ctx.font = `${weight} ${size}px ${FONT}`
+function wrap(ctx: CanvasRenderingContext2D, s: string, size: number, weight: string, maxW: number, family = FONT): string[] {
+  ctx.font = `${weight} ${size}px ${family}`
   const words = s.split(' ')
   const lines: string[] = []
   let cur = ''
@@ -1026,18 +1046,25 @@ const SH = 1920
 // footer behind "Nachricht senden" — which is exactly what this one did. Every
 // number below is content-inset, not canvas-inset.
 //
-// 250 / 310 are the figures Instagram's own creative guidance uses, and the
-// bottom is larger because the reply bar is taller than the header. Anything
-// that must be READ lives between them.
+// 250 / 370 are the figures the pen's own spec frame carries — `XLPb0`,
+// "W3 · STORY SPEC · Safe Zones (1080×1920)", which labels the two red bands
+// "250 PX · IG HEADER, AVATAR, MENÜ" and "370 PX · CAPTION, ANTWORT-LEISTE,
+// LINK-STICKER". The bottom is larger because the reply bar is taller than the
+// header. Anything that must be READ lives between them.
+//
+// The bottom was 310 here and the spec says 370: sixty pixels of every card's
+// footer were sitting under Instagram's reply bar. The spec frame wins.
 const SAFE_TOP = 250
-const SAFE_BOTTOM = 310
+const SAFE_BOTTOM = 370
 
-// THE SIDE MARGIN IS AN EDITORIAL DECISION, not a safety one. 64px on a 1080
-// frame is 6% and reads as a screenshot — type running toward the edge is what
-// makes a card look like a dashboard someone exported. 96px is 9%, where a
-// magazine sets a full-bleed page, and it gives the photograph room to be a
-// photograph rather than a background.
-const MX = 96
+// THE SIDE MARGIN IS AN EDITORIAL DECISION, not a safety one — and the pen
+// makes it: `XLPb0` draws its margin guides at x=24 and x=335 on a 360-wide
+// artboard, which is 72 and 1005 at 1080. Every card in the family sets its
+// type against that column (`D1SQI`, `BMzgQ`, `pi5Hm` all start at x=24), so a
+// different figure here is not a taste difference, it is the cards not matching
+// their own drawings. This was 96 and every element on all three was inset 24px
+// too far.
+const MX = 72
 
 /** The last baseline that will not sit under Instagram's reply bar. */
 const CONTENT_BOTTOM = SH - SAFE_BOTTOM
@@ -1106,6 +1133,17 @@ export interface StoryData {
    *  the viewfinder brackets, the route line. Changing it changes all of them,
    *  which is the whole point: a rider picks a colour, not six. */
   accent?: string
+  /**
+   * WHERE THE LAUFBAND HAS RUN TO, 0–1 — one full repeat of the ticker string.
+   *
+   * A PNG cannot move, so the exported still is one frame of a band that is
+   * moving everywhere else it is shown: the preview scrolls it in the DOM
+   * (`W3LaufbandBands`) and the video burn advances it per frame. Keeping the
+   * offset as data rather than as a CSS-only trick is what makes those three
+   * agree — a preview that scrolls a band the export does not have is a preview
+   * of a different card.
+   */
+  phase?: number
   /** The ride's track, for `trace`. Null falls back to the strip. */
   polyline?: [number, number][] | null
   handle: string
@@ -1178,6 +1216,33 @@ function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][],
  * `w`/`h` are passed rather than read off the source because a video element
  * carries its size on `videoWidth`/`videoHeight`, and an image on `width`.
  */
+/**
+ * WHAT THE TWO BANDS SAY — and the ONE place that decides it.
+ *
+ * The exported PNG paints these on a canvas and the preview scrolls them as
+ * DOM, which is two renderers for one strip of tape. Building the string twice
+ * is how a preview ends up advertising a band the export does not have, so it
+ * is built once here and both ask for it.
+ *
+ * `figures` is the ride as numbers, `verdicts` is the ride as claims. Both end
+ * with the separator so a repeat reads as one continuous belt rather than as a
+ * sentence that starts again.
+ */
+export function laufbandStrings(d: StoryData): { figures: string; verdicts: string } {
+  const SEP = ' — '
+  const figures = [
+    `${d.bigValue} ${d.bigUnit.toUpperCase()}`,
+    // A label is printed only when it is a UNIT ("HM", "KM"); "BEWEGTE ZEIT"
+    // after a clock reading is the band explaining itself, which is exactly the
+    // register a ticker has to stay out of.
+    ...d.stats.map((x) => (x.l.length <= 3 ? `${x.v} ${x.l.toUpperCase()}` : x.v)),
+    ...(d.readings ?? []).map((r) => r.v.toUpperCase()),
+  ].join(SEP) + SEP
+  const verdicts = ((d.ticker ?? '').replace(/^[\s—–-]+/, '').toUpperCase()
+    || (d.routeName ?? '').toUpperCase()) + SEP
+  return { figures, verdicts }
+}
+
 interface CardSource { src: CanvasImageSource; w: number; h: number }
 
 function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: CardSource | null) {
@@ -1197,11 +1262,15 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     ctx.shadowOffsetY = 3
   }
 
-  // ── The photograph. Every layout keeps it; only where it sits changes. The
-  //    broadsheet and the viewfinder inset it so their own furniture has room.
-  const inset = layout === 'headline' ? { y: 300, h: 1180 }
-    : layout === 'viewfinder' ? { y: 210, h: 1000 }
-    : { y: 0, h: SH }
+  // ── The photograph, FULL BLEED on every layout.
+  //
+  // The Laufband and the HUD used to letterbox it — a black bar above and
+  // below, the picture inset into a window. Neither pen frame does that:
+  // `D1SQI` and `BMzgQ` both put `Foto` at 0,0,360,640, edge to edge, and carry
+  // their furniture ON the photograph with a scrim between. The letterbox was
+  // this file's invention and it is the single biggest reason the cards did not
+  // look like their drawings.
+  const inset = { y: 0, h: SH }
   if (photo) {
     const scale = Math.max(SW / photo.w, inset.h / photo.h)
     const w = photo.w * scale
@@ -1263,170 +1332,231 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     chip(d.badge, SW - MX, 'right', true)
   }
 
-  // ── DIE SCHLAGZEILE (pen `iXYiI`) ──────────────────────────────────────
-  // A broadsheet: dateline, the route's name set as large as it will go, the
-  // photograph beneath it, and the numbers running along the bottom as a ticker
-  // rather than sitting in tiles. The register is a newspaper, so nothing is
-  // rounded and nothing glows.
-  if (layout === 'headline') {
-    if (!bare) {
-      ctx.fillStyle = CARD.bg
-      ctx.fillRect(0, 0, SW, inset.y)
-      ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
-    }
-    text(ctx, d.dateline ?? d.footer, MX, SAFE_TOP + 34, 26, '700', CARD.mid, 2.4)
-    const name = (d.routeName ?? '').toUpperCase()
-    let size = 128
-    ctx.font = `700 ${size}px ${FONT}`
-    while (ctx.measureText(name).width > CW && size > 56) {
-      size -= 4
-      ctx.font = `700 ${size}px ${FONT}`
-    }
-    text(ctx, name, MX, SAFE_TOP + 150, size, '700', CARD.ink, -3)
-
-    // The ticker. Acid band, black type, running off both edges on purpose —
-    // it reads as a strip of tape rather than a caption that happens to fit.
-    // The band, its caption and the footer are three stacked lines and they were
-    // sharing 100px between them: the tape sat 8px above its own caption, which
-    // sat on top of the footer. Each gets its own step now.
-    const bandY = CONTENT_BOTTOM - 236
-    ctx.fillStyle = accent
-    ctx.fillRect(0, bandY, SW, 96)
-    const line = [d.bigValue + ' ' + d.bigUnit.toUpperCase(), ...d.stats.map((x) => x.v + ' ' + x.l.split(' ')[0])].join('  —  ')
-    text(ctx, line, MX - 24, bandY + 64, 44, '700', CARD.bg, 1)
-
-    // ── THE RULE, AS THE RIDE ────────────────────────────────────────────
-    // This was the one layout with no graphic on it: a title, a photograph and
-    // a strip of tape. A broadsheet does not want a chart pasted into it, but
-    // it does want a RULE under its masthead — so the rule IS the ride. Full
-    // bleed like the tape above it, each division one bar of the effort, the
-    // hardest ones at full height and the easy ones a hairline. Read as
-    // ornament from across a room and as the shape of the ride up close, which
-    // is what a printed page does with a graphic.
-    if (d.series.length > 1) {
-      const bars = d.series.slice(0, 64)
-      const bw = SW / bars.length
-      const ruleY = bandY + 96
-      for (let i = 0; i < bars.length; i++) {
-        const v = Math.max(0, Math.min(1, bars[i]))
-        const h = 3 + v * 21
-        ctx.fillStyle = v >= 0.92 ? accent : accent + '59'
-        ctx.fillRect(i * bw, ruleY + (24 - h), Math.max(1, bw - 2), h)
-      }
-    }
-
-    if (d.ticker) text(ctx, d.ticker, MX, CONTENT_BOTTOM - 84, 26, '700', CARD.mid, 1.6)
-    markAndFooter(CARD.quiet)
-    return
+  // ── THE PEN'S OWN SCRIM ────────────────────────────────────────────────
+  // Every card washes its photograph, and none of them washes it the same way:
+  // the Laufband darkens top AND bottom because it carries type at both ends,
+  // the HUD is nearly even because its furniture is a grid, the Effort-Kurve is
+  // heavy at the top and almost clear at the foot because its sentence is up
+  // there and its chart draws its own contrast. So the stops are an argument
+  // about that picture, not a shared "dark gradient", and they are transcribed
+  // per card. `rgba(5,6,8,…)` is the pen's own scrim colour — a hair colder
+  // than the ground, which is what keeps it from reading as a grey panel.
+  const vscrim = (stops: [number, number][]) => {
+    const g = ctx.createLinearGradient(0, 0, 0, SH)
+    for (const [pos, a] of stops) g.addColorStop(pos, `rgba(5,6,8,${a})`)
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, SW, SH)
   }
 
-  // ── DER SUCHER (pen `oMRL7`) ───────────────────────────────────────────
-  // The card as a viewfinder: corner brackets, a recording dot, and every
-  // number set in the monospace the app uses for telemetry. It is the ride as
-  // instrument readout, which is the opposite pitch to the broadsheet.
-  if (layout === 'viewfinder') {
-    if (!bare) {
-      ctx.fillStyle = CARD.bg
-      ctx.fillRect(0, 0, SW, inset.y)
-      ctx.fillRect(0, inset.y + inset.h, SW, SH - inset.y - inset.h)
+  /**
+   * ONE RUNNING BAND — ground, then the string repeated across it, clipped.
+   *
+   * The repeat length is measured THE WAY IT WILL BE DRAWN. Canvas has no
+   * letter-spacing metric, so a length taken from `measureText` alone is short
+   * by one `ls` per character, and copies laid at that pitch overlap a little
+   * more with every repeat — invisible in a still, and a band that visibly
+   * eats itself after four seconds of scrolling.
+   */
+  const laufband = (top: number, h: number, band: string, ink: string, s: string, size: number, ls: number, ty: number, x0: number) => {
+    ctx.save()
+    ctx.beginPath(); ctx.rect(0, top, SW, h); ctx.clip()
+    ctx.fillStyle = band
+    ctx.fillRect(0, top, SW, h)
+    ctx.font = `700 ${size}px ${NARROW}`
+    const unit = [...s].reduce((w, ch) => w + ctx.measureText(ch).width + ls, 0)
+    if (unit > 1) {
+      const ph = (((d.phase ?? 0) % 1) + 1) % 1
+      let x = x0 - ph * unit
+      while (x > 0) x -= unit
+      for (; x < SW; x += unit) text(ctx, s, x, ty, size, '700', ink, ls, 'left', NARROW, 'top')
     }
-
-    ctx.strokeStyle = accent
-    ctx.lineWidth = 8
-    const b = MX, len = 86
-    const bt = SAFE_TOP, bb = CONTENT_BOTTOM + 40
-    for (const [cx, cy, dx, dy] of [[b, bt, 1, 1], [SW - b, bt, -1, 1], [b, bb, 1, -1], [SW - b, bb, -1, -1]] as const) {
-      ctx.beginPath()
-      ctx.moveTo(cx, cy + dy * len); ctx.lineTo(cx, cy); ctx.lineTo(cx + dx * len, cy)
-      ctx.stroke()
-    }
-    ctx.beginPath(); ctx.arc(MX + 16, SAFE_TOP + 32, 11, 0, Math.PI * 2)
-    ctx.fillStyle = CARD.warn; ctx.fill()
-    ctx.font = `600 26px ${mono}`
-    text(ctx, `${d.footer.split(' · ')[0]}   ${(d.routeName ?? '').toUpperCase()}`, MX + 46, SAFE_TOP + 42, 26, '600', CARD.ink, 1.4)
-
-    const bl = CONTENT_BOTTOM - 300
-    ctx.font = `700 150px ${FONT}`
-    const w = ctx.measureText(d.bigValue).width
-    text(ctx, d.bigValue, MX, bl, 150, '700', CARD.ink, -6)
-    text(ctx, d.bigUnit.toUpperCase(), MX + w + 16, bl, 40, '700', accent, 1)
-    ctx.font = `600 26px ${mono}`
-    text(ctx, d.stats.map((x) => x.v).join('  //  ') + '  //  ' + (d.dateline ?? ''), MX, bl + 56, 26, '600', CARD.mid, 1.2)
-
-    let rx = MX
-    for (const r of (d.readings ?? []).slice(0, 3)) {
-      text(ctx, r.l.toUpperCase(), rx, bl + 130, 22, '600', CARD.quiet, 1.6)
-      text(ctx, r.v, rx, bl + 180, 40, '700', CARD.ink, -0.5)
-      rx += CW / 3
-    }
-    strip(CONTENT_BOTTOM - 120)
-    return
+    ctx.restore()
   }
 
-  // ── DER EFFORT (pen `ss70W`) ───────────────────────────────────────────
-  // The only layout that leads with TYPE rather than a picture: a kicker, then
-  // the sentence set large at the TOP of the frame, the photograph beneath it,
-  // and a row of four readings over an area chart at the foot.
+  // ── M3 · LAUFBAND (pen `D1SQI`) ────────────────────────────────────────
+  // A dateline, the route's name set as one enormous condensed line, the
+  // photograph edge to edge behind both — and then the two bands: the numbers
+  // in black on acid, the verdicts in acid on black, each running off both
+  // edges, because a ticker that fits is a caption.
   //
-  // It is also the layout that proves the accent control is not decoration. The
-  // pen draws this one in orange, not acid — a card about time above threshold
-  // is not the same statement as a card about a personal best, and the colour
-  // is how a rider says which one they are making.
-  if (layout === 'effort') {
-    if (bare) { /* no scrims on a sticker; the shadow carries the type */ }
-    const scrimTop2 = ctx.createLinearGradient(0, 0, 0, 620)
-    scrimTop2.addColorStop(0, 'rgba(0,0,0,0.88)')
-    scrimTop2.addColorStop(1, 'rgba(0,0,0,0)')
-    if (!bare) { ctx.fillStyle = scrimTop2; ctx.fillRect(0, 0, SW, 620) }
-    const scrimBot = ctx.createLinearGradient(0, SH - 620, 0, SH)
-    scrimBot.addColorStop(0, 'rgba(0,0,0,0)')
-    scrimBot.addColorStop(0.5, 'rgba(0,0,0,0.82)')
-    scrimBot.addColorStop(1, 'rgba(0,0,0,0.96)')
-    if (!bare) { ctx.fillStyle = scrimBot; ctx.fillRect(0, SH - 620, SW, 620) }
+  // EVERY FIGURE HERE IS `D1SQI` AT ×3 — the pen draws the 1080×1920 story on a
+  // 360×640 artboard. They are written as literals rather than derived from
+  // SAFE_TOP/CONTENT_BOTTOM on purpose: this card is a transcription, and a
+  // transcription that recomputes its own coordinates is a redesign. What the
+  // old version had instead — a letterboxed photo, a 128px headline measured
+  // against the wrong margin, one band, and a bar rule under it — is why the
+  // screen did not look like the drawing.
+  if (layout === 'headline') {
+    if (!bare) vscrim([[0, 0.702], [0.28, 0.439], [0.55, 0.38], [0.82, 0.58], [1, 0.722]])
 
-    text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, SAFE_TOP + 30, 24, '700', CARD.mid, 2)
-    let ey = SAFE_TOP + 112
-    for (const line of wrap(ctx, d.lead, 66, '700', CW)) {
-      text(ctx, line, MX, ey, 66, '700', CARD.ink, -1.6); ey += 80
-    }
-    for (const line of wrap(ctx, d.emphasis, 66, '700', CW)) {
-      text(ctx, line, MX, ey, 66, '700', accent, -1.6); ey += 80
-    }
+    text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 114, 28.5, '700', 'rgba(255,255,255,0.65)', 3.9, 'left', FONT, 'top')
 
-    // Four readings, evenly spread — this card is about how hard, so it carries
-    // one more number than the others and none of them is bigger than the rest.
-    const cells = [...(d.readings ?? []).slice(0, 3), { v: d.bigValue, l: d.bigUnit.toUpperCase() }]
-    const cw = CW / Math.max(1, cells.length)
-    cells.forEach((c, i) => {
-      const cx = MX + cw * i
-      text(ctx, c.v, cx, CONTENT_BOTTOM - 210, 46, '700', CARD.ink, -1)
-      text(ctx, c.l.toUpperCase(), cx, CONTENT_BOTTOM - 172, 20, '700', CARD.quiet, 1.6)
+    // 138px is the pen's size, not a starting guess: it shrinks only when a
+    // route name is longer than "RHEINSCHLEIFE", which is the one thing a
+    // fixed transcription cannot survive.
+    const name = (d.routeName ?? '').toUpperCase()
+    let size = 138
+    ctx.font = `700 ${size}px ${NARROW}`
+    while (ctx.measureText(name).width > CW && size > 60) {
+      size -= 4
+      ctx.font = `700 ${size}px ${NARROW}`
+    }
+    text(ctx, name, MX, 171, size, '700', CARD.ink, -1.5, 'left', NARROW, 'top')
+
+    // THE TWO BANDS: acid at 1596 (144 high), ink at 1740 (108 high).
+    //
+    // Both are drawn FULL BLEED. The pen's ink band sits at x=-14 on a 360
+    // artboard, which would leave a 42px slot of photograph at its right edge —
+    // that is a frame that got dragged, not a design: the acid band above it
+    // starts at 0, and a ticker with a gap at one end is a rectangle. The text
+    // offsets inside them ARE kept (-42 and -288), because those are what makes
+    // the two bands run out of step with each other.
+    const { figures, verdicts } = laufbandStrings(d)
+    laufband(1596, 144, accent, CARD.bg, figures, 72, 1.2, 1629, -42)
+    laufband(1740, 108, CARD.bg, accent, verdicts, 51, 2.4, 1767, -288)
+    return
+  }
+
+  // ── M1 · TELEMETRIE-HUD (pen `BMzgQ`) ──────────────────────────────────
+  // The card as an instrument: a measuring grid, four corner ticks, a recording
+  // row, and every number set in the monospace the app uses for telemetry. It
+  // is the opposite pitch to the Laufband — that one shouts a verdict, this one
+  // claims not to have an opinion.
+  if (layout === 'viewfinder') {
+    if (!bare) vscrim([[0, 0.749], [0.24, 0.478], [0.5, 0.259], [0.78, 0.322], [1, 0.58]])
+
+    // The grid: four verticals, three horizontals, 7% white. Furniture that
+    // says "instrument" without ever being mistaken for data.
+    ctx.fillStyle = 'rgba(255,255,255,0.07)'
+    for (const x of [72, 420, 732, 1005]) ctx.fillRect(x, 288, 3, 1248)
+    for (const y of [624, 1200, 1533]) ctx.fillRect(72, y, 936, 3)
+
+    // Four corner ticks, two bars each, straight off the pen.
+    ctx.fillStyle = accent
+    for (const [x, y, w, h] of [
+      [66, 36, 6, 42], [66, 36, 42, 6],
+      [999, 36, 6, 42], [960, 36, 42, 6],
+      [72, 1803, 6, 42], [72, 1842, 42, 6],
+      [1005, 1803, 6, 42], [966, 1842, 42, 6],
+    ] as const) ctx.fillRect(x, y, w, h)
+
+    ctx.beginPath()
+    ctx.arc(103.5, 76, 10.5, 0, Math.PI * 2)
+    ctx.fillStyle = CARD.bad
+    ctx.fill()
+    text(ctx, `${d.footer.split(' · ')[0]}  ${(d.routeName ?? '').toUpperCase()}`, 132, 60, 27, '500', 'rgba(255,255,255,0.80)', 1.2, 'left', mono, 'top')
+
+    // The hero: the number at 234px with its unit set small, bottom-aligned and
+    // in the accent — the one loud thing on a card that is pretending to be a
+    // readout.
+    ctx.font = `700 234px ${ARCHIVO}`
+    const hv = ctx.measureText(d.bigValue).width
+    text(ctx, d.bigValue, 87, 1203, 234, '700', CARD.ink, -9, 'left', ARCHIVO, 'top')
+    text(ctx, d.bigUnit.toUpperCase(), 87 + hv + 21, 1366.5, 36, '700', accent, 3, 'left', mono, 'top')
+    text(ctx, [...d.stats.map((x) => x.v), d.dateline ?? ''].filter(Boolean).join('  //  '), 96, 1464, 28.5, '500', 'rgba(255,255,255,0.65)', 1.8, 'left', mono, 'top')
+
+    // Three labelled cells on the pen's own column stops. Not evenly divided —
+    // 96 / 444 / 756 is a monospace grid, and evenly-divided thirds would put
+    // them between its lines.
+      ;(d.readings ?? []).slice(0, 3).forEach((r, i) => {
+      const cx = [96, 444, 756][i]
+      text(ctx, r.l.toUpperCase(), cx, 1551, 24, '500', 'rgba(255,255,255,0.48)', 3, 'left', mono, 'top')
+      text(ctx, r.v, cx, 1597.8, 45, '700', CARD.ink, -0.9, 'left', mono, 'top')
     })
 
-    // The effort itself, as an area rather than bars: this is a shape over
-    // time, and bars count things.
+    // The ride's own shape, 48 bars. The pen draws a fixture waveform here; the
+    // card draws the ride, because a HUD with an invented trace on it is the
+    // one thing this layout cannot afford to be.
+    if (d.series.length > 0) {
+      const n = 48
+      const gap = 4.5
+      const bw = (936 - gap * (n - 1)) / n
+      for (let i = 0; i < n; i++) {
+        const v = Math.max(0, Math.min(1, d.series[Math.floor((i / n) * d.series.length)] ?? 0))
+        const h = Math.max(9, 24 + v * 96)
+        ctx.globalAlpha = 0.28 + v * 0.62
+        ctx.fillStyle = accent
+        ctx.fillRect(72 + i * (bw + gap), 1842 - h, bw, h)
+      }
+      ctx.globalAlpha = 1
+    }
+    return
+  }
+
+  // ── K3 · EFFORT-KURVE (pen `pi5Hm`) ────────────────────────────────────
+  // The only layout that leads with TYPE: a kicker, the sentence set large at
+  // the top, the photograph beneath it, and at the foot four readings over the
+  // effort drawn as an area with the threshold ruled across it.
+  //
+  // It is also the layout that proves the accent is a control and not a
+  // constant — the pen draws this one in orange, because a card about time
+  // above threshold is not the same statement as a card about a personal best,
+  // and the colour is how a rider says which one they are making.
+  if (layout === 'effort') {
+    if (!bare) vscrim([[0, 0.839], [0.28, 0.78], [0.5, 0.678], [0.72, 0.38], [1, 0.278]])
+
+    text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 87, 30, '700', 'rgba(255,255,255,0.70)', 3.6, 'left', FONT, 'top')
+    let ey = 153
+    for (const line of wrap(ctx, d.lead, 114, '700', CW, ARCHIVO)) {
+      text(ctx, line, MX, ey, 114, '700', CARD.ink, -3.6, 'left', ARCHIVO, 'top'); ey += 116.28
+    }
+    ey += 30
+    for (const line of wrap(ctx, d.emphasis, 114, '700', CW, ARCHIVO)) {
+      text(ctx, line, MX, ey, 114, '700', accent, -3.6, 'left', ARCHIVO, 'top'); ey += 116.28
+    }
+
+    // ── THE CHART, 1530 DOWN, FULL BLEED ────────────────────────────────
+    // An area and not bars: this is a shape over time, and bars count things.
+    // The threshold is ruled across the whole width at 1704 so the area reads
+    // as time SPENT above a line rather than as a silhouette.
     if (d.series.length > 1) {
       const pts2 = d.series.slice(0, 96)
       const step = SW / (pts2.length - 1)
+      const base = 1920
+      const at = (v: number) => 1920 - 60 - Math.max(0, Math.min(1, v)) * 330
       ctx.beginPath()
-      ctx.moveTo(0, CONTENT_BOTTOM - 60)
-      pts2.forEach((v, i) => ctx.lineTo(i * step, CONTENT_BOTTOM - 60 - Math.min(1, v) * 130))
-      ctx.lineTo(SW, CONTENT_BOTTOM - 60)
+      ctx.moveTo(0, base)
+      pts2.forEach((v, i) => ctx.lineTo(i * step, at(v)))
+      ctx.lineTo(SW, base)
       ctx.closePath()
       ctx.fillStyle = accent + '38'
       ctx.fill()
+      ctx.fillStyle = accent + '8C'
+      ctx.fillRect(0, 1704, SW, 3)
       ctx.beginPath()
-      pts2.forEach((v, i) => {
-        const x = i * step, y = CONTENT_BOTTOM - 60 - Math.min(1, v) * 130
-        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y)
-      })
+      pts2.forEach((v, i) => (i === 0 ? ctx.moveTo(0, at(v)) : ctx.lineTo(i * step, at(v))))
       ctx.strokeStyle = accent
-      ctx.lineWidth = 5
+      ctx.lineWidth = 7.5
+      ctx.lineCap = 'round'
       ctx.stroke()
     }
-    text(ctx, 'w3.ride', SW - MX, CONTENT_BOTTOM, 24, '700', accent, 0.6, 'right')
+
+    // Four readings across the pen's column, 72 → 1008, spread rather than
+    // divided: the last one is flush right, which is what stops the row from
+    // reading as a table.
+    const cells = [...(d.readings ?? []).slice(0, 3), { v: d.bigValue, l: d.bigUnit.toUpperCase() }]
+    const widths = cells.map((c) => {
+      ctx.font = `700 57px ${ARCHIVO}`
+      const a = ctx.measureText(c.v).width
+      ctx.font = `600 25.5px ${FONT}`
+      const b = [...c.l.toUpperCase()].reduce((w, ch) => w + ctx.measureText(ch).width + 2.7, 0) - 2.7
+      return Math.max(a, b)
+    })
+    const spread = cells.length > 1 ? (936 - widths.reduce((a, b) => a + b, 0)) / (cells.length - 1) : 0
+    let cx = MX
+    cells.forEach((c, i) => {
+      const right = i === cells.length - 1
+      text(ctx, c.v, right ? MX + 936 : cx, 1479, 57, '700', CARD.ink, -1.5, right ? 'right' : 'left', ARCHIVO, 'top')
+      text(ctx, c.l.toUpperCase(), right ? MX + 936 : cx, 1556.4, 25.5, '600', 'rgba(255,255,255,0.50)', 2.7, right ? 'right' : 'left', FONT, 'top')
+      cx += widths[i] + spread
+    })
+
+    // The mark, bottom right on the pen's own coordinates.
+    star(ctx, 868.5, 1861, 16.5, accent)
+    text(ctx, 'w3.ride', 900, 1842, 31.5, '700', 'rgba(255,255,255,0.80)', 0, 'left', FONT, 'top')
     return
   }
+
 
   // ── DIE SPUR (pen `DJJ0P`) ─────────────────────────────────────────────
   // The most minimal of them: the photograph, the route drawn over it as one
