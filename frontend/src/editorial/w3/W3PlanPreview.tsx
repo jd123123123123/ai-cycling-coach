@@ -1,4 +1,5 @@
 import W3PlanView, { type W3PlanVm } from './W3PlanView'
+import W3PlanEmptyView from './W3PlanEmptyView'
 
 /** TEMP preview harness — renders W3PlanView with a pen-faithful fixture, no
  *  backend. Route /e/w3-plan-preview is unguarded. Mirrors pen2 frame `i3tIj`
@@ -88,6 +89,19 @@ const FIXTURE: W3PlanVm = {
 }
 
 export default function W3PlanPreview() {
+  // `?noplan` renders the one-pager the route shows a rider who has none — the
+  // branch is otherwise only reachable by having no plan on a real account.
+  if (typeof window !== 'undefined' && window.location.search.includes('noplan')) {
+    return (
+      <W3PlanEmptyView
+        vm={{ rides: 41, hours: 63, tss: 3120, since: 'seit 1. Januar' }}
+        onBack={() => history.back()}
+        onStart={() => { location.assign('/e/w3-goal-preview') }}
+        onBuilder={() => { location.assign('/workouts/builder') }}
+        onImport={() => { location.assign('/plan/import') }}
+      />
+    )
+  }
   return (
     <W3PlanView
       vm={FIXTURE}

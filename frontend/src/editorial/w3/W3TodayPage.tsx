@@ -11,6 +11,7 @@ import { itemById } from './w3shop'
 import { useChest, useWallet } from '../../hooks/useWallet'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
+import { hasPlanFromWeek } from './w3hasPlan'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { parseISO, fmtDEShort, DE_WD2 } from './w3plan'
@@ -725,12 +726,16 @@ export default function W3TodayPage() {
       weekLoadLabel,
       weekGoal,
       planWeeks,
-      // A PLAN IS A MESO BLOCK OR A PRESCRIBED WEEK, and nothing softer. The
-      // week strip alone is not evidence: it lists the rider's own days whether
-      // or not anybody planned them, so a rider who simply rides would have
-      // counted as planned. `weekPlanned` counts days the plan actually spoke
-      // for.
-      hasPlan: meso != null || weekPlanned > 0,
+      // A PLAN IS A PRESCRIBED WEEK, and nothing softer. The rule lives in
+      // `w3hasPlan.ts` because the plan route decides the same thing.
+      //
+      // This read `meso != null || weekPlanned > 0`, and BOTH halves are true
+      // for every athlete: `/weeks/current` builds a `MesoBlockContext`
+      // unconditionally, and the strip stamps today 'today' before any other
+      // test, so `weekPlanned` never fell below one. `hasPlan` was a constant
+      // `true` wearing a condition, and `W3PickGoalCard` below could not render
+      // for anybody. See the comment in `w3hasPlan.ts` for the evidence.
+      hasPlan: hasPlanFromWeek(week),
 
       // REAL weather from /weather/today (buildWeather) — today only. Without a
       // forecast there are no numbers at all, just the honest reason why.

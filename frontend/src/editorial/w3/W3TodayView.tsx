@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { WeekTrainingCard, WeekNavCards, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
+import { WeekTrainingCard, WeekNavCards, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, Reveal } from './w3tokens'
 import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
 import W3PickGoalCard from './W3PickGoalCard'
+import W3TodayComposer from './W3TodayComposer'
 import W3RideChest from './W3RideChest'
 import W3WrappedBolt from './W3WrappedBolt'
 import W3StatusBar from './W3StatusBar'
@@ -20,6 +21,7 @@ import W3CoachCard from './W3CoachCard'
 import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayRank from './W3TodayRank'
+import W3CrewFeed from './W3CrewFeed'
 import W3WeekRecapCard from './W3WeekRecapCard'
 import './w3.css'
 
@@ -347,13 +349,21 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
              Both are true — readiness measures the BODY, the plan decides the
              DAY — so it is said out loud here instead of leaving the rider to
              reconcile it. ── */}
-        <W3CoachCard
-          headline={vm.coachLead}
-          body={vm.coachWhy}
-          date={vm.coachDate}
-          restNote={todayIsRest && vm.readiness != null
-            ? `Ruhetag — die ${vm.readiness} beschreibt deinen Körper, nicht den Plan. Heute wird die Erholung angelegt, nicht ausgegeben.`
-            : null} />
+        {/* The coach's sentence is the PLAN's voice — `brief.verdict` is written
+            about the session the plan set for today. With no plan it is either
+            silent or it prescribes, and a prescription is exactly what this
+            screen no longer offers an unplanned rider. The body's own reading
+            is not lost with it: the hero panel above answers "how am I today",
+            which is the question this card was reading aloud. */}
+        {vm.hasPlan && (
+          <W3CoachCard
+            headline={vm.coachLead}
+            body={vm.coachWhy}
+            date={vm.coachDate}
+            restNote={todayIsRest && vm.readiness != null
+              ? `Ruhetag — die ${vm.readiness} beschreibt deinen Körper, nicht den Plan. Heute wird die Erholung angelegt, nicht ausgegeben.`
+              : null} />
+        )}
 
         {/* ── "Deine Schwelle hat sich bewegt" ───────────────────────────
              Above the recovery nudge, and only because it needs an ANSWER:
@@ -377,20 +387,42 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
         {/* ── Deine Woche — ONE card: the day selector, the SELECTED day's
              training (plan / adapt / planned-vs-done), and that day's weather.
              Tapping a day drives everything below the strip inside the card. ── */}
-        <WeekTrainingCard
-          days={vm.weekDays} selected={selDay} onSelect={setSelDay}
-          blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
-          day={selectedDay}
-          session={{
-            dur: vm.sessionDur,
-            // The card follows the selected day: its own real power profile when
-            // it has one (today, or a set future day), else today's bars.
-            blocks: selectedDay.blocks && selectedDay.blocks.length > 0 ? selectedDay.blocks : vm.sessionBlocks,
-            ftpTag: vm.sessionFtpTag,
-            earn: vm.sessionEarn,
-          }}
-          weather={vm.weather}
-          onAdapt={onAdapt} />
+        {/* ── THE SESSION SLOT, AND WHO IS ALLOWED TO FILL IT ─────────────
+             With a plan, this is the week: the day strip, the prescribed
+             session and that day's weather, all of it the plan talking.
+
+             Without a plan there is no prescription, and the app had two bad
+             options — invent a session and dress it as coaching, or print
+             "Deine Woche" over seven empty days. The first is the worse one: a
+             rider who believes they are already being coached never goes and
+             switches coaching on.
+
+             So the slot changes its job rather than its contents. What is left
+             is the one fact Today still genuinely has (when it is worth going
+             out) and one question only the rider can answer (what they feel
+             like), which composes into a real, savable, exportable workout.
+             See `W3TodayComposer`. ── */}
+        {vm.hasPlan ? (
+          <WeekTrainingCard
+            days={vm.weekDays} selected={selDay} onSelect={setSelDay}
+            blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
+            day={selectedDay}
+            session={{
+              dur: vm.sessionDur,
+              // The card follows the selected day: its own real power profile when
+              // it has one (today, or a set future day), else today's bars.
+              blocks: selectedDay.blocks && selectedDay.blocks.length > 0 ? selectedDay.blocks : vm.sessionBlocks,
+              ftpTag: vm.sessionFtpTag,
+              earn: vm.sessionEarn,
+            }}
+            weather={vm.weather}
+            onAdapt={onAdapt} />
+        ) : (
+          <>
+            <TodayWeatherCard weather={vm.weather} />
+            <W3TodayComposer readiness={vm.readiness} />
+          </>
+        )}
 
         {/* "Warum diese Einheit?" is no longer a section here. It moved to the
              (i) ON the session header, several screens up — the answer now sits
@@ -454,6 +486,17 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
              fixture leaderboard and its invented "um die Welt" challenge are
              gone; no crew now renders an honest empty state. ── */}
         <Reveal><W3TodayRank /></Reveal>
+
+        {/* ── Deine Crew fährt — the same crew, one question later. The rank
+             card says where the rider STANDS in it; this says what the people
+             in it actually did, and gives them somewhere to answer. Directly
+             below on purpose: a standings table is a scoreboard, and a
+             scoreboard without the riders on it is the thinnest possible
+             version of belonging to a crew.
+
+             It renders nothing without a crew — the invitation to join one is
+             the card immediately above, and saying it twice is filler. ── */}
+        <Reveal><W3CrewFeed /></Reveal>
 
         {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
         <Reveal><W3TodayProgress /></Reveal>

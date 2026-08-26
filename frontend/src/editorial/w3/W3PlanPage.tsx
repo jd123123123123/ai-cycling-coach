@@ -14,6 +14,8 @@ import {
   planDurSec, isSessionDay, planIF, planTargetWatts, blocksFromIntervals, enduranceEnvelope,
   displayPhase, phaseRail, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
 } from './w3plan'
+import { hasPlanFromWeek } from './w3hasPlan'
+import W3PlanEmptyView, { type W3PlanEmptyVm } from './W3PlanEmptyView'
 import W3PlanView, {
   type W3PlanVm, type GoalOption, type AdaptKind, type AdaptResult,
   type RebuildPayload, type GoalSwitchPayload,
@@ -51,9 +53,16 @@ export default function W3PlanPage() {
   // /plan/build is idempotent per athlete-local day — it returns the existing
   // plan (with its weekly_tss_targets series) without rebuilding. Cached hard so
   // a plan-view open costs at most one request per session.
+  // A PLAN IS NOT BUILT BY LOOKING AT THE PLAN SCREEN. `/plan/build` is
+  // idempotent for an athlete who HAS a plan — it hands back the existing one —
+  // but for an athlete who has none it is a constructor, and firing it on mount
+  // would give every visitor a plan they never asked for and delete the empty
+  // state by visiting it. Gated on the same rule the render branches on.
+  const hasPlan = hasPlanFromWeek(week)
   const { data: plan } = useQuery({
     queryKey: ['plan', 'build'],
     queryFn: () => buildPlan('onboarding'),
+    enabled: hasPlan,
     staleTime: 60 * 60 * 1000,
     retry: false,
   })
@@ -302,6 +311,31 @@ export default function W3PlanPage() {
       return true
     } catch { return false }
   }, [qc])
+
+  // The rider's own season, which is the only argument the empty page makes.
+  const emptyVm = useMemo<W3PlanEmptyVm>(() => {
+    const cyc = (seasonActs?.activities ?? []).filter((a) => a.sport === 'cycling')
+    const secs = cyc.reduce((s, a) => s + (a.duration_seconds ?? 0), 0)
+    const tss = cyc.reduce((s, a) => s + (a.tss ?? 0), 0)
+    return {
+      rides: cyc.length > 0 ? cyc.length : null,
+      hours: secs > 0 ? Math.round(secs / 3600) : null,
+      tss: tss > 0 ? Math.round(tss) : null,
+      since: `seit ${fmtDE(seasonStart).replace(/^\w+,\s*/, '')}`,
+    }
+  }, [seasonActs, seasonStart])
+
+  if (!hasPlan) {
+    return (
+      <W3PlanEmptyView
+        vm={emptyVm}
+        onBack={() => navigate(-1)}
+        onStart={() => navigate('/e/w3-goal')}
+        onBuilder={() => navigate('/workouts/builder')}
+        onImport={() => navigate('/plan/import')}
+      />
+    )
+  }
 
   return (
     <W3PlanView

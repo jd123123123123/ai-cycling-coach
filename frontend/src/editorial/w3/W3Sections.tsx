@@ -988,3 +988,31 @@ function AdaptRow({ adapt, busy, onPick }: { adapt: Adapt; busy: Adapt; onPick: 
     </div>
   )
 }
+
+/**
+ * THE WEATHER, ON ITS OWN, for a rider with no plan.
+ *
+ * The forecast normally lives inside the week card, under the day the rider
+ * selected — it is context for a prescribed session. Without a plan there is
+ * no session to give context to, and the weather stops being a footnote and
+ * becomes the one piece of genuinely actionable information Today still has:
+ * it is the only thing on the screen that can tell an unplanned rider when to
+ * go out. So it gets its own card and its own heading.
+ *
+ * Same `WeatherLine` as the week card renders, deliberately — one forecast in
+ * one handwriting, including its honest empty state when there is no GPS ride
+ * to locate the rider by.
+ */
+export function TodayWeatherCard({ weather }: { weather: W3Weather }) {
+  return (
+    <div style={band(26)}>
+      <div style={{ ...card(), padding: 18, gap: 14 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Wann du rausfährst</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>Heute, Stunde für Stunde</span>
+        </div>
+        <WeatherLine w={weather} isToday dateLabel="heute" />
+      </div>
+    </div>
+  )
+}
