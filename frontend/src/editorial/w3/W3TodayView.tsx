@@ -8,6 +8,7 @@ import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
 import W3PickGoalCard from './W3PickGoalCard'
 import W3RideChest from './W3RideChest'
+import W3WrappedBolt from './W3WrappedBolt'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { useHeroPanel } from './W3HeroShell'
@@ -198,11 +199,13 @@ export function fadeRunway(ground: string | null, page: string, max = 180): numb
   return Math.round(Math.min(1, d / 26) * max)
 }
 
-export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
+export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }: {
   vm: W3Vm
   onAdapt?: OnAdapt
   /** Fired when the rider swipes the sealed chest open. */
   onOpenChest?: () => void
+  /** Opens last week's deck. Absent → the bolt never mounts. */
+  onOpenWrapped?: () => void
 }) {
   const navigate = useNavigate()
   // The colour the stage picture ends in. Everything the hero touches — the
@@ -506,6 +509,15 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest }: {
             {dock}
           </div>
         </div>
+        {/* THE WEEK'S BOLT, above the day's content but never beside the chest.
+            An unclaimed ride is a more urgent invitation than last week's
+            recap, and two glowing offers on one screen means the rider reads
+            neither — so this waits until the chest is empty. */}
+        {!vm.chest?.sealed && onOpenWrapped && (
+          <div style={{ paddingBottom: 18 }}>
+            <W3WrappedBolt onOpen={onOpenWrapped} />
+          </div>
+        )}
         {content}
         <W3TabBar />
       </div>

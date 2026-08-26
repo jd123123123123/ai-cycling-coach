@@ -135,6 +135,8 @@ const W3ThresholdPreview = lazyWithRetry(() => import('./editorial/w3/W3Threshol
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3RideWrapPreview = lazyWithRetry(() => import('./editorial/w3/W3RideWrapPreview'))
 const W3StoryPreview = lazyWithRetry(() => import('./editorial/w3/W3StoryPreview'))
+const W3WrappedPage = lazyWithRetry(() => import('./editorial/w3/W3WrappedPage'))
+const W3WrappedPreview = lazyWithRetry(() => import('./editorial/w3/W3WrappedPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
 const W3ChallengesPreview = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPreview'))
 const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate'))
@@ -485,6 +487,8 @@ function AppRoutes() {
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
           <Route path="/e/w3-ride-wrap-preview" element={<W3RideWrapPreview />} />
           <Route path="/e/w3-story-preview" element={<W3StoryPreview />} />
+          <Route path="/e/w3-wrapped" element={<ProtectedRoute checkOnboarding><W3WrappedPage /></ProtectedRoute>} />
+          <Route path="/e/w3-wrapped-preview" element={<W3WrappedPreview />} />
           <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />
           <Route path="/e/w3-week-review-preview" element={<W3WeekReviewPreview />} />
           {/* W3 first-open onboarding chain: welcome → devices → rewards → garage → today */}

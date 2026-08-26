@@ -813,6 +813,7 @@ export default function W3TodayPage() {
       onAdapt={onAdapt}
       // The swipe hands over to the celebration, which is where the coins
       // actually land. Today's job ends at the gesture.
-      onOpenChest={() => chest?.activity_id && navigate(`/e/w3-ride-celebrate/${chest.activity_id}`)} />
+      onOpenChest={() => chest?.activity_id && navigate(`/e/w3-ride-celebrate/${chest.activity_id}`)}
+      onOpenWrapped={() => navigate('/e/w3-wrapped')} />
   )
 }
