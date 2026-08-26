@@ -136,5 +136,10 @@ const MOCK_ADAPT = async (kind: 'easier' | 'harder' | 'shorter' | 'indoor' | 're
 }
 
 export default function W3TodayPreview() {
-  return <W3TodayView vm={FIXTURE} onAdapt={MOCK_ADAPT} />
+  // THE BOLT NEEDS A HANDLER TO EXIST AT ALL. `W3TodayView` gates it on
+  // `!chest.sealed && onOpenWrapped`, so a preview that passes no handler can
+  // never show it — which is how a component mounted on the live Today screen
+  // went unrendered through three separate passes. A preview that cannot reach
+  // a state is a preview that certifies nothing about it.
+  return <W3TodayView vm={FIXTURE} onAdapt={MOCK_ADAPT} onOpenWrapped={() => {}} />
 }
