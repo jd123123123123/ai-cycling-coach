@@ -1739,3 +1739,149 @@ export async function renderStoryVideo(
   stream.getTracks().forEach((t) => t.stop())
   return { blob, type: mimeType }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// THE WRAPPED SLIDE, AS A CARD
+//
+// Every slide of the week's deck exports on its own — not just the finale. A
+// rider who wants to post the one where they beat a moped should not have to
+// post the summary instead, and each card that leaves carries the mark, which
+// is the only reason anybody who is not already a rider ever sees this app.
+//
+// It repaints rather than screenshots: `html2canvas` on a motion-driven deck
+// captures whatever frame the animation happened to be on. This draws the same
+// scene deterministically at 1080 × 1920 — the field, the orb, the ring, the
+// figure, the sentence and the mark — so the card is the slide, every time.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface WrappedCardData {
+  eyebrow: string
+  value?: string | null
+  unit?: string | null
+  lead: string
+  accent?: string | null
+  foot?: string | null
+  series?: number[]
+  /** The rider's own picture, already a data URL. */
+  photo?: string | null
+  /** Scene colours — the same object the screen used. */
+  scene: { ground: string; ink: string; accent: string; orb: string }
+  /** "18 – 24. AUGUST" */
+  weekLabel: string
+}
+
+/** A CSS `linear-gradient(...)` string, replayed onto a canvas.
+ *  Only the shapes this deck's scenes actually use — angle plus colour stops. */
+function paintCssGradient(ctx: CanvasRenderingContext2D, css: string, w: number, h: number) {
+  const stops = [...css.matchAll(/(#[0-9A-Fa-f]{3,8})[^,)]*?(\d+)?%/g)]
+    .map((m) => ({ color: m[1], at: m[2] != null ? Number(m[2]) / 100 : null }))
+  if (stops.length === 0) { ctx.fillStyle = CARD.bg; ctx.fillRect(0, 0, w, h); return }
+  const g = ctx.createLinearGradient(0, 0, w * 0.35, h)
+  stops.forEach((st, i) => {
+    const at = st.at ?? (stops.length === 1 ? 0 : i / (stops.length - 1))
+    g.addColorStop(Math.max(0, Math.min(1, at)), st.color)
+  })
+  ctx.fillStyle = g
+  ctx.fillRect(0, 0, w, h)
+}
+
+export async function renderWrappedCard(d: WrappedCardData): Promise<{ blob: Blob | null; dataUrl: string }> {
+  const canvas = document.createElement('canvas')
+  canvas.width = SW; canvas.height = SH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return { blob: null, dataUrl: '' }
+
+  const { scene } = d
+
+  // ── the field ──
+  paintCssGradient(ctx, scene.ground, SW, SH)
+
+  // ── the rider's picture, if this slide has one ──
+  if (d.photo) {
+    try {
+      const img = await loadImage(d.photo)
+      const scale = Math.max(SW / img.width, SH / img.height)
+      const w = img.width * scale
+      const h = img.height * scale
+      ctx.drawImage(img, (SW - w) / 2, (SH - h) / 2, w, h)
+      const scrim = ctx.createLinearGradient(0, 0, 0, SH)
+      scrim.addColorStop(0, 'rgba(0,0,0,0.38)')
+      scrim.addColorStop(0.34, 'rgba(0,0,0,0.12)')
+      scrim.addColorStop(1, 'rgba(0,0,0,0.88)')
+      ctx.fillStyle = scrim
+      ctx.fillRect(0, 0, SW, SH)
+    } catch { /* a picture that will not decode must not cost the card */ }
+  }
+
+  // ── the orb ──
+  const orb = ctx.createRadialGradient(SW * 0.12, SH * 0.3, 0, SW * 0.12, SH * 0.3, SW * 0.8)
+  orb.addColorStop(0, scene.orb + (d.photo ? '3D' : '80'))
+  orb.addColorStop(1, 'rgba(0,0,0,0)')
+  ctx.fillStyle = orb
+  ctx.fillRect(0, 0, SW, SH)
+
+  // ── the ring, cropped by the frame ──
+  ctx.beginPath()
+  ctx.arc(SW * 1.06, SH * 0.9, SW * 0.62, 0, Math.PI * 2)
+  ctx.strokeStyle = scene.accent + '4D'
+  ctx.lineWidth = 5
+  ctx.stroke()
+
+  // ── the type ──
+  const MX = 84
+  let y = SH * 0.56
+  text(ctx, d.eyebrow.toUpperCase(), MX, y, 30, '600', scene.accent, 3)
+  y += 70
+
+  if (d.value) {
+    ctx.font = `600 190px ${FONT}`
+    const vw = ctx.measureText(d.value).width
+    // Step down if the figure plus its unit would run past the margin.
+    const size = vw + 120 > SW - MX * 2 ? 150 : 190
+    text(ctx, d.value, MX, y + size * 0.72, size, '600', scene.ink, -8)
+    ctx.font = `600 ${size}px ${FONT}`
+    if (d.unit) {
+      text(ctx, d.unit, MX + ctx.measureText(d.value).width + 18, y + size * 0.72, 52, '600', scene.accent, -1)
+    }
+    y += size * 0.86
+  }
+
+  if (d.series && d.series.length > 1) {
+    const bars = d.series.slice(0, 28)
+    const peak = Math.max(...bars, 0.0001)
+    const bw = (SW - MX * 2) / bars.length
+    for (let i = 0; i < bars.length; i++) {
+      const hgt = Math.max(10, (bars[i] / peak) * 130)
+      ctx.fillStyle = bars[i] / peak >= 0.86 ? scene.ink : scene.ink + '59'
+      roundRect(ctx, MX + i * bw, y + (130 - hgt), Math.max(3, bw - 7), hgt, 5)
+      ctx.fill()
+    }
+    y += 176
+  }
+
+  for (const line of wrap(ctx, d.lead, 62, '600', SW - MX * 2)) {
+    text(ctx, line, MX, y + 54, 62, '600', scene.ink, -2)
+    y += 74
+  }
+  if (d.accent) {
+    for (const line of wrap(ctx, d.accent, 62, '600', SW - MX * 2)) {
+      text(ctx, line, MX, y + 54, 62, '600', scene.accent, -2)
+      y += 74
+    }
+  }
+  if (d.foot) {
+    for (const line of wrap(ctx, d.foot, 28, '600', SW - MX * 2)) {
+      text(ctx, line, MX, y + 60, 28, '600', scene.ink, 0.4)
+      y += 40
+    }
+  }
+
+  // ── THE MARK. On every card, because a card that leaves without it is a
+  //    week somebody admired and could not place. ──
+  text(ctx, d.weekLabel.toUpperCase(), MX, SH - 88, 26, '600', scene.ink, 2)
+  text(ctx, 'w3.ride', SW - MX, SH - 88, 30, '600', scene.accent, 1, 'right')
+
+  const dataUrl = canvas.toDataURL('image/png')
+  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+  return { blob, dataUrl }
+}

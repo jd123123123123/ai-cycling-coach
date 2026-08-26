@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { X, Share2, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
 import { TNUM } from './w3surfaces'
+import { sceneFor, type Scene } from './w3wrapped'
 import './w3.css'
 
 /**
@@ -103,47 +104,9 @@ const SLIDE_MS = 5200
  * `ink` flips with the ground. A slide is only legible if the type was chosen
  * for the field it sits on, and half of these fields are bright.
  */
-interface Scene { ground: string; ink: string; accent: string; orb: string }
+// Scenes live in `w3wrapped` so the CARD PAINTER can use the same ones —
+// an exported slide that differs from the slide on screen is a broken promise.
 
-const SCENES: Record<string, Scene> = {
-  // Night, opening. Violet bloom on black — anticipation, nothing stated yet.
-  open: {
-    ground: `linear-gradient(165deg, ${T.evening}59, ${T.bg} 62%)`,
-    ink: T.ink, accent: T.acid, orb: T.evening,
-  },
-  // The loud one. Acid field, black type — the slide people screenshot.
-  km: {
-    ground: `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 55%, ${T.acidDeep})`,
-    ink: T.bg, accent: T.bg, orb: T.acidHi,
-  },
-  // Deep violet, white type. The counterweight to the acid slide before it.
-  saddle: {
-    ground: `linear-gradient(200deg, ${T.evening}, ${T.nightLo} 78%)`,
-    ink: T.ink, accent: T.lilac, orb: T.evening,
-  },
-  // Heat. Peak power gets the only warm field in the deck.
-  peak: {
-    ground: `linear-gradient(150deg, ${T.warn}, ${T.bad} 72%)`,
-    ink: T.bg, accent: T.bg, orb: T.warn,
-  },
-  // Cobalt, for the named ride — the broadsheet slide.
-  best: {
-    ground: `linear-gradient(185deg, ${T.cool}, ${T.nightLo} 80%)`,
-    ink: T.ink, accent: T.acid, orb: T.cool,
-  },
-  // Green: the plan kept, or not.
-  plan: {
-    ground: `linear-gradient(165deg, ${T.training}, ${T.nightLo} 76%)`,
-    ink: T.ink, accent: T.acid, orb: T.training,
-  },
-  // The poster. Acid over violet — both accents, once, at the end.
-  finale: {
-    ground: `linear-gradient(200deg, ${T.evening} 8%, ${T.bg} 52%, ${T.acidDeep})`,
-    ink: T.ink, accent: T.acid, orb: T.acid,
-  },
-}
-
-const sceneFor = (key: string): Scene => SCENES[key] ?? SCENES.open
 
 function Bars({ series, tint, reduce }: { series: number[]; tint: string; reduce: boolean | null }) {
   if (series.length === 0) return null
@@ -307,7 +270,10 @@ function Slide({ s, sc, reduce }: { s: W3WrappedSlide; sc: Scene; reduce: boolea
 export default function W3WrappedView({ vm, onClose, onShare }: {
   vm: W3WrappedVm
   onClose?: () => void
-  onShare?: () => void
+  /** EVERY slide is shareable, so the handler is told WHICH one. A rider who
+   *  wants to post the slide where they beat a moped should not have to post
+   *  the summary instead. */
+  onShare?: (slide: W3WrappedSlide) => void
 }) {
   const reduce = useReducedMotion()
   const [i, setI] = useState(0)
@@ -447,10 +413,19 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
           <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.4, color: sc.ink, opacity: 0.6 }}>
             {vm.weekLabel.toUpperCase()}
           </span>
-          <button onClick={onClose} aria-label="Schließen"
-            style={{ width: 34, height: 34, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-            <X size={18} color={sc.ink} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            {/* On every slide. The finale keeps its big pill as the deck's
+                closing move, but a rider should never have to reach the end to
+                post the one card they actually liked. */}
+            <button onClick={() => onShare?.(slide)} aria-label="Diese Karte teilen"
+              style={{ width: 34, height: 34, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+              <Share2 size={16} color={sc.ink} />
+            </button>
+            <button onClick={onClose} aria-label="Schließen"
+              style={{ width: 34, height: 34, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+              <X size={18} color={sc.ink} />
+            </button>
+          </div>
         </div>
 
         {/* Tap zones. Left third goes back, the rest goes forward — the
@@ -474,7 +449,7 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
             initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, ease: EASE, delay: 0.3 }}
             style={{ padding: '0 26px calc(30px + env(safe-area-inset-bottom))', position: 'relative' }}>
-            <button onClick={onShare}
+            <button onClick={() => onShare?.(slide)}
               style={{
                 width: '100%', height: 56, borderRadius: 100, border: 0, background: T.acid,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,

@@ -50,5 +50,18 @@ const FIXTURE: Wrapped = {
 }
 
 export default function W3WrappedPreview() {
-  return <W3WrappedView vm={buildWrappedVm(FIXTURE, { bike: '/w3/example-rider.webp', bestRideScene: '/w3/example-rider.webp' })} onClose={() => history.back()} onShare={() => location.assign('/e/w3-share-preview')} />
+  return <W3WrappedView vm={buildWrappedVm(FIXTURE, { bike: '/w3/example-rider.webp', bestRideScene: '/w3/example-rider.webp' })} onClose={() => history.back()} onShare={async (slide) => {
+      // The preview paints the real card and opens it, so the exported artwork
+      // can be judged without a share sheet.
+      const { renderWrappedCard } = await import('./w3share')
+      const { sceneFor } = await import('./w3wrapped')
+      const out = await renderWrappedCard({
+        eyebrow: slide.eyebrow, value: slide.value, unit: slide.unit,
+        lead: slide.lead, accent: slide.accent, foot: slide.foot,
+        series: slide.series, photo: slide.image, scene: sceneFor(slide.key),
+        weekLabel: '18 – 24. August',
+      })
+      const w = window.open()
+      if (w) w.document.write(`<img src="${out.dataUrl}" style="width:100%">`)
+    }} />
 }

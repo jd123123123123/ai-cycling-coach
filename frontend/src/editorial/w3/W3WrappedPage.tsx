@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../api/client'
 import type { Wrapped } from '../../pages/WeeklyWrapped'
-import W3WrappedView from './W3WrappedView'
-import { buildWrappedVm } from './w3wrapped'
+import W3WrappedView, { type W3WrappedSlide } from './W3WrappedView'
+import { buildWrappedVm, sceneFor } from './w3wrapped'
+import { renderWrappedCard, sharePoster } from './w3share'
 import W3Loading from './W3Loading'
 import { useGarage, useRideScene } from '../../hooks/useGarage'
 
@@ -54,7 +55,19 @@ export default function W3WrappedPage() {
     <W3WrappedView
       vm={vm}
       onClose={() => navigate('/e/w3-today')}
-      onShare={() => navigate('/e/w3-share')}
+      // THE SLIDE ITSELF LEAVES, repainted at 1080 × 1920 rather than
+      // screenshotted — html2canvas on a motion deck captures whatever frame
+      // the animation happened to be on. Every card carries the mark.
+      onShare={async (slide: W3WrappedSlide) => {
+        const sc = sceneFor(slide.key)
+        const out = await renderWrappedCard({
+          eyebrow: slide.eyebrow, value: slide.value, unit: slide.unit,
+          lead: slide.lead, accent: slide.accent, foot: slide.foot,
+          series: slide.series, photo: slide.image, scene: sc,
+          weekLabel: vm.weekLabel,
+        })
+        await sharePoster(out.blob, `Meine Woche · ${vm.weekLabel} · w3.ride`, 'w3-woche.png')
+      }}
     />
   )
 }

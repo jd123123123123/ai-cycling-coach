@@ -1,4 +1,5 @@
 import type { Wrapped } from '../../pages/WeeklyWrapped'
+import { T } from './w3tokens'
 import type { W3WrappedSlide, W3WrappedVm } from './W3WrappedView'
 
 /**
@@ -15,6 +16,48 @@ import type { W3WrappedSlide, W3WrappedVm } from './W3WrappedView'
  * invents a statistic to keep its rhythm is worth less than a four-card one
  * that is true — and this app's honesty rule does not pause for a celebration.
  */
+
+export interface Scene { ground: string; ink: string; accent: string; orb: string }
+
+export const SCENES: Record<string, Scene> = {
+  // Night, opening. Violet bloom on black — anticipation, nothing stated yet.
+  open: {
+    ground: `linear-gradient(165deg, ${T.evening}59, ${T.bg} 62%)`,
+    ink: T.ink, accent: T.acid, orb: T.evening,
+  },
+  // The loud one. Acid field, black type — the slide people screenshot.
+  km: {
+    ground: `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 55%, ${T.acidDeep})`,
+    ink: T.bg, accent: T.bg, orb: T.acidHi,
+  },
+  // Deep violet, white type. The counterweight to the acid slide before it.
+  saddle: {
+    ground: `linear-gradient(200deg, ${T.evening}, ${T.nightLo} 78%)`,
+    ink: T.ink, accent: T.lilac, orb: T.evening,
+  },
+  // Heat. Peak power gets the only warm field in the deck.
+  peak: {
+    ground: `linear-gradient(150deg, ${T.warn}, ${T.bad} 72%)`,
+    ink: T.bg, accent: T.bg, orb: T.warn,
+  },
+  // Cobalt, for the named ride — the broadsheet slide.
+  best: {
+    ground: `linear-gradient(185deg, ${T.cool}, ${T.nightLo} 80%)`,
+    ink: T.ink, accent: T.acid, orb: T.cool,
+  },
+  // Green: the plan kept, or not.
+  plan: {
+    ground: `linear-gradient(165deg, ${T.training}, ${T.nightLo} 76%)`,
+    ink: T.ink, accent: T.acid, orb: T.training,
+  },
+  // The poster. Acid over violet — both accents, once, at the end.
+  finale: {
+    ground: `linear-gradient(200deg, ${T.evening} 8%, ${T.bg} 52%, ${T.acidDeep})`,
+    ink: T.ink, accent: T.acid, orb: T.acid,
+  },
+}
+
+export const sceneFor = (key: string): Scene => SCENES[key] ?? SCENES.open
 
 const de = (n: number, dp = 0) =>
   n.toLocaleString('de-DE', { minimumFractionDigits: dp, maximumFractionDigits: dp })
