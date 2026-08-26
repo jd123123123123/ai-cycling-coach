@@ -23,6 +23,28 @@ import './w3.css'
  * TSS, the session's watts/TSS/%FTP) resolve to a value or "—". The phase
  * week-RANGES and the block's coach prose are DERIVED from the real active
  * phase (marked `derived:` in the page); nothing is fabricated.
+*
+ * ACID ANSWERS ONE QUESTION: WHERE AM I, AND WHAT DO I DO NEXT.
+ *
+ * There were forty acid references on this screen. Most were legitimate state —
+ * the current phase, the current week, today — but five were decoration: the
+ * "DEIN ZIEL" eyebrow, an info glyph, a link-card value, a week label already
+ * stated by the bar beside it, and the reward line directly above an acid CTA.
+ * With the accent on everything, "this is where you are" stopped being readable
+ * as a signal, which is the one job it has on a plan.
+ *
+ * The rule now: acid marks the countdown (the page's subject), the CURRENT
+ * phase/week/day, the block's progress fill, and the primary action. Nothing
+ * else. Two acid marks in one card is the failure mode — the reward line and
+ * the "Fahrt starten" pill were exactly that.
+ *
+ * TYPOGRAPHY: THE W3:RIDE CEILING. The shipped app has no Bold — SemiBold is
+ * the heaviest weight in the product (`docs/research/2026-08-w3ride`), and its
+ * display numerals run 44–109px. Presence comes from SIZE, never from weight.
+ * This page had 45 uses of 700 against 26 of 600, so almost every string on it
+ * was set at the same shout and the hierarchy had to be carried by position
+ * alone. Nothing here is heavier than SemiBold now; the countdown carries the
+ * page instead, at the size that job deserves.
  */
 
 // ── view model ──
@@ -110,7 +132,7 @@ const card = (): CSSProperties => ({ background: T.surface, borderRadius: 24, pa
 function SectionTitle({ title, right }: { title: string; right?: ReactNode }) {
   return (
     <div style={{ ...band(0), paddingBottom: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{title}</span>
+      <span style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.6, color: T.ink }}>{title}</span>
       {right}
     </div>
   )
@@ -154,7 +176,7 @@ function PhaseRail({ phases, currentWeek, totalWeeks }: { phases: PhaseSeg[]; cu
           const [f, t] = parseWeeks(p.weeks)
           return (
             <div key={i} style={{ flex: Math.max(1, t - f + 1), display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: p.active ? T.acid : T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: p.active ? T.acid : T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
               <span style={{ fontSize: 10, fontWeight: 600, color: p.active ? T.acidDeep : T.quiet }}>{p.weeks}</span>
             </div>
           )
@@ -194,7 +216,7 @@ function WeekChart({ bars }: { bars: WeekBar[] }) {
       <div style={{ display: 'flex', gap: 5 }}>
         {bars.map((b, i) => (
           <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: b.kind === 'current' ? T.acid : T.quiet }}>{b.idx}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 600, color: b.kind === 'current' ? T.acid : T.quiet }}>{b.idx}</span>
             {b.isRest && <div style={{ width: 3, height: 3, borderRadius: 100, background: T.mid }} />}
           </div>
         ))}
@@ -217,7 +239,7 @@ function SessionBeam({ bars, ftpTag }: { bars: PlanSessionBar[]; ftpTag: string 
   const H = 96
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      {ftpTag && <span style={{ fontSize: 10, fontWeight: 700, color: T.mid }}>{ftpTag}</span>}
+      {ftpTag && <span style={{ fontSize: 10, fontWeight: 600, color: T.mid }}>{ftpTag}</span>}
       <div style={{ position: 'relative', height: H, display: 'flex', gap: 2, alignItems: 'flex-end' }}>
         {bars.map((b, i) => {
           const h = Math.max(4, Math.round(b.w * H))
@@ -251,14 +273,14 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
     if (ok) onClose()
   }
   const pill = (on: boolean): CSSProperties => ({
-    padding: '9px 0', borderRadius: 14, textAlign: 'center', fontSize: 13, fontWeight: 700, cursor: 'pointer', border: `1px solid ${on ? T.acid : T.stroke}`,
+    padding: '9px 0', borderRadius: 14, textAlign: 'center', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? T.acid : T.stroke}`,
     background: on ? T.acidDim : 'transparent', color: on ? T.acid : T.mid,
   })
   return (
     <SheetShell onClose={onClose}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Plan anpassen</span>
+          <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: -0.6, color: T.ink }}>Plan anpassen</span>
           <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>Gilt ab der nächsten Woche · erledigte Wochen bleiben</span>
         </div>
         <IconBtn onClick={onClose} label="Schließen"><X size={18} color={T.ink} /></IconBtn>
@@ -268,10 +290,10 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>Trainingstage</span>
+            <span style={{ fontSize: 17, fontWeight: 600, color: T.ink }}>Trainingstage</span>
             <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>An welchen Tagen du fahren kannst</span>
           </div>
-          <span style={{ fontSize: 15, fontWeight: 700, color: T.acid }}>{dayCount} Tage</span>
+          <span style={{ fontSize: 15, fontWeight: 600, color: T.mid }}>{dayCount} Tage</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO'].map((d, i) => (
@@ -284,7 +306,7 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
       <SheetRow title="Stunden pro Woche" sub={`Aktuell ${fmtHM(vm.adjustHours)} h · Korridor 6:00 – 11:00`}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 12px', borderRadius: 100, background: T.surface2 }}>
           <button aria-label="weniger" onClick={() => setHours((h) => Math.max(6, +(h - 0.25).toFixed(2)))} style={stepBtn}><Minus size={16} color={T.ink} /></button>
-          <span style={{ fontSize: 16, fontWeight: 700, color: T.ink, minWidth: 44, textAlign: 'center' }}>{fmtHM(hours)}</span>
+          <span style={{ fontSize: 16, fontWeight: 600, color: T.ink, minWidth: 44, textAlign: 'center' }}>{fmtHM(hours)}</span>
           <button aria-label="mehr" onClick={() => setHours((h) => Math.min(11, +(h + 0.25).toFixed(2)))} style={stepBtn}><Plus size={16} color={T.ink} /></button>
         </div>
       </SheetRow>
@@ -304,7 +326,7 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 14, border: `1px solid ${T.stroke}` }}>
         <div style={{ width: 20, height: 20, borderRadius: 100, border: `1.5px solid ${T.acid}`, display: 'grid', placeItems: 'center', flex: 'none' }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: T.acid }}>i</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>i</span>
         </div>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>
           Neue Wochenlast: {vm.weekStats[1].value} → {newTss != null ? `${newTss} TSS` : '—'} · {dayCount} Einheiten bleiben
@@ -313,7 +335,7 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
 
       <button onClick={submit} disabled={busy || !onRebuild}
         style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
-        <RefreshCw size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{busy ? 'Rechne…' : 'Plan neu berechnen'}</span>
+        <RefreshCw size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{busy ? 'Rechne…' : 'Plan neu berechnen'}</span>
       </button>
     </SheetShell>
   )
@@ -341,7 +363,7 @@ function GoalSwitchSheet({ vm, onClose, onSwitchGoal }: { vm: W3PlanVm; onClose:
     <SheetShell onClose={onClose}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Wofür trainierst du?</span>
+          <span style={{ fontSize: 26, fontWeight: 600, letterSpacing: -0.6, color: T.ink }}>Wofür trainierst du?</span>
           <span style={{ fontSize: 12.5, fontWeight: 600, color: T.quiet, lineHeight: 1.4 }}>Ein Ziel bestimmt Länge, Phasen und Intensität. Wechseln geht jederzeit – erledigte Wochen bleiben erhalten.</span>
         </div>
         <IconBtn onClick={onClose} label="Schließen"><X size={18} color={T.ink} /></IconBtn>
@@ -356,8 +378,8 @@ function GoalSwitchSheet({ vm, onClose, onSwitchGoal }: { vm: W3PlanVm; onClose:
               <div style={{ width: 46, height: 46, borderRadius: 14, background: on ? (g.icon === 'flag' ? T.acidDim : '#7B5CFF1F') : T.surface2, display: 'grid', placeItems: 'center', flex: 'none' }}>{icon(g.icon)}</div>
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{g.title}</span>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: g.state === 'active' ? T.acid : g.state === 'selected' ? T.evening : T.quiet }}>{g.meta}</span>
+                  <span style={{ fontSize: 17, fontWeight: 600, color: T.ink }}>{g.title}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.4, color: g.state === 'active' ? T.acid : g.state === 'selected' ? T.evening : T.quiet }}>{g.meta}</span>
                 </div>
                 <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, lineHeight: 1.35 }}>{g.desc}</span>
               </div>
@@ -375,7 +397,7 @@ function GoalSwitchSheet({ vm, onClose, onSwitchGoal }: { vm: W3PlanVm; onClose:
       )}
       <button onClick={submit} disabled={busy || !onSwitchGoal}
         style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
-        <Check size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>{busy ? 'Übernehme…' : 'Ziel übernehmen'}</span>
+        <Check size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{busy ? 'Übernehme…' : 'Ziel übernehmen'}</span>
       </button>
     </SheetShell>
   )
@@ -389,7 +411,7 @@ function SheetRow({ title, sub, children }: { title: string; sub: string; childr
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingTop: 16, borderTop: `1px solid ${T.rule}` }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{title}</span>
+        <span style={{ fontSize: 17, fontWeight: 600, color: T.ink }}>{title}</span>
         <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>{sub}</span>
       </div>
       {children}
@@ -403,7 +425,7 @@ function Segmented({ options, value, onChange }: { options: [string, number][]; 
         const on = v === value
         return (
           <button key={label} onClick={() => onChange(v)}
-            style={{ padding: '7px 14px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, background: on ? T.acid : 'transparent', color: on ? T.bg : T.mid }}>{label}</button>
+            style={{ padding: '7px 14px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, background: on ? T.acid : 'transparent', color: on ? T.bg : T.mid }}>{label}</button>
         )
       })}
     </div>
@@ -453,19 +475,26 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
         {/* Goal header */}
         <div style={{ ...band(20), paddingTop: 8, gap: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.acid }}>DEIN ZIEL</span>
+            <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>DEIN ZIEL</span>
             <button onClick={onGoal} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 12px', borderRadius: 100, border: `1px solid ${T.stroke}`, background: 'transparent', cursor: 'pointer', fontFamily: FONT }}>
-              <Pencil size={12} color={T.mid} /><span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: T.mid }}>ZIEL ÄNDERN</span>
+              <Pencil size={12} color={T.mid} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, color: T.mid }}>ZIEL ÄNDERN</span>
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.4, lineHeight: 0.98, color: T.ink }}>{vm.eventName}</span>
+            {/* ── ONE HERO, AND IT IS THE COUNTDOWN ────────────────────────
+                The race name was 40px and the days-to-start 60 — close enough
+                that the eye had to choose between them, so the top of the page
+                had two subjects and no answer. A plan screen is opened with one
+                question underneath every other one: how long have I got. The
+                name is what the plan is FOR; the number is what it is ABOUT.
+                28 against 96 stops the argument. */}
+            <span style={{ fontSize: 28, fontWeight: 600, letterSpacing: -0.9, lineHeight: 1.06, color: T.ink }}>{vm.eventName}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: T.mid }}>{vm.eventSub}</span>
           </div>
           <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', paddingTop: 4 }}>
-            <span style={{ fontSize: 60, fontWeight: 700, letterSpacing: -2.5, lineHeight: 0.8, color: vm.daysToStart != null ? T.acid : T.quiet, textShadow: vm.daysToStart != null ? `0 0 24px ${T.acid}55` : 'none' }}>{vm.daysToStart ?? DASH}</span>
+            <span style={{ fontSize: 96, fontWeight: 600, letterSpacing: -4.6, lineHeight: 0.84, color: vm.daysToStart != null ? T.acid : T.quiet, textShadow: vm.daysToStart != null ? `0 0 34px ${T.acid}4D` : 'none' }}>{vm.daysToStart ?? DASH}</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingBottom: 6 }}>
-              <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Tage bis zum Start</span>
+              <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>Tage bis zum Start</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>{vm.weeksDaysLabel} · {vm.planWeekLabel}</span>
             </div>
           </div>
@@ -481,10 +510,10 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
           <button onClick={onGoal} style={{ ...card(), flexDirection: 'row', alignItems: 'center', gap: 14, cursor: 'pointer', border: 0, fontFamily: FONT, textAlign: 'left' }}>
             <div style={{ width: 42, height: 42, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Flag size={19} color={T.acid} /></div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>Ziel & Anforderungen</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>Ziel & Anforderungen</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>{vm.reqSummary}</span>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.mid }}>{vm.daysRight}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{vm.daysRight}</span>
             <ChevronRight size={18} color={T.mid} />
           </button>
         </div>
@@ -498,7 +527,7 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <Kicker>AKTIVER BLOCK</Kicker>
-                    <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.8, color: T.ink }}>{vm.block.phase}</span>
+                    <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -0.8, color: T.ink }}>{vm.block.phase}</span>
                   </div>
                   <span style={{ fontSize: 12, fontWeight: 600, color: T.mid, paddingTop: 6 }}>{vm.block.dateRange}</span>
                 </div>
@@ -507,7 +536,7 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
                     style={{ height: '100%', borderRadius: 100, background: T.acid }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.acid }}>{vm.block.weekOfBlock}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.ink }}>{vm.block.weekOfBlock}</span>
                   {vm.block.restNote && <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{vm.block.restNote}</span>}
                 </div>
               </div>
@@ -524,30 +553,30 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
             </div>
           ) : (
             <div style={{ ...card(), alignItems: 'center' }}>
-              <span style={{ fontSize: 22, fontWeight: 700, color: T.quiet }}>{DASH}</span>
+              <span style={{ fontSize: 22, fontWeight: 600, color: T.quiet }}>{DASH}</span>
             </div>
           )}
         </div>
 
         {/* Die 12 Wochen */}
-        <SectionTitle title={`Die ${vm.weekBars.length || 12} Wochen`} right={<span style={{ fontSize: 13, fontWeight: 700, color: T.mid }}>Ø {vm.avgTss}</span>} />
+        <SectionTitle title={`Die ${vm.weekBars.length || 12} Wochen`} right={<span style={{ fontSize: 13, fontWeight: 600, color: T.mid }}>Ø {vm.avgTss}</span>} />
         <div style={{ ...band(4), marginTop: -4 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, marginBottom: 12 }}>Belastung pro Woche in TSS</span>
         </div>
         <div style={{ ...band(26) }}>
           <div style={{ ...card() }}>
-            {vm.weekBars.length > 0 ? <WeekChart bars={vm.weekBars} /> : <span style={{ fontSize: 20, fontWeight: 700, color: T.quiet, textAlign: 'center' }}>{DASH}</span>}
+            {vm.weekBars.length > 0 ? <WeekChart bars={vm.weekBars} /> : <span style={{ fontSize: 20, fontWeight: 600, color: T.quiet, textAlign: 'center' }}>{DASH}</span>}
           </div>
         </div>
 
         {/* Diese Woche */}
-        <SectionTitle title="Diese Woche" right={<span style={{ padding: '4px 10px', borderRadius: 100, background: T.acidDim, fontSize: 11, fontWeight: 700, color: T.acid }}>{vm.weekBadge}</span>} />
+        <SectionTitle title="Diese Woche" right={<span style={{ padding: '4px 10px', borderRadius: 100, background: T.acidDim, fontSize: 11, fontWeight: 600, color: T.acid }}>{vm.weekBadge}</span>} />
         <div style={{ ...band(26), gap: 16 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, marginTop: -4 }}>{vm.weekRangeLabel}</span>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             {vm.weekStats.map((s) => (
               <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: s.value === '—' ? T.quiet : T.ink }}>{s.value}</span>
+                <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.6, color: s.value === '—' ? T.quiet : T.ink }}>{s.value}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{s.label}</span>
               </div>
             ))}
@@ -561,8 +590,8 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
               const h = Math.max(6, Math.round((d.frac / stripMax) * 44))
               return (
                 <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: d.isToday ? T.acid : T.quiet }}>{d.letter}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: d.isToday ? T.acid : T.ink }}>{d.date}</span>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: d.isToday ? T.acid : T.quiet }}>{d.letter}</span>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: d.isToday ? T.acid : T.ink }}>{d.date}</span>
                   <div style={{ width: '100%', height: 52, display: 'flex', alignItems: 'flex-end', borderRadius: 10, background: d.isToday ? T.acidDim : T.surface2, padding: 4 }}>
                     <div style={{ width: '100%', height: h, borderRadius: 5, background: d.isRest ? T.d2 : d.isToday ? T.acid : T.d3 }} />
                   </div>
@@ -577,14 +606,14 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
           <div style={{ ...card(), gap: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Kicker>HEUTIGE EINHEIT</Kicker>
-              <span style={{ fontSize: 11, fontWeight: 700, color: T.mid }}>{vm.sessionDur ?? DASH}</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{vm.sessionDur ?? DASH}</span>
             </div>
-            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -0.9, color: vm.sessionTitle ? T.ink : T.ink }}>{vm.sessionTitle ?? 'Ruhetag'}</span>
+            <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -0.9, color: vm.sessionTitle ? T.ink : T.ink }}>{vm.sessionTitle ?? 'Ruhetag'}</span>
             {vm.sessionTitle ? (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 {[[vm.targetW, 'ZIEL'], [vm.sessionTss, 'TSS'], [vm.ftpPct, 'DER FTP']].map(([v, l]) => (
                   <div key={l} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
+                    <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.6, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{l}</span>
                   </div>
                 ))}
@@ -597,8 +626,8 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
             {/* adapt row */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>NICHT NACH DEM GEFÜHL?</span>
-                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>COACH RECHNET DIE WOCHE NEU</span>
+                <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>NICHT NACH DEM GEFÜHL?</span>
+                <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>COACH RECHNET DIE WOCHE NEU</span>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
                 <AdaptBtn label="Leichter" sub={vm.easierTss} icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'easier'} onClick={() => doAdapt('easier')} />
@@ -612,7 +641,7 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
                   <AdaptBtn label="Ruhetag" sub="frei" icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'rest'} onClick={() => doAdapt('rest')} />
                 </div>
               )}
-              {adaptMsg && <span style={{ fontSize: 11, fontWeight: 600, color: T.acid }}>{adaptMsg}</span>}
+              {adaptMsg && <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{adaptMsg}</span>}
             </div>
 
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -622,7 +651,7 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
             {vm.sessionTitle && (
               <button onClick={onStartRide}
                 style={{ height: 54, borderRadius: 100, background: T.acid, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
-                <span style={{ fontSize: 16, fontWeight: 700, color: T.bg }}>Fahrt starten</span>
+                <span style={{ fontSize: 16, fontWeight: 600, color: T.bg }}>Fahrt starten</span>
                 <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
               </button>
             )}
@@ -634,17 +663,17 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
           <button onClick={onLoad} style={{ ...card(), flexDirection: 'row', alignItems: 'center', gap: 14, cursor: 'pointer', border: 0, fontFamily: FONT, textAlign: 'left' }}>
             <div style={{ width: 42, height: 42, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Activity size={19} color={T.acid} /></div>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>Belastung & Prognose</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>Belastung & Prognose</span>
               <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>Zonenverteilung, Umsetzung und wo dich der Plan hinbringt</span>
             </div>
-            <span style={{ fontSize: 12, fontWeight: 700, color: T.mid }}>{vm.forecastValue}</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{vm.forecastValue}</span>
             <ChevronRight size={18} color={T.mid} />
           </button>
         </div>
 
         {/* Wie der Plan sich anpasst */}
         <div style={{ ...band(26), gap: 12 }}>
-          <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Wie der Plan sich anpasst</span>
+          <span style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.6, color: T.ink }}>Wie der Plan sich anpasst</span>
           <span style={{ fontSize: 13, fontWeight: 500, color: T.mid, lineHeight: 1.5 }}>{vm.adaptExplainer}</span>
         </div>
 
@@ -652,11 +681,11 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
         <div style={{ ...band(40), gap: 10 }}>
           <button onClick={() => setSheet('adjust')}
             style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: 'pointer', fontFamily: FONT }}>
-            <SlidersHorizontal size={17} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>Plan anpassen</span>
+            <SlidersHorizontal size={17} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>Plan anpassen</span>
           </button>
           <button onClick={() => setSheet('goal')}
             style={{ height: 50, borderRadius: 100, background: 'transparent', border: `1px solid ${T.stroke}`, display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-            <Repeat size={15} color={T.ink} /><span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>Ziel wechseln</span>
+            <Repeat size={15} color={T.ink} /><span style={{ fontSize: 13.5, fontWeight: 600, color: T.ink }}>Ziel wechseln</span>
           </button>
         </div>
 
@@ -671,7 +700,7 @@ function AdaptBtn({ label, sub, icon, busy, onClick, active }: { label: string; 
   return (
     <button onClick={onClick} disabled={busy}
       style={{ flex: 1, padding: '10px 0', borderRadius: 14, background: active ? T.acidDim : T.surface2, border: active ? `1px solid ${T.acid}` : 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.6 : 1 }}>
-      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>{icon}<span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>{busy ? '…' : label}</span></div>
+      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>{icon}<span style={{ fontSize: 12.5, fontWeight: 600, color: T.ink }}>{busy ? '…' : label}</span></div>
       <span style={{ fontSize: 10, fontWeight: 600, color: active ? T.acid : T.quiet }}>{sub}</span>
     </button>
   )
