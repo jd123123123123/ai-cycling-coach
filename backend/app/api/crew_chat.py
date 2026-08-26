@@ -13,7 +13,15 @@ Endpoints:
                                   with its reaction summary
   GET  /crews/me/rides            recent cycling activities across ALL crew
                                   members (newest first), each with a 'ride'
-                                  reaction summary
+                                  reaction summary and its comment count
+  GET  /crews/me/rides/{id}/comments   the comment thread under one crew ride
+  POST /crews/me/rides/{id}/comments   write under a crew-mate's ride → 201
+
+WHAT THE FEED IS ALLOWED TO SAY. `RideRead` carries training facts and nothing
+else — no GPS, no polyline, no start point. That is the same line
+`GET /crews/me/members/{id}/rides` draws in app/api/crews.py and for the same
+reason: telling the crew you rode 82 km is the point, handing them the track
+that starts at your front door is not.
 """
 
 from __future__ import annotations
@@ -21,13 +29,14 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
+from app.services.crew_notify import notify_ride_comment
 from app.models.crew import CrewMembership
 from app.models.crew_social import CrewMessage
 from app.models.user import User
@@ -52,6 +61,13 @@ CYCLING_SPORTS: frozenset[str] = frozenset(
         "road_cycling",
     }
 )
+
+
+# Where a `crew_messages` row was written. The wall is the crew itself
+# (target_id NULL); a comment hangs off one activity. See models/crew_social.py
+# for why both live in one table.
+MSG_TARGET_CREW = "crew"
+MSG_TARGET_RIDE = "ride"
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -89,7 +105,43 @@ class RideRead(BaseModel):
     distance_m: float | None
     elevation_gain_m: float | None
     duration_seconds: int | None
+    # ── The detail a rider actually opens a crew-mate's ride for ──
+    # Nullable throughout: a ride imported without a power meter has no NP and
+    # no TSS, and the feed prints an em dash for it rather than a padded zero.
+    sport: str | None = None
+    tss: int | None = None
+    avg_power_w: int | None = None
+    avg_hr: int | None = None
+    calories: int | None = None
+    is_mine: bool = False
     reactions: ReactionSummary
+    comment_count: int = 0
+
+
+class CommentSend(BaseModel):
+    text: str = Field(..., min_length=1, max_length=2000)
+
+    @field_validator("text")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        """`min_length=1` lets "   " through, and the endpoint strips before
+        writing — so without this a rider could post an empty comment that
+        still counts in the feed's badge. Validated here, stored stripped."""
+        text = v.strip()
+        if not text:
+            raise ValueError("comment must not be blank")
+        return text
+
+
+class CommentRead(BaseModel):
+    id: int
+    activity_id: int
+    user_id: int
+    handle: str
+    display_name: str
+    text: str
+    created_at: datetime
+    is_mine: bool
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -111,6 +163,11 @@ async def post_chat(
         crew_id=mem.crew_id,
         user_id=current_user.id,
         text=payload.text.strip(),
+        # Explicit, not left to the column default: a wall line and a ride
+        # comment are the same row shape, so the one that decides which is
+        # which should be written where it is read.
+        target_type=MSG_TARGET_CREW,
+        target_id=None,
     )
     db.add(msg)
     await db.commit()
@@ -151,9 +208,15 @@ async def list_chat(
 
     # Fetch the newest `limit` messages (optionally before a cursor), newest
     # first, then reverse to ascending for the response.
+    # THE WALL ONLY. Without this filter every comment written under a ride
+    # would surface a second time in the crew chat, out of the context that
+    # made it mean anything.
     stmt = select(CrewMessage, User).join(
         User, User.id == CrewMessage.user_id
-    ).where(CrewMessage.crew_id == mem.crew_id)
+    ).where(
+        CrewMessage.crew_id == mem.crew_id,
+        CrewMessage.target_type == MSG_TARGET_CREW,
+    )
     if before_id is not None:
         stmt = stmt.where(CrewMessage.id < before_id)
     stmt = stmt.order_by(CrewMessage.id.desc()).limit(limit)
@@ -224,13 +287,16 @@ async def list_crew_rides(
     )
     rows = list((await db.execute(stmt)).all())
 
+    ride_ids = [a.id for a, _ in rows]
+
     summaries = await reaction_summaries(
         db,
         crew_id=mem.crew_id,
         user_id=current_user.id,
         target_type="ride",
-        target_ids=[a.id for a, _ in rows],
+        target_ids=ride_ids,
     )
+    counts = await _comment_counts(db, crew_id=mem.crew_id, activity_ids=ride_ids)
 
     out: list[RideRead] = []
     for act, user in rows:
@@ -247,7 +313,158 @@ async def list_crew_rides(
                 distance_m=act.distance_meters,
                 elevation_gain_m=act.elevation_gain_m,
                 duration_seconds=act.duration_seconds,
+                sport=act.sport,
+                tss=int(round(act.tss)) if act.tss is not None else None,
+                avg_power_w=(
+                    int(round(act.average_power))
+                    if act.average_power is not None
+                    else None
+                ),
+                avg_hr=int(act.average_hr) if act.average_hr is not None else None,
+                calories=int(act.calories) if act.calories is not None else None,
+                is_mine=act.user_id == current_user.id,
                 reactions=ReactionSummary(counts=summ["counts"], mine=summ["mine"]),
+                comment_count=counts.get(act.id, 0),
             )
         )
     return out
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Comments under a crew ride
+# ──────────────────────────────────────────────────────────────────────
+
+
+async def _comment_counts(
+    db: AsyncSession, *, crew_id: int, activity_ids: list[int]
+) -> dict[int, int]:
+    """{activity_id → comment count} for a page of rides, in one grouped query.
+
+    A per-ride COUNT would be N round-trips for a feed of twenty; this is the
+    same batching `reaction_summaries` does one call above.
+    """
+    if not activity_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(CrewMessage.target_id, func.count(CrewMessage.id))
+            .where(
+                CrewMessage.crew_id == crew_id,
+                CrewMessage.target_type == MSG_TARGET_RIDE,
+                CrewMessage.target_id.in_(activity_ids),
+            )
+            .group_by(CrewMessage.target_id)
+        )
+    ).all()
+    return {int(tid): int(n) for tid, n in rows if tid is not None}
+
+
+async def _crew_ride_or_404(
+    db: AsyncSession, *, activity_id: int, crew_id: int
+) -> Activity:
+    """The activity, but only if it belongs to somebody in the caller's crew.
+
+    404 rather than 403 for a ride outside the crew, following the rule set in
+    app/api/crews.py: the endpoint must not confirm that an activity id exists
+    to somebody who has no business seeing it.
+    """
+    act = (
+        await db.execute(
+            select(Activity)
+            .join(CrewMembership, CrewMembership.user_id == Activity.user_id)
+            .where(Activity.id == activity_id, CrewMembership.crew_id == crew_id)
+        )
+    ).scalars().first()
+    if act is None:
+        raise HTTPException(status_code=404, detail="ride not in your crew")
+    return act
+
+
+@router.get("/rides/{activity_id}/comments", response_model=list[CommentRead])
+async def list_ride_comments(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    limit: int = 100,
+) -> list[CommentRead]:
+    """The thread under one crew ride, oldest-FIRST — a conversation is read
+    downwards, unlike the feed above it. 403 when not in a crew, 404 when the
+    ride belongs to nobody in it."""
+    mem = await require_membership(db, current_user.id)
+    await _crew_ride_or_404(db, activity_id=activity_id, crew_id=mem.crew_id)
+
+    limit = max(1, min(200, limit))
+    stmt = (
+        select(CrewMessage, User)
+        .join(User, User.id == CrewMessage.user_id)
+        .where(
+            CrewMessage.crew_id == mem.crew_id,
+            CrewMessage.target_type == MSG_TARGET_RIDE,
+            CrewMessage.target_id == activity_id,
+        )
+        .order_by(CrewMessage.id.desc())
+        .limit(limit)
+    )
+    rows = list((await db.execute(stmt)).all())
+    rows.reverse()  # ascending → oldest first
+
+    return [
+        CommentRead(
+            id=msg.id,
+            activity_id=activity_id,
+            user_id=msg.user_id,
+            handle=display_handle(user) if user else "rider",
+            display_name=display_handle(user) if user else "rider",
+            text=msg.text,
+            created_at=msg.created_at,
+            is_mine=msg.user_id == current_user.id,
+        )
+        for msg, user in rows
+    ]
+
+
+@router.post(
+    "/rides/{activity_id}/comments",
+    response_model=CommentRead,
+    status_code=status.HTTP_201_CREATED,
+)
+async def post_ride_comment(
+    activity_id: int,
+    payload: CommentSend,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> CommentRead:
+    """Write under a crew-mate's ride (or your own). 403 when not in a crew,
+    404 when the ride is not one of the crew's."""
+    mem = await require_membership(db, current_user.id)
+    ride = await _crew_ride_or_404(db, activity_id=activity_id, crew_id=mem.crew_id)
+
+    msg = CrewMessage(
+        crew_id=mem.crew_id,
+        user_id=current_user.id,
+        text=payload.text.strip(),
+        target_type=MSG_TARGET_RIDE,
+        target_id=activity_id,
+    )
+    db.add(msg)
+    await db.commit()
+    await db.refresh(msg)
+
+    # AND TELL THE RIDER WHOSE RIDE IT IS. Writing under somebody's ride was
+    # silent until now: it landed in a table, and they found it the next time
+    # they happened to open the crew screen and expand that row. A comment
+    # nobody is told about is a comment to nobody. Self-comments stay silent,
+    # and a failed push never fails the write — see `crew_notify`.
+    await notify_ride_comment(db, actor=current_user, activity=ride, text=msg.text)
+
+    name = display_handle(current_user)
+    return CommentRead(
+        id=msg.id,
+        activity_id=activity_id,
+        user_id=msg.user_id,
+        handle=name,
+        display_name=name,
+        text=msg.text,
+        created_at=msg.created_at,
+        is_mine=True,
+    )

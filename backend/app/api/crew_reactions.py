@@ -28,8 +28,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
+from app.models.activity import Activity
+from app.models.crew import CrewMembership
 from app.models.crew_social import CrewReaction
 from app.models.user import User
+from app.services.crew_notify import notify_ride_reaction
 from app.services.crew_social import (
     ALLOWED_EMOJI,
     TARGET_TYPES,
@@ -131,6 +134,25 @@ async def toggle_reaction(
         await db.delete(existing)
         toggled_on = False
     await db.commit()
+
+    # ── AND TELL THE RIDER WHOSE RIDE IT IS ──────────────────────────────
+    # Only on the way ON, and only for a ride. A toggle that pushed on both
+    # edges would let one bored thumb ring somebody's phone all evening, and
+    # "somebody took their 🔥 back" is not news. The other target types —
+    # messages, events, the weekly crew cheer — are not somebody's ride and
+    # have no single owner to tell.
+    if toggled_on and payload.target_type == "ride" and target_id is not None:
+        ride = (
+            await db.execute(
+                select(Activity)
+                .join(CrewMembership, CrewMembership.user_id == Activity.user_id)
+                .where(Activity.id == target_id, CrewMembership.crew_id == mem.crew_id)
+            )
+        ).scalars().first()
+        if ride is not None:
+            await notify_ride_reaction(
+                db, actor=current_user, activity=ride, emoji=payload.emoji
+            )
 
     summ = await reaction_summary(
         db,
