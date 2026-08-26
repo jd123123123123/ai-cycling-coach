@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Sparkles, UserPlus, Pencil, ChevronRight } from 'lucide-react'
+import { W3CrewFeedPage } from './W3CrewFeed'
 import { T, FONT, EASE, grow, band, card, DASH } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
 import { YOU_TINT, type W3Period } from './w3crew'
@@ -182,7 +183,7 @@ const SectionHead = ({ n, title, chip }: { n: number; title: string; chip?: stri
   </div>
 )
 
-export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, onPeriod, onOpenMember }: {
+export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, onPeriod, onOpenMember, feed }: {
   vm: W3CrewVm
   onBack?: () => void
   onProps?: () => void
@@ -190,6 +191,9 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
   onEditGoal?: () => void
   onPeriod?: (p: W3Period) => void
   onOpenMember?: (id: number) => void
+  /** Chapter 03's contents. Omitted on the wired screen, where the section
+   *  fetches the crew's real rides itself. */
+  feed?: React.ReactNode
 }) {
   const reduce = useReducedMotion()
 
@@ -360,6 +364,27 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
                 </div>
               </div>
             )}
+
+            {/* ── 03 THE FEED, WHERE IT WAS ALWAYS POINTING ──────────────
+                Today's crew column caps at four rides and offers "+N weitere
+                in der Crew", which navigated HERE — to a screen that rendered
+                no feed at all. The rides it counted were reachable from
+                nowhere. This is that promise, kept: every ride the crew has
+                logged, each one opening in place with its reactions and its
+                thread, the same component Today draws so there is one crew
+                feed in the app and not two dialects of one.
+
+                It sits after the board and the ring because those answer
+                "where do I stand" and this answers "what did they actually
+                do" — the standings are the summary, the feed is the evidence,
+                and a summary reads better before its evidence. */}
+            <div style={{ ...band(28), gap: 14 }}>
+              <SectionHead n={3} title="Zuletzt gefahren" />
+              {/* The wired screen lets the section fetch its own rides; the
+                  preview hands it fixtures so the chapter is reviewable
+                  without a crew, a session or a backend. */}
+              {feed ?? <W3CrewFeedPage />}
+            </div>
 
             {/* HIGHLIGHTS IS GONE — it restated the board in sentences.
                 "@mara leads the crew board this week", "You · 412 TSS · 84 km",

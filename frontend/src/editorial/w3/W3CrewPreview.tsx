@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import W3CrewView, { type W3CrewVm } from './W3CrewView'
+import { W3CrewFeedView } from './W3CrewFeed'
+import type { CrewRide } from '../../api/crewRides'
 import { periodWord, thisPeriod, type W3Period } from './w3crew'
 
 /**
@@ -10,6 +12,31 @@ import { periodWord, thisPeriod, type W3Period } from './w3crew'
  * The period control is live so the layout is inspectable on every tab, but the
  * FIXTURE NUMBERS DO NOT CHANGE with it — only the wired page re-fetches.
  */
+
+/** Fixture rides for chapter 03, so the feed is reviewable without a backend.
+ *  The wired screen reads the crew's real ones. */
+const H = 3600
+const now = Date.now()
+const FEED_RIDES: CrewRide[] = [
+  { id: 901, user_id: 2, handle: 'mara', display_name: 'Mara', title: 'Feierabendrunde am Kanal', started_at: new Date(now - 5 * H * 1000).toISOString(),
+    distance_m: 48200, elevation_gain_m: 310, duration_seconds: 5820, sport: 'cycling', tss: 78, avg_power_w: 212, avg_hr: 148,
+    calories: 1180, is_mine: false, comment_count: 2, reactions: { counts: { '🔥': 3, '💪': 1 }, mine: ['💪'] } },
+  { id: 902, user_id: 1, handle: 'du', display_name: 'Du', title: 'Intervalle, 4×8', started_at: new Date(now - 26 * H * 1000).toISOString(),
+    distance_m: 62400, elevation_gain_m: 680, duration_seconds: 7980, sport: 'cycling', tss: 121, avg_power_w: 241, avg_hr: 156,
+    calories: 1640, is_mine: true, comment_count: 1, reactions: { counts: { '🚀': 2 }, mine: [] } },
+  { id: 903, user_id: 3, handle: 'timo', display_name: 'Timo', title: 'Lange Ausfahrt in die Berge', started_at: new Date(now - 50 * H * 1000).toISOString(),
+    distance_m: 118600, elevation_gain_m: 1840, duration_seconds: 16200, sport: 'cycling', tss: 214, avg_power_w: 198, avg_hr: 141,
+    calories: 3120, is_mine: false, comment_count: 0, reactions: { counts: { '👏': 4, '⚡': 2 }, mine: [] } },
+  // A ride imported without a power meter — the card must print DASH, not a
+  // padded zero. Worth having in the fixture precisely because it is the case
+  // that looks wrong when it is wrong.
+  { id: 904, user_id: 4, handle: 'jo', display_name: 'Jo', title: 'Regeneration', started_at: new Date(now - 74 * H * 1000).toISOString(),
+    distance_m: 24100, elevation_gain_m: 90, duration_seconds: 3600, sport: 'cycling', tss: null, avg_power_w: null, avg_hr: 118,
+    calories: 620, is_mine: false, comment_count: 0, reactions: { counts: {}, mine: [] } },
+  { id: 905, user_id: 2, handle: 'mara', display_name: 'Mara', title: 'Rolle, Sweetspot', started_at: new Date(now - 98 * H * 1000).toISOString(),
+    distance_m: 31000, elevation_gain_m: 0, duration_seconds: 4200, sport: 'cycling', tss: 68, avg_power_w: 205, avg_hr: 144,
+    calories: 840, is_mine: false, comment_count: 3, reactions: { counts: { '🙌': 1 }, mine: [] } },
+]
 
 const BASE = {
   inCrew: true,
@@ -75,5 +102,6 @@ export default function W3CrewPreview() {
     showDistanceGoal: period === 'week',
     highlightsTitle: `This ${periodWord(period)} in the crew`,
   }
-  return <W3CrewView vm={vm} onPeriod={setPeriod} />
+  return <W3CrewView vm={vm} onPeriod={setPeriod}
+    feed={<W3CrewFeedView rides={FEED_RIDES} variant="page" />} />
 }
