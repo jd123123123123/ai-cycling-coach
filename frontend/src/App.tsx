@@ -4,7 +4,7 @@ import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
 import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
-import W3AvatarGate from './editorial/w3/W3AvatarGate'
+import W3SetupGate from './editorial/w3/W3SetupGate'
 import W3WeekReviewGate from './editorial/w3/W3WeekReviewGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import W3Guard from './editorial/w3/W3Guard'
@@ -246,7 +246,7 @@ function AppRoutes() {
   return (
     <>
     <W3RideCelebrationWatcher />
-    <W3AvatarGate />
+    <W3SetupGate />
     <W3WeekReviewGate />
     <Suspense fallback={<AppLoading />}>
       <PageTransition routeKey={roomKey(location.pathname)}>

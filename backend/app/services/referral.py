@@ -49,8 +49,9 @@ from app.models.rewards import (
     REASON_STREAK_BONUS,
     PointsLedger,
 )
+from app.models.garage import GarageAsset
 from app.models.user import User
-from app.services import rewards
+from app.services import crew_avatars, rewards
 from app.services.crew_score import display_handle, challenge_value_for_user
 
 logger = logging.getLogger(__name__)
@@ -241,6 +242,31 @@ async def _power_claimed(
     return int(sum(a for (a,) in result.all() if a))
 
 
+async def _rider_face(db: AsyncSession, uid: int) -> str | None:
+    """The referred rider's DIGITALISED rider, or nothing.
+
+    NOT `users.avatar_url`. That column also holds the raw-photo fallback from
+    before the garage existed and from renders that ran with no image model, so
+    it can contain a snapshot the rider never chose as their rider — which is
+    exactly the face a referrer was seeing on this card for someone who had not
+    made a rider at all. Every other surface in the app already reads the
+    garage (`W3RiderAvatar`, the crew standings, the bike hero); this one was
+    the last leak. Someone who has not made a rider simply has none, and the
+    card falls through to their initial.
+
+    Thumbnailed for the same reason the crew standings are: a rendered rider is
+    50-200 KB and this list draws it in a small circle.
+    """
+    row = (
+        await db.execute(
+            select(GarageAsset.image_url).where(
+                GarageAsset.user_id == uid, GarageAsset.kind == "rider",
+            )
+        )
+    ).scalar_one_or_none()
+    return crew_avatars.thumbnail(row)
+
+
 async def _rider_stats(db: AsyncSession, ref: Referral, now: datetime) -> _RiderStats:
     """The referred rider's real training over the referral window so far."""
     uid = ref.referred_user_id
@@ -255,7 +281,7 @@ async def _rider_stats(db: AsyncSession, ref: Referral, now: datetime) -> _Rider
     power = await _power_claimed(db, uid, ref.started_at, window_end)
     return _RiderStats(
         handle=display_handle(user) if user else "Rider",
-        avatar_url=getattr(user, "avatar_url", None) if user else None,
+        avatar_url=await _rider_face(db, uid),
         power_claimed=power,
         distance_km=distance_km,
         rides=int(rides),

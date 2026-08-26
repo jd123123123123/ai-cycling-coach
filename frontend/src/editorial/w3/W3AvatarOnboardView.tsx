@@ -116,7 +116,7 @@ const CONFETTI = Array.from({ length: 12 }, (_, i) => ({
  * time-based (typical vision pass ≈ 10s) — copy only, never a fake percentage.
  */
 const PHASES: { icon: typeof Mountain; label: string; note: string }[] = [
-  { icon: ScanFace, label: 'Dein Foto wird gelesen', note: 'Gesicht, Haltung, Farben — Cycl_r Studio schaut genau hin.' },
+  { icon: ScanFace, label: 'Dein Foto wird gelesen', note: 'Gesicht, Haltung, Farben — Ridr Studio schaut genau hin.' },
   { icon: Wand2, label: 'Dein Rider wird gebaut', note: 'Das Bildmodell formt daraus deine Collectible-Figur.' },
 ]
 const PHASE_SWITCH_S = 10

@@ -8,14 +8,14 @@ import { useWeeklyRecap } from '../../hooks/useWeeklyRecap'
  * W3 · Week-review auto-trigger.
  *
  * A render-null watcher, mounted once inside the Router next to
- * `W3RideCelebrationWatcher` and `W3AvatarGate`. At the START of a new week it
+ * `W3RideCelebrationWatcher` and `W3SetupGate`. At the START of a new week it
  * opens the WOCHENRÜCKBLICK (`/e/w3-week-review`) exactly once — then not again
  * until the next week rolls over.
  *
  * The "seen" key is the reviewed week's own Monday (`recap.week_start`), not a
  * boolean: dismissing THIS week's review can never suppress next week's, and a
  * hard refresh cannot re-fire the same one. That is why localStorage is right
- * here where the avatar gate uses sessionStorage — "I've read week 33" is a
+ * here where the setup gate uses sessionStorage — "I've read week 33" is a
  * fact about a week, not about a browser session, but it expires on its own the
  * moment week 34 begins. Nothing is silenced forever.
  *
