@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import W3Gear from './W3Gear'
+import W3PlacesView from './W3PlacesView'
+import type { Backdrop, Place } from '../../api/garage'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { T, FONT } from './w3tokens'
@@ -23,6 +25,25 @@ const SLOTS: Record<string, string> = {
 }
 const PRICE: Record<GearRarity, number> = { common: 600, rare: 1800, legendary: 4500 }
 const BALANCE = 2140
+
+/** The ten hand-written stages, in catalogue order, with the states a rider
+ *  actually sees: one selected, several earned, the rest still to ride. */
+const PREVIEW_BACKDROPS: Backdrop[] = [
+  { id: 'studio_black', name_de: 'Studio', unlock_de: '', unlocked: true, selected: false },
+  { id: 'starter_road', name_de: 'Startstraße', unlock_de: '', unlocked: true, selected: true },
+  { id: 'night_road', name_de: 'Nachtstraße', unlock_de: '', unlocked: true, selected: false },
+  { id: 'dawn_road', name_de: 'Morgengrauen', unlock_de: 'Fahrt vor 7 Uhr gestartet', unlocked: true, selected: false },
+  { id: 'mountain_pass', name_de: 'Passhöhe', unlock_de: '1 000 hm an einem Tag', unlocked: false, selected: false },
+  { id: 'coast_road', name_de: 'Küstenstraße', unlock_de: '100 km am Stück', unlocked: true, selected: false },
+  { id: 'rain_road', name_de: 'Regenstraße', unlock_de: 'Eine Fahrt im Regen', unlocked: false, selected: false },
+  { id: 'gravel_track', name_de: 'Schotterweg', unlock_de: 'Eine Schotterfahrt', unlocked: false, selected: false },
+  { id: 'winter_road', name_de: 'Winterstraße', unlock_de: 'Eine Fahrt bei 0 °C oder kälter', unlocked: false, selected: false },
+  { id: 'velodrome', name_de: 'Bahn', unlock_de: 'Eine Fahrt mit IF 0,95 oder höher', unlocked: false, selected: false },
+]
+
+/** Empty on purpose: a rider who has discovered no places still has to be able
+ *  to change the room their bike stands in, and that path must be visible here. */
+const PREVIEW_PLACES: Place[] = []
 
 function item(
   id: string, name_de: string, slot: string, rarity: GearRarity, pct: number,
@@ -107,6 +128,7 @@ const FIXTURE: Gear = {
 
 export default function W3GearPreview() {
   const [gear, setGear] = useState<Gear>(FIXTURE)
+  const [selectedStage, setSelectedStage] = useState('starter_road')
 
   /** The real reducers, locally — including slot displacement, which is the
    *  behaviour most worth seeing before it ships. */
@@ -150,6 +172,22 @@ export default function W3GearPreview() {
           gear={gear} loading={false} busyId={null}
           onBuy={onBuy} onEquip={onEquip}
           onUnequip={(id) => setItem(id, { equipped: false })} />
+        {/* THE PLACES AND THE KULISSEN, because the shipped screen has them.
+            This preview drew the parts grid alone while `W3GearScreen` renders
+            `W3PlacesPanel` underneath it, so the design route disagreed with the
+            page — and a preview that disagrees with its page sends design work
+            after problems that do not exist, or hides ones that do. The
+            backdrop grid was invisible here for exactly that reason. */}
+        <W3PlacesView
+          embedded
+          balance={gear.balance}
+          places={PREVIEW_PLACES}
+          backdrops={PREVIEW_BACKDROPS.map((b) => ({ ...b, selected: b.id === selectedStage }))}
+          selected={selectedStage}
+          busySlug={null}
+          onBuy={() => {}}
+          onSelect={setSelectedStage}
+          onBack={() => {}} />
         <W3TabBar />
       </div>
     </div>

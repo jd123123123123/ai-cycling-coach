@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'framer-motion'
-import { ArrowLeft, Check, Loader2, MapPin } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Lock, MapPin } from 'lucide-react'
 import { T, FONT, EASE, Kicker } from './w3tokens'
 import { S, lux, hairline, TNUM } from './w3surfaces'
 import './w3.css'
@@ -7,6 +7,7 @@ import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { W3Price } from './W3Coin'
 import type { Backdrop, Place } from '../../api/garage'
+import { backdropArt } from './w3backdropArt'
 
 /**
  * W3 · ORTE — the places riders have been, and the one RideCoin sink that is
@@ -174,7 +175,11 @@ export default function W3PlacesView(p: W3PlacesProps) {
       : { minHeight: '100dvh', background: T.bg, fontFamily: FONT }}>
       {!embedded && <W3StatusBar />}
 
-      <div style={{ padding: embedded ? 0 : `0 ${S.xl}px ${S.xxl}px` }}>
+      {/* EMBEDDED STILL NEEDS ITS GUTTER. This was `0` on the theory that the
+          shop supplies the inset — it does not: `W3Gear` pads itself, so the
+          places half ran edge to edge under a grid that did not. A list of
+          full-width rows hid it; a grid of tiles cut off at the right does not. */}
+      <div style={{ padding: embedded ? `0 ${S.xl}px ${S.xl}px` : `0 ${S.xl}px ${S.xxl}px` }}>
         {!embedded && (
           <div style={{
             display: 'flex', alignItems: 'center', gap: S.md, height: 52,
@@ -254,32 +259,87 @@ export default function W3PlacesView(p: W3PlacesProps) {
           </div>
         )}
 
-        {/* The hand-written stages: earned by what the rider DID, never bought,
-            so they are a separate list with no prices anywhere in it. */}
+        {/* ── KULISSEN: THE ROOMS, SHOWN AS ROOMS ─────────────────────────
+            This was a list of NAMES — "Passhöhe", "Küstenstraße" — with the
+            unlock rule underneath and a tick on the current one. Choosing where
+            your bike stands from a text list is not choosing: nothing on the
+            row told a rider what they were picking, so the only way to see a
+            room was to select it and go and look.
+
+            They are tiles now, in the same shape and the same three states as
+            the parts grid one section above — selected, owned, locked with what
+            it takes. The art is drawn (`w3backdropArt`), not fetched: the
+            places half of this screen already inlines a plate per row and is
+            the heaviest read in the app, and repeating that here would cost a
+            hundred kilobytes to show ten gradients.
+
+            Earned, never bought — so there is no price anywhere in this grid,
+            and the locked tiles say what to ride rather than what to pay. */}
+        {/* The anchor the garage's Kulisse row jumps to. */}
+        <div id="kulissen" style={{ scrollMarginTop: 74 }} />
         <Kicker>KULISSEN</Kicker>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm, marginTop: S.md }}>
-          {p.backdrops.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              onClick={() => { if (b.unlocked && !b.selected) p.onSelect(b.id) }}
-              disabled={!b.unlocked || b.selected}
-              style={{
-                ...lux(16), padding: `${S.md}px ${S.lg}px`, border: 0, textAlign: 'left',
-                display: 'flex', alignItems: 'center', gap: S.md, fontFamily: FONT,
-                cursor: b.unlocked && !b.selected ? 'pointer' : 'default',
-                opacity: b.unlocked ? 1 : 0.55,
-              }}
-            >
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{b.name_de}</span>
-                <span style={{ fontSize: 11, color: b.unlocked ? T.mid : T.quiet }}>
-                  {b.unlocked ? 'Freigefahren' : b.unlock_de}
-                </span>
-              </div>
-              {b.selected && <Check size={16} color={T.acid} />}
-            </button>
-          ))}
+        <span style={{ display: 'block', marginTop: 4, fontSize: 11, fontWeight: 500, color: T.quiet }}>
+          Wo dein Rad steht. Freigefahren, nicht gekauft.
+        </span>
+        <div style={{
+          display: 'grid', gridTemplateColumns: '1fr 1fr', gap: S.sm, marginTop: S.md,
+        }}>
+          {p.backdrops.map((b) => {
+            const art = backdropArt(b.id)
+            const pickable = b.unlocked && !b.selected
+            return (
+              <button
+                key={b.id}
+                type="button"
+                onClick={() => { if (pickable) p.onSelect(b.id) }}
+                disabled={!pickable}
+                aria-label={b.name_de}
+                style={{
+                  ...lux(16), padding: 0, border: 0, overflow: 'hidden', textAlign: 'left',
+                  display: 'flex', flexDirection: 'column', fontFamily: FONT,
+                  cursor: pickable ? 'pointer' : 'default',
+                  outline: b.selected ? `2px solid ${T.acid}` : 'none', outlineOffset: -2,
+                }}
+              >
+                <div style={{
+                  position: 'relative', width: '100%', aspectRatio: '16 / 10',
+                  background: art.css,
+                  // A room the rider has not opened is dimmed rather than
+                  // hidden: the picture is the argument for going and riding it.
+                  filter: b.unlocked ? 'none' : 'grayscale(0.7) brightness(0.55)',
+                }}>
+                  {b.selected && (
+                    <span style={{
+                      position: 'absolute', top: 8, right: 8, width: 22, height: 22,
+                      borderRadius: 100, background: T.acid, display: 'grid', placeItems: 'center',
+                    }}>
+                      <Check size={13} color={T.bg} strokeWidth={3} />
+                    </span>
+                  )}
+                  {!b.unlocked && (
+                    <span style={{
+                      position: 'absolute', top: 8, right: 8, width: 22, height: 22,
+                      borderRadius: 100, background: T.glass, display: 'grid', placeItems: 'center',
+                      backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+                    }}>
+                      <Lock size={11} color={T.ink} />
+                    </span>
+                  )}
+                </div>
+                <div style={{ padding: `${S.sm}px ${S.md}px ${S.md}px`, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {b.name_de}
+                  </span>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, lineHeight: 1.3,
+                    color: b.selected ? T.acid : b.unlocked ? T.quiet : T.mid,
+                  }}>
+                    {b.selected ? 'Ausgewählt' : b.unlocked ? art.mood : b.unlock_de}
+                  </span>
+                </div>
+              </button>
+            )
+          })}
         </div>
       </div>
 

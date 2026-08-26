@@ -3,6 +3,8 @@ import { ChevronRight, MapPin, Package, Sparkles, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Workshop, WorkshopComponent } from '../../api/workshop'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
+import { hairline } from './w3surfaces'
+import { backdropArt } from './w3backdropArt'
 import { lux } from './w3surfaces'
 
 /**
@@ -72,6 +74,44 @@ function Row({ icon: Icon, title, note, right, onClick, accent }: {
 }
 
 /**
+ * THE ROOM THE BIKE IS STANDING IN, one tap from the bike.
+ *
+ * Changing the backdrop was reachable only from a text list at the foot of the
+ * shop, two screens from the machine it changes — and `W3StageRail`, the swipe
+ * rail written for exactly this, was mounted NOWHERE. `W3TodayStage`'s comment
+ * says it "is still wired there" in the garage; grep finds it in its own file
+ * and its tests and nothing else. Today was right to drop the rail (a row of
+ * dots naming a room the picture had not rendered yet is the app promising what
+ * it is not showing), but dropping it left no in-garage path at all.
+ *
+ * A row, then, not a carousel: it SHOWS the current room as its own art and
+ * says its name, so a rider standing in the garage can see where their bike is
+ * and reach the picker in one tap. Nothing here claims to be the render.
+ */
+function StageRow({ id, name, onOpen }: { id: string; name: string; onOpen: () => void }) {
+  const art = backdropArt(id)
+  return (
+    <button onClick={onOpen}
+      style={{
+        width: '100%', display: 'flex', alignItems: 'center', gap: 13,
+        padding: '13px 15px', border: 0, cursor: 'pointer', fontFamily: FONT,
+        background: T.tile, borderRadius: 18, textAlign: 'left',
+      }}>
+      <span style={{
+        ...hairline(),
+        width: 46, height: 34, borderRadius: 9, flex: 'none',
+        background: art.css,
+      }} />
+      <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Kulisse</span>
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+      </span>
+      <ChevronRight size={15} color={T.quiet} style={{ flex: 'none' }} />
+    </button>
+  )
+}
+
+/**
  * "Werkstatt in deiner Nähe" — a plain link, on purpose.
  *
  * The obvious build asks for the browser's location and centres a map on it.
@@ -89,6 +129,11 @@ export interface W3GarageLaneProps {
   onOpenWorkshop: () => void
   onOpenGear: () => void
   onOpenShop: () => void
+  /** The room the bike is standing in right now, and its name. Null while the
+   *  backdrops read is in flight — the row simply does not draw rather than
+   *  naming a stage the rider has not chosen. */
+  stage: { id: string; name: string } | null
+  onOpenStages: () => void
 }
 
 export default function W3GarageLane(p: W3GarageLaneProps) {
@@ -162,6 +207,7 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
       <div style={{ ...band(30) }}>
         <div style={{ paddingBottom: 10 }}><Kicker>Weiter</Kicker></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {p.stage && <StageRow id={p.stage.id} name={p.stage.name} onOpen={p.onOpenStages} />}
           <Row icon={Package} title="Ausrüstung" note="Teile kaufen und montieren" onClick={p.onOpenGear} />
           {/* ONE ROW, because there is now one screen behind it. "Shop" and
               "Orte" were two rows leading to two screens that both sold things

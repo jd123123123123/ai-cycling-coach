@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft } from 'lucide-react'
 import { T, FONT } from './w3tokens'
@@ -15,6 +15,7 @@ import W3Shops from './W3Shops'
 import { useBuyGear, useEquipGear, useGear, useUnequipGear } from '../../hooks/useGear'
 import { useWorkshop } from '../../hooks/useWorkshop'
 import { useWallet } from '../../hooks/useWallet'
+import { useBackdrops } from '../../hooks/useGarage'
 
 /**
  * The three live screens of the bike economy, wired to real endpoints.
@@ -81,6 +82,17 @@ export function W3GarageHome() {
   const navigate = useNavigate()
   const { data: gear } = useGear()
   const { data: workshop } = useWorkshop()
+  // The room the bike is in, so the garage can show it and hand the rider one
+  // tap to the picker. Cheap: the same cached read the shop's gallery uses.
+  const { data: backdrops } = useBackdrops()
+  const stage = (() => {
+    if (!backdrops) return null
+    const id = backdrops.selected
+    const b = backdrops.backdrops.find((x) => x.id === id)
+    if (b) return { id, name: b.name_de }
+    const pl = backdrops.places.find((x) => `place:${x.slug}` === id)
+    return pl ? { id, name: pl.name } : null
+  })()
 
   // NO STAGE OF ITS OWN. The garage is the same room as Today, and the room
   // belongs to `W3HeroShell` — so this page contributes the panel that floats
@@ -119,7 +131,9 @@ export function W3GarageHome() {
       workshop={workshop ?? null}
       onOpenWorkshop={() => navigate('/e/w3-workshop')}
       onOpenGear={() => navigate('/e/w3-gear')}
-      onOpenShop={() => navigate('/e/w3-gear')} />
+      onOpenShop={() => navigate('/e/w3-gear')}
+      stage={stage}
+      onOpenStages={() => navigate('/e/w3-gear#kulissen')} />
   )
 
   if (inShell) return <>{portal}{lane}</>
@@ -140,6 +154,18 @@ export function W3GarageHome() {
 
 /** AUSRÜSTUNG — the shop. Route: /e/w3-gear */
 export function W3GearScreen() {
+  // The garage links straight to the backdrops with `#kulissen`; without this
+  // the rider lands at the top of a long shop and has to find them again, which
+  // is the trip the row exists to remove.
+  useEffect(() => {
+    if (window.location.hash !== '#kulissen') return
+    const t = setTimeout(
+      () => document.getElementById('kulissen')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+      120,   // after the panels' first paint, or there is nothing to scroll to
+    )
+    return () => clearTimeout(t)
+  }, [])
+
   return (
     <Shell title="Ausrüstung" back right={<Balance />}>
       <W3GearPanel />
