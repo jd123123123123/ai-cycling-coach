@@ -1,5 +1,6 @@
 """Crew-social API — chat send/list, reaction toggle on/off + counts, crew-week
-cheer, and the all-crew rides feed, plus auth + crew-scoping guards.
+cheer, the all-crew rides feed and the comment thread under one crew ride, plus
+auth + crew-scoping guards.
 
 Mirrors the mocked-db dependency-override harness used in
 tests/api/test_crew_events_api.py: there is no real-Postgres fixture in this
@@ -58,12 +59,25 @@ def _membership(user_id=5, crew_id=1):
 
 
 def _activity(aid, uid, *, sport="cycling", started=None, title="Ride",
-              distance=30000.0, elev=400.0, dur=3600):
+              distance=30000.0, elev=400.0, dur=3600,
+              tss=72.4, avg_power=214.6, avg_hr=138, calories=740):
     return SimpleNamespace(
         id=aid, user_id=uid, sport=sport,
         started_at=started or NOW, title=title,
         distance_meters=distance, elevation_gain_m=elev, duration_seconds=dur,
+        tss=tss, average_power=avg_power, average_hr=avg_hr, calories=calories,
     )
+
+
+def _comment(mid, crew_id, uid, activity_id, text="Stark."):
+    """A crew_messages row in a ride's thread — what the wall filter must skip."""
+    m = CrewMessage(
+        crew_id=crew_id, user_id=uid, text=text,
+        target_type="ride", target_id=activity_id,
+    )
+    m.id = mid
+    m.created_at = NOW
+    return m
 
 
 class FakeDB:
@@ -132,8 +146,29 @@ class FakeDB:
 
         if "FROM crew_messages" in text:
             crew_id = _int_param(stmt, "crew_id")
+            # The wall reads target_type='crew'; a ride thread reads 'ride' plus
+            # a target_id. Rows written before the column existed carry None,
+            # which the column's server_default makes 'crew' in a real database
+            # — the fixtures spell it out rather than relying on that.
+            target_type = _str_param(stmt, "target_type") or "crew"
+            target_id = _int_param(stmt, "target_id")
+            msgs = [
+                m for m in self.messages
+                if m.crew_id == crew_id
+                and (m.target_type or "crew") == target_type
+                and (target_id is None or m.target_id == target_id)
+            ]
+
+            # The feed's grouped comment count, not a list of rows.
+            if "count(" in text.lower():
+                counts: dict[int, int] = {}
+                for m in msgs:
+                    if m.target_id is not None:
+                        counts[m.target_id] = counts.get(m.target_id, 0) + 1
+                res.all.return_value = list(counts.items())
+                return res
+
             before_id = _int_param(stmt, "id")
-            msgs = [m for m in self.messages if m.crew_id == crew_id]
             if before_id is not None:
                 msgs = [m for m in msgs if m.id < before_id]
             msgs.sort(key=lambda m: m.id, reverse=True)
@@ -169,6 +204,22 @@ class FakeDB:
 
         if "FROM activities" in text:
             crew_id = _int_param(stmt, "crew_id")
+            member_ids_all = set(self._crew_member_ids(crew_id))
+
+            # Single-ride lookup (`_crew_ride_or_404`): scoped to the crew, and
+            # NOT to a cycling sport — the guard's job is "is this one of ours".
+            if "activities.id = " in text:
+                aid = _int_param(stmt, "id")
+                match = next(
+                    (
+                        a for a in self.activities
+                        if a.id == aid and a.user_id in member_ids_all
+                    ),
+                    None,
+                )
+                res.scalars.return_value.first.return_value = match
+                return res
+
             member_ids = set(self._crew_member_ids(crew_id))
             acts = [
                 a for a in self.activities
@@ -405,3 +456,117 @@ def test_rides_feed_empty_when_no_crew(client_for):
     res = client_for(db).get("/crews/me/rides")
     assert res.status_code == 200
     assert res.json() == []
+
+
+def test_rides_feed_carries_the_detail_and_the_comment_count(client_for):
+    """The feed row is what the card opens on — training facts, no GPS."""
+    acts = [_activity(300, 6, title="Alpenrand")]
+    db = _base_db(activities=acts, messages=[
+        _comment(1, 1, 5, 300, "Brutal."),
+        _comment(2, 1, 6, 300, "Ging so."),
+        _comment(3, 1, 5, 999, "Anderer Ride."),   # a different thread
+    ])
+    body = client_for(db).get("/crews/me/rides").json()
+    assert len(body) == 1
+    ride = body[0]
+    assert ride["tss"] == 72          # rounded from 72.4
+    assert ride["avg_power_w"] == 215  # rounded from 214.6
+    assert ride["avg_hr"] == 138
+    assert ride["calories"] == 740
+    assert ride["sport"] == "cycling"
+    assert ride["is_mine"] is False
+    assert ride["comment_count"] == 2
+    # The privacy line: training facts travel, the track does not.
+    assert "polyline" not in ride and "start_lat" not in ride
+
+
+def test_rides_feed_prints_no_zero_for_a_ride_without_a_power_meter(client_for):
+    acts = [_activity(301, 6, tss=None, avg_power=None, avg_hr=None, calories=None)]
+    ride = client_for(_base_db(activities=acts)).get("/crews/me/rides").json()[0]
+    assert ride["tss"] is None
+    assert ride["avg_power_w"] is None
+    assert ride["avg_hr"] is None
+    assert ride["comment_count"] == 0
+
+
+# ── ride comments ──────────────────────────────────────────────────────────
+
+
+def test_comment_on_a_crew_mates_ride_returns_201(client_for):
+    db = _base_db(activities=[_activity(400, 6)])
+    res = client_for(db).post(
+        "/crews/me/rides/400/comments", json={"text": "  Starke Fahrt.  "}
+    )
+    assert res.status_code == 201, res.text
+    body = res.json()
+    assert body["text"] == "Starke Fahrt."   # trimmed
+    assert body["activity_id"] == 400
+    assert body["user_id"] == 5
+    assert body["handle"] == "Jannis"
+    assert body["is_mine"] is True
+    assert len(db.messages) == 1
+    assert db.messages[0].target_type == "ride"
+    assert db.messages[0].target_id == 400
+
+
+def test_comment_thread_reads_oldest_first(client_for):
+    db = _base_db(activities=[_activity(401, 6)], messages=[
+        _comment(1, 1, 6, 401, "Erste"),
+        _comment(2, 1, 5, 401, "Zweite"),
+    ])
+    body = client_for(db).get("/crews/me/rides/401/comments").json()
+    assert [c["text"] for c in body] == ["Erste", "Zweite"]
+    # A conversation names its own side.
+    assert [c["is_mine"] for c in body] == [False, True]
+
+
+def test_comment_thread_holds_only_its_own_ride(client_for):
+    db = _base_db(activities=[_activity(402, 6), _activity(403, 6)], messages=[
+        _comment(1, 1, 5, 402, "Zu 402"),
+        _comment(2, 1, 5, 403, "Zu 403"),
+    ])
+    body = client_for(db).get("/crews/me/rides/402/comments").json()
+    assert [c["text"] for c in body] == ["Zu 402"]
+
+
+def test_comment_on_a_ride_outside_the_crew_is_404(client_for):
+    # user 7 is not in the crew — the endpoint must not confirm the id exists.
+    db = _base_db(activities=[_activity(404, 7)])
+    client = client_for(db)
+    assert client.get("/crews/me/rides/404/comments").status_code == 404
+    assert client.post(
+        "/crews/me/rides/404/comments", json={"text": "hi"}
+    ).status_code == 404
+    assert db.messages == []
+
+
+def test_comment_requires_a_crew(client_for):
+    db = FakeDB(memberships={}, activities=[_activity(405, 6)])
+    client = client_for(db)
+    assert client.get("/crews/me/rides/405/comments").status_code == 403
+    assert client.post(
+        "/crews/me/rides/405/comments", json={"text": "hi"}
+    ).status_code == 403
+
+
+def test_comment_rejects_empty_and_too_long(client_for):
+    db = _base_db(activities=[_activity(406, 6)])
+    client = client_for(db)
+    assert client.post(
+        "/crews/me/rides/406/comments", json={"text": "   "}
+    ).status_code == 422
+    assert client.post(
+        "/crews/me/rides/406/comments", json={"text": "x" * 2001}
+    ).status_code == 422
+
+
+def test_ride_comments_never_surface_in_the_crew_wall(client_for):
+    """The regression this filter exists for: one table, two places to read."""
+    wall = CrewMessage(crew_id=1, user_id=5, text="Wer fährt Sonntag?",
+                       target_type="crew", target_id=None)
+    wall.id = 1
+    wall.created_at = NOW
+    db = _base_db(activities=[_activity(407, 6)],
+                  messages=[wall, _comment(2, 1, 5, 407, "Unter dem Ride")])
+    body = client_for(db).get("/crews/me/chat").json()
+    assert [m["text"] for m in body] == ["Wer fährt Sonntag?"]

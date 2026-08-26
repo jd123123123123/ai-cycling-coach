@@ -3,8 +3,11 @@ the V3 · Social screen.
 
 Two tables:
 
-    crew_messages   — one chat line per (crew, author): free text (≤2000 chars),
-                      newest-last in the wall.
+    crew_messages   — one line of writing per (crew, author): free text
+                      (≤2000 chars), newest-last. `target_type`/`target_id` say
+                      WHERE it was written: 'crew' + NULL is the crew wall,
+                      'ride' + an activity id is the comment thread under a
+                      crew-mate's ride in the Today feed.
     crew_reactions  — a flexible emoji reaction keyed by (target_type, target_id):
                       a member can cheer a chat message, a crew-mate's ride, an
                       event, or "the crew this week" (target_type='crew_week',
@@ -49,6 +52,21 @@ class CrewMessage(Base):
         nullable=False,
     )
     text: Mapped[str] = mapped_column(Text, nullable=False)
+    # WHERE this line was written: 'crew' (the wall — target_id NULL) or 'ride'
+    # (a comment under one activity — target_id is the activity id).
+    #
+    # One table rather than a second `crew_ride_comments`: a comment and a wall
+    # line are the same object with the same length limit, the same author
+    # join and the same crew scoping — the only difference is what they hang
+    # off. That is exactly the shape `crew_reactions` already uses one row
+    # below, so the two social primitives now read the same way.
+    #
+    # `server_default` matters: existing wall rows predate this column and must
+    # come back as 'crew', not NULL, or the wall empties itself on deploy.
+    target_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="crew", default="crew"
+    )
+    target_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -60,6 +78,15 @@ class CrewMessage(Base):
         # The wall is paginated newest-first per crew, so (crew_id, id) is the
         # hot index.
         Index("ix_crew_messages_crew_id_id", "crew_id", "id"),
+        # A ride's comment thread reads (crew_id, 'ride', activity_id) ordered
+        # by id, and the feed counts the same key in bulk.
+        Index(
+            "ix_crew_messages_thread",
+            "crew_id",
+            "target_type",
+            "target_id",
+            "id",
+        ),
     )
 
 

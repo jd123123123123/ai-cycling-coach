@@ -2,9 +2,15 @@ import { apiClient } from './client'
 import type { ReactionState } from './crewReactions'
 
 // ──────────────────────────────────────────────────────────────────────
-// All-crew rides — every crew member's recent activities, newest first.
-// `id` is the activity id (links to the ride-detail route). Mirrors the
-// deployed GET /crews/me/rides endpoint.
+// All-crew rides — every crew member's recent activities, newest first,
+// plus the comment thread that hangs under one of them. `id` is the
+// activity id (links to the ride-detail route). Mirrors the deployed
+// GET /crews/me/rides and /crews/me/rides/{id}/comments endpoints.
+//
+// WHAT IS DELIBERATELY ABSENT: there is no polyline, no start point, no
+// GPS of any kind on a crew ride. The server does not send it (see
+// app/api/crew_chat.py) — telling the crew you rode 82 km is the point,
+// handing them the track that starts at your front door is not.
 // ──────────────────────────────────────────────────────────────────────
 
 export interface CrewRide {
@@ -17,12 +23,50 @@ export interface CrewRide {
   distance_m: number
   elevation_gain_m: number
   duration_seconds: number
+  /** Every one of these is nullable on the wire: a ride imported without a
+   *  power meter has no TSS and no average watts, and the card prints "—"
+   *  for it rather than a padded zero. */
+  sport: string | null
+  tss: number | null
+  avg_power_w: number | null
+  avg_hr: number | null
+  calories: number | null
+  is_mine: boolean
   reactions: ReactionState
+  comment_count: number
+}
+
+export interface CrewRideComment {
+  id: number
+  activity_id: number
+  user_id: number
+  handle: string
+  display_name: string
+  text: string
+  created_at: string
+  is_mine: boolean
 }
 
 export async function fetchCrewRides(limit = 20): Promise<CrewRide[]> {
   const res = await apiClient.get<CrewRide[]>('/crews/me/rides', {
     params: { limit },
   })
+  return res.data
+}
+
+/** One ride's thread, oldest-first — a conversation is read downwards. */
+export async function fetchCrewRideComments(activityId: number): Promise<CrewRideComment[]> {
+  const res = await apiClient.get<CrewRideComment[]>(`/crews/me/rides/${activityId}/comments`)
+  return res.data
+}
+
+export async function postCrewRideComment(
+  activityId: number,
+  text: string,
+): Promise<CrewRideComment> {
+  const res = await apiClient.post<CrewRideComment>(
+    `/crews/me/rides/${activityId}/comments`,
+    { text },
+  )
   return res.data
 }
