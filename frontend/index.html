@@ -83,6 +83,7 @@
           <!-- Which build this device is actually running. Readable even though
                nothing has mounted, which is the only moment it matters. -->
           <p style="margin:0;font-size:10px;color:#4A5058;letter-spacing:.04em">__BUILD_STAMP_TEXT__</p>
+          <p id="boot-detail" style="display:none;margin:0;max-width:300px;font-size:10px;line-height:1.5;color:#4A5058;word-break:break-word"></p>
           <button id="boot-retry" hidden
             style="margin-top:4px;padding:11px 22px;border:0;border-radius:100px;background:#BFFF3C;color:#0B0B0B;font-size:14px;font-weight:600;cursor:pointer">
             Neu laden
@@ -90,21 +91,10 @@
         </div>
       </div>
     </div>
-    <script>
-      // Eight seconds is well past a slow cold start on a phone and well short
-      // of the rider deciding the app is broken.
-      window.setTimeout(function () {
-        var boot = document.getElementById('boot')
-        if (!boot) return   // React mounted and replaced it — nothing to do
-        var msg = document.getElementById('boot-msg')
-        var btn = document.getElementById('boot-retry')
-        if (msg) msg.textContent = 'Die App konnte nicht starten.'
-        if (btn) {
-          btn.hidden = false
-          btn.onclick = function () { location.reload() }
-        }
-      }, 8000)
-    </script>
+    <!-- The watchdog is a FILE, not an inline block: this app ships
+         `script-src 'self'`, which refuses inline execution outright. The
+         first version of it was inline and never ran once in production. -->
+    <script src="/boot-watchdog.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
