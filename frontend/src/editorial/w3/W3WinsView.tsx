@@ -1,506 +1,550 @@
+import type { ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import type { ComponentType, CSSProperties } from 'react'
-import {
-  ArrowRight, Bike, Flame, Gauge, Lock, Medal, Mountain,
-  Route as RouteIcon, Sunrise, Trophy, Zap,
-} from 'lucide-react'
-import { T, FONT, band, grow, Reveal } from './w3tokens'
-import { S, TNUM, lux, luxTile, hairline } from './w3surfaces'
-import W3StatusBar from './W3StatusBar'
-import W3TopBar from './W3TopBar'
-import W3TabBar from './W3TabBar'
+import { Lock, Share2 } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { T, FONT, DASH, Reveal, band } from './w3tokens'
+import { lux, hairline, TNUM } from './w3surfaces'
 import './w3.css'
 
 /**
- * W3 · ERFOLGE — the achievements screen, redrawn in the house register
- * (`docs/w3-house-style.md`, pen frames `kVACs` / `l4QUjL`).
+ * W3 · 20 ERFOLGE — the rider's own record, in six chapters.
  *
- * WHAT THIS REPLACED, AND WHY IT WAS THE WRONG PAGE.
+ * Transcribed from pen frame `chj4T`. What changed on the way in, and why:
  *
- * The old Wins screen was six sections of identical weight, and two of them
- * were not this page's job:
+ * ── THE CARDS ARE LIT, NOT FRAMED ────────────────────────────────────────
+ * The pen draws every card with a 1px stroke and a radial wash. That is the
+ * older idiom — house rule 2, and `W3TodayView` carries zero borders. A screen
+ * of stroked cards reads as a stack of boxes; `lux()` gives the same objects
+ * depth from tone and light instead. Composition, order and every instrument
+ * are the pen's; the edge treatment is the app's.
  *
- *  1. A challenge hero and a list of personal challenges — a second, poorer
- *     copy of `/e/w3-challenges`, which owns that subject and draws it with the
- *     real month strip and real boards. Two screens for one thing means one of
- *     them is always the stale one. It is now a single acid button out.
- *  2. "Community-Challenges": a fabricated pool with an invented "Top 8 % der
- *     Community". `W3ChallengesView` had already deleted exactly this fixture
- *     and said so in its own doc comment. Deleted here rather than restyled —
- *     a fabricated section does not get design polish.
+ * ── THE BIKE IS THE TOP OF THE SCREEN ────────────────────────────────────
+ * The pen opens on its own hero card. In the app this screen is a room — the
+ * same mounted stage Today and the rides use — so the machine stands above and
+ * this page's summary rides in the panel over the floor (`useHeroPanel`). The
+ * pen's hero becomes chapter 01, which is where it always belonged: it is the
+ * screen's first ARGUMENT, not its title.
  *
- * What the page is actually for was sitting unused in the payload the whole
- * time: `latest` (the badge most recently earned, with its real unlock date),
- * `in_progress[].pct` (how close each locked one is), and `all_time` (rides,
- * km, hours, kJ, ascent). All three are real, all three are now the page.
+ * ── EVERY SENTENCE IS COMPUTED ───────────────────────────────────────────
+ * The pen's statements carry drawn-in specifics ("284 Fahrten", "Vier davon hat
+ * vor dir niemand in deiner Crew geholt"). The last of those is a claim this
+ * app cannot check, and house rule 9 is that a section which cannot be true
+ * gets deleted rather than polished. So the voice is the pen's and the numbers
+ * are the rider's: the page composes each line from what actually resolved, and
+ * a chapter whose data is missing does not render at all.
  *
- * REAL, end to end: the ledger counts, the hero badge and its date, the whole
- * cabinet incl. locked progress, the lifetime totals (`/achievements/mine`);
- * the RideCoin balance (wallet); the record watts and W/kg and the PR flags
- * (the athlete's own mean-max curve). The fabricated "+40 W vs. Mai" record
- * deltas went with the community pools — the bar now states a real thing (each
- * duration as a share of the rider's own peak) and says so in the subhead.
- *
- * Pure function of `vm`; `W3WinsPage` builds it.
+ * The register is plain and descriptive — the sentence states what the number
+ * is, and stops. No aphorisms, nothing the rider has to decode.
  */
 
-// ── view model ──────────────────────────────────────────────────────────────
+// ── the view model ──────────────────────────────────────────────────────────
 
-export type W3BadgeIcon = 'medal' | 'mountain' | 'sunrise' | 'flame' | 'bike' | 'route' | 'zap' | 'gauge' | 'trophy'
-
-export interface W3LedgerCell {
+export interface W3WinsLedgerItem {
   key: string
-  /** The number itself. `DASH` when the signal has not resolved. */
   value: string
-  /** Sits small on the baseline beside it — "von 34", "RC". */
   unit?: string | null
   label: string
 }
 
-export interface W3Latest {
-  icon: W3BadgeIcon
-  title: string
-  /** "133,1 km" — the achievement's own measurement, split for display. */
-  value: string | null
-  detail: string
-  dateLabel: string
-  fresh: boolean
+/** One bar of the threshold history, oldest first. `pct` is its height as a
+ *  share of the highest measurement, so the series is read against itself. */
+export interface W3FtpPoint { pct: number; current: boolean }
+
+export interface W3FtpChapter {
+  eyebrow: string
+  statement: string
+  firstLabel: string
+  firstValue: string
+  nowLabel: string
+  nowValue: string
+  unit: string
+  points: W3FtpPoint[]
+  caption: string
 }
 
-export interface W3Badge {
+export interface W3Milestone {
   key: string
-  icon: W3BadgeIcon
-  name: string
-  caption: string
-  earned: boolean
-  /** 0–1 for a locked badge with real progress; null when there is no number. */
+  icon: LucideIcon
+  title: string
+  value: string
   pct: number | null
 }
 
-export interface W3Record {
-  key: string
-  label: string
-  /** "1.240 W" or DASH. */
-  value: string
-  /** "4,0 W/kg" — null when the rider has no weight on file. */
-  wkg: string | null
-  /** 0–1: this duration as a share of the rider's own peak. Null → no bar. */
-  frac: number | null
-  /** A recent personal record. The one thing on the row that goes acid. */
-  pr: boolean
+export interface W3MilestoneChapter {
+  eyebrow: string
+  statement: string
+  rows: W3Milestone[]
 }
 
-export interface W3LifeTile {
+export interface W3ConsistencyChapter {
+  eyebrow: string
+  statement: string
+  riddenLabel: string
+  ridden: string
+  ofLabel: string
+  streakLabel: string
+  streak: string
+  /** 0 = not ridden, then 1..3 by how much was ridden that week. */
+  weeks: number[]
+}
+
+export interface W3Beam {
   key: string
+  label: string
   value: string
   unit: string
-  label: string
+  /** Width of the bar as a share of the rider's own peak. */
+  frac: number
+  date: string | null
+  fresh: boolean
+}
+
+export interface W3BeamChapter {
+  eyebrow: string
+  statement: string
+  colLeft: string
+  colRight: string
+  beams: W3Beam[]
+}
+
+export interface W3Medal {
+  key: string
+  icon: LucideIcon
+  title: string
+  /** Earned: the month it landed. Locked: how far along, as a percentage. */
+  note: string
+  earned: boolean
+}
+
+export interface W3MedalChapter {
+  eyebrow: string
+  counter: string
+  statement: string
+  medals: W3Medal[]
+}
+
+export interface W3BiggestDayChapter {
+  eyebrow: string
+  statement: string
+  title: string
+  km: string
+  kmUnit: string
+  time: string
+  ascent: string
+  ascentUnit: string
+  badges: { label: string; icon: LucideIcon }[]
+  cta: string
+  onShare?: () => void
 }
 
 export interface W3WinsVm {
   micro: string
-  eyebrow: string
-  /** The two-weight headline: the sentence, then the one word it turns on. */
-  headline: string
-  headlineAccent: string
-  deck: string
-  ledger: W3LedgerCell[]
-
-  latestChapter: string
-  latestTitle: string
-  latest: W3Latest | null
-  /** Copy for a rider who has not earned anything yet. */
-  latestEmpty: string
-  /** "12 von 34" — the cabinet's count, stated once, on the cabinet. */
-  cabinetValue: string
-  /** The REAL collection counts, for the segment meter. */
-  cabinetLit: number
-  cabinetTotal: number
-  /** Which badge the hero is celebrating. It is the ONE tile in the cabinet
-   *  that stays lit — see `ACCENT RATIONING` in the grid. Null when nothing has
-   *  been earned yet, and then no tile is lit. */
-  latestKey: string | null
-  /** The inset row under the hero: the badge closest to falling. It carries
-   *  the ONE fact that moves the rider, which a repeat of the count does not.
-   *  Null when nothing is in progress. */
-  next: { label: string; value: string } | null
-
-  badgesChapter: string
-  badgesTitle: string
-  badgesSub: string
-  badges: W3Badge[]
-
-  recordsChapter: string
-  recordsTitle: string
-  recordsSub: string
-  /** Shown INSTEAD of the rows when the rider has no power curve at all. Four
-   *  dashes under a subhead promising a bar reads as a broken card. */
-  recordsEmpty: string
-  records: W3Record[]
-
-  lifeChapter: string
-  lifeTitle: string
-  lifeSub: string
-  /** The first tile runs full width — the lifetime number worth a hero. */
-  life: W3LifeTile[]
-
-  ctaLabel: string
-  ctaCaption: string
+  ledger: W3WinsLedgerItem[]
+  ftp: W3FtpChapter | null
+  milestones: W3MilestoneChapter | null
+  consistency: W3ConsistencyChapter | null
+  beams: W3BeamChapter | null
+  medals: W3MedalChapter | null
+  biggestDay: W3BiggestDayChapter | null
+  /** Shown only when NOTHING resolved — a rider with no rides yet. */
+  empty: string | null
 }
 
-// ── primitives ──────────────────────────────────────────────────────────────
+// ── the parts ───────────────────────────────────────────────────────────────
 
-const ICONS: Record<W3BadgeIcon, ComponentType<{ size?: number; color?: string; style?: CSSProperties }>> = {
-  medal: Medal, mountain: Mountain, sunrise: Sunrise, flame: Flame,
-  bike: Bike, route: RouteIcon, zap: Zap, gauge: Gauge, trophy: Trophy,
-}
-
-const OCTAGON = 'polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%)'
-
-/**
- * The medallion. Acid and lit when earned; the same mark, unlit and sealed,
- * when not.
- *
- * A LOCKED BADGE KEEPS ITS OWN FACE. The first draft swapped every unearned
- * mark for a padlock, and the bottom row of the cabinet came out as three
- * identical grey locks — the row whose entire job is "this one is eight watts
- * away, that one is a mountain you have not climbed". The lock moved to a seal
- * in the corner, which says the same thing without erasing the badge.
- */
-function Emblem({ size, icon, earned, glow = true, lit = true }: {
-  size: number; icon: W3BadgeIcon; earned: boolean; glow?: boolean
-  /** Acid, or the quieter earned metal. See `ACCENT RATIONING` in the grid. */
-  lit?: boolean
-}) {
-  const Ic = ICONS[icon]
-  const seal = Math.round(size * 0.34)
+/** The acid eyebrow every chapter opens on, with an optional counter opposite. */
+function Eyebrow({ text, counter }: { text: string; counter?: string }) {
   return (
-    <div style={{ width: size, height: size, position: 'relative', display: 'grid', placeItems: 'center', flex: 'none' }}>
-      {earned && lit && glow && (
-        <div style={{ position: 'absolute', width: size * 1.15, height: size * 1.15, background: T.acid, clipPath: OCTAGON, filter: `blur(${Math.round(size * 0.28)}px)`, opacity: 0.5 }} />
+    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>{text}</span>
+      {counter && (
+        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, ...TNUM }}>{counter}</span>
       )}
-      <div style={{
-        position: 'absolute', inset: 0, clipPath: OCTAGON,
-        background: !earned ? T.d1
-          : lit ? `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 48%, ${T.acidDeep})`
-          // Earned, but not the one being celebrated: struck metal rather than
-          // a second acid light. Twelve acid octagons in a nine-tile grid is a
-          // wall, and a wall has no hierarchy.
-          : `linear-gradient(155deg, ${T.d4}, ${T.d3} 52%, ${T.d2})`,
-      }} />
-      {earned && (
-        <div style={{ position: 'absolute', top: size * 0.08, left: size * 0.16, right: size * 0.3, height: size * 0.24, borderRadius: '50%', background: lit ? T.d3 : T.d2, filter: `blur(${Math.round(size * 0.06)}px)` }} />
-      )}
-      {/* Positioned on purpose: absolutely-positioned siblings paint above a
-          static child whatever the DOM order, so the mark would vanish. */}
-      <Ic size={Math.round(size * 0.42)} color={earned ? (lit ? T.bg : T.ink) : T.mid} style={{ position: 'relative' }} />
-      {!earned && (
-        <div style={{
-          position: 'absolute', right: -seal * 0.12, bottom: -seal * 0.12,
-          width: seal, height: seal, borderRadius: 100, background: T.heroOff,
-          border: `2px solid ${T.bg}`, display: 'grid', placeItems: 'center',
-        }}>
-          <Lock size={Math.round(seal * 0.5)} color={T.bg} strokeWidth={2.6} />
+    </div>
+  )
+}
+
+/** The chapter's one sentence. It says what the number is; it does not sell. */
+function Statement({ children }: { children: ReactNode }) {
+  return (
+    <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.2, color: T.ink, textWrap: 'balance' }}>
+      {children}
+    </span>
+  )
+}
+
+function Chapter({ children, pad = 30 }: { children: ReactNode; pad?: number }) {
+  return (
+    <Reveal style={{ width: '100%' }}>
+      <div style={{ ...band(pad), gap: 14 }}>{children}</div>
+    </Reveal>
+  )
+}
+
+/** A quiet all-caps label — the one text rung every card head uses. */
+function Cap({ children }: { children: ReactNode }) {
+  return <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>{children}</span>
+}
+
+// ── 01 · the threshold ──────────────────────────────────────────────────────
+
+/** The floor of the truncated axis, as a fraction of the lowest reading. 0.92
+ *  leaves the smallest bar a visible stub rather than a hairline. */
+const FTP_FLOOR = 0.92
+const FTP_TRACK = 56
+
+function barHeight(pct: number, all: W3FtpPoint[]): number {
+  const floor = Math.min(...all.map((p) => p.pct)) * FTP_FLOOR
+  const span = 1 - floor
+  const h = span > 0 ? (pct - floor) / span : 1
+  return Math.round(6 + Math.max(0, Math.min(1, h)) * (FTP_TRACK - 6))
+}
+
+function FtpCard({ c }: { c: W3FtpChapter }) {
+  const reduce = useReducedMotion()
+  return (
+    <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 16 }}>
+      <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+          <Cap>{c.firstLabel}</Cap>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
+            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: T.mid, ...TNUM }}>{c.firstValue}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, paddingBottom: 2 }}>{c.unit}</span>
+          </div>
         </div>
-      )}
+        <span aria-hidden style={{ fontSize: 17, color: T.quiet, lineHeight: 1 }}>→</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
+          <Cap>{c.nowLabel}</Cap>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
+            <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: T.acid, ...TNUM }}>{c.nowValue}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, paddingBottom: 2 }}>{c.unit}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style={hairline(0)} />
+
+      {/* Every measurement the app has kept. The current one is the lit bar; the
+          others are the same colour held back, so the series reads as one thing
+          getting brighter.
+
+          THE AXIS IS TRUNCATED, ON PURPOSE AND SAFELY. Zero-based, a threshold
+          series is unreadable: 214 → 292 W means every bar lands between 73%
+          and 100% of the same height, and a 36% gain draws as a flat wall (seen
+          at 390x844 before this). The floor sits just under the lowest
+          measurement so the growth is legible — and it is only ever paired with
+          BOTH endpoints printed in full above it, which is what keeps a
+          truncated axis honest rather than flattering. */}
+      <div style={{ display: 'flex', width: '100%', height: 56, alignItems: 'flex-end', gap: 4 }}>
+        {c.points.map((p, i) => (
+          <motion.div
+            key={i}
+            initial={reduce ? false : { height: 6 }}
+            animate={{ height: barHeight(p.pct, c.points) }}
+            transition={{ duration: 0.5, delay: reduce ? 0 : i * 0.03 }}
+            style={{ flex: 1, borderRadius: 3, background: p.current ? T.acid : `${T.acid}52` }} />
+        ))}
+      </div>
+
+      <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{c.caption}</span>
     </div>
   )
 }
 
-/** A pill floating on art. Near-black + blur, so it belongs to the glass, not
- *  to the picture. `dot` gives it the live indicator. */
-function GlassPill({ children, accent = false, dot = false }: { children: string; accent?: boolean; dot?: boolean }) {
+// ── 02 · the milestones ─────────────────────────────────────────────────────
+
+function MilestoneRow({ m }: { m: W3Milestone }) {
+  const Ic = m.icon
+  const reduce = useReducedMotion()
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 100,
-      background: accent ? T.acid : T.glass, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-    }}>
-      {dot && <div style={{ width: 6, height: 6, borderRadius: 100, background: accent ? T.bg : T.acid }} />}
-      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: accent ? T.bg : T.ink }}>{children}</span>
+    <div style={{ display: 'flex', width: '100%', gap: 14, alignItems: 'center', padding: '14px 0' }}>
+      <div style={{ width: 40, height: 40, borderRadius: 100, flex: 'none', background: T.tile, display: 'grid', placeItems: 'center' }}>
+        <Ic size={19} strokeWidth={1.8} color={T.acid} />
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 9, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 14, fontWeight: 600, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, flex: 'none', ...TNUM }}>{m.value}</span>
+        </div>
+        <div style={{ width: '100%', height: 3, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
+          {m.pct != null && (
+            <motion.div
+              initial={reduce ? false : { width: 0 }}
+              animate={{ width: `${Math.round(Math.max(0, Math.min(1, m.pct)) * 100)}%` }}
+              transition={{ duration: 0.6, ease: 'easeOut' }}
+              style={{ height: 3, borderRadius: 100, background: T.acid }} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
-/** Countable things — badges of a set. Lit acid steps, unlit stubs. */
-function SegGauge({ lit, total, reduce, delay = 0 }: { lit: number; total: number; reduce: boolean | null; delay?: number }) {
-  const n = Math.max(1, Math.min(total, 34))
-  const scale = total > n ? n / total : 1
-  const litN = Math.round(lit * scale)
+// ── 03 · the consistency grid ───────────────────────────────────────────────
+
+/** 13 tiles a row, four rows — a year that fits the width without scrolling. */
+const GRID_COLS = 13
+
+function WeekGrid({ weeks }: { weeks: number[] }) {
+  const tone = (n: number) =>
+    n <= 0 ? T.d1 : n === 1 ? `${T.acid}38` : n === 2 ? `${T.acid}70` : T.acid
+  const rows: number[][] = []
+  for (let i = 0; i < weeks.length; i += GRID_COLS) rows.push(weeks.slice(i, i + GRID_COLS))
   return (
-    <div style={{ display: 'flex', gap: 3, height: 10, alignItems: 'center', width: '100%' }}>
-      {Array.from({ length: n }).map((_, i) => (
-        <motion.div key={i} initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(delay + i * 0.012)}
-          style={{ flex: 1, height: i < litN ? 10 : 5, alignSelf: 'center', transformOrigin: 'center', borderRadius: 1, background: i < litN ? T.acid : T.d1 }} />
+    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 5 }}>
+      {rows.map((row, r) => (
+        <div key={r} style={{ display: 'flex', width: '100%', gap: 5 }}>
+          {row.map((n, i) => (
+            <div key={i} style={{ flex: 1, height: 20, borderRadius: 5, background: tone(n) }} />
+          ))}
+        </div>
       ))}
     </div>
   )
 }
 
-/** Proportions. The percentage always lives in text beside it, never in here. */
-function Bar({ fill, tint = T.acid, reduce, delay = 0, h = 6 }: { fill: number; tint?: string; reduce: boolean | null; delay?: number; h?: number }) {
+// ── 04 · the power curve ────────────────────────────────────────────────────
+
+/**
+ * One duration of the rider's curve, drawn as a filled rail.
+ *
+ * The readout FLIPS: on a wide bar it sits inside in dark ink, on a narrow one
+ * it sits outside in light. A number half-on and half-off its own bar is the
+ * failure mode, and at 254px the 5-second peak fills nearly everything while
+ * the 20-minute one fills a third.
+ */
+const BEAM_INSIDE_FRAC = 0.55
+
+function Beam({ b }: { b: W3Beam }) {
+  const reduce = useReducedMotion()
+  const inside = b.frac >= BEAM_INSIDE_FRAC
+  const readout = (
+    <>
+      <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.5, color: inside ? T.bg : (b.fresh ? T.acid : T.ink), ...TNUM }}>{b.value}</span>
+      <span style={{ fontSize: 10, fontWeight: 600, color: inside ? `${T.bg}99` : T.quiet }}>{b.unit}</span>
+      {b.fresh && (
+        <span style={{
+          fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, borderRadius: 100, padding: '3px 7px',
+          background: inside ? `${T.bg}1F` : T.acidDim, color: inside ? T.bg : T.acid,
+        }}>NEU</span>
+      )}
+      {b.date && (
+        <span style={{ fontSize: 9.5, fontWeight: 600, color: inside ? `${T.bg}99` : T.quiet, ...TNUM }}>{b.date}</span>
+      )}
+    </>
+  )
   return (
-    <div style={{ height: h, borderRadius: 100, background: T.d1, overflow: 'hidden', width: '100%' }}>
-      <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(Math.max(0, Math.min(1, fill)) * 100)}%` }} transition={grow(delay)}
-        style={{ height: '100%', borderRadius: 100, background: tint }} />
+    <div style={{ display: 'flex', width: '100%', gap: 10, alignItems: 'center' }}>
+      <span style={{ width: 50, flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{b.label}</span>
+      <div style={{ position: 'relative', flex: 1, height: 34 }}>
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 9, background: T.d1 }} />
+        <motion.div
+          initial={reduce ? false : { width: 0 }}
+          animate={{ width: `${Math.round(Math.max(0, Math.min(1, b.frac)) * 100)}%` }}
+          transition={{ duration: 0.6, ease: 'easeOut' }}
+          style={{ position: 'absolute', left: 0, top: 0, height: 34, borderRadius: 9, background: b.fresh ? T.acid : T.d2 }} />
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', gap: 7,
+          justifyContent: inside ? 'flex-end' : 'flex-start',
+          paddingRight: inside ? 13 : 0,
+          paddingLeft: inside ? 0 : `calc(${Math.round(Math.max(0, Math.min(1, b.frac)) * 100)}% + 12px)`,
+        }}>{readout}</div>
+      </div>
     </div>
   )
 }
 
-/** `01 — DIE VITRINE`. The ordinal is the point: it makes the page a sequence. */
-const Chapter = ({ n, label, tint = T.acid }: { n: string; label: string; tint?: string }) => (
-  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: tint }}>{n} — {label}</span>
-)
+// ── 05 · the cabinet ────────────────────────────────────────────────────────
 
-const SectionTitle = ({ title, sub, right }: { title: string; sub?: string; right?: string }) => (
-  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: S.md }}>
-    <div style={{ display: 'flex', flexDirection: 'column', gap: S.xs }}>
-      <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{title}</span>
-      {sub && <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.quiet }}>{sub}</span>}
-    </div>
-    {right && <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 700, color: T.mid, paddingTop: 6, ...TNUM }}>{right}</span>}
-  </div>
-)
-
-/** A big number with its unit at a third of its size, on the baseline. */
-function Numeral({ value, unit, size, tint = T.acid }: { value: string; unit?: string | null; size: number; tint?: string }) {
+function Medal({ m }: { m: W3Medal }) {
+  const Ic = m.earned ? m.icon : Lock
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: Math.round(size * 0.1) }}>
-      <span style={{ fontSize: size, fontWeight: 700, letterSpacing: size * -0.035, lineHeight: 1, color: tint, ...TNUM }}>{value}</span>
-      {unit && <span style={{ fontSize: Math.max(11, Math.round(size / 3)), fontWeight: 700, letterSpacing: -0.2, color: tint, ...TNUM }}>{unit}</span>}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, width: 90 }}>
+      <div style={{
+        width: 62, height: 62, borderRadius: 100, display: 'grid', placeItems: 'center',
+        background: m.earned ? T.acid : T.tile,
+        boxShadow: m.earned ? `0 0 22px ${T.acid}3D` : 'none',
+      }}>
+        <Ic size={25} strokeWidth={m.earned ? 1.9 : 2.2} color={m.earned ? T.bg : T.quiet} />
+      </div>
+      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: m.earned ? T.ink : T.quiet, textAlign: 'center', lineHeight: 1.25 }}>{m.title}</span>
+      <span style={{ fontSize: 9, fontWeight: 600, color: T.quiet, ...TNUM }}>{m.note}</span>
+    </div>
+  )
+}
+
+// ── 06 · the biggest day ────────────────────────────────────────────────────
+
+function BiggestDayCard({ c }: { c: W3BiggestDayChapter }) {
+  return (
+    <div style={{ ...lux(24), position: 'relative', overflow: 'hidden', padding: '22px 18px 18px', gap: 18 }}>
+      {/* The one glow on the page. It marks the single best thing the rider
+          has done, which is the only place a flourish is not decoration. */}
+      <div aria-hidden style={{
+        position: 'absolute', top: -120, right: -70, width: 300, height: 300, borderRadius: '50%',
+        background: `radial-gradient(closest-side, ${T.acid}2E, transparent)`, pointerEvents: 'none',
+      }} />
+
+      <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Cap>{c.title}</Cap>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 18, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
+            <span style={{ fontSize: 56, fontWeight: 700, letterSpacing: -2.4, lineHeight: 0.9, color: T.ink, ...TNUM }}>{c.km}</span>
+            <span style={{ fontSize: 18, fontWeight: 600, color: T.quiet, paddingBottom: 5 }}>{c.kmUnit}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 18, paddingBottom: 5 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Cap>ZEIT</Cap>
+              <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: T.ink, ...TNUM }}>{c.time}</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <Cap>HÖHE</Cap>
+              <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: T.ink, ...TNUM }}>
+                {c.ascent}<span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}> {c.ascentUnit}</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {c.badges.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            {c.badges.map((b) => {
+              const Ic = b.icon
+              return (
+                <span key={b.label} style={{
+                  display: 'flex', alignItems: 'center', gap: 5, borderRadius: 100, padding: '6px 11px',
+                  background: T.tile, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.ink,
+                }}>
+                  <Ic size={11} color={T.acid} />{b.label}
+                </span>
+              )
+            })}
+          </div>
+        )}
+
+        <button onClick={c.onShare} style={{
+          width: '100%', height: 46, borderRadius: 100, border: 0, background: T.acid, color: T.bg,
+          fontFamily: FONT, fontSize: 14.5, fontWeight: 700, cursor: 'pointer',
+          display: 'flex', gap: 7, justifyContent: 'center', alignItems: 'center',
+        }}>
+          <Share2 size={15} color={T.bg} />{c.cta}
+        </button>
+      </div>
     </div>
   )
 }
 
 // ── the screen ──────────────────────────────────────────────────────────────
 
-export default function W3WinsView({ vm, onOpenChallenges }: {
-  vm: W3WinsVm
-  onOpenChallenges?: () => void
-}) {
-  const reduce = useReducedMotion()
-  const [lifeHero, ...lifeRest] = vm.life
-  // A chapter that does not render must not consume its number, or a cold
-  // start shows "01" followed by "03" and the sequence stops being one.
-  const hasCabinet = vm.badges.length > 0
-  const hasRecords = vm.records.some((r) => r.frac != null)
-  const hasLife = vm.life.length > 0
-  const ord = (() => {
-    const present = ['latest', hasCabinet && 'cabinet', 'records', hasLife && 'life'].filter(Boolean) as string[]
-    return (k: string) => String(present.indexOf(k) + 1).padStart(2, '0')
-  })()
-
-  return (
-    <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
-
-        <W3StatusBar />
-        <W3TopBar title={vm.micro} />
-
-        {/* ── The opening. The page states its thesis before a single number. ── */}
-        <div style={{ ...band(S.xxl), gap: S.md, paddingTop: S.md }}>
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>{vm.eyebrow}</span>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1.05, color: T.ink }}>{vm.headline}</span>
-            <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1.05, color: T.acid }}>{vm.headlineAccent}</span>
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{vm.deck}</span>
-        </div>
-
-        {/* ── The ledger: the whole page in three numbers. ── */}
-        <div style={{ ...band(S.section), flexDirection: 'row', alignItems: 'stretch' }}>
-          {vm.ledger.map((c, i) => (
-            <div key={c.key} style={{ flex: 1, display: 'flex', alignItems: 'stretch', minWidth: 0 }}>
-              {i > 0 && <div style={{ width: 1, background: T.rule, opacity: 0.55, margin: '2px 14px 2px 0', flex: 'none' }} />}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-                  <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.9, lineHeight: 1, color: T.ink, ...TNUM }}>{c.value}</span>
-                  {c.unit && <span style={{ fontSize: 10, fontWeight: 700, color: T.quiet, ...TNUM }}>{c.unit}</span>}
-                </div>
-                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{c.label}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── 01 · the badge most recently earned ── */}
-        <Reveal style={{ width: '100%' }}>
-          <div style={{ ...band(S.section), gap: S.lg }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
-              <Chapter n={ord('latest')} label={vm.latestChapter} />
-              <SectionTitle title={vm.latestTitle} />
-            </div>
-
-            <div style={{ ...lux(28), overflow: 'hidden' }}>
-              {/* The art panel — its own light, glass pills in opposite corners. */}
-              <div style={{
-                height: 186, position: 'relative', display: 'grid', placeItems: 'center', flex: 'none',
-                background: vm.latest ? `radial-gradient(circle at 50% 46%, ${T.acid}30, ${T.acid}0d 44%, transparent 68%)` : undefined,
-              }}>
-                {/* The bloom is the EARNED state's light. Left on under a
-                    locked emblem it tinted the lock acid — the screen
-                    congratulating a rider for nothing. */}
-                {vm.latest && (
-                  <motion.div
-                    animate={reduce ? undefined : { scale: [1, 1.1, 1], opacity: [0.45, 0.7, 0.45] }}
-                    transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-                    style={{ position: 'absolute', width: 150, height: 150, background: T.acid, clipPath: OCTAGON, filter: 'blur(34px)', opacity: 0.45 }} />
-                )}
-                <Emblem size={104} icon={vm.latest?.icon ?? 'trophy'} earned={!!vm.latest} />
-                {vm.latest && (
-                  <>
-                    <div style={{ position: 'absolute', top: 14, left: 14 }}>
-                      {vm.latest.fresh
-                        ? <GlassPill accent dot>NEU</GlassPill>
-                        : <GlassPill dot>VERDIENT</GlassPill>}
-                    </div>
-                    <div style={{ position: 'absolute', bottom: 14, left: 14 }}>
-                      <GlassPill>{vm.latest.dateLabel}</GlassPill>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div style={{ padding: `0 ${S.xl}px ${S.xl}px`, display: 'flex', flexDirection: 'column', gap: S.md }}>
-                {vm.latest && (
-                  <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>{vm.latest.title}</span>
-                )}
-                {vm.latest?.value && <Numeral {...splitMeasure(vm.latest.value)} size={56} />}
-                <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>
-                  {vm.latest?.detail ?? vm.latestEmpty}
-                </span>
-
-                {/* The inset row: the one fact that matters — what is next. */}
-                {vm.next && (
-                  <div style={{ ...luxTile(18), flexDirection: 'row', alignItems: 'center', gap: S.md, padding: `13px ${S.lg}px`, marginTop: S.xs }}>
-                    <Medal size={17} color={T.acid} />
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: T.ink, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.next.label}</span>
-                    <span style={{ marginLeft: 'auto', flex: 'none', fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: T.acid, ...TNUM }}>{vm.next.value}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </Reveal>
-
-        {/* ── 02 · the cabinet ── */}
-        {vm.badges.length > 0 && (
-        <Reveal style={{ width: '100%' }}>
-          <div style={{ ...band(S.section), gap: S.lg }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
-              <Chapter n={ord('cabinet')} label={vm.badgesChapter} />
-              <SectionTitle title={vm.badgesTitle} sub={vm.badgesSub} right={vm.cabinetValue} />
-            </div>
-            {vm.cabinetTotal > 0 && <SegGauge lit={vm.cabinetLit} total={vm.cabinetTotal} reduce={reduce} />}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: S.sm }}>
-              {vm.badges.map((b, i) => (
-                <div key={b.key} style={{
-                  display: 'flex', flexDirection: 'column', gap: 9, alignItems: 'center',
-                  padding: '16px 9px 14px', borderRadius: 20,
-                  background: b.earned ? `linear-gradient(180deg, ${T.acidTop}, ${T.heroDock})` : T.heroDock,
-                }}>
-                  {/* ── ACCENT RATIONING ──────────────────────────────────
-                      Every earned badge was a lit acid octagon, and with six of
-                      them in a nine-tile grid the accent stopped being an accent
-                      — it was the field. A rider could not tell which of their
-                      badges was the new one, which is the only ranking this grid
-                      has to offer, because all six shouted equally.
-
-                      One is lit: the one the hero above is celebrating. The rest
-                      are struck metal — unmistakably earned, visibly not new. */}
-                  <Emblem size={50} icon={b.icon} earned={b.earned} lit={b.key === vm.latestKey} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'center', width: '100%' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, lineHeight: 1.2, textAlign: 'center', color: b.earned ? T.ink : T.mid }}>{b.name}</span>
-                    {!b.earned && b.pct != null && <Bar fill={b.pct} tint={T.acidDeep} reduce={reduce} delay={i * 0.03} h={4} />}
-                    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.7, lineHeight: 1.3, textAlign: 'center', color: b.key === vm.latestKey ? T.acid : b.earned ? T.mid : T.quiet, ...TNUM }}>{b.caption}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-        )}
-
-        {/* ── 03 · the power records ── */}
-        <Reveal style={{ width: '100%' }}>
-          <div style={{ ...band(S.section), gap: S.lg }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
-              <Chapter n={ord('records')} label={vm.recordsChapter} />
-              <SectionTitle title={vm.recordsTitle} sub={vm.recordsSub} />
-            </div>
-            <div style={{ ...lux(28), padding: `2px ${S.xl}px ${S.md}px` }}>
-              {!hasRecords && (
-                <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.mid, padding: `${S.lg}px 0` }}>{vm.recordsEmpty}</span>
-              )}
-              {hasRecords && vm.records.map((r, i) => (
-                <div key={r.key} style={{ display: 'flex', flexDirection: 'column' }}>
-                  {i > 0 && <div style={hairline()} />}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 9, padding: '15px 0' }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: S.md }}>
-                    <span style={{ width: 46, flex: 'none', fontSize: 9, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{r.label}</span>
-                    <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.9, lineHeight: 1, color: r.pr ? T.acid : T.ink, ...TNUM }}>{r.value}</span>
-                    <span style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, color: r.pr ? T.acid : T.quiet, ...TNUM }}>
-                      {r.pr ? 'NEUER REKORD' : r.wkg ?? ''}
-                    </span>
-                  </div>
-                  {r.frac != null && <Bar fill={r.frac} tint={T.d3} reduce={reduce} delay={i * 0.04} h={5} />}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-
-        {/* ── 04 · everything, ever ── */}
-        {vm.life.length > 0 && (
-        <Reveal style={{ width: '100%' }}>
-          <div style={{ ...band(S.section), gap: S.lg }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: S.sm }}>
-              <Chapter n={ord('life')} label={vm.lifeChapter} />
-              <SectionTitle title={vm.lifeTitle} sub={vm.lifeSub} />
-            </div>
-            {lifeHero && (
-              <div style={{ ...lux(28), padding: `${S.xl}px ${S.xl}px 18px`, gap: S.sm }}>
-                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{lifeHero.label}</span>
-                <Numeral value={lifeHero.value} unit={lifeHero.unit} size={54} />
-              </div>
-            )}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: S.sm }}>
-              {lifeRest.map((t) => (
-                <div key={t.key} style={{ ...lux(22), padding: `${S.lg}px ${S.lg}px 14px`, gap: 6 }}>
-                  <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{t.label}</span>
-                  <Numeral value={t.value} unit={t.unit} size={26} tint={T.ink} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </Reveal>
-        )}
-
-        {/* ── The close: one action, one quiet line about what waits. ── */}
-        <div style={{ ...band(S.lg), gap: S.md, alignItems: 'center' }}>
-          <button onClick={onOpenChallenges} style={{
-            width: '100%', height: 56, borderRadius: 100, border: 0, background: T.acid, cursor: 'pointer',
-            fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-          }}>
-            <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 1, color: T.bg }}>{vm.ctaLabel}</span>
-            <ArrowRight size={17} color={T.bg} strokeWidth={2.6} />
-          </button>
-          <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>{vm.ctaCaption}</span>
-        </div>
-
-        <W3TabBar />
+export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
+  if (vm.empty) {
+    return (
+      <div style={{ ...band(40), paddingTop: 24, gap: 12 }}>
+        <Eyebrow text="ERFOLGE" />
+        <Statement>{vm.empty}</Statement>
       </div>
-    </div>
+    )
+  }
+  return (
+    <>
+      {vm.ftp && (
+        <Chapter>
+          <Eyebrow text={vm.ftp.eyebrow} />
+          <Statement>{vm.ftp.statement}</Statement>
+          <FtpCard c={vm.ftp} />
+        </Chapter>
+      )}
+
+      {vm.milestones && (
+        <Chapter>
+          <Eyebrow text={vm.milestones.eyebrow} />
+          <Statement>{vm.milestones.statement}</Statement>
+          <div style={{ ...lux(24), padding: '6px 18px 8px' }}>
+            {vm.milestones.rows.map((m, i) => (
+              <div key={m.key} style={{ width: '100%' }}>
+                {i > 0 && <div style={hairline(0)} />}
+                <MilestoneRow m={m} />
+              </div>
+            ))}
+          </div>
+        </Chapter>
+      )}
+
+      {vm.consistency && (
+        <Chapter>
+          <Eyebrow text={vm.consistency.eyebrow} />
+          <Statement>{vm.consistency.statement}</Statement>
+          <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 16 }}>
+            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                <Cap>{vm.consistency.riddenLabel}</Cap>
+                <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
+                  <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: T.acid, ...TNUM }}>{vm.consistency.ridden}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, paddingBottom: 2 }}>{vm.consistency.ofLabel}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
+                <Cap>{vm.consistency.streakLabel}</Cap>
+                <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink, ...TNUM }}>{vm.consistency.streak}</span>
+              </div>
+            </div>
+            <WeekGrid weeks={vm.consistency.weeks} />
+          </div>
+        </Chapter>
+      )}
+
+      {vm.beams && (
+        <Chapter>
+          <Eyebrow text={vm.beams.eyebrow} />
+          <Statement>{vm.beams.statement}</Statement>
+          <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 14 }}>
+            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Cap>{vm.beams.colLeft}</Cap>
+              <Cap>{vm.beams.colRight}</Cap>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 9 }}>
+              {vm.beams.beams.map((b) => <Beam key={b.key} b={b} />)}
+            </div>
+          </div>
+        </Chapter>
+      )}
+
+      {vm.medals && (
+        <Chapter>
+          <Eyebrow text={vm.medals.eyebrow} counter={vm.medals.counter} />
+          <Statement>{vm.medals.statement}</Statement>
+          <div style={{ ...lux(24), padding: '24px 18px 22px', gap: 26 }}>
+            <div style={{ display: 'flex', width: '100%', flexWrap: 'wrap', rowGap: 26, justifyContent: 'space-between' }}>
+              {vm.medals.medals.map((m) => <Medal key={m.key} m={m} />)}
+            </div>
+          </div>
+        </Chapter>
+      )}
+
+      {vm.biggestDay && (
+        <Chapter pad={40}>
+          <Eyebrow text={vm.biggestDay.eyebrow} />
+          <Statement>{vm.biggestDay.statement}</Statement>
+          <BiggestDayCard c={vm.biggestDay} />
+        </Chapter>
+      )}
+    </>
   )
 }
 
-/** "133,1 km" → a big number and a small unit. A measurement with no unit
- *  (a bare count) keeps the whole string as the number. */
-export function splitMeasure(s: string): { value: string; unit: string | null } {
-  const cut = s.lastIndexOf(' ')
-  if (cut <= 0) return { value: s, unit: null }
-  const unit = s.slice(cut + 1)
-  // Only split off something that is actually a unit — "Cat 4" must not become
-  // a numeral of "Cat" with a unit of "4".
-  return /^[\d.,]/.test(unit) ? { value: s, unit: null } : { value: s.slice(0, cut), unit }
+/** The three numbers that summarise the page, for the panel over the floor. */
+export function W3WinsDock({ items }: { items: W3WinsLedgerItem[] }) {
+  return (
+    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 10, padding: '0 4px' }}>
+      {items.map((it) => (
+        <div key={it.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
+            <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: it.value === DASH ? T.quiet : T.ink, ...TNUM }}>{it.value}</span>
+            {it.unit && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet, paddingBottom: 2 }}>{it.unit}</span>}
+          </div>
+          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet, whiteSpace: 'nowrap' }}>{it.label}</span>
+        </div>
+      ))}
+    </div>
+  )
 }

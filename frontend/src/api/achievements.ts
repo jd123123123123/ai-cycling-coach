@@ -27,6 +27,35 @@ export interface AchievementProgress {
   pct: number | null
 }
 
+/** One tile of the Erfolge consistency grid. Lit by SHOWING UP, not by volume —
+ *  `rides` only drives how bright the tile is. */
+export interface ConsistencyWeek {
+  start: string              // ISO date of that week's Monday
+  rides: number
+  minutes: number
+}
+
+export interface Consistency {
+  weeks: ConsistencyWeek[]   // oldest first, always `of` entries long
+  ridden: number
+  of: number
+  /** Longest run of consecutive lit weeks WITHIN the window — so the grid
+   *  beside it is always the evidence for the number. */
+  longest_streak: number
+}
+
+/** The rider's longest single ride, by distance. */
+export interface BiggestDay {
+  activity_id: number
+  date: string | null
+  title: string | null
+  km: number
+  duration_s: number
+  ascent_m: number | null
+  /** True only when that same ride also holds their ascent record. */
+  also_highest: boolean
+}
+
 export interface AchievementsPayload {
   unlocked: UnlockedAchievement[]
   in_progress: AchievementProgress[]
@@ -39,6 +68,8 @@ export interface AchievementsPayload {
     kj: number | null
     ascent_m: number | null
   }
+  consistency: Consistency
+  biggest_day: BiggestDay | null
 }
 
 // GET /achievements/mine — detect + persist milestones, then return the grid.

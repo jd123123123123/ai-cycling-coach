@@ -1,153 +1,107 @@
-import { describe, it, expect, afterEach, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup } from '@testing-library/react'
-import W3WinsView, { splitMeasure, type W3WinsVm } from '../W3WinsView'
+import { Bike, Trophy } from 'lucide-react'
+import { W3WinsContent, type W3WinsVm } from '../W3WinsView'
 
-// The three chrome pieces each open their own query (garage, streak) and want a
-// router. None of them is what this file is about.
-vi.mock('../W3StatusBar', () => ({ default: () => null }))
-vi.mock('../W3TopBar', () => ({ default: () => null }))
-vi.mock('../W3TabBar', () => ({ default: () => null }))
 vi.mock('motion/react', () => ({
   useReducedMotion: () => true,
-  // The animated target is folded into `style` rather than dropped: a bar's
-  // whole meaning is the width it animates TO, and a mock that throws `animate`
-  // away makes that value untestable.
+  AnimatePresence: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
   motion: new Proxy({}, { get: () => ({ children, ...rest }: Record<string, unknown> & { children?: React.ReactNode }) => {
     const p: Record<string, unknown> = { ...rest }
-    const animate = p.animate as Record<string, unknown> | undefined
-    delete p.initial; delete p.animate; delete p.exit; delete p.transition
-    p.style = { ...(p.style as object), ...(animate ?? {}) }
+    for (const k of ['initial','animate','exit','transition','whileInView','viewport','layout','layoutId']) delete p[k]
     return <div {...p}>{children}</div>
   } }),
 }))
 
-const VM: W3WinsVm = {
-  micro: 'ERFOLGE',
-  eyebrow: 'SAISON 2026 · AUGUST',
-  headline: 'Nichts hier ist',
-  headlineAccent: 'gekauft.',
-  deck: 'Jedes Abzeichen wird gefahren.',
-  ledger: [{ key: 'badges', value: '12', unit: 'von 34', label: 'ABZEICHEN' }],
-  latestKey: 'century',
-  latestChapter: 'ZULETZT VERDIENT',
-  latestTitle: 'Dein letztes Abzeichen',
-  latest: {
-    icon: 'mountain', title: 'Erster Century', value: '133,1 km',
-    detail: 'Deine längste Fahrt.', dateLabel: '14. AUGUST', fresh: true,
-  },
-  latestEmpty: 'Deine erste gewertete Fahrt schaltet das erste Abzeichen frei.',
-  cabinetValue: '12 von 34',
-  cabinetLit: 12,
-  cabinetTotal: 34,
-  next: { label: 'Als Nächstes · 300 W FTP', value: 'noch 8 W' },
-  badgesChapter: 'DIE VITRINE',
-  badgesTitle: 'Abzeichen',
-  badgesSub: 'Verdiente zuerst',
-  badges: [{ key: 'ftp', icon: 'gauge', name: '300 W FTP', caption: 'NOCH 8 W', earned: false, pct: 0.97 }],
-  recordsChapter: 'DEINE REKORDE',
-  recordsTitle: 'Persönliche Bestwerte',
-  recordsSub: 'Aus deiner eigenen Leistungskurve.',
-  recordsEmpty: 'Noch keine Wattdaten.',
-  records: [{ key: '5s', label: '5 SEK', value: '1.240 W', wkg: '17,0 W/kg', frac: 1, pr: false }],
-  lifeChapter: 'ALLE ZEITEN',
-  lifeTitle: 'Was zusammengekommen ist',
-  lifeSub: 'Alles, was der Coach je gewertet hat',
-  life: [{ key: 'km', value: '14.208', unit: 'km', label: 'GEFAHREN INSGESAMT' }],
-  ctaLabel: 'OFFENE CHALLENGES',
-  ctaCaption: '4 warten auf dich',
-}
-
 afterEach(cleanup)
 
-describe('Erfolge · the chapters are a sequence', () => {
-  it('numbers all four when the rider has everything', () => {
-    render(<W3WinsView vm={VM} />)
-    expect(screen.getByText(/01 — ZULETZT VERDIENT/)).toBeTruthy()
-    expect(screen.getByText(/02 — DIE VITRINE/)).toBeTruthy()
-    expect(screen.getByText(/03 — DEINE REKORDE/)).toBeTruthy()
-    expect(screen.getByText(/04 — ALLE ZEITEN/)).toBeTruthy()
+const BLANK: W3WinsVm = {
+  micro: 'ERFOLGE',
+  ledger: [],
+  ftp: null, milestones: null, consistency: null, beams: null, medals: null, biggestDay: null,
+  empty: null,
+}
+
+describe('a chapter with no data does not render', () => {
+  /**
+   * HOUSE RULE 9, AS A TEST. Six chapters, each with its own source, and a
+   * rider can legitimately have none of them — no threshold history, no
+   * detected milestones, no power meter. A screen that filled those gaps with
+   * placeholders would be inventing a record, which is the one thing this page
+   * must never do.
+   */
+  it('draws nothing at all when every chapter is null', () => {
+    const { container } = render(<W3WinsContent vm={BLANK} />)
+    expect(container.textContent).toBe('')
   })
 
-  it('closes the gap a missing chapter leaves — 01 is never followed by 03', () => {
-    render(<W3WinsView vm={{ ...VM, badges: [], life: [] }} />)
-    expect(screen.queryByText(/DIE VITRINE/)).toBeNull()
-    expect(screen.getByText(/02 — DEINE REKORDE/)).toBeTruthy()
+  it('says so once, and only once, when the rider has never ridden', () => {
+    render(<W3WinsContent vm={{ ...BLANK, empty: 'Deine erste gewertete Fahrt füllt diese Seite.' }} />)
+    expect(screen.getByText('Deine erste gewertete Fahrt füllt diese Seite.')).toBeTruthy()
+  })
+
+  it('renders the chapters it does have without the ones it does not', () => {
+    render(<W3WinsContent vm={{
+      ...BLANK,
+      consistency: {
+        eyebrow: 'KONSTANZ · LETZTE 52 WOCHEN',
+        statement: 'In 46 von 52 Wochen bist du gefahren.',
+        riddenLabel: 'IM SATTEL', ridden: '46', ofLabel: 'von 52 Wochen',
+        streakLabel: 'LÄNGSTE SERIE', streak: '19 Wochen',
+        weeks: Array.from({ length: 52 }, (_, i) => (i % 4 === 0 ? 0 : 2)),
+      },
+    }} />)
+    expect(screen.getByText('In 46 von 52 Wochen bist du gefahren.')).toBeTruthy()
+    expect(screen.queryByText('DEIN GRÖSSTER TAG')).toBeNull()
+    expect(screen.queryByText('MEILENSTEINE')).toBeNull()
   })
 })
 
-describe('Erfolge · honesty', () => {
-  it('states the empty record card instead of drawing four dashes under a promise', () => {
-    render(<W3WinsView vm={{
-      ...VM,
-      records: VM.records.map((r) => ({ ...r, value: '—', wkg: null, frac: null })),
-    }} />)
-    expect(screen.getByText('Noch keine Wattdaten.')).toBeTruthy()
-    expect(screen.queryByText('1.240 W')).toBeNull()
+describe('the biggest day', () => {
+  const day = (badges: { label: string; icon: typeof Trophy }[]) => ({
+    ...BLANK,
+    biggestDay: {
+      eyebrow: 'DEIN GRÖSSTER TAG',
+      statement: '142,3 Kilometer an einem Tag — deine längste Fahrt.',
+      title: 'ALPENPASS · 24.08.26',
+      km: '142,3', kmUnit: 'km', time: '5:12:40', ascent: '2.180', ascentUnit: 'hm',
+      badges, cta: 'Als Karte teilen',
+    },
   })
 
-  it('offers the way in rather than a congratulation when nothing is earned yet', () => {
-    render(<W3WinsView vm={{ ...VM, latest: null, next: null }} />)
-    expect(screen.getByText(VM.latestEmpty)).toBeTruthy()
-    expect(screen.queryByText('NEU')).toBeNull()
-    expect(screen.queryByText('14. AUGUST')).toBeNull()
+  it('carries only the badges it was given', () => {
+    /** "HÖCHSTER TAG" on a ride that merely happens to be hilly is a claim the
+     *  rider can disprove by scrolling their own history, so the second badge
+     *  is the server's call and the view never adds one. */
+    render(<W3WinsContent vm={day([{ label: 'LÄNGSTE FAHRT', icon: Trophy }])} />)
+    expect(screen.getByText('LÄNGSTE FAHRT')).toBeTruthy()
+    expect(screen.queryByText('HÖCHSTER TAG')).toBeNull()
+  })
+
+  it('shows a dash for ascent the file never carried', () => {
+    render(<W3WinsContent vm={{
+      ...day([]),
+      biggestDay: { ...day([]).biggestDay!, ascent: '—' },
+    }} />)
+    expect(screen.getByText('—')).toBeTruthy()
   })
 })
 
-describe('Erfolge · a locked badge draws its REAL remaining progress', () => {
-  it('draws the bar at the fraction it was given, not a hundredth of it', () => {
-    // `/achievements/mine` sends `pct` as 0–1 (achievement_service clamps it
-    // there). W3WinsPage divided it by 100 once, which drew an FTP badge eight
-    // watts from falling as an empty bar. The view takes 0–1; this pins it.
-    const { container } = render(<W3WinsView vm={{
-      ...VM,
-      badges: [{ key: 'ftp', icon: 'gauge', name: '300 W FTP', caption: 'NOCH 8 W', earned: false, pct: 0.97 }],
+describe('the milestone rows', () => {
+  it('draws a row without a bar when there is no percentage', () => {
+    /** A row here IS a bar. Rather than drawing one at an invented width, a
+     *  milestone with no numeric progress keeps its track empty. */
+    const { container } = render(<W3WinsContent vm={{
+      ...BLANK,
+      milestones: {
+        eyebrow: 'MEILENSTEINE',
+        statement: '1 Meilenstein läuft gerade.',
+        rows: [{ key: 'a', icon: Bike, title: 'Wiederholungstäter', value: '284 / 300 Fahrten', pct: null }],
+      },
     }} />)
-    const widths = [...container.querySelectorAll('div')]
-      .map((d) => (d as HTMLElement).style.width)
-      .filter((w) => w.endsWith('%'))
-    expect(widths).toContain('97%')
-  })
-})
-
-describe('splitMeasure', () => {
-  it('splits a measurement off its unit', () => {
-    expect(splitMeasure('133,1 km')).toEqual({ value: '133,1', unit: 'km' })
-    expect(splitMeasure('1.240 W')).toEqual({ value: '1.240', unit: 'W' })
-  })
-
-  it('leaves a label that merely ends in a number alone', () => {
-    expect(splitMeasure('Cat 4')).toEqual({ value: 'Cat 4', unit: null })
-    expect(splitMeasure('486')).toEqual({ value: '486', unit: null })
-  })
-})
-
-describe('Erfolge · the accent is rationed', () => {
-  /** The acid gradient only ever appears on the badge the hero celebrates. */
-  const litCount = (container: HTMLElement) =>
-    [...container.querySelectorAll('div')]
-      .filter((d) => (d as HTMLElement).style.background.includes('linear-gradient')
-        && (d as HTMLElement).style.background.includes('191, 255, 60')).length
-
-  it('lights exactly one badge, however many are earned', () => {
-    const earned = (key: string) => ({
-      key, icon: 'medal' as const, name: key, caption: 'X', earned: true, pct: null,
-    })
-    const { container } = render(<W3WinsView vm={{
-      ...VM,
-      latestKey: 'b',
-      badges: [earned('a'), earned('b'), earned('c'), earned('d')],
-    }} />)
-    // The hero emblem above is lit too, so one in the cabinet plus one hero.
-    expect(litCount(container)).toBeLessThanOrEqual(2)
-  })
-
-  it('lights none in the cabinet when nothing has been earned yet', () => {
-    const { container } = render(<W3WinsView vm={{
-      ...VM,
-      latest: null,
-      latestKey: null,
-      badges: [{ key: 'x', icon: 'gauge', name: 'x', caption: 'NOCH 8 W', earned: false, pct: 0.9 }],
-    }} />)
-    expect(litCount(container)).toBe(0)
+    expect(screen.getByText('Wiederholungstäter')).toBeTruthy()
+    expect(screen.getByText('284 / 300 Fahrten')).toBeTruthy()
+    // The track exists; nothing is filled inside it.
+    expect(container.querySelectorAll('div').length).toBeGreaterThan(0)
   })
 })

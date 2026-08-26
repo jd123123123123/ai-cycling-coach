@@ -219,6 +219,9 @@ const ROOMS: Record<string, string> = {
   '/e/w3-today': 'w3-room',
   '/e/w3-rides': 'w3-room',
   '/e/w3-garage': 'w3-room',
+  // Erfolge is the same machine asked a fourth question — "what has it done" —
+  // so it shares the room rather than tearing it down to answer.
+  '/e/w3-wins': 'w3-room',
 }
 function roomKey(pathname: string): string {
   // The preview route nests its own screens, so it is a room by prefix rather
@@ -448,6 +451,7 @@ function AppRoutes() {
             <Route path="/e/w3-today" element={<W3TodayPage />} />
             <Route path="/e/w3-rides" element={<W3RidesPage />} />
             <Route path="/e/w3-garage" element={<W3GarageHome />} />
+            <Route path="/e/w3-wins" element={<W3WinsPage />} />
           </Route>
           <Route path="/e/w3-gear" element={<ProtectedRoute checkOnboarding><W3Guard><W3GearScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-workshop" element={<ProtectedRoute checkOnboarding><W3Guard><W3WorkshopScreen /></W3Guard></ProtectedRoute>} />
@@ -547,7 +551,6 @@ function AppRoutes() {
           <Route path="/e/w3-register" element={<W3RegisterPage />} />
           <Route path="/e/w3-auth-preview" element={<W3AuthPreview />} />
           <Route path="/e/w3-threshold-preview" element={<W3ThresholdPreview />} />
-          <Route path="/e/w3-wins" element={<ProtectedRoute checkOnboarding><W3Guard><W3WinsPage /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
           <Route path="/e/w3-challenges-preview" element={<W3ChallengesPreview />} />

@@ -164,6 +164,102 @@ class RideRow:
     started_at: datetime
     distance_m: float | None
     duration_s: int | None
+    #: Optional so every existing positional construction keeps working. Both
+    #: are read only by the Erfolge screen's consistency grid and biggest day.
+    elevation_m: float | None = None
+    title: str | None = None
+
+
+def _week_start(d: date) -> date:
+    """The Monday of `d`'s week. ISO weeks, so a year is 52 or 53 of these."""
+    return d - timedelta(days=d.weekday())
+
+
+def weekly_consistency(
+    rides: Sequence[RideRow], now: datetime, weeks: int = 52
+) -> dict[str, Any]:
+    """Which of the last `weeks` weeks the rider actually rode.
+
+    The Erfolge grid is one tile per week, and its whole claim is "you showed
+    up" — so the unit is a WEEK WITH A RIDE IN IT, not a distance or a score. A
+    week with one easy hour counts the same as a week with three; the intensity
+    of the tile carries how much, and the tile being lit at all carries the
+    thing the chapter is about.
+
+    Weeks are counted back from the CURRENT week, which is included even though
+    it is incomplete: a rider who rode on Monday should see this Monday lit,
+    and hiding it would show them a grid that says they stopped.
+
+    `longest_streak` runs over consecutive lit weeks within the window only. It
+    is deliberately not "of all time" — the grid is the evidence for the
+    number printed beside it, and a streak the grid cannot show is a number the
+    rider cannot check.
+    """
+    this_week = _week_start(now.date())
+    first_week = this_week - timedelta(weeks=weeks - 1)
+
+    buckets: dict[date, dict[str, float]] = {}
+    for r in rides:
+        started = r.started_at
+        d = started.date() if started is not None else None
+        if d is None:
+            continue
+        wk = _week_start(d)
+        if wk < first_week or wk > this_week:
+            continue
+        b = buckets.setdefault(wk, {"rides": 0, "seconds": 0.0})
+        b["rides"] += 1
+        b["seconds"] += float(r.duration_s or 0)
+
+    out: list[dict[str, Any]] = []
+    streak = best_streak = 0
+    for i in range(weeks):
+        wk = first_week + timedelta(weeks=i)
+        b = buckets.get(wk)
+        n = int(b["rides"]) if b else 0
+        out.append({
+            "start": wk.isoformat(),
+            "rides": n,
+            "minutes": round(b["seconds"] / 60) if b else 0,
+        })
+        streak = streak + 1 if n else 0
+        best_streak = max(best_streak, streak)
+
+    return {
+        "weeks": out,
+        "ridden": sum(1 for w in out if w["rides"]),
+        "of": weeks,
+        "longest_streak": best_streak,
+    }
+
+
+def biggest_day(rides: Sequence[RideRow]) -> dict[str, Any] | None:
+    """The rider's longest single ride, by distance.
+
+    Distance and not duration, because "how far did you get" is the question a
+    rider asks about their biggest day; a five-hour recovery spin is a longer
+    ride and nobody's biggest day.
+
+    `also_highest` is only true when that same ride ALSO holds their ascent
+    record — the screen shows a second badge for it, and showing that badge on
+    a ride that is merely hilly would be a claim the rider could disprove by
+    scrolling their own history.
+    """
+    ridden = [r for r in rides if (r.distance_m or 0) > 0]
+    if not ridden:
+        return None
+    best = max(ridden, key=lambda r: r.distance_m or 0)
+    climbed = [r for r in rides if r.elevation_m is not None]
+    top_climb = max(climbed, key=lambda r: r.elevation_m or 0) if climbed else None
+    return {
+        "activity_id": best.id,
+        "date": best.started_at.date().isoformat() if best.started_at else None,
+        "title": best.title,
+        "km": round((best.distance_m or 0) / 1000, 1),
+        "duration_s": int(best.duration_s or 0),
+        "ascent_m": round(best.elevation_m) if best.elevation_m is not None else None,
+        "also_highest": top_climb is not None and top_climb.id == best.id,
+    }
 
 
 def detect_ride_milestones(rides: Sequence[RideRow]) -> dict[str, dict[str, Any]]:
@@ -367,11 +463,11 @@ async def get_achievements(db: AsyncSession, user_id: int, lang: str = "en") -> 
     # 1. Rides (chronological, cycling only)
     ride_res = await db.execute(
         select(Activity.id, Activity.started_at, Activity.distance_meters,
-               Activity.duration_seconds)
+               Activity.duration_seconds, Activity.elevation_gain_m, Activity.title)
         .where(Activity.user_id == user_id, Activity.sport == "cycling")
         .order_by(Activity.started_at.asc())
     )
-    rides = [RideRow(r[0], r[1], r[2], r[3]) for r in ride_res.all()]
+    rides = [RideRow(r[0], r[1], r[2], r[3], r[4], r[5]) for r in ride_res.all()]
 
     # 2. Ride work (kJ) from stream scalars
     kj_res = await db.execute(
@@ -560,4 +656,9 @@ async def get_achievements(db: AsyncSession, user_id: int, lang: str = "en") -> 
                 if climb_scanned and scan_ctx.get("ascent_m") is not None else None
             ),
         },
+        # Both come off the ride scan this function already did, so they are the
+        # same rides the totals above are made of rather than a second source
+        # that can disagree with them.
+        "consistency": weekly_consistency(rides, now),
+        "biggest_day": biggest_day(rides),
     }
