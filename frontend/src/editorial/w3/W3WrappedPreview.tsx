@@ -12,7 +12,15 @@ const FIXTURE: Wrapped = {
   totals: { sessions: 5, hours: 8.25, km: 214.6, tss: 486, active_days: 5, saddle_hm: '8:15 h' },
   planned_tss: 450,
   ctl_delta: 2.4,
-  route: null,
+  // A real closed loop so the route mark has a shape to draw.
+  route: {
+    points: Array.from({ length: 180 }, (_, i) => {
+      const t = (i / 180) * Math.PI * 2
+      const r = 0.05 + 0.016 * Math.sin(t * 3) + 0.009 * Math.cos(t * 5)
+      return [50.6 + r * Math.sin(t), 7.2 + r * Math.cos(t) * 1.5] as [number, number]
+    }),
+    view: { w: 100, h: 100 }, n_points: 180, activity_id: 1, title: 'Rheinschleife', km: 214.6,
+  },
   distance_comparison: 'Das ist Köln bis Frankfurt — und ein Stück zurück.',
   saddle_line: 'Acht Stunden. Ein Arbeitstag, nur mit besserer Aussicht.',
   daily_effort: [
@@ -42,5 +50,5 @@ const FIXTURE: Wrapped = {
 }
 
 export default function W3WrappedPreview() {
-  return <W3WrappedView vm={buildWrappedVm(FIXTURE)} onClose={() => history.back()} onShare={() => location.assign('/e/w3-share-preview')} />
+  return <W3WrappedView vm={buildWrappedVm(FIXTURE, { bike: '/w3/example-rider.webp', bestRideScene: '/w3/example-rider.webp' })} onClose={() => history.back()} onShare={() => location.assign('/e/w3-share-preview')} />
 }

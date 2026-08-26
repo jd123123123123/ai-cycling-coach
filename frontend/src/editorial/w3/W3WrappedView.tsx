@@ -64,6 +64,13 @@ export interface W3WrappedSlide {
   series?: number[]
   /** `compare`: this week against last, both already formatted. */
   versus?: { thisWeek: string; lastWeek: string; frac: number }
+  /** THE RIDER'S OWN PICTURE, full bleed behind the type — their composed ride
+   *  scene, or their bike. Wrapped's cards are built on the listener's own
+   *  album art; ours are built on the machine and the road. Absent → the
+   *  slide's colour field carries it alone. */
+  image?: string | null
+  /** The week's route as [lat, lng] pairs. Drawn enormous, edge to edge. */
+  route?: [number, number][] | null
 }
 
 export interface W3WrappedVm {
@@ -159,6 +166,44 @@ function Bars({ series, tint, reduce }: { series: number[]; tint: string; reduce
 }
 
 /** The display size that keeps a figure and its unit inside a 390 card. */
+/**
+ * THE ROUTE, DRAWN AS BIG AS THE CARD ALLOWS.
+ *
+ * Not a map — a shape. A rider recognises their own week from the outline of
+ * where they went, and at this size it reads as a mark rather than as data.
+ */
+function RouteMark({ points, tint, reduce }: {
+  points: [number, number][]; tint: string; reduce: boolean | null
+}) {
+  if (points.length < 2) return null
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
+  for (const [lat, lng] of points) {
+    minX = Math.min(minX, lng); maxX = Math.max(maxX, lng)
+    minY = Math.min(minY, lat); maxY = Math.max(maxY, lat)
+  }
+  const spanX = Math.max(1e-6, maxX - minX)
+  const spanY = Math.max(1e-6, maxY - minY)
+  const d = points
+    .map(([lat, lng], i) =>
+      `${i === 0 ? 'M' : 'L'}${((lng - minX) / spanX) * 100} ${((maxY - lat) / spanY) * 100}`)
+    .join(' ')
+  return (
+    <svg viewBox="-6 -6 112 112" preserveAspectRatio="xMidYMid meet"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
+      <motion.path d={d} fill="none" stroke={tint} strokeWidth={2.2}
+        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
+        initial={reduce ? false : { pathLength: 0, opacity: 0 }}
+        animate={{ pathLength: 1, opacity: 0.9 }}
+        transition={{ duration: 1.6, ease: EASE }} />
+    </svg>
+  )
+}
+
+/** Grain. Every printed poster has it and every flat gradient looks like a
+ *  screenshot without it — one SVG turbulence, no image request. */
+const GRAIN =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")"
+
 function figureSize(value: string): number {
   const glyphs = value.length
   if (glyphs <= 3) return 132
@@ -323,9 +368,40 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
 
         {/* One soft orb, off-centre, in the slide's own colour. Wrapped's cards
             are never flat fills — there is always a shape behind the type. */}
+        {/* THE RIDER'S OWN PICTURE. Wrapped is built on the listener's album
+            art; this is built on their machine and the road they rode. It sits
+            under a scrim heavy enough for type and light enough to still be a
+            photograph. */}
+        {slide.image && (
+          <motion.div aria-hidden key={`${slide.key}-img`}
+            initial={reduce ? false : { opacity: 0, scale: 1.08 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 1.4, ease: EASE }}
+            style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none',
+              backgroundImage: `url(${slide.image})`,
+              backgroundSize: 'cover', backgroundPosition: 'center',
+            }} />
+        )}
+        {slide.image && (
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            background: `linear-gradient(180deg, ${sc.ground.includes(T.acid) ? 'rgba(0,0,0,0.28)' : 'rgba(0,0,0,0.42)'} 0%, rgba(0,0,0,0.14) 34%, rgba(0,0,0,0.86) 100%)`,
+          }} />
+        )}
+
+        {/* The week's shape, enormous, behind everything. */}
+        {slide.route && slide.route.length > 1 && (
+          <div aria-hidden style={{ position: 'absolute', inset: '12% 6% 22%', pointerEvents: 'none' }}>
+            <RouteMark points={slide.route} tint={sc.accent} reduce={reduce} />
+          </div>
+        )}
+
+        {/* One soft orb, off-centre, in the slide's own colour. Wrapped's cards
+            are never flat fills — there is always a shape behind the type. */}
         <motion.div aria-hidden key={`${slide.key}-orb`}
           initial={reduce ? false : { opacity: 0, scale: 0.82 }}
-          animate={{ opacity: 0.5, scale: 1 }}
+          animate={{ opacity: slide.image ? 0.22 : 0.5, scale: 1 }}
           transition={{ duration: 0.9, ease: EASE }}
           style={{
             position: 'absolute', left: '-18%', top: '14%', width: 460, height: 460,
@@ -333,6 +409,24 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
             background: `radial-gradient(circle, ${sc.orb}, transparent 66%)`,
             filter: 'blur(18px)',
           }} />
+
+        {/* A ring, cropped by the frame — the geometry Wrapped puts behind its
+            type so a card never reads as a plain rectangle. */}
+        <motion.div aria-hidden key={`${slide.key}-ring`}
+          initial={reduce ? false : { opacity: 0, rotate: -14 }}
+          animate={{ opacity: 0.3, rotate: 0 }}
+          transition={{ duration: 1.2, ease: EASE }}
+          style={{
+            position: 'absolute', right: '-38%', bottom: '-16%', width: 420, height: 420,
+            borderRadius: '50%', pointerEvents: 'none',
+            border: `2px solid ${sc.accent}`,
+          }} />
+
+        {/* Grain over the lot. */}
+        <div aria-hidden style={{
+          position: 'absolute', inset: 0, pointerEvents: 'none',
+          backgroundImage: GRAIN, opacity: 0.16, mixBlendMode: 'overlay',
+        }} />
 
         {/* Progress — one bar per slide, the one Wrapped taught everybody. */}
         <div style={{ display: 'flex', gap: 4, padding: '14px 20px 0', position: 'relative' }}>

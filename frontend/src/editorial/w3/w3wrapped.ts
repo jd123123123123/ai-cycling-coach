@@ -28,7 +28,18 @@ function weekLabel(startISO: string, endISO: string): string {
   return `${f(a, a.getMonth() !== b.getMonth())} – ${f(b, true)}`
 }
 
-export function buildWrappedVm(w: Wrapped): W3WrappedVm {
+/** What the rider's own pictures are, when the app has them. Absent images are
+ *  simply absent — a slide falls back to its colour field rather than to a
+ *  stock photograph, because a Wrapped built on somebody else's bike is worse
+ *  than one built on none. */
+export interface WrappedArt {
+  /** The composed scene for the week's best ride: their machine, that road. */
+  bestRideScene?: string | null
+  /** Their bike, cut out, from the garage. */
+  bike?: string | null
+}
+
+export function buildWrappedVm(w: Wrapped, art: WrappedArt = {}): W3WrappedVm {
   const slides: W3WrappedSlide[] = []
   const label = weekLabel(w.week_start, w.week_end)
 
@@ -53,6 +64,8 @@ export function buildWrappedVm(w: Wrapped): W3WrappedVm {
       lead: w.totals.sessions === 1 ? 'In einer Fahrt.' : `Über ${de(w.totals.sessions)} Fahrten.`,
       foot: w.distance_comparison ?? undefined,
       series: w.daily_effort.map((d) => d.km),
+      // The week's shape, behind the number that measures it.
+      route: w.route?.points ?? null,
     })
   }
 
@@ -68,6 +81,7 @@ export function buildWrappedVm(w: Wrapped): W3WrappedVm {
       lead: 'So lange warst du',
       accent: 'draußen.',
       foot: w.saddle_line ?? undefined,
+      image: art.bike ?? null,
     })
   }
 
@@ -96,6 +110,8 @@ export function buildWrappedVm(w: Wrapped): W3WrappedVm {
       eyebrow: 'Die Fahrt der Woche',
       lead: w.best_ride.title,
       foot: `${de(w.best_ride.km, 1)} km · ${w.best_ride.moving} · ${de(w.best_ride.tss)} TSS`,
+      // Their machine, on the road this ride actually took.
+      image: art.bestRideScene ?? null,
     })
   }
 
@@ -136,6 +152,8 @@ export function buildWrappedVm(w: Wrapped): W3WrappedVm {
     accent: w.ctl_delta != null && w.ctl_delta > 0 ? `Fitness +${de(w.ctl_delta, 1)}.` : undefined,
     foot: bits,
     series: w.daily_effort.map((d) => d.tss),
+    image: art.bestRideScene ?? art.bike ?? null,
+    route: w.route?.points ?? null,
   })
 
   return { weekLabel: label, slides, shareLabel: 'Woche teilen' }

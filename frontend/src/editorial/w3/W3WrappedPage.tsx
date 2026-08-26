@@ -6,6 +6,7 @@ import type { Wrapped } from '../../pages/WeeklyWrapped'
 import W3WrappedView from './W3WrappedView'
 import { buildWrappedVm } from './w3wrapped'
 import W3Loading from './W3Loading'
+import { useGarage, useRideScene } from '../../hooks/useGarage'
 
 /**
  * W3 · Deine Woche, wired. Route /e/w3-wrapped.
@@ -26,7 +27,22 @@ export default function W3WrappedPage() {
     staleTime: 60 * 60 * 1000,   // a week's summary does not move hourly
   })
 
-  const vm = useMemo(() => (data && data.has_rides ? buildWrappedVm(data) : null), [data])
+  // THE RIDER'S OWN PICTURES. Both are cache reads the app already makes
+  // elsewhere — the garage bike and the composed scene for the week's best
+  // ride. Neither generates anything: a scene that has not been composed yet
+  // simply is not there, and the slide falls back to its colour field.
+  const { data: garage } = useGarage()
+  const { data: scene } = useRideScene(data?.best_ride?.activity_id ?? null)
+
+  const vm = useMemo(
+    () => (data && data.has_rides
+      ? buildWrappedVm(data, {
+          bestRideScene: scene?.status === 'ok' ? scene.image_base64 ?? null : null,
+          bike: garage?.bike?.image_base64 ?? null,
+        })
+      : null),
+    [data, scene, garage],
+  )
 
   if (isLoading) return <W3Loading label="Deine Woche…" />
 
