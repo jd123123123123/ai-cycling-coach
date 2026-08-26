@@ -97,7 +97,7 @@ export default function W3SharePreview() {
     }
     return {
       layout: format,
-      handle: p.handle, badge: 'W3 ANALYSE',
+      handle: p.handle, badge: 'RIDR ANALYSE',
       lead: on('lead', p.sentence.split(' — ')[0] ?? p.sentence),
       emphasis: on('emphasis', p.sentence.split(' — ').slice(1).join(' — ')),
       bigValue: p.bigValue, bigUnit: p.bigUnit,

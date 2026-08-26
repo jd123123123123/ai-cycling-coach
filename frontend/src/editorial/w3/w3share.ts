@@ -3,6 +3,7 @@ import {
   blocksHeight, fitBlocks, paintBlocks, usableBlocks,
   type BlockData, type BlockId,
 } from './w3shareBlocks'
+import { RIDR_LIME } from '../../components/RidrMark'
 /**
  * W3 · Ride-teilen — the share-poster renderer + native-share plumbing.
  *
@@ -249,6 +250,43 @@ function wrap(ctx: CanvasRenderingContext2D, s: string, size: number, weight: st
   }
   if (cur) lines.push(cur)
   return lines
+}
+
+/**
+ * THE RIDR MARK, on a canvas.
+ *
+ * The footer of every exported card used to be a four-point `star` beside the
+ * word "Ridr" — a generic sparkle standing in for a logo the app already has.
+ * These cards are the one surface of this app that leaves it and gets posted in
+ * public, so they are the last place that should be signed with a placeholder.
+ *
+ * This is the SAME geometry as `components/RidrMark.tsx`: one stroked path in a
+ * 200×200 box, so the drawn mark and the rendered one cannot drift apart. It is
+ * transcribed rather than imported because that component is JSX and this is a
+ * 2D context; the path string is the shared source of truth.
+ *
+ * `cx`/`cy` are the mark's CENTRE, so it drops straight into the call sites the
+ * star occupied, which were all centre-anchored too.
+ */
+const RIDR_PATH = 'M54 176v-136h50a36 36 0 0 1 0 72h-50m46 0c32 16 38 40 72 28'
+
+function ridrMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
+  const box = r * 2
+  const k = box / 200
+  ctx.save()
+  ctx.translate(cx - box / 2, cy - box / 2)
+  ctx.scale(k, k)
+  ctx.strokeStyle = color
+  ctx.lineWidth = 13.2
+  ctx.lineCap = 'round'
+  ctx.lineJoin = 'round'
+  try {
+    ctx.stroke(new Path2D(RIDR_PATH))
+  } catch {
+    // A context without Path2D is not worth a broken export — the card simply
+    // goes out unsigned rather than not at all.
+  }
+  ctx.restore()
 }
 
 function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
@@ -653,7 +691,7 @@ async function paint(
 
   // footer
   text(ctx, d.footer, px, y, 26, '600', 'rgba(255,255,255,0.55)')
-  star(ctx, W - px - 150, y - 8, 12, t.acid)
+  ridrMark(ctx, W - px - 150, y - 8, 15, RIDR_LIME)
   text(ctx, 'Ridr', W - px - 128, y, 28, '700', T.ink)
 }
 
@@ -871,7 +909,7 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   // ── footer ──
   const fy = AH - 68
   if (d.footer) text(ctx, d.footer, px, fy, 26, '600', 'rgba(255,255,255,0.55)')
-  star(ctx, AW - px - 150, fy - 8, 12, ACID)
+  ridrMark(ctx, AW - px - 150, fy - 8, 15, RIDR_LIME)
   text(ctx, 'Ridr', AW - px - 128, fy, 28, '700', T.ink)
 }
 
@@ -997,7 +1035,7 @@ function paintChallengeCard(ctx: CanvasRenderingContext2D, d: ChallengeCardData)
 
   const foot = AH - 68
   text(ctx, d.handle, px, foot, 28, '700', 'rgba(255,255,255,0.55)')
-  star(ctx, AW - px - 150, foot - 8, 12, ACID)
+  ridrMark(ctx, AW - px - 150, foot - 8, 15, RIDR_LIME)
   text(ctx, 'Ridr', AW - px - 128, foot, 28, '700', T.ink)
 }
 
@@ -1147,7 +1185,7 @@ export interface StoryData {
   /** The ride's track, for `trace`. Null falls back to the strip. */
   polyline?: [number, number][] | null
   handle: string
-  /** "W3 ANALYSE" — the chip that says where the numbers came from. */
+  /** "RIDR ANALYSE" — the chip that says where the numbers came from. */
   badge: string
   /** The coach's line, already split. `emphasis` goes acid. */
   lead: string
@@ -1313,7 +1351,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
       // that has left the app cannot re-lay itself out.
       // MEASURED THE WAY IT WILL BE DRAWN. The label is set with 1.2 of letter
       // spacing, and `measureText` knows nothing about that — so the pill was
-      // sized to the unspaced string and every longer label ("W3 ANALYSE") ran
+      // sized to the unspaced string and every longer label ("RIDR ANALYSE") ran
       // out through its own right edge. Canvas has no letter-spacing metric, so
       // the spaced width has to be summed the same way `text()` will lay it.
       const spaced = [...label].reduce((acc, ch) => acc + ctx.measureText(ch).width + 1.2, 0) - 1.2
@@ -1552,7 +1590,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     })
 
     // The mark, bottom right on the pen's own coordinates.
-    star(ctx, 868.5, 1861, 16.5, accent)
+    ridrMark(ctx, 868.5, 1861, 19, RIDR_LIME)
     text(ctx, 'w3.ride', 900, 1842, 31.5, '700', 'rgba(255,255,255,0.80)', 0, 'left', FONT, 'top')
     return
   }

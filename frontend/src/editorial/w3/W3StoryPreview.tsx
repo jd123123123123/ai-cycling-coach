@@ -11,7 +11,7 @@ import { T, FONT } from './w3tokens'
 
 const BASE: StoryData = {
   handle: '@jannis_d',
-  badge: 'W3 ANALYSE',
+  badge: 'RIDR ANALYSE',
   lead: 'Schnellste Rheinschleife',
   emphasis: 'seit Mai — bei 4 °C weniger.',
   bigValue: '52,4',

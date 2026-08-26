@@ -367,7 +367,10 @@ export default function W3SharePage() {
       layout: format,
       accent,
       handle: poster.handle,
-      badge: 'W3 ANALYSE',
+      // The app is called Ridr. "W3" is the internal name of the design
+      // system, and it had no business being the credit line on the one
+      // surface of this app that gets posted in public.
+      badge: 'RIDR ANALYSE',
       lead: poster.sentence.split(/ — | – |: /)[0] ?? poster.sentence,
       emphasis: poster.sentence.split(/ — | – |: /).slice(1).join(' — '),
       bigValue,
