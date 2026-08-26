@@ -58,7 +58,50 @@
     </noscript>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- ── THE SHELL SHIPS VISIBLE ────────────────────────────────────────
+         #root was empty, so anything that stopped React from mounting — a
+         module that throws at import time, a chunk that 404s after a deploy, a
+         provider that fails before the error boundary exists — left the user
+         staring at the page background. That is the "app starts black and a
+         reload fixes it" report: the reload takes a different path and mounts.
+
+         An error boundary cannot help here because it is React, and React is
+         the thing that did not start. The only fix that always works is for the
+         document itself to carry something. React replaces this the moment it
+         mounts, so in the normal case it is one paint of the same mark the app
+         uses for every other wait.
+
+         The watchdog below turns the pathological case into a message instead
+         of a void: if nothing has replaced this after eight seconds, the boot
+         did not happen and the rider is told so, with the one action that
+         actually helps. -->
+    <div id="root">
+      <div id="boot" style="min-height:100dvh;display:grid;place-items:center;background:#0B0B0B;font-family:'Inter Tight',ui-sans-serif,system-ui,sans-serif">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:18px;padding:0 32px;text-align:center">
+          <div style="width:46px;height:46px;border-radius:14px;background:#BFFF3C"></div>
+          <p id="boot-msg" style="margin:0;font-size:13px;font-weight:600;color:#8A9099">Einen Moment…</p>
+          <button id="boot-retry" hidden
+            style="margin-top:4px;padding:11px 22px;border:0;border-radius:100px;background:#BFFF3C;color:#0B0B0B;font-size:14px;font-weight:600;cursor:pointer">
+            Neu laden
+          </button>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Eight seconds is well past a slow cold start on a phone and well short
+      // of the rider deciding the app is broken.
+      window.setTimeout(function () {
+        var boot = document.getElementById('boot')
+        if (!boot) return   // React mounted and replaced it — nothing to do
+        var msg = document.getElementById('boot-msg')
+        var btn = document.getElementById('boot-retry')
+        if (msg) msg.textContent = 'Die App konnte nicht starten.'
+        if (btn) {
+          btn.hidden = false
+          btn.onclick = function () { location.reload() }
+        }
+      }, 8000)
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

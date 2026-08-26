@@ -148,6 +148,20 @@ function App() {
   return (
     <BrowserRouter>
       <ScrollToTop />
+      {/* ── THE BOUNDARY GOES OUTERMOST ────────────────────────────────
+          It sat UNDER four providers — auth, locale, mode, celebration — so it
+          could not catch a throw from any of them. A provider that fails during
+          boot takes the whole tree down with it and React renders NOTHING: a
+          genuinely blank black screen, no error page, no recovery. A reload
+          "fixes" it because the second attempt runs a different path — a warm
+          cache, a resolved session, a stage already in the query cache — which
+          is exactly the symptom that was reported.
+
+          A boundary is only worth its code if it sits above the things most
+          likely to fail, and the providers ARE those things: they run first,
+          they touch storage, network and the query cache, and they run before
+          anything has painted. */}
+      <ErrorBoundary>
       <AuthProvider>
         <LocaleProvider>
         {/* OUTSIDE the routed tree on purpose: white mode is the whole app, not
@@ -155,13 +169,12 @@ function App() {
             rider moves the bike onto the white studio floor. */}
         <W3ModeProvider>
         <CelebrationProvider>
-        <ErrorBoundary>
         <AppRoutes />
-        </ErrorBoundary>
         </CelebrationProvider>
         </W3ModeProvider>
         </LocaleProvider>
       </AuthProvider>
+      </ErrorBoundary>
     </BrowserRouter>
   )
 }
