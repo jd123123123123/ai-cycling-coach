@@ -62,6 +62,32 @@ function buildStamp(): string {
   }
 }
 
+/**
+ * Put the build stamp in the DOCUMENT, not just the bundle.
+ *
+ * `__BUILD_STAMP__` already answers "which build am I looking at" — but only
+ * once React has rendered the nav menu that shows it. The question is at its
+ * sharpest precisely when nothing renders: a blank screen proves nothing about
+ * which bundle produced it, and an installed PWA keeps serving its cached
+ * document until it is fully closed, so "I still see the bug" and "I have not
+ * received the fix yet" look identical from here.
+ *
+ * A meta tag survives a page that never mounts. `curl HOST | grep ridr:build`
+ * says what a host serves, and the boot card shows the same string on the
+ * device, so the two can be compared without a laptop.
+ */
+function stampIndexHtml() {
+  const stamp = buildStamp()
+  return {
+    name: 'ridr-stamp-index-html',
+    transformIndexHtml(html: string) {
+      return html
+        .replace('<head>', `<head>\n    <meta name="ridr:build" content="${stamp}" />`)
+        .replace('__BUILD_STAMP_TEXT__', stamp)
+    },
+  }
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   // WHICH BUILD AM I LOOKING AT. "I can't see the changes on my phone" is
@@ -72,7 +98,7 @@ export default defineConfig({
   define: {
     __BUILD_STAMP__: JSON.stringify(buildStamp()),
   },
-  plugins: [react(), tailwindcss(), maplibreWorker()],
+  plugins: [react(), tailwindcss(), maplibreWorker(), stampIndexHtml()],
   // MapLibre GL must not go through esbuild dep pre-bundling. It spawns a web
   // worker for tile parsing, and the pre-bundled copy resolves that worker's
   // URL incorrectly: the map constructs, fetches its style and every TileJSON,
