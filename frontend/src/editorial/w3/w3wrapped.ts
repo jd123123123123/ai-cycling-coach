@@ -19,42 +19,34 @@ import type { W3WrappedSlide, W3WrappedVm } from './W3WrappedView'
 
 export interface Scene { ground: string; ink: string; accent: string; orb: string }
 
+/**
+ * THE GROUND IS DARK. THE PICTURE MAKES THE COLOUR.
+ *
+ * The first two builds got this backwards. I read the token list, saw violet
+ * and orange and acid in it, and painted seven saturated gradient fields — then
+ * looked at the actual w3:ride app and at pen `XLPb0`, which is the layout spec
+ * for exactly this card, and neither works that way.
+ *
+ * In the real product the chrome is near-black and the COLLECTIBLE carries every
+ * bit of colour on the screen: the character portraits fill their cards, the
+ * bike render fills the frame, and the UI around them is dark tiles with two
+ * accents — violet for what you press, acid for what you earned. A rainbow of
+ * gradient slabs is a different app wearing this one's palette.
+ *
+ * So every slide is the same near-black ground now. What changes between them
+ * is the PICTURE and the one accent, which is how a deck of these reads as one
+ * product rather than as seven posters that happen to share a font.
+ */
+const DARK: Scene = { ground: T.bg, ink: T.ink, accent: T.acid, orb: T.acid }
+
 export const SCENES: Record<string, Scene> = {
-  // Night, opening. Violet bloom on black — anticipation, nothing stated yet.
-  open: {
-    ground: `linear-gradient(165deg, ${T.evening}59, ${T.bg} 62%)`,
-    ink: T.ink, accent: T.acid, orb: T.evening,
-  },
-  // The loud one. Acid field, black type — the slide people screenshot.
-  km: {
-    ground: `linear-gradient(155deg, ${T.acidHi}, ${T.acid} 55%, ${T.acidDeep})`,
-    ink: T.bg, accent: T.bg, orb: T.acidHi,
-  },
-  // Deep violet, white type. The counterweight to the acid slide before it.
-  saddle: {
-    ground: `linear-gradient(200deg, ${T.evening}, ${T.nightLo} 78%)`,
-    ink: T.ink, accent: T.lilac, orb: T.evening,
-  },
-  // Heat. Peak power gets the only warm field in the deck.
-  peak: {
-    ground: `linear-gradient(150deg, ${T.warn}, ${T.bad} 72%)`,
-    ink: T.bg, accent: T.bg, orb: T.warn,
-  },
-  // Cobalt, for the named ride — the broadsheet slide.
-  best: {
-    ground: `linear-gradient(185deg, ${T.cool}, ${T.nightLo} 80%)`,
-    ink: T.ink, accent: T.acid, orb: T.cool,
-  },
-  // Green: the plan kept, or not.
-  plan: {
-    ground: `linear-gradient(165deg, ${T.training}, ${T.nightLo} 76%)`,
-    ink: T.ink, accent: T.acid, orb: T.training,
-  },
-  // The poster. Acid over violet — both accents, once, at the end.
-  finale: {
-    ground: `linear-gradient(200deg, ${T.evening} 8%, ${T.bg} 52%, ${T.acidDeep})`,
-    ink: T.ink, accent: T.acid, orb: T.acid,
-  },
+  open:    { ...DARK, accent: T.evening },
+  km:      { ...DARK },
+  saddle:  { ...DARK, accent: T.evening },
+  peak:    { ...DARK, accent: T.warn },
+  best:    { ...DARK },
+  plan:    { ...DARK, accent: T.evening },
+  finale:  { ...DARK },
 }
 
 export const sceneFor = (key: string): Scene => SCENES[key] ?? SCENES.open
@@ -104,6 +96,13 @@ export function buildWrappedVm(w: Wrapped, art: WrappedArt = {}): W3WrappedVm {
       eyebrow: 'Gefahren',
       value: de(w.totals.km, 1),
       unit: 'km',
+      // The row, the way the template sets it — distance, time, climbing, all
+      // at one weight. A week is three numbers, not one with two footnotes.
+      stats: [
+        { label: 'zeit', value: w.totals.saddle_hm.replace(' h', ''), unit: 'h' },
+        ...(w.elevation_m != null && w.elevation_m > 0
+          ? [{ label: 'hm', value: de(Math.round(w.elevation_m)), unit: 'hm' }] : []),
+      ],
       lead: w.totals.sessions === 1 ? 'In einer Fahrt.' : `Über ${de(w.totals.sessions)} Fahrten.`,
       foot: w.distance_comparison ?? undefined,
       series: w.daily_effort.map((d) => d.km),

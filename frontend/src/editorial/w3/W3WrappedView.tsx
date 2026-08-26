@@ -63,6 +63,9 @@ export interface W3WrappedSlide {
   foot?: string
   /** 0–1 bars for the slide's own graphic. Empty draws none. */
   series?: number[]
+  /** THE ROW. Three figures of equal weight, the way pen `XLPb0` sets them —
+   *  "52,4 km · 1:47:32 · 612 hm". Not one hero and two footnotes. */
+  stats?: { label: string; value: string; unit: string }[]
   /** `compare`: this week against last, both already formatted. */
   versus?: { thisWeek: string; lastWeek: string; frac: number }
   /** THE RIDER'S OWN PICTURE, full bleed behind the type — their composed ride
@@ -108,32 +111,11 @@ const SLIDE_MS = 5200
 // an exported slide that differs from the slide on screen is a broken promise.
 
 
-function Bars({ series, tint, reduce }: { series: number[]; tint: string; reduce: boolean | null }) {
-  if (series.length === 0) return null
-  const peak = Math.max(...series, 0.0001)
-  return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 74 }}>
-      {series.slice(0, 28).map((v, i) => (
-        <motion.div key={i}
-          initial={reduce ? false : { scaleY: 0 }}
-          animate={{ scaleY: 1 }}
-          transition={{ duration: 0.5, ease: EASE, delay: 0.25 + i * 0.03 }}
-          style={{
-            flex: 1, transformOrigin: 'bottom', borderRadius: 2,
-            height: `${Math.max(6, (v / peak) * 100)}%`,
-            background: v / peak >= 0.86 ? tint : `${tint}4D`,
-          }} />
-      ))}
-    </div>
-  )
-}
 
-/** The display size that keeps a figure and its unit inside a 390 card. */
+
 /**
- * THE ROUTE, DRAWN AS BIG AS THE CARD ALLOWS.
- *
- * Not a map — a shape. A rider recognises their own week from the outline of
- * where they went, and at this size it reads as a mark rather than as data.
+ * THE ROUTE, SMALL AND LOW-LEFT — the size pen `XLPb0` draws it. It is a
+ * signature on the card, not the subject of it: the photograph is the subject.
  */
 function RouteMark({ points, tint, reduce }: {
   points: [number, number][]; tint: string; reduce: boolean | null
@@ -151,13 +133,13 @@ function RouteMark({ points, tint, reduce }: {
       `${i === 0 ? 'M' : 'L'}${((lng - minX) / spanX) * 100} ${((maxY - lat) / spanY) * 100}`)
     .join(' ')
   return (
-    <svg viewBox="-6 -6 112 112" preserveAspectRatio="xMidYMid meet"
-      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-      <motion.path d={d} fill="none" stroke={tint} strokeWidth={2.2}
+    <svg viewBox="-4 -4 108 108" preserveAspectRatio="xMidYMid meet"
+      style={{ width: '100%', height: '100%' }}>
+      <motion.path d={d} fill="none" stroke={tint} strokeWidth={2.6}
         strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
         initial={reduce ? false : { pathLength: 0, opacity: 0 }}
-        animate={{ pathLength: 1, opacity: 0.9 }}
-        transition={{ duration: 1.6, ease: EASE }} />
+        animate={{ pathLength: 1, opacity: 1 }}
+        transition={{ duration: 1.4, ease: EASE }} />
     </svg>
   )
 }
@@ -167,102 +149,97 @@ function RouteMark({ points, tint, reduce }: {
 const GRAIN =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.5'/%3E%3C/svg%3E\")"
 
-function figureSize(value: string): number {
-  const glyphs = value.length
-  if (glyphs <= 3) return 132
-  if (glyphs === 4) return 116
-  if (glyphs === 5) return 96
-  return 82
-}
 
 function Slide({ s, sc, reduce }: { s: W3WrappedSlide; sc: Scene; reduce: boolean | null }) {
-  const rise = reduce ? {} : { initial: { opacity: 0, y: 18 }, animate: { opacity: 1, y: 0 } }
+  const rise = reduce ? {} : { initial: { opacity: 0, y: 14 }, animate: { opacity: 1, y: 0 } }
 
   return (
+    /* ── THE SAFE BAND ──────────────────────────────────────────────────
+       Pen `XLPb0` marks the two zones a story card must keep clear: 250px at
+       the top for Instagram's own header, avatar and menu, and 370px at the
+       bottom for the caption, reply bar and link sticker. On a 1920 frame that
+       is 13% and 19%; the content lives between them or Instagram covers it.
+       Designing to the middle band is the difference between a card that was
+       made for the platform and one that was made and then cropped by it. */
     <div style={{
-      // CENTRED, NOT BOTTOM-STACKED. Every slide sat on the floor of the frame
-      // with two-thirds of a saturated field empty above it — which reads as a
-      // caption on a colour swatch rather than as a poster. Wrapped's cards put
-      // their type where the eye already is and let the field run past it on
-      // both sides.
       flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column',
-      justifyContent: 'center',
-      gap: 16, padding: '0 26px 20px',
+      justifyContent: 'flex-end', gap: 14,
+      padding: '13% 26px 19%',
     }}>
+      {/* Chapter line: the route and the date, the way the template sets it. */}
       <motion.span {...rise} transition={{ duration: 0.5, ease: EASE }}
-        style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.6, color: sc.accent, opacity: 0.85 }}>
+        style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 1.5, color: sc.ink, opacity: 0.72 }}>
         {s.eyebrow.toUpperCase()}
       </motion.span>
 
-      {/* THE DISPLAY TIER. 104 is the top of w3:ride's range and this is what
-          that range is for — one number a week, arriving on its own slide. */}
-      {s.value && (
-        <motion.div {...rise} transition={{ duration: 0.6, ease: EASE, delay: 0.08 }}
-          style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0, maxWidth: '100%' }}>
-          <span style={{
-            // BIG, BUT INSIDE THE FRAME. 124 is the size a number wants to be
-            // before it stops reading as a statistic and starts being the
-            // picture — and at five or six glyphs it pushed its own unit off
-            // the right edge of a 390 card. The figure steps down as it gets
-            // longer so "214,6 km" and "9" both fill the width instead of one
-            // of them overflowing it.
-            fontSize: s.kind === 'figure' ? figureSize(s.value ?? '') : 74,
-            fontWeight: 600,
-            letterSpacing: s.kind === 'figure' ? -6 : -3.2, lineHeight: 0.84,
-            color: sc.ink, ...TNUM,
-          }}>{s.value}</span>
-          {s.unit && (
-            <span style={{ fontSize: s.kind === 'figure' ? 30 : 22, fontWeight: 600, color: sc.accent }}>
-              {s.unit}
+      {/* The sentence leads. In the real product the type is modest and the
+          PICTURE is the spectacle — a number the height of the frame is a
+          poster about a statistic, which is not what these cards are. */}
+      <motion.div {...rise} transition={{ duration: 0.55, ease: EASE, delay: 0.08 }}
+        style={{ display: 'flex', flexDirection: 'column' }}>
+        <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -1.1, lineHeight: 1.08, color: sc.ink }}>
+          {s.lead}
+        </span>
+        {s.accent && (
+          <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -1.1, lineHeight: 1.08, color: sc.accent }}>
+            {s.accent}
+          </span>
+        )}
+      </motion.div>
+
+      {/* ── THE STAT ROW ───────────────────────────────────────────────
+          `XLPb0` sets "52,4 km · 1:47:32 · 612 hm" as three figures of EQUAL
+          weight on one line, unit small on the baseline. Not one hero number
+          and two footnotes — the row is the composition, and it is what makes
+          these cards recognisably the same object as the ride shares. */}
+      {(s.value || (s.stats && s.stats.length > 0)) && (
+        <motion.div {...rise} transition={{ duration: 0.55, ease: EASE, delay: 0.14 }}
+          style={{ display: 'flex', alignItems: 'baseline', gap: 20, flexWrap: 'wrap' }}>
+          {s.value && (
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+              <span style={{ fontSize: 34, fontWeight: 600, letterSpacing: -1.2, color: sc.ink, ...TNUM }}>{s.value}</span>
+              {s.unit && <span style={{ fontSize: 13, fontWeight: 600, color: sc.ink, opacity: 0.6, ...TNUM }}>{s.unit}</span>}
             </span>
           )}
+          {(s.stats ?? []).map((st) => (
+            <span key={st.label} style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
+              <span style={{ fontSize: 34, fontWeight: 600, letterSpacing: -1.2, color: sc.ink, ...TNUM }}>{st.value}</span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: sc.ink, opacity: 0.6, ...TNUM }}>{st.unit}</span>
+            </span>
+          ))}
         </motion.div>
       )}
 
       {s.versus && (
-        <motion.div {...rise} transition={{ duration: 0.6, ease: EASE, delay: 0.12 }}
-          style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-          {/* Last week is the only fair opponent, so it is drawn as the track
-              and this week as the fill. The gap IS the story. */}
-          <div style={{ height: 12, borderRadius: 100, background: `${sc.ink}1F`, overflow: 'hidden' }}>
+        <motion.div {...rise} transition={{ duration: 0.55, ease: EASE, delay: 0.18 }}
+          style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          <div style={{ height: 8, borderRadius: 100, background: `${sc.ink}1F`, overflow: 'hidden' }}>
             <motion.div
               initial={reduce ? false : { width: 0 }}
               animate={{ width: `${Math.round(Math.max(0, Math.min(1.4, s.versus.frac)) / 1.4 * 100)}%` }}
-              transition={{ duration: 0.9, ease: EASE, delay: 0.2 }}
-              style={{ height: '100%', borderRadius: 100, background: sc.ink }} />
+              transition={{ duration: 0.9, ease: EASE, delay: 0.24 }}
+              style={{ height: '100%', borderRadius: 100, background: sc.accent }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: sc.ink, ...TNUM }}>{s.versus.thisWeek}</span>
-            <span style={{ fontSize: 11, fontWeight: 600, color: sc.ink, opacity: 0.55, ...TNUM }}>{s.versus.lastWeek}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: sc.accent, ...TNUM }}>{s.versus.thisWeek}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 600, color: sc.ink, opacity: 0.5, ...TNUM }}>{s.versus.lastWeek}</span>
           </div>
         </motion.div>
       )}
 
-      {s.series && s.series.length > 0 && (
-        <Bars series={s.series} tint={sc.ink} reduce={reduce} />
-      )}
-
-      {/* The sentence, set solid at the w3:ride heading ratio. */}
-      <motion.div {...rise} transition={{ duration: 0.6, ease: EASE, delay: 0.16 }}
-        style={{ display: 'flex', flexDirection: 'column' }}>
-        <span style={{
-          fontSize: s.kind === 'broadsheet' ? 44 : 30, fontWeight: 600,
-          letterSpacing: s.kind === 'broadsheet' ? -1.8 : -1.1, lineHeight: 1.06, color: sc.ink,
-        }}>{s.lead}</span>
-        {s.accent && (
-          <span style={{
-            fontSize: s.kind === 'broadsheet' ? 44 : 30, fontWeight: 600,
-            letterSpacing: s.kind === 'broadsheet' ? -1.8 : -1.1, lineHeight: 1.06, color: sc.accent,
-          }}>{s.accent}</span>
-        )}
-      </motion.div>
-
       {s.foot && (
-        <motion.span {...rise} transition={{ duration: 0.6, ease: EASE, delay: 0.22 }}
-          style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: sc.ink, opacity: 0.62 }}>
+        <motion.span {...rise} transition={{ duration: 0.55, ease: EASE, delay: 0.22 }}
+          style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: sc.ink, opacity: 0.55 }}>
           {s.foot}
         </motion.span>
       )}
+
+      {/* The mark, small, where the template puts it. */}
+      <motion.div {...rise} transition={{ duration: 0.55, ease: EASE, delay: 0.28 }}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 2 }}>
+        <span style={{ width: 5, height: 5, borderRadius: 100, background: T.acid }} />
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, color: sc.ink, opacity: 0.7 }}>w3.ride</span>
+      </motion.div>
     </div>
   )
 }
@@ -358,8 +335,15 @@ export default function W3WrappedView({ vm, onClose, onShare }: {
 
         {/* The week's shape, enormous, behind everything. */}
         {slide.route && slide.route.length > 1 && (
-          <div aria-hidden style={{ position: 'absolute', inset: '12% 6% 22%', pointerEvents: 'none' }}>
-            <RouteMark points={slide.route} tint={sc.accent} reduce={reduce} />
+          <div aria-hidden style={{
+            // ABOVE THE TYPE, NOT ON IT. At bottom:30% the trace landed across
+            // the headline and the stat row — a signature drawn over the thing
+            // it signs. It sits in the clear band between the photo and the
+            // copy now, which is where `XLPb0` puts it.
+            position: 'absolute', left: 26, bottom: '43%', width: 76, height: 76, pointerEvents: 'none',
+            opacity: 0.9,
+          }}>
+            <RouteMark points={slide.route} tint={T.acid} reduce={reduce} />
           </div>
         )}
 
