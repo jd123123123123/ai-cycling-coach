@@ -562,6 +562,7 @@ def weekly_tss_target(
     phase: Phase,
     block_position: Literal["accumulation", "transmutation", "realization", "recovery"],
     weekly_hours: float | None = None,
+    ramp_cap_pct: float | None = None,
 ) -> int:
     """Compute weekly TSS target for one Issurin block position.
 
@@ -602,8 +603,15 @@ def weekly_tss_target(
     if block_position == "recovery":
         return int(round(base_tss * ramp))
 
-    # Clamp ramp to Friel 8% cap — if ramp already exceeds cap use cap
-    effective_ramp = min(ramp, 1.0 + FRIEL_RAMP_CAP_PCT)
+    # Clamp ramp to Friel's 8% cap — if ramp already exceeds cap use cap.
+    #
+    # AGE FLATTENS IT. Friel's rule is written for a general athlete, and older
+    # riders tolerate less week-over-week growth before the adaptation turns
+    # into accumulated fatigue. `age_rails` supplies the cap; absent one, this
+    # is exactly the behaviour it always had. It NEVER removes intensity — see
+    # that module for why the obvious "he is 85, drop the VO₂ work" is wrong.
+    cap = FRIEL_RAMP_CAP_PCT if ramp_cap_pct is None else ramp_cap_pct
+    effective_ramp = min(ramp, 1.0 + cap)
     return int(round(base_tss * effective_ramp))
 
 
@@ -1442,16 +1450,30 @@ async def generate_mesocycle(
     # see _blend_weekly_anchor for the closing-the-gap rules.
     declared_hours = getattr(athlete, "weekly_hours_available", None)
 
+    # ── AGE RAILS ──────────────────────────────────────────────────────────
+    # The generator had no idea how old the rider was: `mesocycle_generator`
+    # contained the substring "age" exactly twice, in "manage" and "average".
+    # Friel's 8%-per-week ramp is written for a general athlete; an older rider
+    # tolerates less growth before adaptation becomes accumulated fatigue.
+    #
+    # It flattens the RAMP and nothing else. The intensity stays in the plan at
+    # every age — see `age_rails` for why "he is 85, drop the VO₂ work" is the
+    # wrong conclusion from a true premise.
+    from app.services.age_rails import rails_for_profile
+
+    rails = rails_for_profile(getattr(athlete, "date_of_birth", None))
+
     tss_targets: list[int] = []
     prev_tss: int | None = None
     for week_idx in range(MESO_LENGTH_WEEKS):
         block_pos = issurin_block_for_week(week_idx)
         tss = weekly_tss_target(
-            ctl_for_ramp, phase, block_pos, weekly_hours=declared_hours
+            ctl_for_ramp, phase, block_pos, weekly_hours=declared_hours,
+            ramp_cap_pct=rails.ramp_cap_pct,
         )
-        # Enforce Friel 8% cap week-over-week on build weeks
+        # Enforce the week-over-week ramp cap on build weeks
         if prev_tss is not None and block_pos != "recovery":
-            cap = int(round(prev_tss * (1.0 + FRIEL_RAMP_CAP_PCT)))
+            cap = int(round(prev_tss * (1.0 + rails.ramp_cap_pct)))
             tss = min(tss, cap)
         tss_targets.append(tss)
         if block_pos != "recovery":

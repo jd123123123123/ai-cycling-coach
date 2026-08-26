@@ -82,7 +82,7 @@ export default function W3SessionPreview() {
       onBack={() => history.back()}
       onShare={() => {}}
       onExport={() => {}}
-      onToday={() => { location.hash = '#/e/w3-today' }}
+      onToday={() => { location.assign('/e/w3-today') }}
     />
   )
 }

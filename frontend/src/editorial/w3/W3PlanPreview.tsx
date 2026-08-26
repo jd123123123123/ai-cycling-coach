@@ -92,9 +92,9 @@ export default function W3PlanPreview() {
     <W3PlanView
       vm={FIXTURE}
       onBack={() => history.back()}
-      onGoal={() => { location.hash = '#/e/w3-goal-preview' }}
-      onLoad={() => { location.hash = '#/e/w3-load-preview' }}
-      onStartRide={() => { location.hash = '#/e/w3-session-preview' }}
+      onGoal={() => { location.assign('/e/w3-goal-preview') }}
+      onLoad={() => { location.assign('/e/w3-load-preview') }}
+      onStartRide={() => { location.assign('/e/w3-session-preview') }}
       onAdapt={async () => ({ title: 'Sweet Spot 3×12', tss: 97, note: 'Angepasst – Sweet Spot 3×12', railsDowngraded: false })}
       onRebuild={async () => true}
       onSwitchGoal={async () => true}

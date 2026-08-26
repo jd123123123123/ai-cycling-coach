@@ -53,7 +53,7 @@ export default function W3GoalPreview() {
     <W3GoalView
       vm={FIXTURE}
       onBack={() => history.back()}
-      onSwitch={() => { location.hash = '#/e/w3-plan-preview' }}
+      onSwitch={() => { location.assign('/e/w3-plan-preview') }}
       onRemove={async () => true}
       onSave={async () => true}
       onRehearseRoute={() => {}}

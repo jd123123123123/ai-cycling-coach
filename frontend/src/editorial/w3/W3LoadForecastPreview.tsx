@@ -32,5 +32,5 @@ const FIXTURE: W3LoadVm = {
 }
 
 export default function W3LoadForecastPreview() {
-  return <W3LoadForecastView vm={FIXTURE} onBack={() => history.back()} onAdjust={() => { location.hash = '#/e/w3-plan-preview' }} />
+  return <W3LoadForecastView vm={FIXTURE} onBack={() => history.back()} onAdjust={() => { location.assign('/e/w3-plan-preview') }} />
 }
