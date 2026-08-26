@@ -43,11 +43,9 @@
 
     if (msg) msg.textContent = 'Die App konnte nicht starten.';
     if (det) {
-      var meta = document.querySelector('meta[name="ridr:build"]');
-      var lines = [
-        'build ' + ((meta && meta.content) || '?'),
-        'nach ' + Math.round((Date.now() - marks.t0) / 1000) + ' s',
-      ];
+      // The build stamp is already printed above this line — repeating it here
+      // is the same restating the crew chapter had to have removed.
+      var lines = ['nach ' + Math.round((Date.now() - marks.t0) / 1000) + ' s'];
       if (marks.error) lines.push(marks.error);
       det.textContent = lines.join(' · ');
       det.style.display = 'block';
