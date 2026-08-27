@@ -12,6 +12,7 @@ import {
 } from './w3share'
 import { VALUES, DEFAULT_VALUES, type ValueId } from './w3shareValues'
 import { STORY_FORMATS } from './w3storyEdit'
+import { useRouteSnapshot } from './useRouteSnapshot'
 import {
   canRenderVideo, renderStoryVideo, videoPosterFrame, renderStoryOverlay, MAX_STORY_SECONDS,
 } from './w3share' 
@@ -111,6 +112,19 @@ export default function W3SharePage() {
   // Never uploaded, never persisted: the picture only exists for as long as
   // this screen is open, which is exactly as long as it is needed.
   const [ownPhoto, setOwnPhoto] = useState<string | null>(null)
+  /**
+   * THE DEFAULT BACKGROUND IS THE ROUTE ON THE MAP.
+   *
+   * A canvas cannot fetch tiles, so every template used to fall back to a bare
+   * line on the ground — a diagram, where the streets are what make a card a
+   * place the rider recognises. The map is rendered once off to the side and
+   * photographed; `rig` is the thing doing the rendering and removes itself as
+   * soon as the picture is taken.
+   *
+   * It comes second to the rider's OWN photo and to a composed scene: a picture
+   * they chose always outranks one we made.
+   */
+  const { image: routeShot, rig: routeRig } = useRouteSnapshot(activity?.route_polyline ?? null)
 
   // ── WHAT THE RIDER PUTS ON THE CARD ─────────────────────────────────────
   // Null means "whatever this angle leads with"; the moment they touch the
@@ -129,7 +143,10 @@ export default function W3SharePage() {
   // WHICH OF THE FIVE LEAVES THE APP. The old in-app poster is gone: the pen's
   // templates are the screens now, and keeping a sixth "our own card" option
   // beside them would be the old design surviving as a preference.
-  const [format, setFormat] = useState<StoryLayout>('full')
+  // OPENS ON WHAT THEY WERE JUST LOOKING AT. A rider presses share on the
+  // unlock screen and means "this"; landing them on a different composition of
+  // the same ride makes the first thing the studio does an undo.
+  const [format, setFormat] = useState<StoryLayout>('wrap')
   // The rider's overrides for the card's WORDS — see `EDITABLE` in the view for
   // why the numbers are not in here. Keyed per field, cleared by emptying.
   const [edits, setEdits] = useState<Partial<Record<EditField, string>>>({})
@@ -408,14 +425,17 @@ export default function W3SharePage() {
       footer: poster.footer,
       // The rider's own picture first — a still they chose, or the frame pulled
       // from their clip — then the ride's composed scene. Never a stock image.
-      photo: ownPhoto ?? video?.poster ?? poster.sceneSrc ?? null,
+      photo: ownPhoto ?? video?.poster ?? poster.sceneSrc ?? routeShot ?? null,
+      // Only the last link in that chain IS the map — a photograph the rider
+      // brought, or a composed scene, still wants the line drawn over it.
+      groundIsRoute: !ownPhoto && !video?.poster && !poster.sceneSrc && !!routeShot,
       polyline: poster.polyline,
       routeName: activity?.title ?? '',
       dateline: poster.footer,
       ticker: poster.sentence,
       readings: picked.map((v) => ({ v: v.value, l: v.short })),
     }
-  }, [poster, debrief, profile, format, accent, values, ownPhoto, video, activity])
+  }, [poster, debrief, profile, format, accent, values, ownPhoto, video, activity, routeShot])
 
   /**
    * THE RIDE'S OWN WORDS, AND THEN THE RIDER'S ON TOP.
@@ -570,6 +590,10 @@ export default function W3SharePage() {
   }
 
   return (
+    <>
+    {/* The offscreen map that becomes the card's ground. It unmounts itself
+        the moment the picture is taken, or after it gives up. */}
+    {routeRig}
     <W3ShareView
       vm={vm}
       onClose={() => navigate(-1)}
@@ -586,5 +610,6 @@ export default function W3SharePage() {
       onCrew={() => navigate('/e/w3-crew')}
       onLink={onLink}
     />
+    </>
   )
 }

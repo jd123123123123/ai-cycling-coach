@@ -80,6 +80,18 @@ export interface RouteMapProps {
   /** Fired once the basemap has actually painted, so the caller can cross-fade
    *  its SVG fallback out instead of flashing an empty canvas. */
   onReady?: () => void
+  /**
+   * Keep the WebGL drawing buffer readable so the map can be SNAPSHOT.
+   *
+   * Without it `getCanvas().toDataURL()` comes back blank: WebGL is free to
+   * discard the buffer the moment it has composited, and it does. It costs a
+   * copy per frame, so it is opt-in and only the share card's one-off render
+   * asks for it — never the maps a rider actually looks at.
+   */
+  snapshot?: boolean
+  /** Called once the tiles have settled, with a reader for the composited
+   *  frame. Returns null when the context is gone or the buffer was not kept. */
+  onSnapshot?: (read: () => string | null) => void
   className?: string
   /** Per-vertex colours, same length as `polyline`. Paints the route as a
    *  gradient along its own length instead of one flat colour — the rehearsal
@@ -291,6 +303,7 @@ function repaint(map: MlMap, p: MapPalette): void {
 
 export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
+  snapshot = false, onSnapshot,
   lineColors, markerLatLng = null,
   lineColor = '#FF5A3C', lineWidth = 4, startColor = '#16E08A', endColor = '#FF5A3C',
   attributionBottom, palette, terrain = false,
@@ -331,6 +344,11 @@ export default function RouteMap({
           // 290px preview are chrome competing with them.
           dragRotate: false,
           pitchWithRotate: false,
+          // maplibre 6 moved the WebGL attributes under their own key; the
+          // top-level `preserveDrawingBuffer` of v4 is silently ignored, which
+          // is the kind of "option accepted, nothing happens" that costs an
+          // hour of staring at a blank snapshot.
+          ...(snapshot ? { canvasContextAttributes: { preserveDrawingBuffer: true } } : {}),
         })
         mapRef.current = map
 
@@ -498,6 +516,21 @@ export default function RouteMap({
           }
 
           if (!cancelled) onReady?.()
+
+          // ONE FRAME LATER, AND ONLY WHEN IDLE. `load` fires when the style is
+          // ready, not when the tiles for this viewport have actually painted —
+          // snapshotting there yields a grey rectangle with a route on it.
+          if (!cancelled && snapshot && onSnapshot) {
+            const grab = () => {
+              if (cancelled) return
+              onSnapshot(() => {
+                try { return map?.getCanvas().toDataURL('image/jpeg', 0.82) ?? null }
+                catch { return null }
+              })
+            }
+            if (map.loaded() && map.areTilesLoaded()) requestAnimationFrame(grab)
+            else map.once('idle', () => requestAnimationFrame(grab))
+          }
         }
         if (map.loaded()) decorate()
         else map.on('load', decorate)

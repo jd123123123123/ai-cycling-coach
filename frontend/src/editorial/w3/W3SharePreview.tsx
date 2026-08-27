@@ -6,6 +6,7 @@ import {
 } from './w3share'
 import W3ShareView, { type W3ShareVm, type EditField } from './W3ShareView'
 import { STORY_FORMATS } from './w3storyEdit'
+import { useRouteSnapshot } from './useRouteSnapshot'
 import { T } from './w3tokens'
 
 /** TEMP preview harness — renders W3ShareView with a pen-faithful fixture, no
@@ -75,6 +76,41 @@ const PREVIEW_BLOCK_DATA = {
           { text: 'Längste', sub: 'Fahrt im Block', tone: 'violet' as const }],
 }
 
+/**
+ * `?grid` — every template at once, side by side.
+ *
+ * Judging a card family one navigation at a time is how a set drifts: you fix
+ * the one in front of you and never see it against its siblings. This renders
+ * all of them from the SAME story at a size you can actually read, which is
+ * the only way to catch "these two disagree about where the footer sits".
+ */
+function TemplateGrid({ story }: { story: StoryData }) {
+  const [shots, setShots] = useState<{ id: StoryLayout; name: string; url: string }[]>([])
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const out: { id: StoryLayout; name: string; url: string }[] = []
+      for (const f of STORY_FORMATS) {
+        const r = await renderStoryCard({ ...story, layout: f.id }, { scale: 0.42 })
+        if (!alive) return
+        out.push({ id: f.id, name: f.name, url: r.dataUrl })
+        setShots([...out])
+      }
+    })()
+    return () => { alive = false }
+  }, [story])
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, padding: 12, background: T.bg }}>
+      {shots.map((s2) => (
+        <div key={s2.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <img src={s2.url} alt={s2.name} style={{ width: 227, display: 'block', borderRadius: 8 }} />
+          <span style={{ fontSize: 11, color: '#fff', fontFamily: 'sans-serif' }}>{s2.name}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function W3SharePreview() {
   const [angle, setAngle] = useState<ShareAngle>('rekord')
   const [dataUrl, setDataUrl] = useState<string | null>(null)
@@ -86,8 +122,12 @@ export default function W3SharePreview() {
   // pass no `onPickFormat`, which meant the one screen that exists to exercise
   // this view could not reach five of its six layouts — and the Laufband, whose
   // whole point is that it moves, was unreachable in the only place it moves.
-  const [format, setFormat] = useState<StoryLayout>('headline')
+  const [format, setFormat] = useState<StoryLayout>('wrap')
   const [edits, setEdits] = useState<Partial<Record<EditField, string>>>({})
+  //: The harness carries the SAME ground the real screen does — the route on
+  //: the map. Without it every template was audited over flat black, which
+  //: flatters some layouts and condemns others for a fault they do not have.
+  const { image: routeShot, rig: routeRig } = useRouteSnapshot(PREVIEW_BLOCK_DATA.polyline)
 
   //: The card the harness is currently describing. Held as data rather than
   //: rebuilt inside the effect so the Laufband strings and the bitmap are
@@ -106,13 +146,13 @@ export default function W3SharePreview() {
       bigValue: p.bigValue, bigUnit: p.bigUnit,
       stats: [{ v: p.stats[0].v, l: p.stats[0].l }, { v: p.stats[1].v, l: p.stats[1].l }],
       series: Array.from({ length: 48 }, (_, i) => 0.34 + 0.6 * Math.abs(Math.sin(i / 4.3))),
-      footer: p.footer, photo: null, polyline: p.polyline,
+      footer: p.footer, photo: routeShot, groundIsRoute: !!routeShot, polyline: p.polyline,
       routeName: on('routeName', 'Harzrunde'),
       dateline: on('dateline', p.footer),
       ticker: on('ticker', p.sentence),
       readings: [{ v: '29,2 km/h', l: 'Ø Tempo' }, { v: '234', l: 'Ø Leistung' }, { v: '172', l: 'Puls Ø' }],
     }
-  }, [angle, format, edits])
+  }, [angle, format, edits, routeShot])
 
   useEffect(() => {
     let alive = true
@@ -175,7 +215,13 @@ export default function W3SharePreview() {
     ],
   }
 
+  // `?grid` shows every template side by side — see `TemplateGrid`.
+  const grid = typeof window !== 'undefined' && window.location.search.includes('grid')
+  if (grid) return <>{routeRig}<TemplateGrid story={story} /></>
+
   return (
+    <>
+    {routeRig}
     <W3ShareView
       vm={vm}
       onClose={() => history.back()}
@@ -187,5 +233,6 @@ export default function W3SharePreview() {
       onCrew={() => { location.assign('/e/w3-crew') }}
       onLink={() => {}}
     />
+    </>
   )
 }

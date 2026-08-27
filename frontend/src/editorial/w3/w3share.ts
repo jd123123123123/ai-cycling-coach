@@ -1242,6 +1242,19 @@ export interface StoryData {
   /** The rider's photograph. Without one the card falls back to the ground
    *  colour and the type carries it alone — never invented scenery. */
   photo: string | null
+  /**
+   * THE GROUND ALREADY IS THE ROUTE.
+   *
+   * When `photo` is a snapshot of the live map, the road is in the picture —
+   * and the layouts that also draw the trace then print the SAME ride twice, in
+   * two different projections, one crossing the other. A card with two versions
+   * of one route on it does not read as a design decision; it reads as a bug,
+   * because it is one.
+   *
+   * False when the rider brought their own photograph: there the line is the
+   * only thing saying where they were.
+   */
+  groundIsRoute?: boolean
 }
 
 function paintStoryTrace(ctx: CanvasRenderingContext2D, pts: [number, number][], accent: string) {
@@ -1627,7 +1640,15 @@ function paintStoryCard(
       pts2.forEach((v, i) => ctx.lineTo(i * step, at(v)))
       ctx.lineTo(SW, base)
       ctx.closePath()
-      ctx.fillStyle = accent + '38'
+      // A FADE, NOT A SLAB. A flat 22% wash over 330px of card is a coloured
+      // rectangle at any distance — it hides the ground the card is standing on
+      // and spends the accent on area instead of on the line. The fill belongs
+      // to the curve, so it dies away from it.
+      const area = ctx.createLinearGradient(0, at(1), 0, base)
+      area.addColorStop(0, accent + '4D')
+      area.addColorStop(0.55, accent + '1F')
+      area.addColorStop(1, accent + '00')
+      ctx.fillStyle = area
       ctx.fill()
       ctx.fillStyle = accent + '8C'
       ctx.fillRect(0, 1704, SW, 3)
@@ -1681,13 +1702,14 @@ function paintStoryCard(
    * and the route running underneath the whole thing.
    *
    * The ground is the PHOTOGRAPH when there is one and the ground colour when
-   * there is not, with the trace over either: the app screen has a live basemap
-   * and a still cannot, so the line carries the road on its own here rather
-   * than pretending to tiles it has no way to fetch.
+   * there is not. The card cannot fetch tiles, but the app can: the share
+   * screen photographs its own map and hands the bitmap over as the photo, so
+   * the road under this one is the real road. The bare trace is what gets drawn
+   * when that picture never arrives — see `groundIsRoute`.
    */
   if (layout === 'wrap') {
     if (!bare) vscrim([[0, 0.82], [0.3, 0.52], [0.55, 0.42], [0.78, 0.68], [1, 0.88]])
-    if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
+    if (!d.groundIsRoute && d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
 
     // ONE top line, and it must not say the route twice. `dateline` already
     // carries the route on most rides ("Harzrunde · So, 24. August"), so
@@ -1722,18 +1744,46 @@ function paintStoryCard(
     // THE THREE TILES, on the same glass as the screen: they sit over the route
     // rather than over the ground, and three solid blocks would punch three
     // holes in the picture.
-    const shown = d.stats.filter((st) => st.v).slice(0, 3)
+    //: THE THREE THE RIDER CHOSE, not the two the poster happened to carry.
+    //: `readings` is the row they picked in the studio and the row the unlock
+    //: screen showed them; `stats` is a pair the angle computed. This card
+    //: exists to be that screen, so it asks for that row first.
+    const shown = ((d.readings ?? []).length > 0 ? d.readings! : d.stats)
+      .filter((st) => st.v).slice(0, 3)
     if (shown.length > 0) {
       const gap = 18
       const tw = (CW - gap * (shown.length - 1)) / shown.length
       const ty = CONTENT_BOTTOM - 214
       shown.forEach((st, i) => {
         const tx = MX + i * (tw + gap)
-        ctx.fillStyle = 'rgba(11,11,11,0.62)'
+        //: GLASS HAS AN EDGE. At 62% over the ground colour these were tiles;
+        //: over a photograph of the map they vanished and left three numbers
+        //: floating at arbitrary heights. The fill goes darker and the tile
+        //: takes a hairline, which is what the screen's own tiles have.
+        ctx.fillStyle = 'rgba(8,9,10,0.74)'
         roundRect(ctx, tx, ty, tw, 148, 30)
         ctx.fill()
-        text(ctx, st.l.toUpperCase(), tx + 26, ty + 32, 22, '700', 'rgba(255,255,255,0.55)', 2.2, 'left', FONT, 'top')
-        text(ctx, st.v, tx + 26, ty + 66, 54, '700', CARD.ink, -1.6, 'left', ARCHIVO, 'top')
+        ctx.strokeStyle = 'rgba(255,255,255,0.13)'
+        ctx.lineWidth = 2
+        roundRect(ctx, tx + 1, ty + 1, tw - 2, 146, 29)
+        ctx.stroke()
+        //: One line, ellipsised — "Ø Leistung" fits, and a label that wraps
+        //: pushes its own number out of the tile.
+        let label = st.l.toUpperCase()
+        ctx.font = `700 22px ${FONT}`
+        while (label.length > 3 && [...label].reduce((w, c) => w + ctx.measureText(c).width + 2.2, 0) > tw - 52) {
+          label = label.slice(0, -1)
+        }
+        text(ctx, label, tx + 26, ty + 32, 22, '700', 'rgba(255,255,255,0.58)', 2.2, 'left', FONT, 'top')
+        //: The value shrinks rather than running out through the right edge —
+        //: "29,2 km/h" is a third wider than "118".
+        let vs = 54
+        ctx.font = `700 ${vs}px ${ARCHIVO}`
+        while (vs > 30 && ctx.measureText(st.v).width > tw - 46) {
+          vs -= 2
+          ctx.font = `700 ${vs}px ${ARCHIVO}`
+        }
+        text(ctx, st.v, tx + 26, ty + 66 + (54 - vs) * 0.6, vs, '700', CARD.ink, -1.6, 'left', ARCHIVO, 'top')
       })
     }
 
@@ -1749,7 +1799,7 @@ function paintStoryCard(
       ctx.fillStyle = bottom0
       ctx.fillRect(0, SH - 760, SW, 760)
     }
-    if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
+    if (!d.groundIsRoute && d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
     // Pen `i4lb4E`: the name in caps, ONE meta line under it, both hard left.
     // No chips, no big number — the line already said how far it went, and a
     // second statement of the same fact is what turns a card into a dashboard.
