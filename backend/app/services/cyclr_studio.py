@@ -98,22 +98,40 @@ CHARACTER_STYLE = (
     "A warm, instantly likeable stylised 3D collectible character. The look is one contrast: a "
     "simple, clean, beautifully designed face against a hyper-detailed outfit.\n\n"
 
-    # ── THE REGISTER IS COMPOSED, NOT BEAMING ──────────────────────────────
-    # This asked for "an openly happy smile with a clean line of upper teeth"
-    # and eyes "a fifth of the face width", and it delivered exactly that: a
-    # wide-eyed, grinning character. Against this app — near-black, one acid
-    # accent, a machine photographed like a product — that reads as a children's
-    # film mascot rather than as the designer collectible the rest of the
-    # product is. The likeness machinery below is untouched; only the MOOD
-    # changes. A rider should look like somebody who rides, not somebody
-    # delighted to be photographed.
-    "THE FACE follows the attached face reference for its head proportions and its calm, "
-    "composed expression. One flawless smooth matte surface with very few features: the mouth is "
-    "closed and relaxed in a level line with the faintest lift at one corner — self-possessed and "
-    "cool rather than cheerful, and never a grin, never visible teeth. The eyes are neat, "
-    "confident almonds — about an eighth of the face's width, evenly set, with a dark iris, a "
-    "clear catchlight and a calm, level gaze straight down the lens. The brows are two clean "
-    "defined strokes and carry most of the expression. "
+    # ── THE FEATURES ARE GRAPHIC, AND THAT IS THE WHOLE LOOK ───────────────
+    # Twice now the mood has been dialled down in prose — from beaming to
+    # composed — and twice the render came back as a semi-realistic adult with
+    # modelled eyelids, a shaded beard, nasolabial creases and a polite little
+    # smile. Prose was never going to win that: the model has an overwhelming
+    # prior for "3D character face" and every sentence here was an adjustment to
+    # it rather than a different thing to draw.
+    #
+    # The different thing to draw is what the shipped build reference already
+    # does, and what every collectible in this register does: the head is ONE
+    # unbroken matte surface and the features are FLAT GRAPHIC MARKS laid onto
+    # it, like decals on a vinyl toy. Not small eyes — hard-edged shapes. That
+    # is the difference between a character and a caricature of a person, and
+    # it costs nothing in likeness, because the likeness was never in the eyes:
+    # it lives in the four anchors below (hair, facial hair, skin tone, face
+    # shape), which is what the paragraph after this one has always said.
+    "THE FACE IS ONE UNBROKEN MATTE SURFACE WITH FLAT GRAPHIC FEATURES LAID ON IT, the way a "
+    "designer vinyl toy is finished: the features are crisp decal shapes with hard clean edges, "
+    "not modelled geometry. There is no eyelid, no eye socket, no nostril, no crease beside the "
+    "mouth, no shading across the cheek — the surface runs smooth and uninterrupted from brow to "
+    "jaw and the marks simply sit on it.\n"
+    "THE EYES are two hard-edged white almonds, tilted very slightly down at the outer corner, "
+    "each holding one small solid dark pupil and no other detail. Directly above each, cutting "
+    "into its top edge, sits a heavy black brow — a thick angled wedge, low and driven down "
+    "toward the nose. That single angle is the expression and it is the point: level, "
+    "unimpressed, entirely unbothered, looking straight down the lens. The mouth is a short "
+    "straight line, closed and flat, set low and small — never a smile, never a grin, never "
+    "teeth. The nose is the faintest soft ridge or nothing at all. The ears are small, "
+    "simple and tucked close to the head.\n"
+    "FACIAL HAIR FOLLOWS THE SAME RULE — it is sculpted VOLUME, not hair: one matte mass "
+    "with a clean carved edge against the skin, the way a beard is moulded on a toy. Never "
+    "individual strands, never a soft photographic stipple across the jaw.\n"
+    "Those four marks — two eyes, two brows, the mouth — are the whole face. The skin around "
+    "and between them is clean, bare and unbroken, and it stays that way. "
     "THE HEAD PROPORTIONS ARE ALWAYS THE STYLE'S, never the description's: whatever face shape "
     "the person is described as having — oval, long, narrow — it is compressed into this style's "
     "short wide head. The described shape survives only as a light character cue. The head "
@@ -206,12 +224,24 @@ INTEGRATION = (
 #: The kit is where the detail budget goes — see `CHARACTER_STYLE`'s contrast
 #: rule. Written as a garment a person would actually own rather than as a
 #: colour spec, because the model renders material it can picture.
+#:
+#: AND ITS BRANDING IS A SHAPE, NOT A WORD. This asked for "the wordmark RIDR
+#: across the chest ... exactly the four letters R, I, D, R and no other word",
+#: which is about as explicit as an instruction gets, and two consecutive draws
+#: came back reading RIIDR in letters six inches tall. Diffusion models cannot
+#: spell reliably at any prompt length, and a misspelt brand across the chest of
+#: an avatar that gets posted is worse than no brand at all. The mark is a
+#: closed shape, the one thing this model draws consistently, and it is the
+#: app's actual logo (`components/RidrMark.tsx`) rather than its name set in
+#: type.
 DEFAULT_KIT = (
     "THE STARTER KIT, worn by every rider so the look is consistent from day one, and described "
     "here as the garment it is. A fitted short-sleeved cycling jersey in matte black with bold "
-    "acid lime-green (#C8FF00) side panels and sleeves, the wordmark RIDR across the chest in "
-    "bold white capitals — exactly the four letters R, I, D, R and no other word — and a thin "
-    "lime accent stripe, worn over matching black bib shorts. "
+    "acid lime-green (#C8FF00) side panels and sleeves, and a thin lime accent stripe, worn "
+    "over matching black bib shorts. THE BRANDING IS AN OBJECT, NOT A WORD: a small "
+    "hard-enamel badge at the left chest — a lime-green rounded R whose leg flicks away to "
+    "the right, raised and glossy against the matte panel — plus the same shape moulded into "
+    "the zip pull. No lettering anywhere on the garment. "
     "Render the fabric richly: the fine ribbed weave of technical lycra catching the light, crisp "
     "flatlock seams tracing every panel join, a full-length front zip with individual teeth and a "
     "small pull tab at the collar, a gripper band at the hem and cuffs, and the subtle sheen "
@@ -551,6 +581,21 @@ def _isolated_prompt(description: str, kind: str, wear: str = "") -> str:
     they look at every morning, not only in a picture of a ride.
     """
     if kind == "rider":
+        # ── THE ONE PROP, AND WHY THERE IS ONE ─────────────────────────────
+        # A bare bust in a jersey is a passport photo of a toy. What makes the
+        # reference read as a collectible is that its character is WEARING
+        # something with intent — goggles shoved up into the hair, a band, a
+        # pin. That is cheap to render, it survives a 40px circle as a
+        # silhouette, and unlike the face it costs nothing in likeness.
+        #
+        # Only when the rider has NOT equipped their own eyewear: `wear` is a
+        # helmet and glasses they actually bought, and inventing a second pair
+        # on top is how a rider ends up wearing two.
+        prop = "" if wear.strip() else (
+            "ONE ACCESSORY, worn with intent: a pair of matte-black sport shades pushed up off "
+            "the face and sitting in the hair, their lime-green temple arms visible against it. "
+            "They sit ON the hair, never over the eyes, and the face stays completely clear. "
+        )
         return (
             f"A tight front-facing PORTRAIT of a 3D character built from this description: "
             f"[{description}].\n\n"
@@ -560,7 +605,7 @@ def _isolated_prompt(description: str, kind: str, wear: str = "") -> str:
             f"frontal angle, the face square to camera and perfectly centred, looking straight "
             f"down the lens. If the waist, hips or legs are visible the crop is far too wide — "
             f"push in until the head dominates.\n\n"
-            f"{DEFAULT_KIT} {wear} "
+            f"{DEFAULT_KIT} {wear} {prop}"
             # Stated explicitly, because without it the render invents a setting:
             # a blurred living room turned up behind the bust the first time the
             # style asked for a richly modelled world.
@@ -775,6 +820,31 @@ async def render_bike_from_photo(photo_b64: str, description: str) -> tuple[str 
 #: explicitly that the fidelity carries over and the jacket does not.
 _BUILD_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_build.webp"
 
+#: THE SAME CHARACTER, WEARING THE APP'S OWN KIT — and this is what the rider
+#: render actually sends.
+#:
+#: `_BUILD_REF` has two failure modes and they are complementary, because both
+#: come from what is in its frame. Sent whole, one draw in three came back in
+#: its black streetwear fleece with its W3 pin, on a rider whose kit is
+#: specified as a black-and-lime cycling jersey. Sent cropped to the head, the
+#: garment problem vanished and two draws in three copied its FACE instead of
+#: its method — its locs, its skin, its plaster — because with only a head in
+#: frame there is nothing else to look at.
+#:
+#: No amount of prose closed either gap. The mandate was rewritten positively
+#: (this module's own rule: a negation names the thing it forbids) and moved to
+#: the end of the prompt for recency, and the fleece still arrived. An image
+#: beats a sentence about the image, which is the lesson this file has now
+#: learned three times.
+#:
+#: So the competing garment is removed at the source rather than argued with.
+#: This is `character_build.webp` with ONLY its clothing edited — the same
+#: trick the note above describes: the clothing changes and the character
+#: cannot, because the character is the input. It now shows the face method,
+#: the sculpt, the material fidelity AND the starter kit at once, so every part
+#: of it points the same way.
+_STYLE_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_style.webp"
+
 #: A shipped picture of the FACE TREATMENT the house style wants — big round
 #: clean eyes, few features, smooth matte surface, warm expression.
 #:
@@ -822,25 +892,36 @@ _BODY_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_
 #: Used with the reference. The danger of a style image is that the model copies
 #: the WRONG things from it, so what to take and what to ignore is spelled out.
 _BUILD_MANDATE = (
-    "\n\nTHE TWO ATTACHED IMAGES ARE STYLE REFERENCES, not people. IMAGE 1 ALONE DECIDES THE "
-    "FACE: copy its eye size relative to the face, its short wide head proportions, how low the "
-    "features sit and how warm the expression is — your face should look built by the same hand. "
-    "If your eyes are smaller or your face longer than IMAGE 1, you have drifted back toward "
-    "realism; match the reference. IMAGE 2's face is flat graphic decal work and is NOT a face — "
-    "it has no bearing here, and nothing about the eyes, brows or mouth comes from it.\n"
-    "IMAGE 2 SETS THE BODY FROM THE COLLAR DOWN, and two things about it are the target. FIRST, "
-    "THE PROPORTIONS: the "
-    "size of that head against those shoulders, the head sitting straight into the collar with no "
-    "neck showing, the broad softly-sloped shoulders, the whole figure built from simple heavy "
-    "volume. SECOND, THE MATERIAL FIDELITY: how clean and matte the skin is, against how densely "
-    "real the garment is — visible fabric weave, a moulded zip with legible branding on its tape, "
-    "an enamel pin, crisp stitching, all lit like a product photograph. Match that gap between the "
-    "smooth figure and the expensive clothing.\n"
-    "TAKE ONLY THOSE FROM IMAGE 2. Its garment is streetwear and this rider wears the cycling kit "
-    "described above — carry over the fidelity, never the jacket. Take nothing else from either "
-    "image: not their faces, skin tones, hair, colours, poses or backgrounds. The references supply "
-    "the sculpt and the finish; the description supplies the person. "
-    "The head is bare: no helmet, cap or glasses, so the hair stays fully visible."
+    "\n\nTHE ATTACHED IMAGE IS A STYLE REFERENCE, NOT A PERSON, and it decides three things.\n"
+    "FIRST, THE FACE TREATMENT. Its features are flat graphic marks on one unbroken matte "
+    "surface — hard-edged white eye shapes, a heavy angled brow cutting into each, a small flat "
+    "mouth, no modelled eyelids or creases anywhere. Build your face by the same method. If your "
+    "eyes have lids, sockets or catchlit corneas, or your cheeks carry shading, you have drifted "
+    "back toward realism; go back to the reference. Take its METHOD and its ATTITUDE, never its "
+    "actual eye shape, brow angle or colouring, which belong to that character.\n"
+    "SECOND, THE PROPORTIONS: the size of that head against those shoulders, the head sitting "
+    "straight into the collar with no neck showing, the broad softly-sloped shoulders, the whole "
+    "figure built from simple heavy volume.\n"
+    "THIRD, THE MATERIAL FIDELITY: how clean and matte the skin is, against how densely real the "
+    "garment is — visible fabric weave, a moulded zip, an enamel badge, crisp stitching, all lit "
+    "like a product photograph. Match that gap between the smooth figure and the expensive "
+    "clothing.\n"
+    "TAKE ONLY THOSE THREE, and carry the reference's material fidelity onto THIS rider's "
+    "own kit rather than onto its clothes. Take nothing else: not its "
+    "hair, its skin tone, its colours, its pose or its background. Everything this rider "
+    "wears and carries is specified in the description and the kit above, and that list is "
+    "complete: the reference's own wardrobe and markings stay with the character they "
+    "belong to.\n"
+    "THE REFERENCE SUPPLIES THE SCULPT, THE FINISH AND THE FACE'S METHOD. THE DESCRIPTION "
+    "SUPPLIES THE PERSON — their hair's cut and colour, their facial hair, their true skin "
+    "tone and their face shape all come from the written description and from nowhere "
+    "else. If your rider's hair or skin matches the reference's rather than the "
+    "description's, you have copied the character instead of the style.\n"
+    "THE HAIR IS FULLY VISIBLE, with the head otherwise bare.\n"
+    "AND LAST, THE GARMENT, because it is the one thing that has to survive the reference: "
+    "this rider wears the fitted technical cycling jersey specified above — matte black "
+    "with acid lime side panels, a full front zip and a lime enamel R badge at the chest — "
+    "and that jersey is what is on their body in this render."
 )
 
 
@@ -859,19 +940,28 @@ def _style_reference(path: pathlib.Path) -> str | None:
 
 
 def _style_references() -> list[str]:
-    """The face and build references, as data URLs, IN ROLE ORDER.
+    """The rider's style reference, as a data URL — a list, possibly empty.
 
-    Order is part of the contract: `_BUILD_MANDATE` calls them "IMAGE 1" and
-    "IMAGE 2", so face must come first. Either may be absent — each is optional
-    by design, and a deploy that ships neither degrades to the old text-only
-    render rather than failing to make an avatar at all.
+    THIS USED TO SEND TWO IMAGES AND THEY CONTRADICTED EACH OTHER. `_FACE_REF`
+    is a small bright cartoon of a smiling boy in a white helmet on a pale card,
+    and the mandate said "IMAGE 1 ALONE DECIDES THE FACE ... copy how warm the
+    expression is". `_BUILD_REF` is the app's actual target — a designer
+    collectible on near-black with flat graphic features and a level stare —
+    and the same mandate said its face "is NOT a face" and "has no bearing
+    here".
+
+    So every rider avatar was being built, deliberately and in writing, toward
+    the cheerful cartoon and away from the collectible, while `CHARACTER_STYLE`
+    spent two paragraphs of prose trying to talk the mood back down. This
+    module's own note says reference images beat description; that is exactly
+    what was happening, and the description was losing.
+
+    One reference now, and it is the one that shows the target wearing the
+    app's own kit — see `_STYLE_REF`. `_FACE_REF` and `_BUILD_REF` stay on disk
+    (the latter is what `_STYLE_REF` was edited from); nothing sends them.
     """
-    out: list[str] = []
-    for path in (_FACE_REF, _BUILD_REF):
-        ref = _style_reference(path)
-        if ref:
-            out.append(ref)
-    return out
+    ref = _style_reference(_STYLE_REF)
+    return [ref] if ref else []
 
 
 async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> str | None:
