@@ -32,6 +32,74 @@ import { buildWeather } from './w3weatherWindow'
 
 export type BriefingTone = 'go' | 'easy' | 'rest' | 'unknown'
 
+/**
+ * ONE ROW OF THE CONTRIBUTOR LIST — a reading placed on a SPECTRUM.
+ *
+ * A fill bar answers "how much", which is the wrong question for a vital sign.
+ * What a rider needs is two things at once: where the good range sits, and
+ * where last night actually landed relative to it. 7 h 24 means nothing until
+ * you know the band is 7–9; 46 bpm means nothing until you know it is under
+ * your own.
+ *
+ * So every row draws the same three parts: the scale, the OPTIMAL BAND on it,
+ * and a marker for the reading. `tone` still says whether landing there is good
+ * news for THIS signal — that is not a property of the position, since low is
+ * excellent for a resting pulse and poor for HRV.
+ */
+export interface Contributor {
+  key: string
+  label: string
+  value: string
+  /** Where the reading landed, 0..1 of the row's scale. Null → no marker. */
+  at: number | null
+  /** The optimal band on that same 0..1 scale. Null → no band to draw, and the
+   *  row falls back to the marker alone rather than inventing a range. */
+  band: { lo: number; hi: number } | null
+  /** What the band's two edges are, in the rider's units — printed beside it so
+   *  the spectrum is readable and not just decorative. */
+  bandLabel: string | null
+  tone: 'good' | 'warn' | 'flat'
+  /**
+   * Which way this reading moved, as a glyph rather than a number.
+   *
+   * Direction is the thing a rider checks first and the thing a figure answers
+   * slowest. An arrow in a soft tinted disc is read at a glance and carries no
+   * arithmetic — the mechanism the calmest health apps lean on hardest.
+   */
+  dir: 'up' | 'down' | 'flat'
+}
+
+/**
+ * ONE READING, ITS OWN HISTORY, AND WHAT IT MEANS — kept for the load row.
+ *
+ * A number alone is unreadable on a morning: 46 bpm is excellent or alarming
+ * depending on whose it is and what it was last week. The tile carries all
+ * three parts, so nothing needs a sentence underneath explaining it — which is
+ * how the briefing stopped being mostly prose.
+ */
+export interface StatTile {
+  key: string
+  label: string
+  /** Already formatted, in the rider's locale. */
+  value: string
+  unit: string | null
+  /** Trailing history, oldest first. Empty when there is no history — the tile
+   *  then draws its number and no spark rather than a flat invented line. */
+  spark: number[]
+  /**
+   * Which bar is TODAY, and therefore lit. Defaults to the last.
+   *
+   * It has to be a field because not every spark ends today: the week runs
+   * Monday to Sunday, so on a Thursday the last bar is a Sunday nobody has
+   * ridden yet. Lighting it claimed a value three days in the future.
+   */
+  todayIdx?: number
+  /** The one clause: "+4 zu deinem Schnitt", "Bestwert", "unter deinem Band". */
+  sub: string | null
+  /** Whether that clause is good news, bad news, or neither. */
+  tone: 'good' | 'warn' | 'flat'
+}
+
 export interface MorningBriefing {
   greeting: string
   /**
@@ -51,6 +119,16 @@ export interface MorningBriefing {
    *  headline let a wrap put "· 75 min" alone on the second line, which reads
    *  as a broken string rather than as a duration. */
   headlineMeta: string | null
+  /**
+   * TODAY'S SESSION AS ITS SHAPE — the interval profile, block by block.
+   *
+   * "Schwellenintervalle · 75 min" tells a rider the name and the cost and
+   * nothing about the SESSION: four by eight at threshold and a two-hour
+   * endurance ride are the same sentence with different numbers. The profile is
+   * the one picture that answers "what am I actually in for", and it is the
+   * thing every workout app draws because it works.
+   */
+  blocks: { label: string; minutes: number; watts: number | null }[]
   /**
    * ONLY WHEN THE RING CANNOT SPEAK.
    *
@@ -113,11 +191,31 @@ export interface MorningBriefing {
     yesterdayTss: number | null
     fatigueDrop: number | null
     form: number | null
+    /**
+     * Form over the trailing weeks, so today's figure has somewhere to stand.
+     * "−6" alone is unreadable: a rider cannot tell a body climbing out of a
+     * block from one falling into one, and those call for opposite mornings.
+     */
+    formSeries: { date: string; tsb: number }[]
     /** Mon-Sun, so the week reads as a shape. Null = no ride logged that day. */
     week: { letter: string; tss: number | null }[]
     weekSpent: number | null
     weekPlanned: number | null
   } | null
+  /**
+   * THE VERDICT BESIDE THE NUMBER — "Grünes Licht", "Halt die Zügel kurz".
+   *
+   * Every readiness surface worth copying puts a plain-language verdict next to
+   * the score, and so does this app's own Today dock. A rider reads the word
+   * before the figure; the figure is what they check afterwards.
+   */
+  readinessVerdict: string | null
+  /**
+   * The contributors, as a LIST — label, value, and how far along its own
+   * range it sits. Not a grid of chart tiles: six equal boxes have no hero and
+   * read as a dashboard, which is the note this screen kept getting.
+   */
+  contributors: Contributor[]
   /** Consecutive days, when the streak is worth a word. */
   streak: string | null
   /** True when nothing at all resolved — no plan, no wearable, no forecast. */
@@ -144,6 +242,7 @@ export function useMorningBriefing(): MorningBriefing {
     const session = isPresent(model.session) ? model.session.value : null
     let headline: string
     let headlineMeta: string | null = null
+    let blocks: { label: string; minutes: number; watts: number | null }[] = []
     let tone: BriefingTone
     if (!planned) {
       headline = 'Noch kein Plan'
@@ -152,6 +251,7 @@ export function useMorningBriefing(): MorningBriefing {
       const mins = session.blocks.reduce((n, b) => n + b.minutes, 0)
       headline = session.title
       headlineMeta = mins > 0 ? HM(mins * 60) : null
+      blocks = session.blocks
       tone = (session.intensityFactor ?? 0) >= 0.85 ? 'go' : 'easy'
     } else {
       headline = 'Ruhetag'
@@ -206,10 +306,90 @@ export function useMorningBriefing(): MorningBriefing {
 
     const days = isPresent(model.streakDays) ? model.streakDays.value : 0
 
-    // ── the night ─────────────────────────────────────────────────────────
     const sleepV = isPresent(model.sleep) ? model.sleep.value : null
     const hrvV = isPresent(model.hrv) ? model.hrv.value : null
     const rhrV = isPresent(model.restingHr) ? model.restingHr.value : null
+
+    // ── the verdict, and the contributors behind it ──────────────────────
+    // A rider reads the WORD before the figure. This app's own Today dock puts
+    // "Grünes Licht" beside 88 for exactly that reason, and every readiness
+    // screen worth copying does the same.
+    const readinessVerdict = score == null
+      ? null
+      : score.score >= 80 ? 'Grünes Licht'
+      : score.score >= 65 ? 'Solide Basis'
+      : score.score >= 50 ? 'Mit Gefühl'
+      : 'Halt die Zügel kurz'
+
+    const contributors: Contributor[] = []
+    const clamp01 = (n: number) => Math.max(0, Math.min(1, n))
+
+    if (sleepV) {
+      // 0-10 h of scale, and the band a rider can actually be held to: seven to
+      // nine hours is the range every sleep guideline agrees on, so it is
+      // stated rather than derived from a short history.
+      const hrs = sleepV.totalS / 3600
+      contributors.push({
+        key: 'sleep', label: 'Schlaf',
+        value: `${Math.floor(sleepV.totalS / 3600)}:${String(Math.round((sleepV.totalS % 3600) / 60)).padStart(2, '0')} h`,
+        at: clamp01(hrs / 10), band: { lo: 0.7, hi: 0.9 }, bandLabel: '7–9 h',
+        tone: hrs >= 7 && hrs <= 9 ? 'good' : hrs < 6 ? 'warn' : 'flat',
+        dir: hrs >= 7 ? 'up' : hrs < 6 ? 'down' : 'flat',
+      })
+      if (sleepV.deepS != null) {
+        // Deep sleep is judged as a SHARE of the night, not in minutes: 90 min
+        // is excellent after seven hours and alarming after four. 13-23 % is
+        // the range the sleep literature converges on.
+        const share = sleepV.deepS / sleepV.totalS
+        contributors.push({
+          key: 'deep', label: 'Tiefschlaf',
+          value: `${Math.round(sleepV.deepS / 60)} min`,
+          at: clamp01(share / 0.35), band: { lo: 0.13 / 0.35, hi: 0.23 / 0.35 },
+          bandLabel: '13–23 %',
+          tone: share >= 0.13 && share <= 0.23 ? 'good' : share < 0.10 ? 'warn' : 'flat',
+          dir: share > 0.23 ? 'up' : share < 0.13 ? 'down' : 'flat',
+        })
+      }
+    }
+
+    // HRV and resting pulse are placed against the rider's OWN trailing band —
+    // the only range that means anything for a vital sign. The scale runs a
+    // little past both edges so a reading outside the band still has somewhere
+    // to sit instead of pinning to the end.
+    const ownSpectrum = (v: number, b: { low: number; high: number } | null | undefined) => {
+      if (!b || b.high === b.low) return { at: null, band: null }
+      const pad = (b.high - b.low) * 0.8
+      const lo = b.low - pad
+      const span = (b.high + pad) - lo
+      return {
+        at: clamp01((v - lo) / span),
+        band: { lo: clamp01((b.low - lo) / span), hi: clamp01((b.high - lo) / span) },
+      }
+    }
+
+    if (hrvV) {
+      const sp = ownSpectrum(hrvV.value, hrvV.band)
+      contributors.push({
+        key: 'hrv', label: 'HRV', value: `${Math.round(hrvV.value)} ${hrvV.unit}`,
+        at: sp.at, band: sp.band,
+        bandLabel: hrvV.band ? `${Math.round(hrvV.band.low)}–${Math.round(hrvV.band.high)} ${hrvV.unit}` : null,
+        tone: hrvV.band?.position === 'above' ? 'good' : hrvV.band?.position === 'below' ? 'warn' : 'flat',
+        dir: hrvV.band?.position === 'above' ? 'up' : hrvV.band?.position === 'below' ? 'down' : 'flat',
+      })
+    }
+    if (rhrV) {
+      const sp = ownSpectrum(rhrV.value, rhrV.band)
+      contributors.push({
+        key: 'rhr', label: 'Ruhepuls', value: `${Math.round(rhrV.value)} ${rhrV.unit}`,
+        at: sp.at, band: sp.band,
+        bandLabel: rhrV.band ? `${Math.round(rhrV.band.low)}–${Math.round(rhrV.band.high)} ${rhrV.unit}` : null,
+        // Below your own band is the best news on the screen for this one.
+        tone: rhrV.band?.position === 'below' ? 'good' : rhrV.band?.position === 'above' ? 'warn' : 'flat',
+        dir: rhrV.band?.position === 'above' ? 'up' : rhrV.band?.position === 'below' ? 'down' : 'flat',
+      })
+    }
+
+    // ── the night ─────────────────────────────────────────────────────────
     let night: MorningBriefing['night'] = null
     if (sleepV || hrvV || rhrV) {
       const st: { key: string; label: string; minutes: number }[] = []
@@ -248,6 +428,10 @@ export function useMorningBriefing(): MorningBriefing {
     const load = isPresent(model.weekLoad) ? model.weekLoad.value : null
     const weekDays = model.week.map((d) => ({ letter: d.letter, tss: isPresent(d.tss) ? d.tss.value : null }))
     let body: MorningBriefing['body'] = null
+    let fatigueSpark: number[] = []
+    /** Which weekday the newest PMC row belongs to — the bar the WOCHE spark
+     *  lights. Mon=0. Undefined when there is no series to date it from. */
+    let todayWeekday: number | undefined
     if (pmc || load || weekDays.some((d) => d.tss != null)) {
       const series = pmc?.series ?? []
       const last = series[series.length - 1] ?? null
@@ -255,6 +439,10 @@ export function useMorningBriefing(): MorningBriefing {
       // ATL is a rolling average, so yesterday minus today IS what the body
       // shed overnight. Only meaningful when it actually fell.
       const drop = last && prev ? prev.atl - last.atl : null
+      todayWeekday = last ? (new Date(`${last.date}T00:00:00`).getDay() + 6) % 7 : undefined
+      // Night-over-night recovery for the last week, so the tile's spark is the
+      // same quantity its number is.
+      fatigueSpark = series.slice(-8).map((pt, i, arr) => (i === 0 ? 0 : arr[i - 1].atl - pt.atl)).slice(1)
       const yTss = prev?.tss ?? null
       const noteParts: string[] = []
       if (drop != null && drop > 0.5) noteParts.push(`Über Nacht hat dein Körper ${drop.toFixed(1)} Ermüdung abgebaut`)
@@ -264,6 +452,8 @@ export function useMorningBriefing(): MorningBriefing {
         yesterdayTss: yTss != null ? Math.round(yTss) : null,
         fatigueDrop: drop != null ? Math.round(drop * 10) / 10 : null,
         form: pmc ? Math.round(pmc.form) : null,
+        // The last four weeks, thinned to what a 90px sparkline can show.
+        formSeries: series.slice(-28).map((pt) => ({ date: pt.date, tsb: pt.tsb })),
         week: weekDays,
         weekSpent: load ? Math.round(load.spent) : null,
         weekPlanned: load ? Math.round(load.planned) : null,
@@ -272,13 +462,52 @@ export function useMorningBriefing(): MorningBriefing {
 
     const streak = days >= 2 ? `${days} Tage in Folge` : null
 
+    // ── the load tiles ────────────────────────────────────────────────────
+    const loadTiles: StatTile[] = []
+    if (body) {
+      if (body.form != null) {
+        loadTiles.push({
+          key: 'form', label: 'FORM',
+          value: `${body.form > 0 ? '+' : ''}${body.form}`, unit: null,
+          spark: body.formSeries.slice(-7).map((p) => p.tsb),
+          // TSB's SIGN is what riders read off it, so the clause names the side
+          // rather than repeating the figure.
+          sub: body.form > 5 ? 'frisch' : body.form < -15 ? 'tief im Block' : 'im Aufbau',
+          tone: body.form > 5 ? 'good' : body.form < -15 ? 'warn' : 'flat',
+        })
+      }
+      if (body.fatigueDrop != null) {
+        loadTiles.push({
+          key: 'drop', label: 'ÜBER NACHT',
+          value: `${body.fatigueDrop > 0 ? '−' : '+'}${Math.abs(body.fatigueDrop)}`, unit: null,
+          spark: fatigueSpark,
+          sub: body.fatigueDrop > 0 ? 'Ermüdung abgebaut' : 'Ermüdung gestiegen',
+          tone: body.fatigueDrop > 0 ? 'good' : 'warn',
+        })
+      }
+      if (body.weekSpent != null) {
+        const pct = body.weekPlanned ? Math.round((body.weekSpent / body.weekPlanned) * 100) : null
+        loadTiles.push({
+          key: 'week', label: 'WOCHE', value: String(body.weekSpent), unit: 'TSS',
+          spark: body.week.map((d) => d.tss ?? 0),
+          // FROM THE DATA, NOT FROM A CLOCK. The last PMC point IS today's
+          // row, so its weekday is the bar to light — and reading a clock here
+          // would be impure inside the memo anyway (react-hooks/purity).
+          // Mon=0; `getDay()` is Sun=0, so Sunday folds to the end of ITS week.
+          todayIdx: todayWeekday,
+          sub: pct != null ? `${pct} % vom Plan` : null,
+          tone: 'flat',
+        })
+      }
+    }
+
     // ── the warm line ─────────────────────────────────────────────────────
     // Composed, in the order a rider would care: a good night first, then a
     // long streak, then a hard day behind them. One line or none.
     const slept = sleepV ? sleepV.totalS / 3600 : null
     let welcome: string | null = null
     if (slept != null && slept >= 7.5 && (hrvV?.band?.position ?? 'in') !== 'below') {
-      welcome = `${slept.toFixed(1).replace('.', ',')} Stunden Schlaf — damit lässt sich was anfangen.`
+      welcome = 'Die Nacht war lang genug. Damit lässt sich was anfangen.'
     } else if (hrvV?.band?.position === 'above') {
       welcome = 'Dein Körper hat die Nacht gut genutzt.'
     } else if (days >= 7) {
@@ -290,10 +519,12 @@ export function useMorningBriefing(): MorningBriefing {
     }
 
     return {
-      greeting, welcome, dateLabel, headline, headlineMeta, why, tone, window,
+      greeting, welcome, dateLabel, headline, headlineMeta, blocks, why, tone, window,
       readiness: score ? { score: Math.round(score.score), delta: score.deltaVsYesterday } : null,
       night,
       body,
+      readinessVerdict,
+      contributors,
       streak,
       bare: !planned && !window && !night && !body,
     }

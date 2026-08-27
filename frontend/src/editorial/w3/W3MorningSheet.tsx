@@ -1,295 +1,385 @@
+import { useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowRight, X } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, X } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
-import { TNUM } from './w3surfaces'
-import type { MorningBriefing } from './useMorningBriefing'
+import { lux, luxTile, TNUM, S } from './w3surfaces'
+import type { Contributor, MorningBriefing } from './useMorningBriefing'
 import './w3.css'
 
 /**
- * THE MORNING BRIEFING — four questions, each answered once.
+ * THE MORNING BRIEFING — three lit chapters under one answer.
  *
  * Split from `W3MorningGate` because the gate is all TIMING — once a day, only
  * in the morning, never on top of another sheet — and none of that can be
  * looked at. This half can: `/e/w3-morning-preview` renders it without a
  * session, which is how it was built at 390x844.
  *
- * ── THE FOUR QUESTIONS, AND NOTHING TWICE ────────────────────────────────
- * A rider deciding their morning is asking exactly four things, and they do not
- * overlap:
+ * ── THE QUESTIONS, EACH ANSWERED ONCE ────────────────────────────────────
+ * A rider deciding their morning asks four things that do not overlap. The
+ * first one is the OPENING, because it is the answer and everything else is
+ * why:
  *
- *   01 BEREIT   — can my body do it?      (the night, and what it left me)
- *   02 HEUTE    — what am I meant to do?  (the plan)
- *   03 RAUS     — when do I go?           (the day's conditions)
- *   04 STAND    — where does that put me? (load, form, the week)
+ *   (the headline)  what am I meant to do?
+ *   01 BEREIT       can my body do it?       the night, and what it left
+ *   02 RAUS         when do I go?            the day, hour by hour
+ *   03 STAND        where does that put me?  load, form, the week
  *
- * The previous cut answered them and then answered them again in prose: a ring
- * showing 74 with its own delta, beside a sentence reading "Deine Bereitschaft
- * liegt bei 74 (+6 zu gestern)", above a form figure repeated two blocks down.
- * Three statements of two numbers. Every fact now appears in exactly one place,
- * and the only prose left is the warm line at the top — which says something no
- * graphic does.
+ * Every fact appears in exactly one of them. The only prose is the warm line
+ * under the headline, which says something no graphic does.
  *
- * ── NO DUAL AXIS ─────────────────────────────────────────────────────────
- * The weather panel drew ride quality as bars and rain as a line over the same
- * plot, on two different scales. That is the most common charting mistake there
- * is: where those two series cross means nothing, and a reader cannot help but
- * read it. They are three stacked tracks now, sharing an x-axis with one scale
- * each — small multiples, which is what this always was.
+ * ── THE WEATHER IS SCRUBBABLE, NOT A LEGEND ──────────────────────────────
+ * It began as bars plus a rain line on ONE plot with two y-scales — the most
+ * common charting mistake there is. Splitting it into three stacked static
+ * tracks fixed the axis and produced a new problem: a row of 3px triangles and
+ * a colour key, which is a chart asking to be decoded.
+ *
+ * A rider does not want the whole day at once. They want ONE hour, in full, and
+ * the shape around it to choose from. So the bars are the shape and the hour is
+ * a control: drag across it and the readout gives that hour whole — clock,
+ * temperature, rain, wind speed AND direction at a legible size. The wind
+ * arrow, which was unreadable at 3px in fifteen copies, is one arrow at 22px
+ * that turns as you scrub.
+ *
+ * WHY THIS IS STILL HAND-DRAWN. `uplot` (40 KB gz) would earn its place the
+ * moment this needs real axes, zoom, or many series. Fifteen bars and a
+ * pointer-x lookup is not that, and a canvas library would have to be fought
+ * out of its own coordinate system to light the window in the accent.
  *
  * ── AND IT STILL HAS TO BE TRUE ──────────────────────────────────────────
  * The ring draws EMPTY when the readiness gate withholds — never a plausible
  * angle. A rest day gets no ride window. A stage the watch did not record is
- * absent rather than zero. Graphics are the frame, never the claim.
+ * absent rather than zero.
  */
 
+/** Sentence case, like everything else here. All-caps is the loudest thing a
+ *  typographic system can do, and the screens that feel calm use it nowhere. */
 const TONE_LABEL: Record<string, string> = {
-  go: 'HEUTE WIRD GEARBEITET',
-  easy: 'HEUTE LOCKER',
-  rest: 'HEUTE RUHE',
-  unknown: 'HEUTE OFFEN',
+  go: 'Heute wird gearbeitet',
+  easy: 'Heute locker',
+  rest: 'Heute Ruhe',
+  unknown: 'Heute offen',
 }
 
-/** Wind arrows point where the wind blows FROM, the way a rider reads a flag. */
+/** Arrows point where the wind blows FROM, the way a rider reads a flag. */
 const DIR_DEG: Record<string, number> = {
   N: 180, NE: 225, E: 270, SE: 315, S: 0, SW: 45, W: 90, NW: 135,
 }
 
-/**
- * SLEEP DEPTH IS ORDINAL, SO IT GETS AN ORDINAL RAMP.
- *
- * An earlier cut used the app's vital-sign hues — magenta for deep, cyan for
- * REM — because that is what the recovery surfaces use for those signals. Side
- * by side at 26px they were four unrelated colours shouting next to an acid
- * ring. Deep to awake is a SEQUENCE, and one ramp says so without a legend:
- * brightest is deepest.
- */
-const STAGE_TONE: Record<string, string> = {
-  deep: T.ink, rem: T.d4, light: T.d3, awake: T.d1,
+type Hour = {
+  hour: number; q: number | null; rideable: boolean
+  rain: number | null; wind: number | null; dir: string | null; temp: number | null
 }
 
-const RING = 104
-const STROKE = 8
-const R = (RING - STROKE) / 2
-const C = 2 * Math.PI * R
-
-/** `01 — BEREIT`. The ordinal is the point: it makes the sheet a sequence of
- *  four answers rather than a pile of cards. */
-function Chapter({ n, label, right }: { n: string; label: string; right?: string }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, ...TNUM }}>{n}</span>
-      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.mid }}>{label}</span>
-      <span style={{ flex: 1, height: 1, background: T.d1 }} />
-      {right && <span style={{ fontSize: 9, fontWeight: 700, color: T.quiet, ...TNUM }}>{right}</span>}
+/** One hour, whole — the readout the scrub drives. */
+function HourReadout({ h }: { h: Hour }) {
+  const cell = (label: string, node: React.ReactNode) => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+      <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 0.1, color: T.quiet }}>{label}</span>
+      {node}
     </div>
   )
-}
-
-/** The readiness ring. Empty and dashed when there is no score — the one shape
- *  here that must never be drawn at a guessed angle. */
-function Ring({ score, delta, accent, reduce }: {
-  score: number | null; delta: number | null; accent: string; reduce: boolean
-}) {
-  const pct = score == null ? 0 : Math.max(0, Math.min(100, score)) / 100
+  const num = (v: string, unit?: string) => (
+    <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.4, color: T.ink, ...TNUM }}>
+      {v}{unit && <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}> {unit}</span>}
+    </span>
+  )
   return (
-    <div style={{ position: 'relative', width: RING, height: RING, flex: 'none' }}>
-      <svg width={RING} height={RING} style={{ display: 'block', transform: 'rotate(-90deg)' }}>
-        <circle cx={RING / 2} cy={RING / 2} r={R} fill="none" stroke={T.d1} strokeWidth={STROKE}
-          strokeDasharray={score == null ? '3 6' : undefined} strokeLinecap="round" />
-        {score != null && (
-          <motion.circle
-            cx={RING / 2} cy={RING / 2} r={R} fill="none" stroke={accent} strokeWidth={STROKE}
-            strokeLinecap="round" strokeDasharray={C}
-            initial={reduce ? false : { strokeDashoffset: C }}
-            animate={{ strokeDashoffset: C * (1 - pct) }}
-            transition={{ duration: 1, ease: [0.16, 1, 0.3, 1], delay: reduce ? 0 : 0.15 }} />
-        )}
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <span style={{
-            fontSize: score == null ? 26 : 36, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1,
-            color: score == null ? T.quiet : T.ink, ...TNUM,
-          }}>{score ?? DASH}</span>
-          <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet, marginTop: 2 }}>BEREIT</span>
-          {delta != null && delta !== 0 && (
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: delta > 0 ? accent : T.quiet, ...TNUM }}>
-              {delta > 0 ? '+' : '−'}{Math.abs(Math.round(delta))}
-            </span>
+    <div style={{ ...luxTile(16), flexDirection: 'row', alignItems: 'center', gap: S.lg, padding: '9px 12px' }}>
+      <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8, color: T.ink, flex: 'none', ...TNUM }}>
+        {String(h.hour).padStart(2, '0')}:00
+      </span>
+      {cell('Temp', num(h.temp != null ? `${Math.round(h.temp)}°` : DASH))}
+      {cell('Regen', num(h.rain != null ? String(Math.round(h.rain)) : DASH, h.rain != null ? '%' : undefined))}
+      {cell('Wind', (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {num(h.wind != null ? String(Math.round(h.wind)) : DASH, h.wind != null ? 'km/h' : undefined)}
+          {h.dir && (
+            // ONE arrow at a readable size, turning as you scrub. Fifteen 3px
+            // copies of this were a texture, not a reading.
+            <motion.span aria-label={`aus ${h.dir}`}
+              animate={{ rotate: DIR_DEG[h.dir] ?? 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+              style={{
+                display: 'block', width: 0, height: 0, flex: 'none',
+                borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+                borderBottom: `9px solid ${T.mid}`,
+              }} />
           )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** The night as the proportions it actually was. */
-function NightBar({ stages, reduce }: {
-  stages: { key: string; label: string; minutes: number }[]; reduce: boolean
-}) {
-  if (stages.reduce((n, s) => n + s.minutes, 0) <= 0) return null
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, width: '100%' }}>
-      <div style={{ display: 'flex', gap: 2, height: 26, width: '100%' }}>
-        {stages.map((st, i) => (
-          <motion.div
-            key={st.key}
-            initial={reduce ? false : { flexGrow: 0.001 }}
-            animate={{ flexGrow: st.minutes }}
-            transition={{ duration: 0.65, delay: reduce ? 0 : 0.1 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
-            style={{ flexBasis: 0, minWidth: 2, borderRadius: 5, background: STAGE_TONE[st.key] ?? T.d2 }} />
-        ))}
-      </div>
-      <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-        {stages.map((st) => (
-          <div key={st.key} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 6, height: 6, borderRadius: 2, background: STAGE_TONE[st.key] ?? T.d2 }} />
-            <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>{st.label}</span>
-            <span style={{ fontSize: 9, fontWeight: 700, color: T.mid, ...TNUM }}>{st.minutes}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/**
- * A reading against the rider's OWN band.
- *
- * `good` is not decoration. An earlier cut painted every "below" in warn amber,
- * which told a rider that a resting pulse two beats UNDER their own range — the
- * best news on the screen — was a problem. HRV is good high, resting heart rate
- * is good low, and the chip has to be told which.
- */
-function BandChip({ label, value, delta, position, accent, good }: {
-  label: string; value: string; delta: number | null
-  position: 'below' | 'in' | 'above' | null; accent: string; good: 'above' | 'below'
-}) {
-  const tone = position == null || position === 'in' ? T.mid : position === good ? accent : T.warn
-  return (
-    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-      <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{label}</span>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-        <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink, ...TNUM }}>{value}</span>
-        {delta != null && delta !== 0 && (
-          <span style={{ fontSize: 9, fontWeight: 700, color: tone, ...TNUM }}>
-            {delta > 0 ? '+' : '−'}{Math.abs(Math.round(delta))}
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/**
- * THE DAY, AS THREE TRACKS ON ONE X-AXIS.
- *
- * Not one plot with two y-scales — that is the most common charting mistake
- * there is, and where quality crossed rain would have meant nothing at all.
- * Three small multiples: each track has one scale, and the hours line up so a
- * rider can read the trade. The driest hour is often the windiest, and that is
- * the whole reason a window is a judgement rather than a lookup.
- */
-function DayTracks({ hours, from, to, accent, reduce }: {
-  hours: { hour: number; q: number | null; rideable: boolean; rain: number | null; wind: number | null; dir: string | null }[]
-  from: number | null; to: number | null; accent: string; reduce: boolean
-}) {
-  const shown = hours.filter((h) => h.rideable)
-  if (shown.length < 2) return null
-  const inWin = (h: number) => from != null && to != null && h >= from && h <= to
-  const maxWind = Math.max(1, ...shown.map((h) => h.wind ?? 0))
-  const hasRain = shown.some((h) => h.rain != null)
-  const hasWind = shown.some((h) => h.wind != null)
-  const col = { flex: 1, minWidth: 0 } as const
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
-      {/* 1 — ride quality, 0..1 */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 40, width: '100%' }}>
-        {shown.map((h, i) => (
-          <motion.div key={h.hour}
-            initial={reduce ? false : { height: 3 }}
-            animate={{ height: h.q == null ? 3 : Math.max(5, Math.round(h.q * 40)) }}
-            transition={{ duration: 0.45, delay: reduce ? 0 : 0.15 + i * 0.015, ease: 'easeOut' }}
-            style={{ ...col, borderRadius: 3, background: h.q == null ? T.d1 : inWin(h.hour) ? accent : `${accent}2E` }} />
-        ))}
-      </div>
-
-      {/* 2 — rain probability, 0..100 %, on its own baseline */}
-      {hasRain && (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 18, width: '100%' }}>
-          {shown.map((h, i) => (
-            <motion.div key={h.hour}
-              initial={reduce ? false : { height: 2 }}
-              animate={{ height: h.rain == null ? 2 : Math.max(2, Math.round((h.rain / 100) * 18)) }}
-              transition={{ duration: 0.45, delay: reduce ? 0 : 0.25 + i * 0.015, ease: 'easeOut' }}
-              style={{ ...col, borderRadius: 2, background: h.rain == null ? T.d1 : T.cool }} />
-          ))}
-        </div>
-      )}
-
-      {/* 3 — wind: a glyph row, not a third scale. Size carries speed. */}
-      {hasWind && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 2, width: '100%', height: 12 }}>
-          {shown.map((h) => (
-            <div key={h.hour} style={{ ...col, display: 'grid', placeItems: 'center' }}>
-              {h.wind != null && (
-                <span aria-hidden style={{
-                  display: 'block', width: 0, height: 0,
-                  borderLeft: `${2.5 + (h.wind / maxWind) * 2}px solid transparent`,
-                  borderRight: `${2.5 + (h.wind / maxWind) * 2}px solid transparent`,
-                  borderBottom: `${4 + (h.wind / maxWind) * 3.5}px solid ${T.mid}`,
-                  opacity: 0.3 + (h.wind / maxWind) * 0.7,
-                  transform: `rotate(${DIR_DEG[h.dir ?? ''] ?? 0}deg)`,
-                }} />
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* the shared x-axis, labelled every third hour so it stays readable */}
-      <div style={{ display: 'flex', width: '100%' }}>
-        {shown.map((h) => (
-          <span key={h.hour} style={{
-            ...col, textAlign: 'center', fontSize: 7.5, fontWeight: 700, color: T.quiet, ...TNUM,
-          }}>{h.hour % 3 === 1 ? h.hour : ''}</span>
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** The week as a shape: seven days, the ridden ones drawn to their real load. */
-function WeekShape({ week, accent, reduce }: {
-  week: { letter: string; tss: number | null }[]; accent: string; reduce: boolean
-}) {
-  const max = Math.max(1, ...week.map((d) => d.tss ?? 0))
-  return (
-    <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', width: '100%' }}>
-      {week.map((d, i) => (
-        <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, minWidth: 0 }}>
-          <motion.div
-            initial={reduce ? false : { height: 3 }}
-            animate={{ height: d.tss == null ? 3 : Math.max(4, Math.round((d.tss / max) * 28)) }}
-            transition={{ duration: 0.45, delay: reduce ? 0 : 0.2 + i * 0.035, ease: 'easeOut' }}
-            style={{ width: '100%', borderRadius: 3, background: d.tss == null ? T.d1 : accent }} />
-          <span style={{ fontSize: 7.5, fontWeight: 700, color: d.tss == null ? T.quiet : T.mid }}>{d.letter}</span>
         </div>
       ))}
     </div>
   )
 }
 
-/** A figure with its own label — the unit of block 04. */
-function Figure({ label, value, sub, tone }: {
-  label: string; value: string; sub?: string; tone?: string
+/**
+ * The day as a shape you can put your thumb on.
+ *
+ * Bars carry ride quality (one scale, no second axis). Rain rides UNDER them as
+ * its own short track, so the two never share a y. The selected column is the
+ * only lit thing besides the window, and the readout above says what it is.
+ */
+function HourScrubber({ hours, from, to, accent, reduce, selected, onSelect }: {
+  hours: Hour[]; from: number | null; to: number | null
+  accent: string; reduce: boolean
+  selected: number; onSelect: (hour: number) => void
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const inWin = (h: number) => from != null && to != null && h >= from && h <= to
+
+  const pick = (clientX: number) => {
+    const el = ref.current
+    if (!el || hours.length === 0) return
+    const r = el.getBoundingClientRect()
+    const i = Math.round(((clientX - r.left) / r.width) * (hours.length - 1))
+    const h = hours[Math.max(0, Math.min(hours.length - 1, i))]
+    if (h) onSelect(h.hour)
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 1, flex: 'none' }}>
-      <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{label}</span>
-      <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.7, lineHeight: 1.05, color: tone ?? T.ink, ...TNUM }}>{value}</span>
-      {sub && <span style={{ fontSize: 7.5, fontWeight: 600, color: T.quiet }}>{sub}</span>}
+    <div
+      ref={ref}
+      role="slider" tabIndex={0}
+      aria-label="Stunde wählen"
+      aria-valuemin={hours[0]?.hour ?? 0}
+      aria-valuemax={hours[hours.length - 1]?.hour ?? 23}
+      aria-valuenow={selected}
+      onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); pick(e.clientX) }}
+      onPointerMove={(e) => { if (e.buttons > 0) pick(e.clientX) }}
+      onKeyDown={(e) => {
+        const i = hours.findIndex((h) => h.hour === selected)
+        if (e.key === 'ArrowLeft' && i > 0) onSelect(hours[i - 1].hour)
+        if (e.key === 'ArrowRight' && i < hours.length - 1) onSelect(hours[i + 1].hour)
+      }}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 4, width: '100%',
+        touchAction: 'none', cursor: 'pointer', outline: 'none',
+      }}>
+
+      {/* ride quality */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 34, width: '100%' }}>
+        {hours.map((h, i) => {
+          const on = h.hour === selected
+          return (
+            <motion.div key={h.hour}
+              initial={reduce ? false : { height: 3 }}
+              animate={{ height: h.q == null ? 3 : Math.max(5, Math.round(h.q * 34)) }}
+              transition={{ duration: 0.45, delay: reduce ? 0 : 0.15 + i * 0.015, ease: 'easeOut' }}
+              style={{
+                flex: 1, minWidth: 0, borderRadius: 3,
+                background: h.q == null ? T.d1 : on ? T.ink : inWin(h.hour) ? accent : T.d2,
+              }} />
+          )
+        })}
+      </div>
+
+      {/* rain, its own baseline and its own scale */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 12, width: '100%' }}>
+        {hours.map((h, i) => (
+          <motion.div key={h.hour}
+            initial={reduce ? false : { height: 2 }}
+            animate={{ height: h.rain == null ? 2 : Math.max(2, Math.round((h.rain / 100) * 12)) }}
+            transition={{ duration: 0.45, delay: reduce ? 0 : 0.25 + i * 0.015, ease: 'easeOut' }}
+            style={{
+              flex: 1, minWidth: 0, borderRadius: 2,
+              background: h.rain == null ? T.d1 : h.hour === selected ? T.ink : `${T.cool}8C`,
+            }} />
+        ))}
+      </div>
+
+      {/* the axis: the ends, and wherever the thumb is */}
+      <div style={{ display: 'flex', width: '100%', paddingTop: 2 }}>
+        {hours.map((h, i) => {
+          const lastI = hours.length - 1
+          // Suppress an end label when the thumb is sitting on top of it —
+          // "7 8" printed side by side reads as one number.
+          const nearSel = Math.abs(i - hours.findIndex((x) => x.hour === selected)) <= 1
+          const edge = (i === 0 || i === lastI) && !nearSel
+          const on = h.hour === selected
+          return (
+            <span key={h.hour} style={{
+              flex: 1, minWidth: 0, textAlign: 'center', ...TNUM,
+              fontSize: 8, fontWeight: 700,
+              color: on ? T.ink : edge ? T.quiet : 'transparent',
+            }}>{h.hour}</span>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+
+
+/**
+ * THE HOUSE METER — 22 lit segments, straight off `W3TodayDock`.
+ *
+ * Not a sparkline and not a progress bar. This app already has an instrument
+ * for "how far along its scale does this sit", it is on the first screen a
+ * rider ever sees, and it is what makes the readiness number legible at a
+ * glance without a second colour: a lit segment catches light from above, an
+ * unlit one does not. Importing a foreign chart idiom is what made the previous
+ * cut read as a generic dashboard.
+ */
+const SEGMENTS = 22
+
+function SegmentMeter({ frac, hue, reduce }: { frac: number; hue: string; reduce: boolean }) {
+  const filled = Math.round(Math.max(0, Math.min(1, frac)) * SEGMENTS)
+  return (
+    <div style={{ display: 'flex', gap: 3, height: 10, width: '100%' }} aria-hidden>
+      {Array.from({ length: SEGMENTS }).map((_, i) => (
+        <motion.span key={i}
+          initial={reduce ? false : { opacity: 0.25 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.3, delay: reduce ? 0 : (i < filled ? i * 0.018 : 0) }}
+          style={{
+            flex: 1, height: 10, borderRadius: 3,
+            background: i < filled ? `linear-gradient(180deg, ${hue} 0%, ${hue}D9 100%)` : T.heroOff,
+            boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40` : 'none',
+          }} />
+      ))}
+    </div>
+  )
+}
+
+/**
+ * ONE CONTRIBUTOR, ON A SPECTRUM.
+ *
+ * A fill bar answers "how much", which is the wrong question for a vital sign:
+ * 7 h 24 means nothing until you know the band is 7–9, and 46 bpm means nothing
+ * until you know it sits under your own. So the row draws the scale, the
+ * OPTIMAL BAND on it, and a marker for where last night landed — the two facts
+ * a rider needs at once.
+ *
+ * The band is a lit segment of the same track rather than a second bar: it is
+ * the same axis, and drawing it separately would be a second scale to reconcile.
+ * The marker carries the tone, because being outside the band is good news on
+ * one row and bad on another.
+ */
+function ContributorRow({ c, accent, reduce, i }: {
+  c: Contributor; accent: string; reduce: boolean; i: number
+}) {
+  const hue = c.tone === 'good' ? accent : c.tone === 'warn' ? T.warn : T.ink
+  const TRACK = 6
+  const Arrow = c.dir === 'up' ? ArrowUpRight : c.dir === 'down' ? ArrowDownRight : ArrowRight
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+          {/* A soft tinted disc, never a bare glyph on the ground: the disc is
+              what keeps a 10px arrow legible and unhurried. */}
+          <span aria-hidden style={{
+            width: 20, height: 20, flex: 'none', borderRadius: 100,
+            background: `${hue}1F`, display: 'grid', placeItems: 'center',
+          }}>
+            <Arrow size={11} color={hue} strokeWidth={2.4} />
+          </span>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>{c.label}</span>
+        </span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+          {c.bandLabel && (
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, color: T.quiet, ...TNUM }}>
+              opt. {c.bandLabel}
+            </span>
+          )}
+          <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink, ...TNUM }}>{c.value}</span>
+        </div>
+      </div>
+      <div style={{ position: 'relative', width: '100%', height: TRACK }}>
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 100, background: T.d1 }} />
+        {c.band && (
+          <motion.div
+            aria-hidden
+            initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
+            transition={{ duration: 0.4, delay: reduce ? 0 : 0.15 + i * 0.05 }}
+            style={{
+              position: 'absolute', top: 0, height: TRACK, borderRadius: 100, background: T.d3,
+              left: `${c.band.lo * 100}%`, width: `${Math.max(2, (c.band.hi - c.band.lo) * 100)}%`,
+            }} />
+        )}
+        {c.at != null && (
+          <motion.div
+            aria-hidden
+            initial={reduce ? false : { left: '0%' }}
+            animate={{ left: `${c.at * 100}%` }}
+            transition={{ duration: 0.65, delay: reduce ? 0 : 0.2 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+            style={{
+              position: 'absolute', top: -2, width: 4, height: TRACK + 4, borderRadius: 100,
+              background: hue, marginLeft: -2,
+              // A ring of ground around the marker so it stays legible when it
+              // lands inside the band, which is exactly where it should be.
+              boxShadow: `0 0 0 2px ${T.heroDock}`,
+            }} />
+        )}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * TODAY'S SESSION, AS ONE SILHOUETTE.
+ *
+ * The first cut drew the blocks as separated rounded bars, and it read as a bar
+ * chart of nine unrelated things. A session is not nine things — it is one
+ * continuous hour with a shape, which is exactly why every workout app draws it
+ * as an unbroken profile. No gaps, no rounding between blocks: the eye follows
+ * the ride from warm-up to cool-down and sees the four efforts stand up out of
+ * it.
+ *
+ * WIDTH IS TIME, HEIGHT IS WATTS. Equal columns would draw a 16-minute warm-up
+ * and a 4-minute recovery the same size, which turns the picture into a
+ * decoration rather than the session.
+ *
+ * THE FLOOR IS NOT ZERO. Recovery at 120 W against threshold at 274 stands at
+ * 44% of full height on a zero-based scale, so the efforts barely rise above
+ * the valleys and the shape flattens into noise. The floor sits just under the
+ * easiest block, which is how a rider reads a profile anyway: relative to their
+ * own easy.
+ */
+function WorkoutProfile({ blocks, reduce, selected, onSelect }: {
+  blocks: { label: string; minutes: number; watts: number | null }[]
+  reduce: boolean
+  selected: number | null; onSelect: (i: number | null) => void
+}) {
+  const total = blocks.reduce((n, b) => n + b.minutes, 0)
+  if (total <= 0) return null
+  const watts = blocks.map((b) => b.watts ?? 0).filter((w) => w > 0)
+  const lo = watts.length ? Math.min(...watts) * 0.72 : 0
+  const hi = watts.length ? Math.max(...watts) : 1
+  const H = 54
+  const h = (w: number | null) => w == null ? 10 : Math.max(8, Math.round(((w - lo) / (hi - lo || 1)) * H))
+  const pick = selected != null ? blocks[selected] : null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', height: H, width: '100%' }}>
+        {blocks.map((b, i) => {
+          const on = selected === i
+          const first = i === 0
+          const last = i === blocks.length - 1
+          return (
+            <motion.button key={i} type="button"
+              aria-label={`${b.label}, ${b.minutes} Minuten${b.watts != null ? `, ${b.watts} Watt` : ''}`}
+              onClick={() => onSelect(on ? null : i)}
+              initial={reduce ? false : { height: 4 }}
+              animate={{ height: h(b.watts) }}
+              transition={{ duration: 0.55, delay: reduce ? 0 : 0.1 + i * 0.035, ease: [0.16, 1, 0.3, 1] }}
+              style={{
+                flexGrow: b.minutes, flexBasis: 0, minWidth: 2, padding: 0, border: 0, cursor: 'pointer',
+                // Rounded only at the two ends of the RIDE, so the middle reads
+                // as one continuous session rather than as separate objects.
+                borderRadius: `${first ? 4 : 0}px ${last ? 4 : 0}px ${last ? 4 : 0}px ${first ? 4 : 0}px`,
+                background: on ? T.ink : selected == null ? `${T.ink}D9` : `${T.ink}4D`,
+              }} />
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: S.sm, minHeight: 12 }}>
+        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>
+          {(pick ?? blocks[0]).label}
+        </span>
+        <span style={{ fontSize: 9.5, fontWeight: 700, color: T.quiet, ...TNUM }}>
+          {(pick ?? blocks[0]).minutes} min{(pick ?? blocks[0]).watts != null ? ` · ${(pick ?? blocks[0]).watts} W` : ''}
+        </span>
+      </div>
     </div>
   )
 }
@@ -303,11 +393,26 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
   const reduce = useReducedMotion()
   const accent = briefing.tone === 'rest' ? T.cool : T.acid
 
+  const hours = useMemo<Hour[]>(
+    () => (briefing.window?.hours ?? []).filter((h) => h.rideable),
+    [briefing.window],
+  )
+  /** Opens on the best hour, because that is the answer the panel came to give;
+   *  scrubbing is for interrogating it, not for finding it. */
+  const [selected, setSelected] = useState<number | null>(null)
+  const [block, setBlock] = useState<number | null>(null)
+
+  const shownHour = hours.find((h) => h.hour === selected)
+    ?? hours.find((h) => h.hour === briefing.window?.bestFrom)
+    ?? hours[0]
+
   const step = (i: number) => ({
     initial: reduce ? false : { opacity: 0, y: 10 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.4, delay: reduce ? 0 : 0.05 + i * 0.06, ease: [0.22, 1, 0.36, 1] as const },
+    transition: { duration: 0.4, delay: reduce ? 0 : 0.05 + i * 0.07, ease: [0.22, 1, 0.36, 1] as const },
   })
+
+  const card = { ...lux(22), padding: '12px 12px', gap: 9 }
 
   return (
     <motion.div
@@ -321,21 +426,18 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'relative', width: 390, maxWidth: '100%', height: '100dvh',
-          // Built to FIT 390x844 without scrolling. A shorter phone gets a short
-          // scroll rather than a clipped weather panel — losing the bottom of
-          // the answer is worse than a nudge of movement.
           overflowY: 'auto', overflowX: 'hidden',
           fontFamily: FONT, display: 'flex', flexDirection: 'column', background: T.bg,
         }}>
 
         <div aria-hidden style={{
-          position: 'absolute', top: -80, right: -60, width: 300, height: 300, borderRadius: '50%',
+          position: 'absolute', top: -90, right: -70, width: 320, height: 320, borderRadius: '50%',
           pointerEvents: 'none', background: `radial-gradient(closest-side, ${accent}1A, transparent)`,
         }} />
 
         <button type="button" onClick={onClose} aria-label="Schließen"
           style={{
-            position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', right: 16, zIndex: 1,
+            position: 'absolute', top: 'calc(14px + env(safe-area-inset-top))', right: S.lg, zIndex: 1,
             width: 32, height: 32, borderRadius: 100, border: 0, background: T.tile,
             display: 'grid', placeItems: 'center', cursor: 'pointer',
           }}>
@@ -344,128 +446,117 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
 
         <div style={{
           position: 'relative', margin: 'auto 0', display: 'flex', flexDirection: 'column',
-          gap: 15, padding: 'calc(14px + env(safe-area-inset-top)) 20px calc(14px + env(safe-area-inset-bottom))',
+          gap: 10, padding: `calc(12px + env(safe-area-inset-top)) ${S.lg}px calc(10px + env(safe-area-inset-bottom))`,
         }}>
 
-          {/* ── the greeting: the one place prose is allowed ─────────────── */}
-          <motion.div {...step(0)} style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingRight: 40 }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.3, color: accent }}>
+          {/* ── THE OPENING: the answer, then who is being told it ───────── */}
+          <motion.div {...step(0)} style={{ display: 'flex', flexDirection: 'column', gap: 5, paddingRight: 42 }}>
+            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: accent }}>
               {TONE_LABEL[briefing.tone] ?? TONE_LABEL.unknown}
             </span>
-            <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>
-              {briefing.greeting}
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, flexWrap: 'wrap' }}>
+              <span id="w3-morning-title" style={{
+                fontSize: 29, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.03, color: T.ink, textWrap: 'balance',
+              }}>{briefing.headline}</span>
+              {briefing.headlineMeta && (
+                <span style={{ fontSize: 15, fontWeight: 700, color: T.quiet, ...TNUM }}>{briefing.headlineMeta}</span>
+              )}
+            </div>
+            {/* ONE line of prose, not three. The date was the least useful of
+                them — a rider opening the app in the morning knows what day it
+                is — and the greeting and the warm line say more together. */}
+            <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>
+              <span style={{ fontWeight: 700, color: T.quiet }}>{briefing.greeting}.</span>
+              {briefing.welcome ? ` ${briefing.welcome}` : ''}
             </span>
-            {briefing.welcome && (
-              <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{briefing.welcome}</span>
-            )}
           </motion.div>
 
-          {/* ── 01 — BEREIT: the body ─────────────────────────────────────
-              `why` is in the condition, and that is not defensive coding. On a
-              morning the watch missed there is no score AND no night, so an
-              earlier guard of `readiness || night` dropped the whole block —
-              taking with it the ONE sentence that explains the absence. The
-              rider was shown a briefing with no body in it and no word about
-              why, which is the exact failure the readiness gate exists to
-              prevent. The empty ring plus its reason IS the answer here. */}
-          {(briefing.readiness || briefing.night || briefing.why) && (
-            <motion.div {...step(1)} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <Chapter n="01" label="BEREIT" right={briefing.night?.totalLabel} />
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <Ring score={briefing.readiness?.score ?? null} delta={briefing.readiness?.delta ?? null}
-                  accent={accent} reduce={!!reduce} />
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  {briefing.night && briefing.night.stages.length > 0 && (
-                    <NightBar stages={briefing.night.stages} reduce={!!reduce} />
-                  )}
-                  {briefing.night && (briefing.night.hrv || briefing.night.rhr || briefing.night.battery != null) && (
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      {briefing.night.hrv && (
-                        <BandChip label="HRV" value={briefing.night.hrv.value} delta={briefing.night.hrv.delta}
-                          position={briefing.night.hrv.position} accent={accent} good="above" />
-                      )}
-                      {briefing.night.rhr && (
-                        <BandChip label="PULS" value={briefing.night.rhr.value} delta={briefing.night.rhr.delta}
-                          position={briefing.night.rhr.position} accent={accent} good="below" />
-                      )}
-                      {briefing.night.battery != null && (
-                        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                          <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>AKKU</span>
-                          <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink, ...TNUM }}>{briefing.night.battery}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  {/* Only ever present when the ring could not be drawn. */}
-                  {briefing.why && (
-                    <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.35, color: T.mid }}>{briefing.why}</span>
-                  )}
-                </div>
-              </div>
+          {/* The session's own shape, right under its name — the one picture
+              that answers "what am I actually in for". */}
+          {briefing.blocks.length > 0 && (
+            <motion.div {...step(1)} style={{ ...card, gap: S.sm }}>
+              <WorkoutProfile blocks={briefing.blocks} reduce={!!reduce}
+                selected={block} onSelect={setBlock} />
             </motion.div>
           )}
 
-          {/* ── 02 — HEUTE: the plan ────────────────────────────────────── */}
-          <motion.div {...step(2)} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <Chapter n="02" label="HEUTE" right={briefing.headlineMeta ?? undefined} />
-            <span id="w3-morning-title" style={{
-              fontSize: 30, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1.05, color: T.ink, textWrap: 'balance',
-            }}>{briefing.headline}</span>
-          </motion.div>
-
-          {/* ── 03 — RAUS: the conditions ───────────────────────────────── */}
-          {briefing.window && (
-            <motion.div {...step(3)} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <Chapter n="03" label="RAUS" right={briefing.window.verdict ?? undefined} />
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.8, color: T.ink, ...TNUM }}>{briefing.window.label}</span>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.mid }}>{briefing.window.detail}</span>
-              </div>
-              <DayTracks hours={briefing.window.hours} from={briefing.window.bestFrom} to={briefing.window.bestTo}
-                accent={accent} reduce={!!reduce} />
-              {/* Three tracks need three names, or the blue row is a mystery. */}
-              <div style={{ display: 'flex', gap: 12 }}>
-                {[
-                  { c: accent, t: 'FAHRBAR' },
-                  { c: T.cool, t: 'REGEN' },
-                  { c: T.mid, t: 'WIND' },
-                ].map((l) => (
-                  <span key={l.t} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 7, height: 7, borderRadius: 2, background: l.c }} />
-                    <span style={{ fontSize: 7.5, fontWeight: 700, letterSpacing: 0.7, color: T.quiet }}>{l.t}</span>
+          {/* ── THE HERO: one number, its verdict, its meter ─────────────
+              The shape this app's own Today dock already uses — 44px score,
+              quiet label, plain-German verdict, 22 segments — and the shape
+              every readiness screen worth studying converges on. Six equal
+              tiles had no hero at all, which is what made the screen read as
+              generic. */}
+          {(briefing.readiness || briefing.why) && (
+            <motion.div {...step(2)} style={{ ...card, gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%' }}>
+                <span style={{
+                  fontSize: 44, fontWeight: 700, lineHeight: 0.86, flex: 'none', ...TNUM,
+                  color: briefing.readiness ? accent : T.heroOff,
+                }}>{briefing.readiness?.score ?? DASH}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>Bereitschaft</span>
+                  {/* The verdict when there is one, the reason when there is
+                      not — same slot, same size, so the block never changes
+                      shape between a good morning and a missed sync. */}
+                  <span style={{
+                    fontSize: 17, fontWeight: 700, letterSpacing: -0.4, minWidth: 0,
+                    color: briefing.readiness ? T.ink : T.mid,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {briefing.readinessVerdict ?? briefing.why ?? 'Noch keine Messung'}
                   </span>
-                ))}
+                </div>
+                {briefing.readiness?.delta != null && briefing.readiness.delta !== 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', flex: 'none' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>Gestern</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, ...TNUM }}>
+                      {briefing.readiness.delta > 0 ? '+' : '−'}{Math.abs(Math.round(briefing.readiness.delta))}
+                    </span>
+                  </div>
+                )}
               </div>
+
+              {briefing.readiness && (
+                <SegmentMeter frac={briefing.readiness.score / 100} hue={accent} reduce={!!reduce} />
+              )}
+
+              {briefing.contributors.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 13, width: '100%' }}>
+                  {briefing.contributors.map((c, i) => (
+                    <ContributorRow key={c.key} c={c} accent={accent} reduce={!!reduce} i={i} />
+                  ))}
+                </div>
+              )}
             </motion.div>
           )}
 
-          {/* ── 04 — STAND: where the load leaves you ───────────────────── */}
-          {briefing.body && (
-            <motion.div {...step(4)} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-              <Chapter n="04" label="STAND"
-                right={briefing.body.weekSpent != null && briefing.body.weekPlanned != null
-                  ? `${briefing.body.weekSpent}/${briefing.body.weekPlanned} TSS` : undefined} />
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
-                {briefing.body.form != null && (
-                  <Figure label="FORM" value={`${briefing.body.form > 0 ? '+' : ''}${briefing.body.form}`} sub="heute" />
+          {/* ── 02 — RAUS ───────────────────────────────────────────────── */}
+          {briefing.window && shownHour && (
+            <motion.div {...step(3)} style={card}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: S.sm }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.2, color: T.quiet }}>Raus</span>
+                <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.7, color: T.ink, marginLeft: 4, ...TNUM }}>
+                  {briefing.window.label}
+                </span>
+                {briefing.window.verdict && (
+                  <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: accent }}>
+                    {briefing.window.verdict}
+                  </span>
                 )}
-                {briefing.body.fatigueDrop != null && (
-                  <Figure label="ÜBER NACHT"
-                    value={`${briefing.body.fatigueDrop > 0 ? '−' : '+'}${Math.abs(briefing.body.fatigueDrop)}`}
-                    sub="Ermüdung" tone={briefing.body.fatigueDrop > 0 ? accent : T.ink} />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <WeekShape week={briefing.body.week} accent={accent} reduce={!!reduce} />
-                </div>
               </div>
+              <HourScrubber
+                hours={hours} from={briefing.window.bestFrom} to={briefing.window.bestTo}
+                accent={accent} reduce={!!reduce}
+                selected={shownHour.hour} onSelect={setSelected} />
+              <HourReadout h={shownHour} />
             </motion.div>
           )}
 
           <motion.button {...step(5)} ref={primaryRef} onClick={onToday}
             style={{
-              width: '100%', height: 50, borderRadius: 100, border: 0, background: accent, color: T.bg,
+              width: '100%', height: 48, borderRadius: 100, border: 0, background: accent, color: T.bg,
               fontFamily: FONT, fontSize: 15, fontWeight: 700, cursor: 'pointer',
-              display: 'flex', gap: 8, justifyContent: 'center', alignItems: 'center', marginTop: 2,
+              display: 'flex', gap: S.sm, justifyContent: 'center', alignItems: 'center', marginTop: 2,
             }}>
             Zum Tag<ArrowRight size={16} color={T.bg} />
           </motion.button>
