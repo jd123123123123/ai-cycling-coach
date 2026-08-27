@@ -4,7 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Bike, Camera, Sparkles, UserRound, Plus } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useGarage } from '../../hooks/useGarage'
-import { claimGate, releaseGate } from './w3gates'
+import { claimGate, releaseGate, seizeGate } from './w3gates'
 import { T, FONT } from './w3tokens'
 import './w3.css'
 
@@ -21,11 +21,29 @@ import './w3.css'
  * the avatar leak it already guards against: a screen that knows something is
  * missing next to a prompt that never fires.
  *
+ * THE RIDER IS REQUIRED; THE BIKE IS INVITED. These are two different things
+ * and the sheet behaves differently for each.
+ *
+ * The rider half was an invitation and it did not work: riders dismissed it
+ * with "Später" every session and simply never made one, while the leaderboard
+ * went on showing them as an empty seat and the referral card fell back to an
+ * initial. An invitation that is declined forever is not a gentle product, it
+ * is a broken one — the rider is the identity every social surface in the app
+ * renders, so the app does not really function without it. So for the rider
+ * this is now a BLOCKING step: no backdrop dismissal, no Escape, no "Später",
+ * and no once-per-session memory, because "asked already" is not a reason to
+ * stop asking for something that is required.
+ *
+ * The bike stays an invitation, unchanged. Forcing somebody to go and
+ * photograph a bicycle before they can open the app is a different and much
+ * more hostile proposition than asking for a selfie they can take where they
+ * are standing, and nothing is structurally broken by a missing bike — Today
+ * says `needs_bike` and the rest of the app works.
+ *
  * ONE INVITATION AT A TIME, and the rider comes first. Two sheets stacked on
- * one app open is a nag, and the rider is the half that appears on every
- * leaderboard, so it is the half worth asking for first. The bike is offered on
- * the next open — or immediately after the rider is made, which is the one
- * moment a second ask is welcome rather than tiring.
+ * one app open is a nag. The bike is offered on the next open — or immediately
+ * after the rider is made, which is the one moment a second ask is welcome
+ * rather than tiring.
  *
  * "Has a rider" means a DIGITALISED rider in the garage, not merely a
  * `users.avatar_url`. Those are two different things: avatar_url also holds the
@@ -38,8 +56,10 @@ import './w3.css'
  *  - never on the studios/onboarding/auth routes themselves (that's the loop),
  *    and never on the celebrate/share moments it would step on;
  *  - never while auth or the garage is still resolving, and never without a user;
- *  - fires once per subject per browser session, recorded BEFORE it opens, so a
- *    re-render or a route change can't re-fire it.
+ *  - the BIKE fires once per browser session, recorded BEFORE it opens, so a
+ *    re-render or a route change can't re-fire it. The rider keeps no such
+ *    memory: a required step that remembers it has been shown is a required
+ *    step you can escape by reloading.
  *
  * Mount (App.tsx, inside <BrowserRouter>):
  *   import W3SetupGate from './editorial/w3/W3SetupGate'
@@ -48,8 +68,20 @@ import './w3.css'
 
 type Subject = 'rider' | 'bike'
 
-/** Per subject, so "Später" on the rider does not also silence the bike. */
+/** Per subject, so dismissing the bike does not silence a later ask. Only the
+ *  bike writes one — see `REQUIRED`. */
 const seenKey = (s: Subject) => `w3.setupGate.${s}`
+
+/**
+ * WHICH HALF THE RIDER CANNOT DECLINE.
+ *
+ * A list rather than a boolean so that making the bike required later is one
+ * word, and so the difference is legible everywhere it is checked instead of
+ * being spelled `subject === 'rider'` in five places, where the next person has
+ * to work out whether each one meant "the rider" or "the required one".
+ */
+const REQUIRED: readonly Subject[] = ['rider']
+const isRequired = (s: Subject | null) => s !== null && REQUIRED.includes(s)
 const SETUP_GATE_ID = 'setup'
 /** A beat after the screen settles — it should feel offered, not thrown. */
 const OPEN_DELAY_MS = 900
@@ -81,7 +113,10 @@ const COPY: Record<Subject, {
     deck: 'Ein Foto genügt. Danach fährt dein Rider in jeder Fahrt, jeder Challenge und auf jedem Leaderboard mit.',
     cta: 'Rider erstellen',
     route: '/e/w3-avatar-onboard',
-    note: 'Dein Foto wird einmal verwendet und danach verworfen. Dauert etwa eine Minute.',
+    // Says WHY it cannot be skipped, because a sheet with no way out and no
+    // reason given reads as a bug. It states the fact plainly and does not
+    // apologise for it — the register the rest of the app uses.
+    note: 'Dein Rider gehört zu deinem Konto — ohne ihn fehlt er auf jedem Leaderboard. Dein Foto wird einmal verwendet und danach verworfen. Dauert etwa eine Minute.',
   },
   bike: {
     eyebrow: 'DEIN RAD FEHLT NOCH',
@@ -122,33 +157,56 @@ export default function W3SetupGate() {
 
   useEffect(() => {
     if (!eligible || missing === null) return
+    const required = isRequired(missing)
+    // `firedRef` stops a re-render re-opening the sheet within one mount. The
+    // required half still uses it — what it must NOT keep is memory that
+    // survives a reload, which is what `seenKey` is.
     if (firedRef.current[missing]) return
-    let seen: string | null = null
-    try { seen = sessionStorage.getItem(seenKey(missing)) } catch { /* private mode */ }
-    if (seen) { firedRef.current[missing] = true; return }
+    if (!required) {
+      let seen: string | null = null
+      try { seen = sessionStorage.getItem(seenKey(missing)) } catch { /* private mode */ }
+      if (seen) { firedRef.current[missing] = true; return }
+    }
     const t = window.setTimeout(() => {
       // Record BEFORE opening so a re-render / a route change can't re-fire.
       firedRef.current[missing] = true
-      // One interruption per app open. On a rider's first Monday morning the
-      // briefing, the week review and this are all eligible at once; whoever
-      // asks first gets the launch and the rest wait for the next one.
-      if (!claimGate(SETUP_GATE_ID)) return
-      try { sessionStorage.setItem(seenKey(missing), '1') } catch { /* ignore */ }
+      // One interruption per app open — but only among things that are merely
+      // being OFFERED. A required step that lost this race would not "ask again
+      // tomorrow"; the app would just quietly not work today, so it takes the
+      // launch instead of asking for it.
+      if (required) {
+        seizeGate(SETUP_GATE_ID)
+      } else {
+        if (!claimGate(SETUP_GATE_ID)) return
+        try { sessionStorage.setItem(seenKey(missing), '1') } catch { /* ignore */ }
+      }
       setSubject(missing)
     }, OPEN_DELAY_MS)
     return () => window.clearTimeout(t)
   }, [eligible, missing])
 
-  // Escape dismisses; focus lands on the invitation, not on the way out.
+  // Escape dismisses an INVITATION; there is nothing for it to do on a required
+  // step. Focus lands on the way forward either way — on the required half it is
+  // the only control there is.
   useEffect(() => {
     if (!subject) return
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSubject(null) }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isRequired(subject)) setSubject(null)
+    }
     window.addEventListener('keydown', onKey)
     const focus = window.setTimeout(() => primaryRef.current?.focus(), reduce ? 0 : 340)
     return () => { window.removeEventListener('keydown', onKey); window.clearTimeout(focus) }
   }, [subject, reduce])
 
-  const dismiss = () => { setSubject(null); releaseGate(SETUP_GATE_ID) }
+  const required = isRequired(subject)
+  // A no-op when the step is required, rather than a handler that is never
+  // wired: the backdrop and the key listener both route through here, and one
+  // place deciding is one place to get it wrong.
+  const dismiss = () => {
+    if (isRequired(subject)) return
+    setSubject(null)
+    releaseGate(SETUP_GATE_ID)
+  }
   const go = () => { const s = subject; setSubject(null); releaseGate(SETUP_GATE_ID); if (s) navigate(COPY[s].route) }
 
   const copy = subject ? COPY[subject] : null
@@ -168,8 +226,11 @@ export default function W3SetupGate() {
             onClick={(e) => e.stopPropagation()}
             style={{ width: 390, maxWidth: '100%', background: T.bg, borderRadius: '28px 28px 0 0', border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '10px 20px calc(22px + env(safe-area-inset-bottom))', gap: 14, position: 'relative', overflow: 'hidden' }}>
 
-            {/* grabber */}
-            <div style={{ width: 38, height: 4, borderRadius: 100, background: T.d2, flex: 'none' }} />
+            {/* The grabber is a promise that this can be swiped away, so it is
+                only drawn when that is true. */}
+            {!required && (
+              <div style={{ width: 38, height: 4, borderRadius: 100, background: T.d2, flex: 'none' }} />
+            )}
 
             {/* THE EMPTY SEAT — the whole argument, no words needed, and it
                 MOVES. A still dashed ring reads as a disabled control; the same
@@ -219,10 +280,12 @@ export default function W3SetupGate() {
               style={{ width: '100%', height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontFamily: FONT, fontSize: 16, fontWeight: 700, letterSpacing: -0.2, cursor: 'pointer', display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', marginTop: 4 }}>
               <Camera size={18} color={T.bg} />{copy.cta}
             </button>
-            <button onClick={dismiss}
-              style={{ width: '100%', height: 40, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
-              Später
-            </button>
+            {!required && (
+              <button onClick={dismiss}
+                style={{ width: '100%', height: 40, background: 'transparent', border: 0, color: T.quiet, fontFamily: FONT, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                Später
+              </button>
+            )}
             <span style={{ fontSize: 10.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet, textAlign: 'center', textWrap: 'balance' }}>
               {copy.note}
             </span>

@@ -33,6 +33,25 @@ export function claimGate(id: string): boolean {
   return true
 }
 
+/**
+ * TAKE THE LAUNCH WHETHER OR NOT IT IS FREE.
+ *
+ * `claimGate` implements a courtesy between INVITATIONS: three watchers that
+ * each have something nice to offer, and only one of them gets to say it. A
+ * REQUIRED step is not in that conversation. If a rider cannot use the app
+ * until they have made their rider, then losing the race to the morning
+ * briefing does not mean "ask again tomorrow", it means the app silently does
+ * not work today.
+ *
+ * So this exists for the one caller that must always open, and it is
+ * deliberately harder to reach for than `claimGate`: seizing means whatever
+ * else was about to be shown is not shown, and that is only ever the right
+ * trade when the thing seizing is a gate the rider has to pass anyway.
+ */
+export function seizeGate(id: string): void {
+  holder = id
+}
+
 /** Give it back — a gate that decided NOT to open after claiming, or one whose
  *  sheet the rider has dismissed, should not hold the launch for the rest of
  *  the session. */

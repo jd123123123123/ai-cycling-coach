@@ -47,6 +47,36 @@ export function beamSteps(tss: number): number {
   return BEAM_CUTS.filter((cut) => tss >= cut).length
 }
 
+/**
+ * THE SPORTS THIS APP WILL NAME, in the rider's language.
+ *
+ * The load from a gym session or a run has always reached CTL, ATL and TSB —
+ * `_compute_tss` scores every sport at ingestion and the PMC sums across them
+ * on purpose. What was missing was the sentence: the week strip drew such a day
+ * as trained, counted it against the week's budget, and then said nothing about
+ * what it was. A rider saw a day marked done, carrying load, with dashes where
+ * the session should be — the app had noticed their training everywhere except
+ * on the screen.
+ *
+ * Unknown sports fall through to their own id rather than to a guess. A day
+ * labelled `padel` is honest and slightly ugly; a day labelled "Training"
+ * throws away the one fact this row exists to add.
+ */
+const SPORT_DE: Record<string, string> = {
+  running: 'Laufen',
+  strength_training: 'Krafttraining',
+  swimming: 'Schwimmen',
+  walking: 'Gehen',
+  hiking: 'Wandern',
+  rowing: 'Rudern',
+  yoga: 'Yoga',
+  elliptical: 'Crosstrainer',
+  padel: 'Padel',
+  tennis: 'Tennis',
+  football: 'Fußball',
+  skiing: 'Ski',
+}
+
 export type DayStatus = 'today' | 'hit' | 'missed' | 'over' | 'rest' | 'upcoming'
 export interface W3DayFull {
   letter: string
@@ -68,6 +98,11 @@ export interface W3DayFull {
   actualDurMin?: number | null
   actualW?: number | null
   actualHr?: number | null
+  /** The sport, when the day's session was NOT a ride — null on a rest day and
+   *  null on a ride, because a cycling app's week strip does not label the
+   *  thing it is already about. Set, it changes two things below: the day says
+   *  what it was, and the power column disappears. */
+  actualSport?: string | null
   /** True when the PLAN prescribes rest, independently of `status`. Needed
    *  because `status` is 'today' for today whatever the day type is, so it
    *  cannot answer "is this a rest day?" for the one day that matters most. */
@@ -478,12 +513,20 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
           </div>
         ))}
       </div>
-      {/* What you actually rode — real duration / avg power / avg HR. */}
+      {/* What you actually DID — real duration / avg power / avg HR. */}
       {(day.actualDurMin != null || day.actualW != null || day.actualHr != null) && (
         <div style={{ display: 'flex', gap: 8, paddingTop: 12, borderTop: `1px solid ${T.rule}` }}>
           {[
             ['DAUER', day.actualDurMin != null ? `${Math.floor(day.actualDurMin / 60)}:${String(Math.round(day.actualDurMin % 60)).padStart(2, '0')}` : '—'],
-            ['Ø LEISTUNG', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
+            // THE COLUMN IS DROPPED, NOT DASHED. A gym session has no power to
+            // report and an empty cell under Ø LEISTUNG does not read as "this
+            // sport has no watts" — it reads as a ride whose power meter failed.
+            // Watts on a run would be worse still: a running-power number in a
+            // column that is read against an FTP is a different quantity wearing
+            // the same unit.
+            ...(day.actualSport ? [] : [
+              ['Ø LEISTUNG', day.actualW != null ? `${Math.round(day.actualW)} W` : '—'],
+            ]),
             ['Ø HF', day.actualHr != null ? `${Math.round(day.actualHr)}` : '—'],
           ].map(([l, v]) => (
             <div key={l} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 14, background: T.surface2 }}>
@@ -492,6 +535,16 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
             </div>
           ))}
         </div>
+      )}
+      {/* And it says what it was — quiet, because the day already carries its
+          numbers above and this line only has to stop them being misread as a
+          ride's. Nothing is drawn on a ride: labelling every cycling day
+          "Radfahren" in a cycling app is noise. */}
+      {day.actualSport && (
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 10, fontWeight: 700, letterSpacing: 0.6, color: T.quiet }}>
+          <span style={{ width: 5, height: 5, borderRadius: 100, background: T.mid, flex: 'none' }} />
+          {(SPORT_DE[day.actualSport] ?? day.actualSport).toUpperCase()}
+        </span>
       )}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
         {delta != null && (

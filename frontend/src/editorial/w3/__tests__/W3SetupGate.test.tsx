@@ -100,25 +100,72 @@ describe('what the setup gate asks for', () => {
 })
 
 describe('how often it asks', () => {
-  it('remembers per subject, so "Später" on the rider does not silence the bike', () => {
-    /** ONE FLAG FOR BOTH HALVES WOULD BE THE NAG-OR-SILENCE BUG: dismissing the
-     *  rider would also swallow the bike ask for the whole session, and a rider
-     *  who then made their rider would never be asked for the machine. */
+  it('keeps no memory for the rider, because a required step must keep asking', () => {
+    /** THE BEHAVIOUR THIS TEST USED TO PIN, and why it changed.
+     *
+     *  It asserted that the rider ask wrote `w3.setupGate.rider`, so that it
+     *  fired once per session. That was right while the rider was an INVITATION
+     *  — and it is exactly how riders went months without making one: dismiss
+     *  once, and the app never mentions it again until tomorrow.
+     *
+     *  The rider is now required, so it writes nothing. "Already asked" is not a
+     *  reason to stop asking for something the app does not work without, and a
+     *  required step that remembers being shown is a required step you escape by
+     *  reloading the page. */
     openAt('/e/w3-today')
-    expect(sessionStorage.getItem('w3.setupGate.rider')).toBe('1')
+    expect(sessionStorage.getItem('w3.setupGate.rider')).toBeNull()
     expect(sessionStorage.getItem('w3.setupGate.bike')).toBeNull()
+  })
 
-    cleanup()
+  it('still remembers the bike, which is only ever offered', () => {
     garage = { rider: asset('rider'), bike: null }
     openAt('/e/w3-today')
     expect(screen.getByText('Dein Rider hat noch kein Rad')).toBeTruthy()
+    expect(sessionStorage.getItem('w3.setupGate.bike')).toBe('1')
   })
 
-  it('does not ask twice in one session', () => {
+  it('does not ask for the bike twice in one session', () => {
+    garage = { rider: asset('rider'), bike: null }
     openAt('/e/w3-today')
     expect(screen.getByRole('dialog')).toBeTruthy()
     cleanup()
     openAt('/e/w3-today')
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('asks for the rider again on the next open', () => {
+    openAt('/e/w3-today')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    cleanup()
+    openAt('/e/w3-today')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+})
+
+describe('what the rider can and cannot decline', () => {
+  /**
+   * THE POINT OF THE WHOLE CHANGE. A rider with no rider figure is rendered as
+   * an empty seat on every leaderboard and falls back to an initial on the
+   * referral card, so the app does not really work for them — and the sheet that
+   * said so was declinable, so it was declined, every session, indefinitely.
+   */
+  it('offers no way out of the rider step', () => {
+    openAt('/e/w3-today')
+    expect(screen.getByRole('dialog')).toBeTruthy()
+    expect(screen.queryByText('Später')).toBeNull()
+  })
+
+  it('does not close the rider step on Escape', () => {
+    openAt('/e/w3-today')
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    })
+    expect(screen.getByRole('dialog')).toBeTruthy()
+  })
+
+  it('still lets the bike be put off', () => {
+    garage = { rider: asset('rider'), bike: null }
+    openAt('/e/w3-today')
+    expect(screen.getByText('Später')).toBeTruthy()
   })
 })

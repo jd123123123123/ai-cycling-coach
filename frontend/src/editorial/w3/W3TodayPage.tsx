@@ -368,19 +368,46 @@ export default function W3TodayPage() {
     // up its own DayPlan (title / TSS / category / intervals).
     const planByDate = new Map<string, DayPlan>()
     for (const dp of week?.days ?? []) planByDate.set(dp.date.slice(0, 10), dp)
-    // Actual ridden cycling activity per local date (biggest-TSS ride wins).
-    const actByDate = new Map<string, { durMin: number; w: number | null; hr: number | null; tss: number }>()
+    // What was actually TRAINED per local date — the biggest-load session wins.
+    //
+    // THIS USED TO SKIP EVERYTHING THAT WAS NOT A RIDE, and the result was a day
+    // that contradicted itself. A gym session or a run earns an honest hrTSS at
+    // ingestion (`activity_service._compute_tss` scores every sport, down to
+    // padel and hiking) and that load reaches CTL/ATL/TSB through the PMC total,
+    // which sums across sports on purpose. So the strip already drew the day as
+    // trained and already counted it against the week's TSS — it just had
+    // nothing to SAY about it, because the only map feeding the day's duration
+    // and heart rate dropped it on the floor. The rider saw a day marked done,
+    // carrying load, with three dashes where the session should be, and no hint
+    // anywhere that the app had noticed they trained.
+    //
+    // The app stays cycling-only in what it PLANS. Refusing to acknowledge
+    // cross-training is a different thing, and it makes the app wrong about the
+    // athlete's week rather than focused on the bike.
+    const actByDate = new Map<string, {
+      durMin: number; w: number | null; hr: number | null; tss: number; sport: string
+    }>()
     for (const a of weekActs?.activities ?? []) {
-      if (a.sport !== 'cycling') continue
       const key = new Date(a.started_at).toISOString().slice(0, 10)
       const cur = actByDate.get(key)
       const tss = a.tss ?? 0
-      if (!cur || tss > cur.tss) {
+      // A ride outranks a heavier cross-training session on the same date: this
+      // is a cycling app's week strip, and on a brick day the ride is what the
+      // plan was about. Only when there is no ride at all does the day describe
+      // itself by whatever else was done.
+      const isRide = a.sport === 'cycling'
+      const curIsRide = cur?.sport === 'cycling'
+      const beats = cur == null || (isRide && !curIsRide) || (isRide === curIsRide && tss > cur.tss)
+      if (beats) {
         actByDate.set(key, {
           durMin: (a.duration_seconds ?? 0) / 60,
-          w: a.normalized_power ?? a.average_power ?? null,
+          // Power belongs to the bike. A run's watts would be a running-power
+          // number in a column labelled Ø LEISTUNG and read against an FTP — a
+          // different quantity wearing the same unit.
+          w: isRide ? (a.normalized_power ?? a.average_power ?? null) : null,
           hr: a.average_hr ?? null,
           tss,
+          sport: a.sport,
         })
       }
     }
@@ -553,6 +580,10 @@ export default function W3TodayPage() {
         actualDurMin: act?.durMin ?? null,
         actualW: act?.w ?? null,
         actualHr: act?.hr ?? null,
+        // Null for a ride, which needs no label on a cycling app's week strip —
+        // only cross-training has to name itself, or the day reads as a ride
+        // that lost its power meter.
+        actualSport: act != null && act.sport !== 'cycling' ? act.sport : null,
       }
     })
 
