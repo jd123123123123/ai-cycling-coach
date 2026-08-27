@@ -156,17 +156,17 @@ function HourScrubber({ hours, from, to, accent, reduce, selected, onSelect }: {
       }}>
 
       {/* ride quality */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 34, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 2, height: 30, width: '100%' }}>
         {hours.map((h, i) => {
           const on = h.hour === selected
           return (
             <motion.div key={h.hour}
               initial={reduce ? false : { height: 3 }}
-              animate={{ height: h.q == null ? 3 : Math.max(5, Math.round(h.q * 34)) }}
+              animate={{ height: h.q == null ? 3 : Math.max(4, Math.round(h.q * 30)) }}
               transition={{ duration: 0.45, delay: reduce ? 0 : 0.15 + i * 0.015, ease: 'easeOut' }}
               style={{
                 flex: 1, minWidth: 0, borderRadius: 3,
-                background: h.q == null ? T.d1 : on ? T.ink : inWin(h.hour) ? accent : T.d2,
+                background: h.q == null ? T.d1 : on ? T.ink : inWin(h.hour) ? accent : `${T.ink}1F`,
               }} />
           )
         })}
@@ -181,7 +181,7 @@ function HourScrubber({ hours, from, to, accent, reduce, selected, onSelect }: {
             transition={{ duration: 0.45, delay: reduce ? 0 : 0.25 + i * 0.015, ease: 'easeOut' }}
             style={{
               flex: 1, minWidth: 0, borderRadius: 2,
-              background: h.rain == null ? T.d1 : h.hour === selected ? T.ink : `${T.cool}8C`,
+              background: h.rain == null ? T.d1 : h.hour === selected ? T.ink : `${T.cool}73`,
             }} />
         ))}
       </div>
@@ -233,7 +233,7 @@ function SegmentMeter({ frac, hue, reduce }: { frac: number; hue: string; reduce
           transition={{ duration: 0.3, delay: reduce ? 0 : (i < filled ? i * 0.018 : 0) }}
           style={{
             flex: 1, height: 10, borderRadius: 3,
-            background: i < filled ? `linear-gradient(180deg, ${hue} 0%, ${hue}D9 100%)` : T.heroOff,
+            background: i < filled ? `linear-gradient(180deg, ${hue}CC 0%, ${hue}8C 100%)` : T.heroOff,
             boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40` : 'none',
           }} />
       ))}
@@ -259,7 +259,7 @@ function ContributorRow({ c, reduce, i }: {
   c: Contributor; reduce: boolean; i: number
 }) {
   const hue = c.tone === 'good' ? T.acidDeep : c.tone === 'warn' ? T.warn : T.d4
-  const TRACK = 6
+  const TRACK = 4
   const Arrow = c.dir === 'up' ? ArrowUpRight : c.dir === 'down' ? ArrowDownRight : ArrowRight
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
@@ -282,21 +282,21 @@ function ContributorRow({ c, reduce, i }: {
           {c.value}
         </span>
       </div>
-      <div style={{ position: 'relative', width: '100%', height: TRACK + 14 }}>
-        <div style={{ position: 'absolute', inset: 0, borderRadius: 100, background: T.d1 }} />
+      <div style={{ position: 'relative', width: '100%', height: TRACK + 15 }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: TRACK, borderRadius: 100, background: T.d1 }} />
         {c.band && (
           <motion.div
             aria-hidden
             initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: reduce ? 0 : 0.15 + i * 0.05 }}
             style={{
-              position: 'absolute', top: 0, height: TRACK, borderRadius: 100, background: T.d3,
+              position: 'absolute', top: 0, height: TRACK, borderRadius: 100, background: `${T.ink}38`,
               left: `${c.band.lo * 100}%`, width: `${Math.max(2, (c.band.hi - c.band.lo) * 100)}%`,
             }} />
         )}
         {c.band && c.bandLabel && (
           <span aria-hidden style={{
-            position: 'absolute', top: TRACK + 3, fontSize: 8.5, fontWeight: 500, color: T.quiet,
+            position: 'absolute', top: TRACK + 5, fontSize: 8.5, fontWeight: 500, color: T.quiet,
             left: `${c.band.lo * 100}%`, ...TNUM,
           }}>{c.bandLabel}</span>
         )}
@@ -307,8 +307,8 @@ function ContributorRow({ c, reduce, i }: {
             animate={{ left: `${c.at * 100}%` }}
             transition={{ duration: 0.65, delay: reduce ? 0 : 0.2 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
             style={{
-              position: 'absolute', top: -2, width: 4, height: TRACK + 4, borderRadius: 100,
-              background: hue, marginLeft: -2,
+              position: 'absolute', top: -3, width: 3, height: TRACK + 6, borderRadius: 100,
+              background: hue, marginLeft: -1.5,
               // A ring of ground around the marker so it stays legible when it
               // lands inside the band, which is exactly where it should be.
               boxShadow: `0 0 0 2px ${T.heroDock}`,
@@ -347,10 +347,9 @@ function WorkoutProfile({ blocks, reduce, selected, onSelect }: {
   const total = blocks.reduce((n, b) => n + b.minutes, 0)
   if (total <= 0) return null
   const watts = blocks.map((b) => b.watts ?? 0).filter((w) => w > 0)
-  const lo = watts.length ? Math.min(...watts) * 0.72 : 0
   const hi = watts.length ? Math.max(...watts) : 1
   const H = 46
-  const h = (w: number | null) => w == null ? 10 : Math.max(8, Math.round(((w - lo) / (hi - lo || 1)) * H))
+  const h = (w: number | null) => w == null ? 10 : Math.max(6, Math.round((w / hi) * H))
   const pick = selected != null ? blocks[selected] : null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 9, width: '100%' }}>
