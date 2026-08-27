@@ -67,6 +67,14 @@ const FULL: MorningBriefing = {
     ],
   },
   readiness: { score: 74, delta: 6 },
+  // A stand-in landscape so the poster treatment can be looked at without a
+  // session; the real screen puts the rider's own composed scene here.
+  heroImage: "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23415A77'/%3E%3Cstop offset='60%25' stop-color='%231B263B'/%3E%3Cstop offset='100%25' stop-color='%230D1B2A'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='400' height='300' fill='url(%23g)'/%3E%3Cpath d='M0 210 L90 150 L150 195 L240 120 L320 180 L400 140 L400 300 L0 300 Z' fill='%23101820'/%3E%3C/svg%3E",
+  celebration: {
+    title: 'Solide Basis.',
+    body: 'Genug im Tank für den Plan. Kein Grund zur Vorsicht, kein Grund zum Übermut.',
+    crowned: false,
+  },
   night: {
     totalLabel: '7:24 h',
     stages: [
@@ -138,6 +146,7 @@ const REST: MorningBriefing = {
  *  rather than borrowing yesterday's. */
 const STALE: MorningBriefing = {
   ...FULL,
+  celebration: null,
   readinessVerdict: null,
   contributors: [],
   welcome: null,

@@ -3,6 +3,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useDayState } from '../state/useDayState'
 import { useTodayModel } from '../data/useTodayModel'
 import { useTodayWeather } from '../../hooks/useTodayWeather'
+import { useTodayStage } from '../../hooks/useGarage'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { hasPlanFromWeek } from './w3hasPlan'
 import { isPresent } from '../data/value'
@@ -171,6 +172,32 @@ export interface MorningBriefing {
   readiness: { score: number; delta: number | null } | null
 
   /**
+   * THE RIDER'S OWN BIKE, BEHIND THEIR SCORE.
+   *
+   * A number on a flat card is a dashboard; the same number over a photograph
+   * is a poster, and a poster is the thing people screenshot. This is the
+   * composed scene the room already holds — their machine, in a place — so it
+   * costs nothing extra and it is unmistakably theirs.
+   *
+   * Null until the scene exists. The card then falls back to its own ground
+   * rather than to a stock picture of somebody else's morning.
+   */
+  heroImage: string | null
+
+  /**
+   * WHAT THE APP SAYS BACK.
+   *
+   * The screens people post are the ones that REACTED to them. "Optimal" is a
+   * label; "Put it in the Louvre" is an app noticing. The title is short enough
+   * to be the thing you screenshot and the body earns it by staying about the
+   * rider's own night.
+   *
+   * `crowned` is the top band only. An ornament that appears every morning is
+   * decoration; one that appears rarely is a reward.
+   */
+  celebration: { title: string; body: string; crowned: boolean } | null
+
+  /**
    * HOW THE NIGHT WENT — the question a rider actually wakes up with, and the
    * one most apps answer with a single score. The stages are drawn as the
    * proportions they are; HRV and resting heart rate are placed against the
@@ -239,6 +266,7 @@ export function useMorningBriefing(): MorningBriefing {
   const { state } = useDayState()
   const model = useTodayModel(state)
   const { data: weather } = useTodayWeather()
+  const { data: stage } = useTodayStage()
   const { data: week } = useCurrentWeek()
 
   return useMemo<MorningBriefing>(() => {
@@ -323,6 +351,35 @@ export function useMorningBriefing(): MorningBriefing {
     // A rider reads the WORD before the figure. This app's own Today dock puts
     // "Grünes Licht" beside 88 for exactly that reason, and every readiness
     // screen worth copying does the same.
+    // The reaction, banded. Only the top one gets its own flourish — a line
+    // that lands every morning is wallpaper.
+    const celebration = score == null ? null
+      : score.score >= 90 ? {
+          title: 'Häng es ins Museum.',
+          body: 'So einen Wert bekommt man nicht geschenkt. Dein Körper hat heute Nacht abgeliefert — fahr etwas Schönes damit.',
+          crowned: true,
+        }
+      : score.score >= 80 ? {
+          title: 'Grünes Licht.',
+          body: 'Alles steht auf Fahren. Was du heute vorhast, trägt dich auch durch.',
+          crowned: false,
+        }
+      : score.score >= 65 ? {
+          title: 'Solide Basis.',
+          body: 'Genug im Tank für den Plan. Kein Grund zur Vorsicht, kein Grund zum Übermut.',
+          crowned: false,
+        }
+      : score.score >= 50 ? {
+          title: 'Mit Gefühl.',
+          body: 'Geht klar — halt aber etwas zurück. Der Tag muss nicht heute entschieden werden.',
+          crowned: false,
+        }
+      : {
+          title: 'Halt die Zügel kurz.',
+          body: 'Heute zählt Erholung mehr als Wattzahlen. Der Plan läuft dir nicht weg.',
+          crowned: false,
+        }
+
     const readinessVerdict = score == null
       ? null
       : score.score >= 80 ? 'Grünes Licht'
@@ -546,6 +603,8 @@ export function useMorningBriefing(): MorningBriefing {
     return {
       greeting, welcome, dateLabel, headline, headlineMeta, blocks, why, tone, window,
       readiness: score ? { score: Math.round(score.score), delta: score.deltaVsYesterday } : null,
+      heroImage: stage?.bike_image ?? null,
+      celebration,
       night,
       body,
       readinessVerdict,
@@ -553,5 +612,5 @@ export function useMorningBriefing(): MorningBriefing {
       streak,
       bare: !planned && !window && !night && !body,
     }
-  }, [user, model, weather, week])
+  }, [user, model, weather, week, stage])
 }

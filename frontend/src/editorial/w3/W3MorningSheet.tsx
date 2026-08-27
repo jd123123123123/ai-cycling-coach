@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowDownRight, ArrowRight, ArrowUpRight, X } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, Crown, X } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
 import { TNUM } from './w3surfaces'
 import type { Contributor, MorningBriefing } from './useMorningBriefing'
@@ -65,6 +65,31 @@ const card = (radius: number) => ({
   width: '100%',
 })
 
+/**
+ * THE SPACING SYSTEM, stated once so nothing here is a guess.
+ *
+ * Everything is a multiple of 4. Ad-hoc 9s, 11s, 13s and 15s read as sloppy
+ * even to someone who cannot name why, and this file was full of them.
+ *
+ * The scale is a 1:2:4 rhythm, and the CONTRAST between its steps is what makes
+ * a screen feel composed rather than merely padded:
+ *
+ *   TIGHT (4-8)  things that belong to each other — a label and its value
+ *   GROUP (16)   one block from the next inside a card
+ *   SECTION (24) one card from the next
+ *
+ * Two rules the previous cut broke, and they are why it read cramped:
+ *
+ *   PADDING >= RADIUS. A 28px corner with 15px of padding puts content inside
+ *   the corner's own arc. Nothing looks wrong at a glance and everything feels
+ *   tight. 24 of padding against a 24 corner is the floor.
+ *
+ *   INSIDE >= BETWEEN. Card padding was 15 while the gap between cards was 14,
+ *   so the cards read as tight boxes floating apart. Generous inside, moderate
+ *   between: that is the whole trick.
+ */
+const SP = { tight: 4, snug: 8, group: 16, card: 24, section: 24, radius: 24 } as const
+
 // ── the arc ─────────────────────────────────────────────────────────────────
 
 const RING = 146
@@ -126,9 +151,9 @@ function Arc({ score, verdict, reduce }: {
       </svg>
       <div style={{
         position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center', gap: 2, paddingTop: 6,
+        alignItems: 'center', justifyContent: 'center', gap: SP.tight, paddingTop: 6,
       }}>
-        <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 2.2, color: T.quiet }}>BEREITSCHAFT</span>
+        <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.3, color: T.quiet }}>BEREITSCHAFT</span>
         <motion.span
           initial={reduce ? false : { opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -137,10 +162,12 @@ function Arc({ score, verdict, reduce }: {
             fontSize: 54, fontWeight: 700, letterSpacing: -2.4, lineHeight: 1.1, ...TNUM,
             color: score == null ? T.heroOff : T.scoreInk,
           }}>{score ?? DASH}</motion.span>
-        <span style={{
-          fontSize: 13, fontWeight: 600, letterSpacing: -0.2, color: T.ink,
-          textAlign: 'center', maxWidth: RING - 26, textWrap: 'balance',
-        }}>{verdict}</span>
+        {verdict && (
+          <span style={{
+            fontSize: 12, fontWeight: 500, letterSpacing: -0.1, color: T.quiet,
+            textAlign: 'center', maxWidth: RING - 30, textWrap: 'balance',
+          }}>{verdict}</span>
+        )}
 
       </div>
     </div>
@@ -166,13 +193,13 @@ function Spectrum({ c, reduce, i }: { c: Contributor; reduce: boolean; i: number
   const Arrow = c.dir === 'up' ? ArrowUpRight : c.dir === 'down' ? ArrowDownRight : ArrowRight
   const TRACK = 6
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, width: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SP.snug, width: '100%' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: SP.snug, width: '100%' }}>
         <span aria-hidden style={{
-          width: 21, height: 21, flex: 'none', borderRadius: 100,
+          width: 24, height: 24, flex: 'none', borderRadius: 100,
           background: `${hue}1F`, display: 'grid', placeItems: 'center',
         }}>
-          <Arrow size={11} color={hue} strokeWidth={2.4} />
+          <Arrow size={12} color={hue} strokeWidth={2.3} />
         </span>
         <span style={{
           flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 400, letterSpacing: -0.1, color: T.mid,
@@ -232,7 +259,7 @@ function Profile({ blocks, reduce, selected, onSelect }: {
   const H = 62
   const pick = selected != null ? blocks[selected] : blocks[0]
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: SP.snug + 2, width: '100%' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: H, width: '100%' }}>
         {blocks.map((b, i) => {
           const work = (b.watts ?? 0) / hi >= EFFORT_AT
@@ -384,13 +411,13 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
         }}>
 
         <div style={{
-          display: 'flex', flexDirection: 'column', gap: 14,
-          padding: `calc(18px + env(safe-area-inset-top)) 20px calc(18px + env(safe-area-inset-bottom))`,
+          display: 'flex', flexDirection: 'column', gap: SP.section,
+          padding: `calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom))`,
           margin: 'auto 0',
         }}>
 
           {/* ── the opening ─────────────────────────────────────────────── */}
-          <motion.div {...step(0)} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%' }}>
+          <motion.div {...step(0)} style={{ display: 'flex', alignItems: 'flex-start', gap: SP.group, width: '100%' }}>
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 5 }}>
               <span id="w3-morning-title" style={{
                 fontSize: 24, fontWeight: 700, letterSpacing: -0.9, lineHeight: 1.08, color: T.ink,
@@ -412,22 +439,69 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
           {/* ── readiness ───────────────────────────────────────────────── */}
           {(briefing.readiness || briefing.why || briefing.contributors.length > 0) && (
             <motion.div {...step(1)} style={{
-              ...card(28), alignItems: 'center', gap: 12, padding: 15,
+              ...card(SP.radius), alignItems: 'center', gap: SP.group, padding: SP.card,
+              position: 'relative', overflow: 'hidden',
             }}>
+              {/* THE RIDER'S OWN BIKE, BEHIND THEIR SCORE. A number on a flat
+                  card is a dashboard; the same number over a photograph is a
+                  poster, and a poster is the thing people screenshot. The scrim
+                  is heavy on purpose — the picture is atmosphere, and every
+                  reading on top of it still has to clear contrast. */}
+              {briefing.heroImage && (
+                <>
+                  <img src={briefing.heroImage} alt="" aria-hidden style={{
+                    position: 'absolute', inset: 0, width: '100%', height: '100%',
+                    objectFit: 'cover', opacity: 0.85,
+                  }} />
+                  <div aria-hidden style={{
+                    position: 'absolute', inset: 0,
+                    background: `linear-gradient(180deg, ${T.bg}3D 0%, ${T.bg}8C 38%, ${T.bg}F2 62%, ${T.bg} 78%)`,
+                  }} />
+                </>
+              )}
+              {briefing.celebration?.crowned && (
+                <motion.span aria-hidden
+                  initial={reduce ? false : { opacity: 0, y: 6, scale: 0.8 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 18, delay: reduce ? 0 : 1.1 }}
+                  style={{ position: 'relative', marginBottom: -SP.snug }}>
+                  <Crown size={20} color={T.acid} strokeWidth={2} />
+                </motion.span>
+              )}
               <Arc score={briefing.readiness?.score ?? null}
-                verdict={briefing.readinessVerdict ?? briefing.why ?? 'Noch keine Messung'}
+                // The celebration below says the verdict now; inside the ring
+                // only the withheld-score reason still needs a slot.
+                verdict={briefing.readiness ? '' : (briefing.why ?? 'Noch keine Messung')}
                 reduce={!!reduce} />
 
-              {briefing.readiness?.delta != null && briefing.readiness.delta !== 0 && (
-                <span style={{ fontSize: 11, fontWeight: 500, color: T.quiet, ...TNUM }}>
-                  {briefing.readiness.delta > 0 ? '+' : '−'}{Math.abs(Math.round(briefing.readiness.delta))} zu gestern
-                </span>
+              {briefing.celebration && (
+                <motion.div
+                  initial={reduce ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5, delay: reduce ? 0 : 0.9, ease: [0.16, 1, 0.3, 1] }}
+                  style={{
+                    position: 'relative', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', gap: SP.snug, paddingInline: SP.snug,
+                  }}>
+                  <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.7, color: T.ink, textAlign: 'center' }}>
+                    {briefing.celebration.title}
+                  </span>
+                  <span style={{
+                    fontSize: 12.5, fontWeight: 400, lineHeight: 1.5, color: T.mid,
+                    textAlign: 'center', textWrap: 'balance',
+                  }}>{briefing.celebration.body}</span>
+                  {briefing.readiness?.delta != null && briefing.readiness.delta !== 0 && (
+                    <span style={{ fontSize: 11, fontWeight: 500, color: T.quiet, ...TNUM }}>
+                      {briefing.readiness.delta > 0 ? '+' : '−'}{Math.abs(Math.round(briefing.readiness.delta))} zu gestern
+                    </span>
+                  )}
+                </motion.div>
               )}
 
               {briefing.contributors.length > 0 && (
                 <>
-                  <div style={{ width: '100%', height: 1, background: `${T.ink}12` }} />
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+                  <div style={{ position: 'relative', width: '100%', height: 1, background: `${T.ink}12` }} />
+                  <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: SP.group, width: '100%' }}>
                     {briefing.contributors.map((c, i) => (
                       <Spectrum key={c.key} c={c} reduce={!!reduce} i={i} />
                     ))}
@@ -439,8 +513,8 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
 
           {/* ── today's session ─────────────────────────────────────────── */}
           {briefing.blocks.length > 0 && (
-            <motion.div {...step(2)} style={{ ...card(28), gap: 12, padding: 15 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+            <motion.div {...step(2)} style={{ ...card(SP.radius), gap: SP.group, padding: SP.card }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: SP.snug + 4 }}>
                 <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.6, color: T.ink, flex: 1, minWidth: 0 }}>
                   {briefing.headline}
                 </span>
@@ -456,8 +530,8 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
 
           {/* ── when to go ──────────────────────────────────────────────── */}
           {briefing.window && shown && (
-            <motion.div {...step(3)} style={{ ...card(28), gap: 12, padding: 15 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <motion.div {...step(3)} style={{ ...card(SP.radius), gap: SP.group, padding: SP.card }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: SP.snug + 4 }}>
                 <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.6, color: T.ink, ...TNUM }}>
                   {briefing.window.label}
                 </span>
@@ -472,8 +546,8 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
               <HourStrip hours={hours} from={briefing.window.bestFrom} to={briefing.window.bestTo}
                 selected={shown.hour} onSelect={setSelected} reduce={!!reduce} />
               <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '11px 13px',
-                borderRadius: 18, background: `${T.ink}08`,
+                display: 'flex', alignItems: 'center', gap: SP.snug + 4, padding: '12px 16px',
+                borderRadius: SP.group, background: `${T.ink}08`,
               }}>
                 <span style={{ fontSize: 17, fontWeight: 700, letterSpacing: -0.5, color: T.ink, flex: 'none', ...TNUM }}>
                   {String(shown.hour).padStart(2, '0')}:00
@@ -505,11 +579,11 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
 
           <motion.button {...step(4)} ref={primaryRef} onClick={onToday}
             style={{
-              width: '100%', height: 54, borderRadius: 100, border: 0, cursor: 'pointer',
+              width: '100%', height: 56, borderRadius: 100, border: 0, cursor: 'pointer',
               background: `linear-gradient(180deg, ${T.acidHi2} 0%, ${T.acid} 55%, ${T.acidMid} 100%)`,
               boxShadow: `0 10px 34px ${T.acid}59`,
               color: T.bg, fontFamily: FONT, fontSize: 17, fontWeight: 700, letterSpacing: -0.4,
-              display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center',
+              display: 'flex', gap: SP.snug, justifyContent: 'center', alignItems: 'center',
             }}>
             Zum Tag<ArrowRight size={18} color={T.bg} />
           </motion.button>
