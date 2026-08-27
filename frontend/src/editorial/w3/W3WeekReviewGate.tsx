@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { recapHasStory } from './useWeekReviewVm'
 import { useWeeklyRecap } from '../../hooks/useWeeklyRecap'
+import { claimGate } from './w3gates'
 
 /**
  * W3 · Week-review auto-trigger.
@@ -93,6 +94,10 @@ export default function W3WeekReviewGate() {
 
     // Record BEFORE navigating so a re-render / second tab can't double-fire.
     firedRef.current = true
+    // One interruption per app open — the morning briefing outranks a look back
+    // at last week, and two of them on one launch is the behaviour that makes
+    // riders dread opening an app.
+    if (!claimGate('weekReview')) return
     try { localStorage.setItem(SEEN_KEY, recap.week_start) } catch { /* ignore */ }
     navigate('/e/w3-week-review')
   }, [eligible, recap, navigate])

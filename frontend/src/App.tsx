@@ -5,6 +5,7 @@ import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
 import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
 import W3SetupGate from './editorial/w3/W3SetupGate'
+import W3MorningGate from './editorial/w3/W3MorningGate'
 import W3WeekReviewGate from './editorial/w3/W3WeekReviewGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import W3Guard from './editorial/w3/W3Guard'
@@ -135,6 +136,7 @@ const W3ThresholdPreview = lazyWithRetry(() => import('./editorial/w3/W3Threshol
 const W3WinsPreview = lazyWithRetry(() => import('./editorial/w3/W3WinsPreview'))
 const W3RideWrapPreview = lazyWithRetry(() => import('./editorial/w3/W3RideWrapPreview'))
 const W3StoryPreview = lazyWithRetry(() => import('./editorial/w3/W3StoryPreview'))
+const W3MorningPreview = lazyWithRetry(() => import('./editorial/w3/W3MorningPreview'))
 const W3WrappedPage = lazyWithRetry(() => import('./editorial/w3/W3WrappedPage'))
 const W3WrappedPreview = lazyWithRetry(() => import('./editorial/w3/W3WrappedPreview'))
 const W3ChallengesPage = lazyWithRetry(() => import('./editorial/w3/W3ChallengesPage'))
@@ -249,6 +251,7 @@ function AppRoutes() {
   return (
     <>
     <W3RideCelebrationWatcher />
+    <W3MorningGate />
     <W3SetupGate />
     <W3WeekReviewGate />
     <Suspense fallback={<AppLoading />}>
@@ -504,6 +507,7 @@ function AppRoutes() {
           <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
           <Route path="/e/w3-ride-wrap-preview" element={<W3RideWrapPreview />} />
           <Route path="/e/w3-story-preview" element={<W3StoryPreview />} />
+          <Route path="/e/w3-morning-preview" element={<W3MorningPreview />} />
           <Route path="/e/w3-wrapped" element={<ProtectedRoute checkOnboarding><W3WrappedPage /></ProtectedRoute>} />
           <Route path="/e/w3-wrapped-preview" element={<W3WrappedPreview />} />
           <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />

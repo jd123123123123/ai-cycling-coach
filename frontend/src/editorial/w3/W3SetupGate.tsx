@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Bike, Camera, Sparkles, UserRound, Plus } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useGarage } from '../../hooks/useGarage'
+import { claimGate, releaseGate } from './w3gates'
 import { T, FONT } from './w3tokens'
 import './w3.css'
 
@@ -49,6 +50,7 @@ type Subject = 'rider' | 'bike'
 
 /** Per subject, so "Später" on the rider does not also silence the bike. */
 const seenKey = (s: Subject) => `w3.setupGate.${s}`
+const SETUP_GATE_ID = 'setup'
 /** A beat after the screen settles — it should feel offered, not thrown. */
 const OPEN_DELAY_MS = 900
 
@@ -127,6 +129,10 @@ export default function W3SetupGate() {
     const t = window.setTimeout(() => {
       // Record BEFORE opening so a re-render / a route change can't re-fire.
       firedRef.current[missing] = true
+      // One interruption per app open. On a rider's first Monday morning the
+      // briefing, the week review and this are all eligible at once; whoever
+      // asks first gets the launch and the rest wait for the next one.
+      if (!claimGate(SETUP_GATE_ID)) return
       try { sessionStorage.setItem(seenKey(missing), '1') } catch { /* ignore */ }
       setSubject(missing)
     }, OPEN_DELAY_MS)
@@ -142,8 +148,8 @@ export default function W3SetupGate() {
     return () => { window.removeEventListener('keydown', onKey); window.clearTimeout(focus) }
   }, [subject, reduce])
 
-  const dismiss = () => setSubject(null)
-  const go = () => { const s = subject; setSubject(null); if (s) navigate(COPY[s].route) }
+  const dismiss = () => { setSubject(null); releaseGate(SETUP_GATE_ID) }
+  const go = () => { const s = subject; setSubject(null); releaseGate(SETUP_GATE_ID); if (s) navigate(COPY[s].route) }
 
   const copy = subject ? COPY[subject] : null
 
