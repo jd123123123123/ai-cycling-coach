@@ -1,11 +1,28 @@
-import { useEffect, useRef } from 'react'
+import { Suspense, lazy, useEffect, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowRight, Share2, X } from 'lucide-react'
+import { ArrowRight, Check, Gauge, Mountain, Share2, Timer, X, Zap } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { T, FONT, grow } from './w3tokens'
 import { TNUM } from './w3surfaces'
 import RouteSketch from '../../components/ui/RouteSketch'
+import { W3_MAP } from './w3map'
 import { fireConfetti } from '../../lib/confetti'
 import { hapticCelebrate } from '../../lib/haptics'
+
+/** maplibre is the app's biggest chunk and only this screen's ground needs it,
+ *  so it loads when the ground does — never on the way to Today. */
+const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
+
+/**
+ * Which glyph belongs to which reading. Keyed on the stat's own id rather than
+ * its label, so a translated or reworded label cannot silently drop the icon.
+ */
+const STAT_ICON: Record<string, LucideIcon> = {
+  time: Timer, moving: Timer, duration: Timer,
+  climb: Mountain, elevation: Mountain, ascent: Mountain,
+  power: Zap, np: Zap,
+  speed: Gauge, pace: Gauge,
+}
 
 /**
  * THE RIDE, WRAPPED — the moment a rider unlocks a finished ride.
@@ -78,10 +95,20 @@ export interface W3RideWrapVm {
    * button then says what it can honestly say and shares instead.
    */
   rewardRc: number | null
+  /**
+   * THE CLAIM HAPPENS HERE, so this is a state and not a destination.
+   *
+   * `idle` offers it, `claiming` is the round trip, `claimed` is the receipt.
+   * The button never navigates: sending a rider to another screen to press a
+   * second button for coins they were already shown is a step that exists only
+   * because the code was split that way.
+   */
+  claimState: 'idle' | 'claiming' | 'claimed'
 }
 
 function StatTile({ s, i, reduce }: { s: W3WrapStat; i: number; reduce: boolean | null }) {
   const tint = s.best ? T.acid : T.ink
+  const Ic = STAT_ICON[s.key]
   return (
     <div style={{
       flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6,
@@ -90,7 +117,13 @@ function StatTile({ s, i, reduce }: { s: W3WrapStat; i: number; reduce: boolean 
       // solid tile here would punch three holes in the picture.
       background: `${T.bg}A6`, backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
     }}>
-      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>{s.label}</span>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+        {Ic && <Ic size={11} color={s.best ? T.acid : T.quiet} strokeWidth={2.2} />}
+        <span style={{
+          fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet,
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>{s.label}</span>
+      </span>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
         <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.7, lineHeight: 1, color: tint, ...TNUM }}>{s.value}</span>
         <span style={{ fontSize: 9.5, fontWeight: 700, color: T.quiet, ...TNUM }}>{s.unit}</span>
@@ -117,12 +150,13 @@ export default function W3RideWrap({ vm, onShare, onClose, onUnlock, onDetails }
   /** The way out. Without it this screen has none — the detail below hides its
    *  own back arrow in celebrate mode, so the rider is stuck on the page. */
   onClose?: () => void
-  /** Open the chest. The reason the rider is here. */
+  /** Claim the coins, HERE. Never a navigation. */
   onUnlock?: () => void
   /** The full analysis, the same page a past ride opens. */
   onDetails?: () => void
 }) {
   const reduce = useReducedMotion()
+  const [mapReady, setMapReady] = useState(false)
 
   // ── THE CELEBRATION, FIRED ONCE ────────────────────────────────────────
   // A ride landing is the one moment in this app that has earned confetti, and
@@ -147,26 +181,45 @@ export default function W3RideWrap({ vm, onShare, onClose, onUnlock, onDetails }
       display: 'flex', flexDirection: 'column', fontFamily: FONT, background: T.bg,
     }}>
 
-      {/* ── THE ROUTE, AS THE GROUND ──────────────────────────────────────
-          The ride's own track fills the lower two thirds and everything below
-          the hero stands on it. A scrim keeps the headline legible at the top
-          and hands the picture back in the middle, where the line actually is. */}
+      {/* ── THE MAP, AS THE GROUND ────────────────────────────────────────
+          The ride's own route on the real basemap, filling the screen. A bare
+          line on black is a diagram; the streets are what make it a place the
+          rider recognises and therefore a picture worth posting.
+          `RouteSketch` stays as the pre-paint fallback — and permanently if the
+          tiles never arrive — because a ride screen without its route is not a
+          slower screen, it is a broken one. */}
       {vm.polyline && vm.polyline.length > 1 && (
         <div aria-hidden style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
-          {/* `fluid` gives 100% width and `renderHeight` the CSS height, so the
-              drawing SCALES rather than re-projecting — the track keeps its real
-              geographic aspect and simply fills more of the ground. Without a
-              height it drew at its natural aspect and floated mid-screen. */}
-          <div style={{
-            position: 'absolute', left: 0, right: 0, top: '24%', bottom: 0,
-            display: 'flex', alignItems: 'center',
-          }}>
-            <RouteSketch
-              polyline={vm.polyline}
-              width={390} height={420} renderHeight={560}
-              fluid color={T.acid} strokeWidth={4} halo endpoints pad={16}
-              ariaLabel="Deine Strecke" />
+          <div style={{ position: 'absolute', inset: 0 }}>
+            <Suspense fallback={null}>
+              <RouteMap
+                polyline={vm.polyline}
+                styleKey="dark"
+                interactive={false}
+                onReady={() => setMapReady(true)}
+                palette={W3_MAP}
+                lineColor={T.acid}
+                lineWidth={6}
+                startColor={T.ink}
+                endColor={T.acid}
+                // Clear of the action band, or the licence notice sits behind a
+                // button — which is the one thing the licence asks for.
+                attributionBottom={210}
+                className="w3-ride-map" />
+            </Suspense>
           </div>
+          {!mapReady && (
+            <div style={{
+              position: 'absolute', left: 0, right: 0, top: '24%', bottom: 0,
+              display: 'flex', alignItems: 'center',
+            }}>
+              <RouteSketch
+                polyline={vm.polyline}
+                width={390} height={420} renderHeight={560}
+                fluid color={T.acid} strokeWidth={4} halo endpoints pad={16}
+                ariaLabel="Deine Strecke" />
+            </div>
+          )}
           <div style={{
             position: 'absolute', inset: 0,
             background: `linear-gradient(180deg, ${T.bg} 0%, ${T.bg}D9 20%, ${T.bg}00 44%, ${T.bg}D9 72%, ${T.bg} 88%)`,
@@ -249,28 +302,53 @@ export default function W3RideWrap({ vm, onShare, onClose, onUnlock, onDetails }
 
         <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
           <motion.button
-            onClick={vm.rewardRc != null ? onUnlock : onShare}
+            onClick={
+              vm.rewardRc == null || vm.claimState === 'claimed' ? onShare
+                : vm.claimState === 'claiming' ? undefined
+                : onUnlock
+            }
+            disabled={vm.claimState === 'claiming'}
             initial={reduce ? false : { scale: 0.96, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={grow(0.18)}
             style={{
-              flex: 1, minWidth: 0, height: 56, borderRadius: 100, border: 0, cursor: 'pointer',
-              background: T.acid, boxShadow: `0 8px 28px ${T.acid}40`,
+              flex: 1, minWidth: 0, height: 56, borderRadius: 100, border: 0,
+              cursor: vm.claimState === 'claiming' ? 'default' : 'pointer',
+              background: vm.claimState === 'claimed' ? `${T.ink}14` : T.acid,
+              boxShadow: vm.claimState === 'claimed' ? 'none' : `0 8px 28px ${T.acid}40`,
+              backdropFilter: vm.claimState === 'claimed' ? 'blur(12px)' : undefined,
               fontFamily: FONT, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 9,
             }}>
-            <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>
-              {vm.rewardRc != null ? 'Belohnung einlösen' : 'Fahrt teilen'}
-            </span>
-            {vm.rewardRc != null ? (
-              // THE AMOUNT IS ON THE BUTTON. "Belohnung einlösen" with the
-              // figure on it is a different button from one without — the
-              // number is the reason to press.
-              <span style={{
-                fontSize: 13, fontWeight: 700, padding: '4px 9px', borderRadius: 100,
-                background: `${T.bg}1F`, color: T.bg, ...TNUM,
-              }}>{vm.rewardRc} RC</span>
+            {/* THE RECEIPT REPLACES THE OFFER IN PLACE. The rider pressed for
+                coins; showing them landing here is the confirmation, and a
+                second screen to press a second button was a step that existed
+                only because the code was split that way. */}
+            {vm.claimState === 'claimed' ? (
+              <>
+                <Check size={17} color={T.acid} strokeWidth={2.8} />
+                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>
+                  {vm.rewardRc != null ? `${vm.rewardRc} RC gutgeschrieben` : 'Gutgeschrieben'}
+                </span>
+              </>
             ) : (
-              <ArrowRight size={17} color={T.bg} strokeWidth={2.6} />
+              <>
+                <span style={{ fontSize: 14.5, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>
+                  {vm.rewardRc == null ? 'Fahrt teilen'
+                    : vm.claimState === 'claiming' ? 'Wird gutgeschrieben…'
+                    : 'Belohnung einlösen'}
+                </span>
+                {vm.rewardRc != null && vm.claimState === 'idle' ? (
+                  // THE AMOUNT IS ON THE BUTTON. "Belohnung einlösen" with the
+                  // figure on it is a different button from one without — the
+                  // number is the reason to press.
+                  <span style={{
+                    fontSize: 13, fontWeight: 700, padding: '4px 9px', borderRadius: 100,
+                    background: `${T.bg}1F`, color: T.bg, ...TNUM,
+                  }}>{vm.rewardRc} RC</span>
+                ) : vm.rewardRc == null ? (
+                  <ArrowRight size={17} color={T.bg} strokeWidth={2.6} />
+                ) : null}
+              </>
             )}
           </motion.button>
 

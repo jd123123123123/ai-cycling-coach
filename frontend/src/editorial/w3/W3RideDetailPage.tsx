@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { usePMC } from '../../hooks/usePMC'
@@ -6,7 +6,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useActivity } from '../../hooks/useActivity'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
-import { useChest } from '../../hooks/useWallet'
+import { useChest, useClaimRide } from '../../hooks/useWallet'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
 import type { W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
@@ -382,6 +382,7 @@ const SCENE_STATUSES: W3SceneStatus[] = ['ok', 'not_generated', 'needs_rider', '
  */
 function toWrapVm(
   d: RaceDebrief, activity: ActivityRead | null, rewardRc: number | null,
+  claimState: W3RideWrapVm['claimState'],
 ): W3RideWrapVm {
   const h = d.header
   const nf = (n: number, dp = 0) =>
@@ -432,6 +433,7 @@ function toWrapVm(
     // The route IS this screen's ground now, not a panel further down it.
     polyline: activity?.route_polyline ?? null,
     rewardRc,
+    claimState,
   }
 }
 
@@ -462,9 +464,17 @@ export default function W3RideDetailPage() {
   // sealed one, so it only counts when it is the ride on screen — otherwise the
   // button would offer another day's coins.
   const { data: chest } = useChest()
-  const rewardRc = chest?.sealed && chest.activity_id === activityId && chest.total != null
+  const claim = useClaimRide()
+  // The amount is pinned the moment the rider presses, because claiming
+  // invalidates the chest — without this the receipt would read "null RC" the
+  // instant it succeeded.
+  const [claimedRc, setClaimedRc] = useState<number | null>(null)
+  const sealedRc = chest?.sealed && chest.activity_id === activityId && chest.total != null
     ? chest.total
     : null
+  const rewardRc = claimedRc ?? sealedRc
+  const claimState: W3RideWrapVm['claimState'] =
+    claim.isSuccess ? 'claimed' : claim.isPending ? 'claiming' : 'idle'
 
   const { data: sceneData } = useRideScene(activityId)
   const compose = useRenderRideScene()
@@ -502,8 +512,8 @@ export default function W3RideDetailPage() {
   )
 
   const wrapVm = useMemo(
-    () => (celebrate && data ? toWrapVm(data, activity, rewardRc) : null),
-    [celebrate, data, activity, rewardRc],
+    () => (celebrate && data ? toWrapVm(data, activity, rewardRc, claimState) : null),
+    [celebrate, data, activity, rewardRc, claimState],
   )
 
   if (!vm || !heroVm) return <W3Loading label="Lade deine Fahrt…" />
@@ -540,7 +550,14 @@ export default function W3RideDetailPage() {
           // on Today, and history here can be the share screen the rider just
           // backed out of.
           onClose={() => navigate('/e/w3-today')}
-          onUnlock={() => id && navigate(`/e/w3-ride-points/${id}`)}
+          // CLAIMED HERE. The coins land on the screen the rider is already
+          // looking at; a second screen with a second button was a step that
+          // existed only because the code was split that way.
+          onUnlock={() => {
+            if (activityId == null || rewardRc == null) return
+            setClaimedRc(rewardRc)
+            claim.mutate(activityId)
+          }}
           onDetails={() => id && navigate(`/e/w3-ride/${id}`)}
           onShare={() => id && navigate(`/e/w3-share/${id}`)} />
       </div>

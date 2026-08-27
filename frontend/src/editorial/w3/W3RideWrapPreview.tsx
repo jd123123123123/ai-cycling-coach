@@ -26,6 +26,7 @@ const VM: W3RideWrapVm = {
     { key: 'power', label: 'Ø LEISTUNG', value: '234', unit: 'W', note: '+12 zur Basis', fill: 0.64 },
   ],
   rewardRc: 128,
+  claimState: 'idle' as const,
   polyline: DEMO_ROUTE,
 }
 
