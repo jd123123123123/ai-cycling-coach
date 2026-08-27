@@ -1146,7 +1146,7 @@ export interface StoryStat { v: string; l: string }
  * All four keep the handle, the mark and the ground; that is what makes them a
  * family rather than four cards. Everything else is the rider's to spend.
  */
-export type StoryLayout = 'full' | 'silent' | 'trace' | 'headline' | 'viewfinder' | 'effort'
+export type StoryLayout = 'wrap' | 'full' | 'silent' | 'trace' | 'headline' | 'viewfinder' | 'effort'
 
 /**
  * THE FIVE THINGS A RIDER MAY REWRITE — the card's LANGUAGE, never its numbers.
@@ -1670,6 +1670,77 @@ function paintStoryCard(
   // The most minimal of them: the photograph, the route drawn over it as one
   // line, and three readings under a hairline. No headline, no big number —
   // for the ride whose picture is the point.
+  /**
+   * `wrap` — WHAT THE RIDER IS ACTUALLY LOOKING AT.
+   *
+   * The unlock screen, as a card. A rider who presses share on that screen
+   * means "this", and every other template gave them a different composition:
+   * the same ride, rearranged, without the three numbers or the road they had
+   * just been shown. So this one mirrors it, top to bottom — the coach's line
+   * in two weights, the distance enormous, the three readings in their tiles,
+   * and the route running underneath the whole thing.
+   *
+   * The ground is the PHOTOGRAPH when there is one and the ground colour when
+   * there is not, with the trace over either: the app screen has a live basemap
+   * and a still cannot, so the line carries the road on its own here rather
+   * than pretending to tiles it has no way to fetch.
+   */
+  if (layout === 'wrap') {
+    if (!bare) vscrim([[0, 0.82], [0.3, 0.52], [0.55, 0.42], [0.78, 0.68], [1, 0.88]])
+    if (d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
+
+    // ONE top line, and it must not say the route twice. `dateline` already
+    // carries the route on most rides ("Harzrunde · So, 24. August"), so
+    // joining it to `routeName` printed the name back to back with itself.
+    // The dateline wins when there is one; the name only fills in when there
+    // is not.
+    const topLine = (d.dateline && d.dateline.trim())
+      ? d.dateline
+      : [d.routeName, d.footer].filter(Boolean).join('  ·  ')
+    text(ctx, topLine.toUpperCase(),
+      MX, 132, 27, '700', 'rgba(255,255,255,0.62)', 2.6, 'left', FONT, 'top')
+    zone('routeName', MX, 124, CW, 44)
+
+    // The coach's sentence, two weights, the accent on what was achieved.
+    let hy = 190
+    for (const line of wrap(ctx, d.lead, 66, '700', CW)) {
+      text(ctx, line, MX, hy, 66, '700', CARD.ink, -1.8, 'left', FONT, 'top'); hy += 78
+    }
+    zone('lead', MX, 190, CW, Math.max(78, hy - 190))
+    const emphTop = hy
+    for (const line of wrap(ctx, d.emphasis, 66, '700', CW)) {
+      text(ctx, line, MX, hy, 66, '700', accent, -1.8, 'left', FONT, 'top'); hy += 78
+    }
+    zone('emphasis', MX, emphTop, CW, Math.max(78, hy - emphTop))
+
+    // The number a rider quotes.
+    ctx.font = `700 176px ${ARCHIVO}`
+    const bw = ctx.measureText(d.bigValue).width
+    text(ctx, d.bigValue, MX, hy + 42, 176, '700', accent, -7, 'left', ARCHIVO, 'top')
+    text(ctx, d.bigUnit, MX + bw + 18, hy + 158, 48, '700', accent, -1, 'left', ARCHIVO, 'top')
+
+    // THE THREE TILES, on the same glass as the screen: they sit over the route
+    // rather than over the ground, and three solid blocks would punch three
+    // holes in the picture.
+    const shown = d.stats.filter((st) => st.v).slice(0, 3)
+    if (shown.length > 0) {
+      const gap = 18
+      const tw = (CW - gap * (shown.length - 1)) / shown.length
+      const ty = CONTENT_BOTTOM - 214
+      shown.forEach((st, i) => {
+        const tx = MX + i * (tw + gap)
+        ctx.fillStyle = 'rgba(11,11,11,0.62)'
+        roundRect(ctx, tx, ty, tw, 148, 30)
+        ctx.fill()
+        text(ctx, st.l.toUpperCase(), tx + 26, ty + 32, 22, '700', 'rgba(255,255,255,0.55)', 2.2, 'left', FONT, 'top')
+        text(ctx, st.v, tx + 26, ty + 66, 54, '700', CARD.ink, -1.6, 'left', ARCHIVO, 'top')
+      })
+    }
+
+    markAndFooter()
+    return
+  }
+
   if (layout === 'trace') {
     if (!bare) {
       const bottom0 = ctx.createLinearGradient(0, SH - 760, 0, SH)
@@ -1820,11 +1891,23 @@ export async function renderStoryOverlay(d: StoryData): Promise<{ blob: Blob | n
 /** The rider's photograph with their ride written over it. 1080 × 1920. */
 export async function renderStoryCard(
   d: StoryData,
+  /**
+   * Draw the same card smaller.
+   *
+   * The format picker wants a real thumbnail of every layout — a strip of text
+   * chips reads as a settings menu, and the thing that makes a filter row feel
+   * like one is seeing YOUR picture in each. Seven full 1080x1920 canvases to
+   * do that is ~14 MB of bitmap for tiles 150px wide, so the context is scaled
+   * and every coordinate in the painter goes along unchanged.
+   */
+  opts?: { scale?: number },
 ): Promise<{ blob: Blob | null; dataUrl: string; zones: StoryTextZone[] }> {
+  const scale = opts?.scale ?? 1
   const canvas = document.createElement('canvas')
-  canvas.width = SW; canvas.height = SH
+  canvas.width = Math.round(SW * scale); canvas.height = Math.round(SH * scale)
   const ctx = canvas.getContext('2d')
   if (!ctx) return { blob: null, dataUrl: '', zones: [] }
+  if (scale !== 1) ctx.scale(scale, scale)
 
   let photo: CardSource | null = null
   if (d.photo) {
@@ -1837,8 +1920,12 @@ export async function renderStoryCard(
   const zones: StoryTextZone[] = []
   paintStoryCard(ctx, d, photo, zones)
 
-  const dataUrl = canvas.toDataURL('image/png')
-  const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+  // A thumbnail is never shared, so it never needs a lossless blob — and JPEG
+  // at this size is a tenth of the bytes.
+  const dataUrl = scale === 1 ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', 0.72)
+  const blob = scale === 1
+    ? await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+    : null
   return { blob, dataUrl, zones: resolveZones(zones) }
 }
 

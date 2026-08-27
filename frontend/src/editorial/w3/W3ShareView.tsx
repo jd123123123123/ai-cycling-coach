@@ -71,6 +71,9 @@ export interface W3ShareVm {
   /** The two Laufband strings, built by `laufbandStrings` so the belt that
    *  scrolls here and the one burned into the PNG are the same tape. */
   laufband?: { figures: string; verdicts: string }
+  /** The rider's own card in each layout, for the picker. Absent entries just
+   *  draw the name — the strip never waits on a thumbnail. */
+  thumbs?: Partial<Record<StoryLayout, string>>
   /** What the rider has typed over the card's own words. */
   edits?: Partial<Record<EditField, string>>
   /** The card's own words, for the placeholders. */
@@ -473,20 +476,41 @@ export default function W3ShareView({
             itself. Tapping is the shortcut; swiping the card is the gesture a
             rider already knows from every other photo editor they own. */}
         <div ref={stripRef} style={{
-          display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
-          padding: '0 20px 10px', flex: 'none',
+          display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none',
+          padding: '0 20px 12px', flex: 'none', scrollSnapType: 'x proximity',
         }}>
           {STORY_FORMATS.map((f) => {
             const on = f.id === format
+            const thumb = vm.thumbs?.[f.id]
             return (
               <button key={f.id} type="button" data-on={on ? '1' : '0'} onClick={() => pickFormat(f.id)}
                 style={{
-                  flex: 'none', padding: '8px 12px', borderRadius: 12, border: 0, cursor: 'pointer',
-                  background: on ? accent : T.surface, fontFamily: FONT,
-                  display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start',
+                  flex: 'none', padding: 0, border: 0, background: 'transparent', cursor: 'pointer',
+                  fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 6,
+                  alignItems: 'center', scrollSnapAlign: 'center',
                 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', color: on ? T.bg : T.ink }}>{f.name}</span>
-                <span style={{ fontSize: 8.5, fontWeight: 600, whiteSpace: 'nowrap', color: on ? `${T.bg}A6` : T.quiet }}>{f.drops}</span>
+                {/* THE CARD ITSELF, small. A row of text chips is a settings
+                    menu; what makes a filter row read as one is seeing your own
+                    picture in every option. The selected tile is ringed rather
+                    than filled — a filled chip hides the very thing it is
+                    offering. */}
+                <motion.span
+                  animate={{ scale: on ? 1 : 0.92, opacity: on ? 1 : 0.62 }}
+                  transition={{ type: 'spring', stiffness: 420, damping: 32 }}
+                  style={{
+                    display: 'block', width: 46, height: 82, borderRadius: 9, overflow: 'hidden',
+                    background: T.surface, position: 'relative',
+                    boxShadow: on ? `0 0 0 2px ${accent}` : `0 0 0 1px ${T.stroke}`,
+                  }}>
+                  {thumb && (
+                    <img src={thumb} alt="" aria-hidden
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                  )}
+                </motion.span>
+                <span style={{
+                  fontSize: 9.5, fontWeight: 700, whiteSpace: 'nowrap',
+                  color: on ? T.ink : T.quiet,
+                }}>{f.name}</span>
               </button>
             )
           })}

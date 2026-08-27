@@ -10,6 +10,7 @@ import type { StoryField, StoryLayout } from './w3share'
  * words the format refuses to draw is how a settings screen grows.
  */
 export const EDITABLE_FIELDS: Record<StoryLayout, StoryField[]> = {
+  wrap: ['routeName', 'lead', 'emphasis'],
   full: ['lead', 'emphasis'],
   silent: [],
   trace: ['routeName'],
@@ -37,6 +38,11 @@ export const FIELD_LABEL: Record<StoryField, string> = {
  * where they are in it.
  */
 export const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
+  // FIRST, because it is what the rider was looking at when they pressed share.
+  // Every other format is a re-composition of the same ride; this one is the
+  // screen itself, and defaulting to anything else answers a question nobody
+  // asked.
+  { id: 'wrap', name: 'Dein Screen', drops: 'Wie im Ziel' },
   { id: 'full', name: 'Karte', drops: 'Alles drauf' },
   { id: 'headline', name: 'Schlagzeile', drops: 'Titel + Laufband' },
   { id: 'viewfinder', name: 'Sucher', drops: 'Telemetrie' },

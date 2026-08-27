@@ -11,6 +11,7 @@ import {
   type ShareAngle, type PosterData,
 } from './w3share'
 import { VALUES, DEFAULT_VALUES, type ValueId } from './w3shareValues'
+import { STORY_FORMATS } from './w3storyEdit'
 import {
   canRenderVideo, renderStoryVideo, videoPosterFrame, renderStoryOverlay, MAX_STORY_SECONDS,
 } from './w3share' 
@@ -160,6 +161,16 @@ export default function W3SharePage() {
   /** Where the paint pass actually put each editable word — the editor draws
    *  its tap targets from these, so they cannot drift from the type. */
   const [zones, setZones] = useState<StoryTextZone[]>([])
+  /**
+   * A real thumbnail per format — the rider's OWN card in each layout.
+   *
+   * A row of text chips is a settings menu; what makes a filter row feel like
+   * a filter row is seeing your picture in every one. Rendered AFTER the main
+   * card, one at a time on idle, so the screen opens on its poster and the
+   * strip fills in behind it rather than making seven canvases before anything
+   * paints.
+   */
+  const [thumbs, setThumbs] = useState<Partial<Record<StoryLayout, string>>>({})
   const [posterBlob, setPosterBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
 
@@ -447,6 +458,27 @@ export default function W3SharePage() {
     return () => { alive = false }
   }, [poster, edited])
 
+  // Re-thumbnailed whenever the CARD's content changes — a new photo, a new
+  // accent, a rewritten line. Not on format change: the layouts are all drawn
+  // from the same story, so switching between them invalidates nothing.
+  useEffect(() => {
+    if (!edited) return
+    let alive = true
+    const idle = (fn: () => void) =>
+      typeof requestIdleCallback === 'function' ? requestIdleCallback(fn) : setTimeout(fn, 120)
+    idle(async () => {
+      for (const f of STORY_FORMATS) {
+        if (!alive) return
+        const out = await renderStoryCard({ ...edited, layout: f.id }, { scale: 0.16 })
+        if (!alive) return
+        if (out.dataUrl) setThumbs((prev) => ({ ...prev, [f.id]: out.dataUrl }))
+      }
+    })
+    return () => { alive = false }
+    // `edited` carries the photo, accent, values and every override; the layout
+    // it happens to hold is irrelevant here because each pass sets its own.
+  }, [edited])
+
   const caption = useMemo(() => {
     if (!poster) return 'w3.ride'
     return `${poster.footer} — ${poster.sentence} #w3ride`
@@ -497,6 +529,7 @@ export default function W3SharePage() {
   const vm: W3ShareVm = {
     posterDataUrl,
     zones,
+    thumbs,
     generating,
     activeAngle: angle,
     canShare: shareable,

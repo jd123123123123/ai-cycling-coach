@@ -17,9 +17,17 @@ import { EDITABLE_FIELDS } from '../w3storyEdit'
  * metrics do not exist in jsdom, so measuring here would be measuring a stub.
  */
 
-const LAYOUTS: StoryLayout[] = ['full', 'silent', 'trace', 'headline', 'viewfinder', 'effort']
+const LAYOUTS: StoryLayout[] = ['wrap', 'full', 'silent', 'trace', 'headline', 'viewfinder', 'effort']
 
 describe('which words each layout offers', () => {
+  it('opens on the screen the rider pressed share from', async () => {
+    const { STORY_FORMATS } = await import('../w3storyEdit')
+    /** Every other format is a RE-composition of the same ride. `wrap` is the
+     *  composition they were already looking at, so defaulting to anything else
+     *  answers a question nobody asked. */
+    expect(STORY_FORMATS[0].id).toBe('wrap')
+  })
+
   it('covers every layout, so a new one cannot ship without a decision', () => {
     for (const l of LAYOUTS) expect(EDITABLE_FIELDS[l]).toBeDefined()
   })
@@ -62,15 +70,18 @@ describe('the safe area the zones live in', () => {
 describe('swiping through the formats', () => {
   it('walks the list one at a time', async () => {
     const { stepFormat, STORY_FORMATS } = await import('../w3storyEdit')
-    expect(stepFormat('full', 1)).toBe(STORY_FORMATS[1].id)
-    expect(stepFormat(STORY_FORMATS[1].id, -1)).toBe('full')
+    // Anchored on the list rather than on a hard-coded id: `wrap` was added at
+    // the front later, and a test that names the first format has to be edited
+    // every time the order is reconsidered.
+    expect(stepFormat(STORY_FORMATS[0].id, 1)).toBe(STORY_FORMATS[1].id)
+    expect(stepFormat(STORY_FORMATS[1].id, -1)).toBe(STORY_FORMATS[0].id)
   })
 
   it('stops at both ends instead of wrapping', async () => {
     const { stepFormat, STORY_FORMATS } = await import('../w3storyEdit')
     const last = STORY_FORMATS[STORY_FORMATS.length - 1].id
     /** A rider who wraps cannot tell whether they have seen all six. */
-    expect(stepFormat('full', -1)).toBe('full')
+    expect(stepFormat(STORY_FORMATS[0].id, -1)).toBe(STORY_FORMATS[0].id)
     expect(stepFormat(last, 1)).toBe(last)
   })
 })

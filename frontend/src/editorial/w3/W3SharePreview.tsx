@@ -5,6 +5,7 @@ import {
   type ShareAngle, type PosterData, type StoryData, type StoryLayout,
 } from './w3share'
 import W3ShareView, { type W3ShareVm, type EditField } from './W3ShareView'
+import { STORY_FORMATS } from './w3storyEdit'
 import { T } from './w3tokens'
 
 /** TEMP preview harness — renders W3ShareView with a pen-faithful fixture, no
@@ -80,6 +81,7 @@ export default function W3SharePreview() {
   const [blob, setBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
   const [zones, setZones] = useState<StoryTextZone[]>([])
+  const [thumbs, setThumbs] = useState<Partial<Record<StoryLayout, string>>>({})
   // The harness drives the REAL controls. It used to pin `format: 'full'` and
   // pass no `onPickFormat`, which meant the one screen that exists to exercise
   // this view could not reach five of its six layouts — and the Laufband, whose
@@ -123,9 +125,26 @@ export default function W3SharePreview() {
     return () => { alive = false }
   }, [story])
 
+  // The picker's own tiles — the same idle pass the real page runs.
+  useEffect(() => {
+    let alive = true
+    const idle = (fn: () => void) =>
+      typeof requestIdleCallback === 'function' ? requestIdleCallback(fn) : setTimeout(fn, 120)
+    idle(async () => {
+      for (const f of STORY_FORMATS) {
+        if (!alive) return
+        const out = await renderStoryCard({ ...story, layout: f.id }, { scale: 0.16 })
+        if (!alive) return
+        if (out.dataUrl) setThumbs((prev) => ({ ...prev, [f.id]: out.dataUrl }))
+      }
+    })
+    return () => { alive = false }
+  }, [story])
+
   const vm: W3ShareVm = {
     posterDataUrl: dataUrl,
     zones,
+    thumbs,
     generating,
     activeAngle: angle,
     hasOwnPhoto: false,
