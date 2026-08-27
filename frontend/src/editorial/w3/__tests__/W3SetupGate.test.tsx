@@ -169,3 +169,48 @@ describe('what the rider can and cannot decline', () => {
     expect(screen.getByText('Später')).toBeTruthy()
   })
 })
+
+/**
+ * THE BIKE ESCALATES — the half of the gate that is neither a nag nor a trap.
+ *
+ * A rider cannot photograph a bicycle they are not standing next to, so
+ * blocking them on the first ask locks a door from a place they cannot reach.
+ * Declining forever is the failure the rider half already proved. So the bike
+ * is invited a few times and then required, and these pin both ends of that.
+ */
+describe('the bike ask stops taking no for an answer', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    garage = { rider: asset('rider'), bike: null }
+  })
+  afterEach(() => { localStorage.clear() })
+
+  it('is an invitation while there is grace left', () => {
+    localStorage.setItem('w3.setupGate.bike.deferred', '0')
+    openAt('/e/w3-today')
+    expect(screen.getByText('Später')).toBeTruthy()
+  })
+
+  it('insists once it has been waved away enough times', () => {
+    localStorage.setItem('w3.setupGate.bike.deferred', '3')
+    openAt('/e/w3-today')
+    expect(screen.queryByText('Später')).toBeNull()
+    // And it SAYS why it is now insisting — a door that was open yesterday and
+    // is shut today reads as a bug unless the sheet explains itself.
+    expect(screen.getByText('LETZTER SCHRITT')).toBeTruthy()
+  })
+
+  it('counts a dismissal, so the grace actually runs out', () => {
+    localStorage.setItem('w3.setupGate.bike.deferred', '1')
+    openAt('/e/w3-today')
+    act(() => { screen.getByText('Später').click() })
+    expect(localStorage.getItem('w3.setupGate.bike.deferred')).toBe('2')
+  })
+
+  it('never escalates the rider — it was required from the very first ask', () => {
+    garage = { rider: null, bike: null }
+    localStorage.setItem('w3.setupGate.rider.deferred', '0')
+    openAt('/e/w3-today')
+    expect(screen.queryByText('Später')).toBeNull()
+  })
+})

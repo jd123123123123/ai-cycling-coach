@@ -73,15 +73,55 @@ type Subject = 'rider' | 'bike'
 const seenKey = (s: Subject) => `w3.setupGate.${s}`
 
 /**
- * WHICH HALF THE RIDER CANNOT DECLINE.
+ * WHICH HALF THE RIDER CANNOT DECLINE — AND WHEN.
  *
- * A list rather than a boolean so that making the bike required later is one
- * word, and so the difference is legible everywhere it is checked instead of
- * being spelled `subject === 'rider'` in five places, where the next person has
- * to work out whether each one meant "the rider" or "the required one".
+ * The rider is required from the first ask. Nothing about it depends on where
+ * somebody is standing: it is a selfie, and the app genuinely does not work
+ * without one, because the rider is the identity every social surface renders.
+ *
+ * THE BIKE IS REQUIRED TOO, BUT NOT YET. This is the part worth explaining,
+ * because "make it required" and "block them on the first open" are not the
+ * same instruction and only one of them is defensible.
+ *
+ * The original objection to forcing the bike was correct and still is: a rider
+ * cannot photograph a bicycle they are not standing next to. Blocking the app
+ * on the first ask would mean a rider who opened it on a train has no way to
+ * proceed, and no amount of nice wording fixes a door that is locked from a
+ * place they cannot reach. That is hostile, and it is also pointless — they
+ * would give the app a photograph of a wall.
+ *
+ * So it ESCALATES. The first few opens are an invitation with a way out; after
+ * that it insists. By then a rider has had several separate days to stand next
+ * to their own bicycle for one minute, and the ask has stopped being "do this
+ * now" and become "this is not optional". They are never trapped on a launch
+ * where finishing was impossible, and they are never able to decline forever —
+ * which was the failure the rider half already proved: an invitation that is
+ * declined every session is not a gentle product, it is a broken one.
  */
-const REQUIRED: readonly Subject[] = ['rider']
-const isRequired = (s: Subject | null) => s !== null && REQUIRED.includes(s)
+const REQUIRED_ALWAYS: readonly Subject[] = ['rider']
+
+/** How many times the bike may be waved away before it stops taking no for an
+ *  answer. Three is two more chances than the rider gets and roughly a week of
+ *  normal use — long enough to have been at home with the bike, short enough
+ *  that the garage does not sit empty for a month. */
+const BIKE_GRACE = 3
+const deferKey = (s: Subject) => `w3.setupGate.${s}.deferred`
+
+/** How many times this rider has waved the ask away. Survives reloads, unlike
+ *  `seenKey` — "asked already today" and "declined four times" are different
+ *  facts and only the second one may escalate. */
+function deferrals(s: Subject): number {
+  try { return Number(localStorage.getItem(deferKey(s)) ?? '0') || 0 } catch { return 0 }
+}
+function recordDeferral(s: Subject): void {
+  try { localStorage.setItem(deferKey(s), String(deferrals(s) + 1)) } catch { /* private mode */ }
+}
+
+const isRequired = (s: Subject | null): boolean => {
+  if (s === null) return false
+  if (REQUIRED_ALWAYS.includes(s)) return true
+  return deferrals(s) >= BIKE_GRACE
+}
 const SETUP_GATE_ID = 'setup'
 /** A beat after the screen settles — it should feel offered, not thrown. */
 const OPEN_DELAY_MS = 900
@@ -204,12 +244,30 @@ export default function W3SetupGate() {
   // place deciding is one place to get it wrong.
   const dismiss = () => {
     if (isRequired(subject)) return
+    // COUNTED, because this is the thing that escalates. A wave-away is not the
+    // same as never having been asked, and after `BIKE_GRACE` of them the next
+    // open stops offering a way out. Recorded on the way out rather than on the
+    // way in: an ask the rider completed is not an ask they declined.
+    if (subject) recordDeferral(subject)
     setSubject(null)
     releaseGate(SETUP_GATE_ID)
   }
   const go = () => { const s = subject; setSubject(null); releaseGate(SETUP_GATE_ID); if (s) navigate(COPY[s].route) }
 
-  const copy = subject ? COPY[subject] : null
+  const base = subject ? COPY[subject] : null
+  // THE FINAL ASK SAYS WHY IT IS FINAL. A sheet that offered "Später" three
+  // times and then quietly stopped offering it reads as a bug in the app rather
+  // than as a decision about the rider, so the one that insists says so.
+  const copy = base && subject === 'bike' && required
+    ? {
+        ...base,
+        eyebrow: 'LETZTER SCHRITT',
+        title: 'Jetzt fehlt nur noch dein Rad',
+        note: 'Du hast das ein paar Mal verschoben — deshalb fragen wir jetzt einmal richtig. '
+          + 'Ohne Rad bleibt Today leer und deine Fahrten haben nichts, worauf sie stattfinden. '
+          + 'Ein Bild von der Antriebsseite reicht, es dauert etwa eine Minute.',
+      }
+    : base
 
   return (
     <AnimatePresence>

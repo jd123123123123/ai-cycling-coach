@@ -38,13 +38,50 @@ export default function W3SyncChip({ size = 44, iconSize = 20 }: {
   size?: number
   iconSize?: number
 }) {
-  const { data: status } = useGarminStatus()
+  const { data: status, dataUpdatedAt } = useGarminStatus()
   const sync = useForceSync()
   const reduce = useReducedMotion()
 
   // Two ways to be busy, and they should look identical: this tab asked for a
   // sync, or the server says one is running for other reasons.
   const busy = sync.isPending || status?.sync_status === 'syncing'
+
+  /**
+   * BROKEN AND EMPTY LOOK THE SAME, AND THEY ARE NOT.
+   *
+   * `last_sync_at` and `sync_status` have always been on this response and
+   * nothing has ever drawn them. So a rider whose Garmin token expired three
+   * days ago sees exactly what a rider who genuinely has not ridden sees: an
+   * empty screen. One of them should press this button and one of them should
+   * go and reconnect their watch, and the app gave neither of them a way to
+   * tell which they were.
+   *
+   * A DOT IS ENOUGH. This chip lives in a stack of 44px controls over the hero
+   * and there is no room for a sentence — but there is room for one mark that
+   * says "the thing behind this button is not well", which is the entire
+   * decision the rider has to make. The detail belongs on the devices screen,
+   * and that is where the label sends them.
+   *
+   * STALE IS NOT AN ERROR. Past a few hours the hourly pull has plainly not
+   * run, which is worth a quiet mark; it is not worth alarm, because the usual
+   * cause is a watch that has not been near a phone. Only a real auth failure
+   * gets the warning colour.
+   */
+  const failed = status?.sync_status === 'auth_error' || status?.sync_status === 'error'
+  //
+   // MEASURED AGAINST WHEN WE ASKED, NOT AGAINST NOW. `Date.now()` in a render
+   // body is impure and the lint rule is right to refuse it — but the query's
+   // own fetch timestamp is also the more honest clock here: the answer is
+   // "how stale was the sync when the server last told us", which cannot drift
+   // as a tab sits open.
+  const syncedAt = status?.last_sync_at ? Date.parse(status.last_sync_at) : NaN
+  const staleHours = Number.isFinite(syncedAt) && dataUpdatedAt
+    ? (dataUpdatedAt - syncedAt) / 3.6e6
+    : null
+  // Never seen a sync at all counts as stale: a connected watch that has never
+  // delivered is exactly the case worth flagging.
+  const stale = !busy && (staleHours === null || staleHours > 3)
+  const mark = failed ? T.bad : stale ? T.mid : null
 
   if (!status?.connected) return null
 
@@ -53,12 +90,22 @@ export default function W3SyncChip({ size = 44, iconSize = 20 }: {
       type="button"
       onClick={() => { if (!busy) sync.mutate() }}
       disabled={busy}
-      aria-label={busy ? 'Garmin wird synchronisiert' : 'Garmin jetzt synchronisieren'}
+      aria-label={
+        busy ? 'Garmin wird synchronisiert'
+          : failed ? 'Garmin-Verbindung gestört — jetzt synchronisieren'
+            : stale ? 'Garmin länger nicht synchronisiert — jetzt synchronisieren'
+              : 'Garmin jetzt synchronisieren'
+      }
+      title={
+        failed ? 'Verbindung zu Garmin gestört'
+          : stale ? 'Länger nicht synchronisiert'
+            : undefined
+      }
       aria-busy={busy}
       style={{
         width: size, height: size, borderRadius: 100, flex: 'none',
         display: 'grid', placeItems: 'center',
-        background: T.heroChip, border: 0,
+        background: T.heroChip, border: 0, position: 'relative',
         // Not `not-allowed`: the button is doing what it was asked, and a
         // forbidden cursor says the tap was a mistake.
         cursor: busy ? 'progress' : 'pointer',
@@ -74,6 +121,17 @@ export default function W3SyncChip({ size = 44, iconSize = 20 }: {
           : { duration: 0.2 }}>
         <RefreshCw size={iconSize} color={busy ? T.acid : T.ink} strokeWidth={2} />
       </motion.span>
+      {mark && (
+        <span
+          aria-hidden
+          style={{
+            position: 'absolute', top: 8, right: 8,
+            width: 7, height: 7, borderRadius: 100, background: mark,
+            // Ringed in the chip's own ground so it reads as a mark ON the
+            // control rather than a speck of dust on the photograph behind it.
+            boxShadow: `0 0 0 2px ${T.heroChip}`,
+          }} />
+      )}
     </button>
   )
 }

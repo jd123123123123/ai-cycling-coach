@@ -15,8 +15,14 @@ const status = vi.hoisted(() => ({ value: null as unknown }))
 const sync = vi.hoisted(() => ({ fn: vi.fn() }))
 
 vi.mock('../../../hooks/useGarminStatus', () => ({
-  useGarminStatus: () => ({ data: status.value }),
+  // `dataUpdatedAt` is part of the shape the chip reads: staleness is measured
+  // against WHEN THE SERVER ANSWERED rather than against `Date.now()`, which is
+  // both impure in a render body and a clock that drifts as a tab sits open.
+  useGarminStatus: () => ({ data: status.value, dataUpdatedAt: NOW }),
 }))
+/** A fixed "now" for the fetch, so the staleness cases are arithmetic and not
+ *  a race with the test's own runtime. */
+const NOW = Date.now()
 vi.mock('../../../api/garmin', () => ({
   forceGarminSync: (...a: unknown[]) => sync.fn(...a),
 }))
@@ -85,5 +91,54 @@ describe('the Today sync chip', () => {
       }
     })
     expect(sync.fn).toHaveBeenCalledTimes(1)
+  })
+})
+
+/**
+ * BROKEN AND EMPTY MUST NOT LOOK THE SAME.
+ *
+ * `last_sync_at` and `sync_status` were on the response from the beginning and
+ * nothing drew them, so a rider whose Garmin token had expired saw exactly what
+ * a rider who simply had not ridden saw. One of those people should press this
+ * button and the other should go and reconnect their watch, and the app told
+ * neither of them which they were.
+ */
+describe('what the chip says about the state of the connection', () => {
+  afterEach(cleanup)
+
+  const fresh = new Date(NOW - 5 * 60_000).toISOString()
+  const old = new Date(NOW - 9 * 3.6e6).toISOString()
+
+  it('says nothing when the last sync was recent', () => {
+    status.value = { connected: true, sync_enabled: true, last_sync_at: fresh, sync_status: 'ok' }
+    mount()
+    expect(screen.getByRole('button').getAttribute('title')).toBeNull()
+  })
+
+  it('marks a connection that is actually broken', () => {
+    status.value = { connected: true, sync_enabled: true, last_sync_at: fresh, sync_status: 'auth_error' }
+    mount()
+    const b = screen.getByRole('button')
+    expect(b.getAttribute('title')).toContain('gestört')
+    expect(b.getAttribute('aria-label')).toContain('gestört')
+  })
+
+  it('marks a sync that has plainly not run in hours', () => {
+    status.value = { connected: true, sync_enabled: true, last_sync_at: old, sync_status: 'ok' }
+    mount()
+    expect(screen.getByRole('button').getAttribute('title')).toContain('synchronisiert')
+  })
+
+  it('treats a watch that has never delivered as stale, not as fine', () => {
+    status.value = { connected: true, sync_enabled: true, last_sync_at: null, sync_status: 'ok' }
+    mount()
+    expect(screen.getByRole('button').getAttribute('title')).toBeTruthy()
+  })
+
+  it('stays quiet while a sync is actually running', () => {
+    status.value = { connected: true, sync_enabled: true, last_sync_at: null, sync_status: 'syncing' }
+    mount()
+    // Busy is not stale: the thing the mark would ask for is already happening.
+    expect(screen.getByRole('button').getAttribute('title')).toBeNull()
   })
 })
