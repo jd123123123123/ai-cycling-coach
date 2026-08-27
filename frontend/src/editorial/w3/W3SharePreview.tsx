@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { STARTER_BIKE } from './starterBike'
 import {
-  renderStoryCard, canShareImage, laufbandStrings,
+  renderStoryCard, canShareImage, laufbandStrings, type StoryTextZone,
   type ShareAngle, type PosterData, type StoryData, type StoryLayout,
 } from './w3share'
 import W3ShareView, { type W3ShareVm, type EditField } from './W3ShareView'
@@ -79,6 +79,7 @@ export default function W3SharePreview() {
   const [dataUrl, setDataUrl] = useState<string | null>(null)
   const [blob, setBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [zones, setZones] = useState<StoryTextZone[]>([])
   // The harness drives the REAL controls. It used to pin `format: 'full'` and
   // pass no `onPickFormat`, which meant the one screen that exists to exercise
   // this view could not reach five of its six layouts — and the Laufband, whose
@@ -117,13 +118,14 @@ export default function W3SharePreview() {
     // The STORY card, not the retired poster — the harness must show the same
     // object the real screen sends, or it is a preview of nothing.
     renderStoryCard(story)
-      .then((o) => { if (alive) { setDataUrl(o.dataUrl || null); setBlob(o.blob) } })
+      .then((o) => { if (alive) { setDataUrl(o.dataUrl || null); setBlob(o.blob); setZones(o.zones) } })
       .finally(() => { if (alive) setGenerating(false) })
     return () => { alive = false }
   }, [story])
 
   const vm: W3ShareVm = {
     posterDataUrl: dataUrl,
+    zones,
     generating,
     activeAngle: angle,
     hasOwnPhoto: false,

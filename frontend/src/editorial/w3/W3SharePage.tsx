@@ -7,7 +7,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage, useRenderRideScene, useRideScene } from '../../hooks/useGarage'
 import {
   renderStoryCard, sharePoster, downloadPoster, canShareImage, laufbandStrings,
-  type StoryLayout, type StoryData,
+  type StoryLayout, type StoryData, type StoryTextZone,
   type ShareAngle, type PosterData,
 } from './w3share'
 import { VALUES, DEFAULT_VALUES, type ValueId } from './w3shareValues'
@@ -157,6 +157,9 @@ export default function W3SharePage() {
   // clip pinned in memory.
   useEffect(() => () => { if (video) URL.revokeObjectURL(video.url) }, [video])
   const [posterDataUrl, setPosterDataUrl] = useState<string | null>(null)
+  /** Where the paint pass actually put each editable word — the editor draws
+   *  its tap targets from these, so they cannot drift from the type. */
+  const [zones, setZones] = useState<StoryTextZone[]>([])
   const [posterBlob, setPosterBlob] = useState<Blob | null>(null)
   const [generating, setGenerating] = useState(false)
 
@@ -420,7 +423,12 @@ export default function W3SharePage() {
     setGenerating(true)
     const job = renderStoryCard(edited)
     job
-      .then((out) => { if (alive) { setPosterDataUrl(out.dataUrl || null); setPosterBlob(out.blob) } })
+      .then((out) => {
+        if (!alive) return
+        setPosterDataUrl(out.dataUrl || null)
+        setPosterBlob(out.blob)
+        setZones(out.zones)
+      })
       .finally(() => { if (alive) setGenerating(false) })
     return () => { alive = false }
   }, [poster, edited])
@@ -474,6 +482,7 @@ export default function W3SharePage() {
 
   const vm: W3ShareVm = {
     posterDataUrl,
+    zones,
     generating,
     activeAngle: angle,
     canShare: shareable,

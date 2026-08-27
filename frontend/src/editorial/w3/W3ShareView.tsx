@@ -1,33 +1,59 @@
-import { type CSSProperties } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Download, Users, Link2, Sticker, Share2, ImagePlus, X } from 'lucide-react'
+import { Check, Download, ImagePlus, Users, Link2, Palette, Sticker, SlidersHorizontal, X } from 'lucide-react'
 import { T, FONT, EASE, HIDDEN_FILE_INPUT } from './w3tokens'
 import { TNUM } from './w3surfaces'
-import type { StoryLayout } from './w3share'
+import type { ShareAngle, StoryField, StoryLayout, StoryTextZone } from './w3share'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import W3LaufbandBands from './W3LaufbandBands'
-import type { ShareAngle } from './w3share'
 import { fileToDownscaledDataUrl } from './w3photo'
 import { MAX_VALUES, type ValueId } from './w3shareValues'
+import { FIELD_LABEL, STORY_FORMATS, stepFormat } from './w3storyEdit'
 import './w3.css'
 
 /**
- * W3 · 18 FAHRT TEILEN — a 1:1 code rebuild of pen `oLeCk` (w3.pen).
+ * W3 · STORY STUDIO — one screen, and you work ON the picture.
  *
- * Pure function of `vm`. The poster is the SAME PNG bitmap that will be shared
- * (rendered by `w3share.renderSharePoster` in the page), so the preview and the
- * shared file are identical. The angle chips ("Was du zeigst") re-render the
- * poster with a different headline (Segment-PR / Beste Fahrt / Beste 20 min).
- * Every action is real: Teilen/Story open the native share sheet, Link copies a
- * caption, Crew opens the crew, the download icon saves the PNG.
+ * WHAT THIS REPLACED, AND WHY. The studio was a small preview tile with five
+ * labelled settings sections stacked under it: format chips, a list of text
+ * inputs, angle chips, a photo row, an accent row, a value grid. Everything was
+ * reachable and nothing was direct — the rider looked at a thumbnail of their
+ * card while typing into a form about it, and had to scroll a page and a half
+ * to see what one change did. That is a settings screen for an image, and the
+ * app it is competing with is Instagram.
+ *
+ * So: ONE VIEWPORT, NO PAGE SCROLL, and every control is on the thing it
+ * changes.
+ *
+ *   · the card fills the screen;
+ *   · SWIPE it to change format — the six are ordered by how much they give up,
+ *     so the gesture runs along a continuum instead of shuffling a menu;
+ *   · TAP A WORD to rewrite it, in place, where it sits on the picture. The
+ *     rectangles come from the renderer itself (`renderStoryCard` emits them as
+ *     it paints), so a tap target cannot drift away from its type;
+ *   · TAP THE PICTURE to put a different one behind it;
+ *   · colour and numbers live behind two glass buttons on the card, opening a
+ *     tray over it rather than a section below it.
+ *
+ * THE NUMBERS ARE STILL NOT EDITABLE, and that is the same rule as before: a
+ * share sheet where you can retype the wattage is a lie generator. Only
+ * `StoryField` — the card's LANGUAGE — is the rider's to change.
  */
 
 export interface ShareAngleChip { id: ShareAngle; label: string; sub: string }
+
+/** Kept as the view's own name for the renderer's field type, so the page and
+ *  its tests do not all have to be rewritten to import from `w3share`. */
+export type EditField = StoryField
+
 export interface W3ShareVm {
-  /** Which of the four story formats is selected. Absent → the full card. */
+  /** Which of the six story formats is selected. Absent → the full card. */
   format?: StoryLayout
   posterDataUrl: string | null
+  /** Where each editable word ended up on the bitmap, in 1080x1920 space.
+   *  Emitted by the paint pass, so it is always the current layout's truth. */
+  zones?: StoryTextZone[]
   generating: boolean
   angles: ShareAngleChip[]
   activeAngle: ShareAngle
@@ -45,101 +71,28 @@ export interface W3ShareVm {
   /** The two Laufband strings, built by `laufbandStrings` so the belt that
    *  scrolls here and the one burned into the PNG are the same tape. */
   laufband?: { figures: string; verdicts: string }
-  /** What the rider has typed over the card's own words. Absent fields mean
-   *  "whatever the ride said"; the placeholder shows that value. */
+  /** What the rider has typed over the card's own words. */
   edits?: Partial<Record<EditField, string>>
-  /** The card's own words, for the placeholders — what each field says when the
-   *  rider has not overridden it. */
+  /** The card's own words, for the placeholders. */
   defaults?: Partial<Record<EditField, string>>
 }
 
-/**
- * THE FIVE THINGS A RIDER MAY REWRITE.
- *
- * Not "edit the card": the numbers are the ride and are not the rider's to
- * retype — a share sheet that lets you type 300 W over a 240 W ride is a lie
- * generator, and it is also why nobody trusts a screenshot. What IS theirs is
- * the LANGUAGE: what the route is called, what the day was, and the sentence
- * the card makes about it. Those five below, and nothing else.
- */
-export type EditField = 'routeName' | 'dateline' | 'lead' | 'emphasis' | 'ticker'
-
-/** Which words each layout actually prints — asking a rider to fill in a field
- *  the format drops is how a settings screen grows. */
-const EDITABLE: Record<StoryLayout, { id: EditField; label: string; hint: string }[]> = {
-  headline: [
-    { id: 'routeName', label: 'Titel', hint: 'Der große Name' },
-    { id: 'dateline', label: 'Zeile darüber', hint: 'Ausfahrt & Datum' },
-    { id: 'ticker', label: 'Laufband', hint: 'Läuft unten schwarz durch' },
-  ],
-  viewfinder: [
-    { id: 'routeName', label: 'Titel', hint: 'Neben dem roten Punkt' },
-    { id: 'dateline', label: 'Zeile unter der Zahl', hint: 'Werte & Datum' },
-  ],
-  effort: [
-    { id: 'dateline', label: 'Kicker', hint: 'Die kleine Zeile oben' },
-    { id: 'lead', label: 'Satz', hint: 'Weiß' },
-    { id: 'emphasis', label: 'Betonung', hint: 'In deiner Farbe' },
-  ],
-  full: [
-    { id: 'lead', label: 'Satz', hint: 'Weiß' },
-    { id: 'emphasis', label: 'Betonung', hint: 'In deiner Farbe' },
-  ],
-  silent: [],
-  trace: [{ id: 'routeName', label: 'Titel', hint: 'Über der Strecke' }],
-}
 export interface W3ShareActions {
-  /** The rider's own photograph, already downscaled to a data URL. Null clears
-   *  it and hands the background back to the composed scene. */
   onPickPhoto?: (dataUrl: string | null) => void
-  /** The rider rebuilt their card. Between MIN_BLOCKS and MAX_BLOCKS. */
   onPickValues?: (ids: ValueId[]) => void
   onPickAccent?: (hex: string) => void
-  /** The rider chose a clip. The overlay is burned into it frame by frame. */
   onPickVideo?: (file: File) => void
-  /** Which of the four story formats leaves the app. See `StoryLayout`. */
   onPickFormat?: (id: StoryLayout) => void
-  /** The rider rewrote one of the card's words. Empty string clears the
-   *  override and hands the field back to the ride. */
   onEditText?: (field: EditField, value: string) => void
   onClose?: () => void
   onDownload?: () => void
   onSelectAngle?: (id: ShareAngle) => void
   onShare?: () => void
-  /** Save the overlay alone, transparent, to place by hand in Instagram. */
   onSticker?: () => void
   onCrew?: () => void
   onLink?: () => void
 }
 
-/**
- * TWO ROUTES OUT, AND THEY GO TO DIFFERENT PLACES.
- *
- * The button below this row shares the FINISHED card — burned, one file, and it
- * lands anywhere a file can: WhatsApp, iMessage, Signal, an Instagram post. That
- * is the one most riders want most of the time, which is why it is the button
- * and not a chip.
- *
- * `Sticker` is the Instagram-only route: the overlay alone on transparency,
- * saved to the camera roll, placed by the rider over their own story. It exists
- * because Instagram's photo sticker preserves alpha — the live draggable layer
- * Strava gets needs a native wrapper we do not have.
- *
- * `Story` used to sit here too and called the same handler as the button, so
- * the screen offered one action twice and explained neither. It went the way
- * `Mehr` did.
- *
- * EVERY ONE CARRIES WHERE IT GOES. Four unlabelled glyphs is the problem this
- * screen already had once.
- */
-const ACTIONS = [
-  { id: 'sticker', label: 'Sticker', sub: 'für Instagram', Icon: Sticker },
-  { id: 'crew', label: 'Crew', sub: 'in der App', Icon: Users },
-  { id: 'link', label: 'Link', sub: 'kopieren', Icon: Link2 },
-] as const
-
-/** The four, in the order they give things up. See `StoryLayout` for why there
- *  are exactly four and not five. */
 /** The accent palette. Five, all tokens — the app's own colours, never a wheel.
  *  A sixth would be a preference; five is a decision. */
 const ACCENTS: { name: string; value: string }[] = [
@@ -150,331 +103,431 @@ const ACCENTS: { name: string; value: string }[] = [
   { name: 'Weiß', value: T.ink },
 ]
 
-const STORY_FORMATS: { id: StoryLayout; name: string; drops: string }[] = [
-  { id: 'full', name: 'Karte', drops: 'Satz + Zahlen' },
-  { id: 'silent', name: 'Ohne Worte', drops: 'Nur Zahlen' },
-  { id: 'trace', name: 'Spur', drops: 'Foto + Strecke' },
-  { id: 'headline', name: 'Schlagzeile', drops: 'Titel + Laufband' },
-  { id: 'viewfinder', name: 'Sucher', drops: 'Telemetrie' },
-  { id: 'effort', name: 'Effort', drops: 'Satz oben' },
-]
+const SECONDARY = [
+  { id: 'sticker', label: 'Sticker', Icon: Sticker },
+  { id: 'crew', label: 'Crew', Icon: Users },
+  { id: 'link', label: 'Link', Icon: Link2 },
+] as const
 
-export default function W3ShareView({ vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent, onPickVideo, onPickFormat, onEditText, onShare, onSticker, onCrew, onLink }: { vm: W3ShareVm } & W3ShareActions) {
+/** Below this a horizontal drag is a tap that wandered, not a swipe. */
+const SWIPE_PX = 44
+
+type Tray = 'accent' | 'values' | null
+
+export default function W3ShareView({
+  vm, onClose, onDownload, onSelectAngle, onPickPhoto, onPickValues, onPickAccent,
+  onPickVideo, onPickFormat, onEditText, onShare, onSticker, onCrew, onLink,
+}: { vm: W3ShareVm } & W3ShareActions) {
   const reduce = useReducedMotion()
-  const iconBtn: CSSProperties = { width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }
+  const format = vm.format ?? 'full'
+  const accent = vm.accent ?? T.acid
 
-  const onAction = (id: (typeof ACTIONS)[number]['id']) => {
-    if (id === 'sticker') onSticker?.()
-    else if (id === 'crew') onCrew?.()
-    else onLink?.()
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState({ w: 0, h: 0 })
+  const [editing, setEditing] = useState<EditField | null>(null)
+  const [draft, setDraft] = useState('')
+  const [tray, setTray] = useState<Tray>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const stripRef = useRef<HTMLDivElement>(null)
+
+  /** The zones are in canvas units; everything drawn over them is in CSS px.
+   *  Measured rather than computed, because the card is height-constrained on a
+   *  short screen and width-constrained on a tall one. */
+  useLayoutEffect(() => {
+    const el = cardRef.current
+    if (!el) return
+    const read = () => setBox({ w: el.clientWidth, h: el.clientHeight })
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Opening the editor puts the caret in it; the keyboard is the point.
+  useEffect(() => {
+    if (!editing) return
+    const t = window.setTimeout(() => inputRef.current?.focus(), reduce ? 0 : 120)
+    return () => window.clearTimeout(t)
+  }, [editing, reduce])
+
+  /** Change format, and close any open editor first — each layout prints its
+   *  own set of words, so a format change can drop the one being edited and
+   *  leave a caret floating over type that is no longer there. Done here rather
+   *  than in an effect on `format`: setState inside an effect cascades a render,
+   *  and this is a plain consequence of an event, not of the state settling. */
+  const pickFormat = (id: StoryLayout) => {
+    setEditing(null)
+    onPickFormat?.(id)
+  }
+
+  // The strip follows the swipe. Six chips do not fit in 390 — that is why the
+  // row scrolls — so swiping to either end would otherwise light a chip the
+  // rider cannot see, and the one control that says where they are in the list
+  // would be the one thing off screen.
+  useEffect(() => {
+    const el = stripRef.current?.querySelector('[data-on="1"]')
+    el?.scrollIntoView({ behavior: reduce ? 'auto' : 'smooth', block: 'nearest', inline: 'center' })
+  }, [format, reduce])
+
+  const openEditor = (field: EditField) => {
+    setTray(null)
+    setDraft(vm.edits?.[field] ?? '')
+    setEditing(field)
+  }
+  const commit = () => {
+    if (editing) onEditText?.(editing, draft)
+    setEditing(null)
+  }
+
+  // ── the swipe ─────────────────────────────────────────────────────────────
+  //
+  // `swallow` is the whole reason this is not three lines. A swipe that crosses
+  // a word ends with a `click` on that word — pointerup fires first and clears
+  // the drag, so a guard reading the drag state at click time is ALWAYS looking
+  // at null and always lets the tap through. Swiping over the headline would
+  // change the format and open its keyboard on the way past. The verdict has to
+  // outlive the gesture that produced it, so pointerup records it and the next
+  // click consumes it.
+  const drag = useRef<{ x: number; y: number; moved: boolean } | null>(null)
+  const swallow = useRef(false)
+  /** True once, for the click a just-finished swipe is about to fire. */
+  const swiped = () => {
+    if (!swallow.current) return false
+    swallow.current = false
+    return true
+  }
+  const onDown = (e: React.PointerEvent) => {
+    swallow.current = false
+    drag.current = { x: e.clientX, y: e.clientY, moved: false }
+  }
+  const onMove = (e: React.PointerEvent) => {
+    const d = drag.current
+    if (!d) return
+    if (Math.abs(e.clientX - d.x) > 10 || Math.abs(e.clientY - d.y) > 10) d.moved = true
+  }
+  const onUp = (e: React.PointerEvent) => {
+    const d = drag.current
+    drag.current = null
+    if (!d) return
+    if (d.moved) swallow.current = true
+    const dx = e.clientX - d.x
+    // A vertical drag is the rider scrolling something else, not a format swipe.
+    if (Math.abs(dx) < SWIPE_PX || Math.abs(e.clientY - d.y) > Math.abs(dx)) return
+    pickFormat(stepFormat(format, dx < 0 ? 1 : -1))
+  }
+
+  const zones = vm.zones ?? []
+  const sx = box.w / 1080
+  const sy = box.h / 1920
+  const editingZone = editing ? zones.find((z) => z.field === editing) ?? null : null
+
+  const glass: CSSProperties = {
+    width: 36, height: 36, borderRadius: 100, border: 0, cursor: 'pointer',
+    background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
+    display: 'grid', placeItems: 'center',
+  }
+  const tool: CSSProperties = {
+    width: 36, height: 36, flex: 'none', borderRadius: 100, border: 0, cursor: 'pointer',
+    background: T.surface, display: 'grid', placeItems: 'center',
   }
 
   return (
     <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+      <div className="w3-frame" style={{
+        fontFamily: FONT, display: 'flex', flexDirection: 'column',
+        // ONE PAGER. The card is the only thing that flexes; nothing scrolls.
+        height: '100dvh', overflow: 'hidden',
+      }}>
         <W3StatusBar />
-
-        {/* Nav */}
         <W3TopBar title="Fahrt teilen" onBack={onClose}
-          extra={<button onClick={onDownload} aria-label="Bild speichern" style={iconBtn}><Download size={17} color={T.ink} /></button>} />
+          extra={
+            <button onClick={onDownload} aria-label="Bild speichern"
+              style={{ width: 40, height: 40, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+              <Download size={17} color={T.ink} />
+            </button>
+          } />
 
-        {/* ── THE PREVIEW TILE (pen `C6Xn06`, "Preview · Story A") ──────────
-            9:16, AND THAT IS THE FIX. This box was `1080 / 1720` — the old
-            poster's ratio — while every card it shows is rendered at
-            1080 × 1920. With `objectFit: cover` on top of that, the preview
-            cropped 200px off a story and did it silently: the rider approved a
-            card whose foot they had never seen, and the two Laufband bands, the
-            HUD's bar strip and the Effort-Kurve's readings all live in exactly
-            that missing strip. It is the single reason the app looked least
-            like the drawings.
+        {/* ── THE CONTROL ROW ────────────────────────────────────────────
+            These sat ON the card, which is where Instagram puts them — and
+            Instagram's canvas is a photograph. Ours is a designed card with
+            type hard against BOTH edges: rendered at 390x844 the angle pill
+            landed exactly on the Laufband's dateline, and the tool rail was one
+            row above the 138px headline. A control that covers the thing it
+            controls is worse than a control that costs 40px.
 
-            The corner and the shadow are the pen's own, scaled from its 196-wide
-            artboard: r14 → 26, and a 30-blur drop at 10 down → 55 at 18. ── */}
-        <div style={{ padding: '10px 20px 4px', display: 'flex', justifyContent: 'center' }}>
-          <div style={{
-            width: '100%', maxWidth: 360, aspectRatio: '1080 / 1920', borderRadius: 26,
-            overflow: 'hidden', background: T.surface, border: `1px solid ${T.stroke}`,
-            position: 'relative', boxShadow: '0 18px 55px rgba(0,0,0,0.65)',
-          }}>
+            So the card stays pristine — it is the product — and its chrome sits
+            in a slim row of its own. Tapping the picture is still how you
+            change the picture; this only adds the button that SAYS so. ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 20px 8px', flex: 'none' }}>
+          {vm.angles.length > 0 && (
+            <button type="button"
+              onClick={() => {
+                const i = vm.angles.findIndex((a) => a.id === vm.activeAngle)
+                onSelectAngle?.(vm.angles[(i + 1) % vm.angles.length].id)
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px',
+                borderRadius: 100, background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT,
+              }}>
+              <span style={{ width: 6, height: 6, borderRadius: 100, background: accent }} />
+              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: T.ink }}>
+                {vm.angles.find((a) => a.id === vm.activeAngle)?.label ?? ''}
+              </span>
+            </button>
+          )}
+          <span style={{ flex: 1 }} />
+          <button type="button" aria-label={vm.hasOwnPhoto ? 'Anderes Bild wählen' : 'Eigenes Bild wählen'}
+            onClick={() => fileRef.current?.click()}
+            style={{ ...tool, background: vm.hasOwnPhoto ? T.acidDim : T.surface }}>
+            <ImagePlus size={16} color={vm.hasOwnPhoto ? accent : T.ink} />
+          </button>
+          {vm.hasOwnPhoto && (
+            <button type="button" aria-label="Eigenes Bild entfernen" onClick={() => onPickPhoto?.(null)} style={tool}>
+              <X size={16} color={T.mid} />
+            </button>
+          )}
+          <button type="button" aria-label="Akzentfarbe" onClick={() => setTray(tray === 'accent' ? null : 'accent')}
+            style={{ ...tool, background: tray === 'accent' ? T.acidDim : T.surface }}>
+            <Palette size={16} color={tray === 'accent' ? accent : T.ink} />
+          </button>
+          {(vm.availableValues ?? []).length > 0 && (
+            <button type="button" aria-label="Werte" onClick={() => setTray(tray === 'values' ? null : 'values')}
+              style={{ ...tool, background: tray === 'values' ? T.acidDim : T.surface }}>
+              <SlidersHorizontal size={16} color={tray === 'values' ? accent : T.ink} />
+            </button>
+          )}
+        </div>
+
+        {/* ── THE CARD, AND THE WORDS ON IT ─────────────────────────────── */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '6px 20px 10px' }}>
+          <div
+            ref={cardRef}
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
+            style={{
+              position: 'relative', height: '100%', aspectRatio: '1080 / 1920',
+              maxWidth: '100%', borderRadius: 22, overflow: 'hidden',
+              background: T.surface, boxShadow: '0 18px 55px rgba(0,0,0,0.65)',
+              touchAction: 'pan-y',
+            }}>
             {vm.posterDataUrl
-              ? <motion.img key={vm.activeAngle} src={vm.posterDataUrl} alt="Teilbares Bild deiner Fahrt"
-                  initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.35, ease: EASE }}
+              ? <motion.img key={`${vm.activeAngle}-${format}`} src={vm.posterDataUrl} alt="Teilbares Bild deiner Fahrt"
+                  initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.28, ease: EASE }}
+                  draggable={false}
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
                   <span style={{ fontSize: 13, fontWeight: 600, color: T.quiet }}>Bild wird erstellt…</span>
                 </div>}
-            {/* The Laufband runs — see `W3LaufbandBands` for why this replaces
-                the painted bands rather than sitting over them. It waits for the
-                bitmap so the belt cannot be moving on an empty tile. */}
-            {(vm.format ?? 'full') === 'headline' && vm.laufband && vm.posterDataUrl && (
-              <W3LaufbandBands figures={vm.laufband.figures} verdicts={vm.laufband.verdicts} accent={vm.accent ?? T.acid} />
+
+            {format === 'headline' && vm.laufband && vm.posterDataUrl && (
+              <W3LaufbandBands figures={vm.laufband.figures} verdicts={vm.laufband.verdicts} accent={accent} />
             )}
+
+            {/* TAP THE PICTURE → ANOTHER PICTURE. It sits UNDER the word
+                targets, so a rider aiming at the headline gets the headline and
+                a rider aiming at the sky gets their photo library. */}
+            <button type="button" aria-label="Anderes Bild wählen"
+              onClick={() => { if (!swiped()) fileRef.current?.click() }}
+              style={{ position: 'absolute', inset: 0, border: 0, background: 'transparent', cursor: 'pointer' }} />
+
+            {/* THE WORDS, WHERE THEY ARE. Invisible until touched — the card is
+                the design, and dotted boxes over it would be a form again. */}
+            {box.w > 0 && !editing && zones.map((z) => (
+              <button key={z.field} type="button"
+                aria-label={`${FIELD_LABEL[z.field]} bearbeiten`}
+                onClick={() => { if (!swiped()) openEditor(z.field) }}
+                style={{
+                  position: 'absolute',
+                  left: z.x * sx, top: z.y * sy, width: z.w * sx, height: z.h * sy,
+                  border: 0, borderRadius: 8, cursor: 'text', padding: 0,
+                  background: vm.edits?.[z.field] ? `${accent}1F` : 'transparent',
+                }} />
+            ))}
+
             {vm.generating && vm.posterDataUrl && (
-              <div style={{ position: 'absolute', top: 12, right: 12, padding: '5px 11px', borderRadius: 100, background: 'rgba(0,0,0,0.63)' }}>
-                <span style={{ fontSize: 10, fontWeight: 700, color: T.acid }}>rendert…</span>
+              <div style={{ position: 'absolute', bottom: 12, left: 12, padding: '5px 11px', borderRadius: 100, background: 'rgba(0,0,0,0.63)' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: accent }}>rendert…</span>
               </div>
             )}
-          </div>
-        </div>
 
-        {/* ── WIE DU ES ZEIGST ────────────────────────────────────────────
-            The format is the design decision, not a setting. Strava posts one
-            layout for every ride — a photo with four numbers over it, the same
-            for a commute and for an alpine day — and the reason it can never
-            offer this row is that each of these four is defined by what it
-            REFUSES to print. A rider posting a mountain does not want four
-            numbers across it; a rider posting a personal best does not want a
-            landscape behind it. ── */}
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WIE DU ES ZEIGST</span>
-          {/* SIX CHIPS DO NOT FIT IN 390, and dividing the width by six does not
-              make them fit — it clips them: "Schlagzeile" came out as
-              "Schlagzei" and its subline broke over three lines. The row scrolls
-              instead, each chip as wide as its own word, which is also what says
-              there are more formats than the ones on screen. */}
-          <div style={{
-            display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
-            margin: '0 -20px', padding: '0 20px',
-          }}>
-            {STORY_FORMATS.map((f) => {
-              const on = f.id === (vm.format ?? 'full')
-              return (
-                <button key={f.id} type="button" onClick={() => onPickFormat?.(f.id)}
-                  style={{
-                    flex: 'none', padding: '11px 13px 10px', borderRadius: 14,
-                    border: `1px solid ${on ? T.acid : 'transparent'}`,
-                    background: on ? T.acidDim : T.surface, cursor: 'pointer',
-                    fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 3,
-                  }}>
-                  <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 0.3, whiteSpace: 'nowrap', color: on ? T.acid : T.ink }}>{f.name}</span>
-                  <span style={{ fontSize: 8.5, fontWeight: 600, lineHeight: 1.25, whiteSpace: 'nowrap', color: T.quiet }}>{f.drops}</span>
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* ── WAS DRAUFSTEHT ───────────────────────────────────────────────
-            THE WORDS ARE THE RIDER'S, THE NUMBERS ARE THE RIDE'S.
-            Every field here is language — the route's name, the dateline, the
-            sentence, the ticker. None of them is a measurement, and that is a
-            rule and not an oversight: a share sheet where you can retype the
-            wattage is a lie generator, and it is the reason a screenshot of a
-            training app persuades nobody.
-
-            Empty gives the field back to the ride rather than printing nothing,
-            so a rider can always undo by clearing — which is the one gesture
-            they will try before looking for a reset. ── */}
-        {EDITABLE[vm.format ?? 'full'].length > 0 && (
-          <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WAS DRAUFSTEHT</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {EDITABLE[vm.format ?? 'full'].map((f) => (
-                <label key={f.id} style={{
-                  display: 'flex', flexDirection: 'column', gap: 3,
-                  padding: '9px 14px 10px', borderRadius: 14,
-                  background: T.surface, border: `1px solid ${vm.edits?.[f.id] ? T.acid : T.stroke}`,
+            {/* ── EDITING, IN PLACE ──────────────────────────────────────
+                The rest of the card dims so the word being rewritten is the
+                only lit thing, and the field sits exactly where its type sits.
+                Not a modal with a form in it: the rider is looking at the
+                sentence they are changing, in the place it will be read. */}
+            {editing && editingZone && (
+              <>
+                <button type="button" aria-label="Fertig" onClick={commit}
+                  style={{ position: 'absolute', inset: 0, border: 0, background: 'rgba(0,0,0,0.62)', cursor: 'pointer' }} />
+                {/* ON ITS OWN GROUND. Sat directly on the type at first, so
+                    the placeholder ("Harzrunde") was printed across the 138px
+                    headline saying the same word and neither could be read. The
+                    field keeps the word's POSITION — that is the whole idea —
+                    and brings a surface with it. Clamped so a zone near the
+                    foot of the card cannot push the keyboard off-screen. */}
+                <div style={{
+                  position: 'absolute',
+                  left: 10,
+                  top: Math.max(10, Math.min(box.h - 118, editingZone.y * sy - 30)),
+                  width: box.w - 20,
+                  display: 'flex', flexDirection: 'column', gap: 5,
+                  background: 'rgba(8,8,8,0.94)', borderRadius: 14,
+                  padding: '11px 13px 13px',
                 }}>
-                  <span style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, color: vm.edits?.[f.id] ? T.acid : T.quiet }}>
-                      {f.label.toUpperCase()}
-                    </span>
-                    <span style={{ fontSize: 9, fontWeight: 600, color: T.quiet }}>{f.hint}</span>
+                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: accent }}>
+                    {FIELD_LABEL[editing].toUpperCase()}
                   </span>
                   <input
-                    type="text"
-                    value={vm.edits?.[f.id] ?? ''}
-                    placeholder={vm.defaults?.[f.id] ?? ''}
-                    onChange={(e) => onEditText?.(f.id, e.target.value)}
+                    ref={inputRef}
+                    value={draft}
+                    placeholder={vm.defaults?.[editing] ?? ''}
+                    onChange={(e) => setDraft(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(null) }}
                     className="w3-share-edit"
                     style={{
                       width: '100%', border: 0, outline: 'none', background: 'transparent',
-                      fontFamily: FONT, fontSize: 14, fontWeight: 700, color: T.ink, padding: 0,
-                      ['--w3-ph' as string]: T.quiet,
+                      borderBottom: `2px solid ${accent}`, padding: '2px 0 6px',
+                      fontFamily: FONT, fontSize: 17, fontWeight: 700, color: T.ink,
+                      ['--w3-ph' as string]: 'rgba(255,255,255,0.45)',
                     } as CSSProperties} />
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Was du zeigst — angle chips */}
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WAS DU ZEIGST</span>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {vm.angles.map((a) => {
-              const on = a.id === vm.activeAngle
-              return (
-                <button key={a.id} onClick={() => onSelectAngle?.(a.id)}
-                  style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 2, padding: '12px 12px', borderRadius: 16, background: on ? T.acidDim : T.surface, border: on ? `1px solid ${T.acid}` : `1px solid ${T.stroke}`, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? T.acid : T.ink }}>{a.label}</span>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{a.sub}</span>
-                </button>
-              )
-            })}
-          </div>
-
-          {/* ── THE RIDER'S OWN PHOTOGRAPH ────────────────────────────────
-              A composed scene is a picture of where the app thinks they were;
-              a photo from their pocket is a picture of where they WERE. It
-              never leaves the device — the poster is rendered locally in a
-              canvas, so the only copy that goes anywhere is the one the rider
-              hands to the share sheet themselves. ── */}
-          <label style={{
-            display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px',
-            borderRadius: 16, cursor: 'pointer', fontFamily: FONT,
-            background: vm.hasOwnPhoto ? T.acidDim : T.surface,
-            border: `1px ${vm.hasOwnPhoto ? 'solid' : 'dashed'} ${vm.hasOwnPhoto ? T.acid : T.stroke}`,
-          }}>
-            <span style={{
-              width: 34, height: 34, flex: 'none', borderRadius: 11,
-              background: vm.hasOwnPhoto ? 'transparent' : T.surface2,
-              display: 'grid', placeItems: 'center',
-            }}>
-              <ImagePlus size={17} color={vm.hasOwnPhoto ? T.acid : T.mid} />
-            </span>
-            <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: vm.hasOwnPhoto ? T.acid : T.ink }}>
-                {vm.hasOwnPhoto ? 'Dein Foto ist drauf' : 'Eigenes Foto nehmen'}
-              </span>
-              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
-                {vm.videoNote ?? (vm.hasOwnPhoto ? 'Tippen zum Wechseln' : 'Bild oder Video · bleibt auf deinem Gerät')}
-              </span>
-            </span>
-            {vm.hasOwnPhoto && (
-              <button
-                type="button"
-                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onPickPhoto?.(null) }}
-                aria-label="Eigenes Foto entfernen"
-                style={{
-                  width: 28, height: 28, flex: 'none', borderRadius: 100, border: 0,
-                  background: T.surface2, display: 'grid', placeItems: 'center', cursor: 'pointer',
-                }}>
-                <X size={13} color={T.mid} />
-              </button>
-            )}
-            {/* IMAGES AND VIDEO, through one control. A story is as often a
-                clip as a photograph, and asking the rider which KIND of file
-                they are about to pick is a question their photo library already
-                answers. The page decides what to do with it. */}
-            <input
-              type="file" accept="image/*,video/*" style={HIDDEN_FILE_INPUT}
-              onChange={async (e) => {
-                const f = e.target.files?.[0]
-                // Reset first: picking the SAME file twice must still fire.
-                e.target.value = ''
-                if (!f) return
-                if (f.type.startsWith('video/')) { onPickVideo?.(f); return }
-                // 1440 rather than the studio's 1024 — this one is drawn at
-                // 1080 across and then cropped, so it needs the headroom.
-                onPickPhoto?.(await fileToDownscaledDataUrl(f, 1440).catch(() => null))
-              }} />
-          </label>
-        </div>
-
-        {/* ── AKZENT ───────────────────────────────────────────────────
-            One colour, and it moves everything the card is loud with at once —
-            the emphasised words, the unit, the strip, the ticker band, the
-            viewfinder brackets, the route line. A rider picks a colour, not
-            six, which is the difference between a control and a settings page.
-            Tokens only: this is the app's palette, not a colour wheel. ── */}
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>AKZENT</span>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {ACCENTS.map((a) => {
-              const on = (vm.accent ?? T.acid) === a.value
-              return (
-                <button key={a.name} type="button" onClick={() => onPickAccent?.(a.value)}
-                  aria-label={a.name}
+                  <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+                    Leer lassen — dann sagt es wieder, was die Fahrt sagt.
+                  </span>
+                </div>
+                <button type="button" onClick={commit}
                   style={{
-                    width: 44, height: 44, borderRadius: 100, cursor: 'pointer',
-                    background: a.value, border: on ? `3px solid ${T.ink}` : `1px solid ${T.stroke}`,
-                    boxShadow: on ? `0 0 0 2px ${T.bg}` : 'none',
-                  }} />
-              )
-            })}
-          </div>
-        </div>
-
-        {/* ── WERTE ────────────────────────────────────────────────────
-            Which measurements fill the template's slots. This asked which
-            BLOCKS to draw before — a chart, a zone bar, a trace — because the
-            old poster composed itself out of them. The pen's templates have
-            fixed compositions, so the only question left is the easy one: a
-            rider knows they want their climbing on there; nobody knows whether
-            they want a "zone block". Tap to add, tap to remove, up to three. ── */}
-        <div style={{ padding: '18px 20px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-            <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WERTE</span>
-            <span style={{ fontSize: 9.5, fontWeight: 700, color: T.mid, ...TNUM }}>
-              {(vm.values ?? []).length} VON {MAX_VALUES}
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {(vm.availableValues ?? []).map((v) => {
-              const at = (vm.values ?? []).indexOf(v.id)
-              const on = at >= 0
-              const full = !on && (vm.values ?? []).length >= MAX_VALUES
-              return (
-                <button key={v.id} type="button" disabled={full}
-                  onClick={() => onPickValues?.(
-                    on ? (vm.values ?? []).filter((x) => x !== v.id)
-                       : [...(vm.values ?? []), v.id],
-                  )}
-                  style={{
-                    padding: '10px 14px', borderRadius: 100, cursor: full ? 'default' : 'pointer',
-                    border: `1px solid ${on ? T.acid : 'transparent'}`,
-                    background: on ? T.acidDim : T.surface,
-                    opacity: full ? 0.4 : 1, fontFamily: FONT,
-                    display: 'flex', alignItems: 'center', gap: 7,
+                    position: 'absolute', right: 12, top: 12, ...glass,
+                    background: accent,
                   }}>
-                  {on && (
-                    <span style={{
-                      width: 17, height: 17, borderRadius: 100, background: T.acid,
-                      display: 'grid', placeItems: 'center',
-                      fontSize: 9.5, fontWeight: 800, color: T.heroInk, ...TNUM,
-                    }}>{at + 1}</span>
-                  )}
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: on ? T.acid : T.ink }}>{v.label}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, ...TNUM }}>{v.value}</span>
+                  <Check size={17} color={T.bg} />
                 </button>
-              )
-            })}
+              </>
+            )}
+
+            {/* ── THE TRAY ───────────────────────────────────────────────
+                Colour and numbers open OVER the card rather than under it, so
+                the rider never loses sight of what they are changing and the
+                page never grows a second screenful. */}
+            {tray && !editing && (
+              <motion.div
+                initial={reduce ? false : { y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+                transition={{ duration: 0.2, ease: EASE }}
+                style={{
+                  position: 'absolute', left: 8, right: 8, bottom: 8, borderRadius: 18,
+                  background: 'rgba(10,10,10,0.86)', backdropFilter: 'blur(10px)',
+                  padding: '13px 14px', display: 'flex', flexDirection: 'column', gap: 11,
+                }}>
+                {tray === 'accent' ? (
+                  <>
+                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>AKZENT</span>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      {ACCENTS.map((a) => (
+                        <button key={a.name} type="button" aria-label={a.name}
+                          onClick={() => onPickAccent?.(a.value)}
+                          style={{
+                            width: 36, height: 36, borderRadius: 100, cursor: 'pointer', background: a.value,
+                            border: accent === a.value ? `3px solid ${T.ink}` : 0,
+                          }} />
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>WERTE</span>
+                      <span style={{ fontSize: 9, fontWeight: 700, color: T.mid, ...TNUM }}>
+                        {(vm.values ?? []).length} VON {MAX_VALUES}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                      {(vm.availableValues ?? []).map((v) => {
+                        const at = (vm.values ?? []).indexOf(v.id)
+                        const on = at >= 0
+                        const full = !on && (vm.values ?? []).length >= MAX_VALUES
+                        return (
+                          <button key={v.id} type="button" disabled={full}
+                            onClick={() => onPickValues?.(
+                              on ? (vm.values ?? []).filter((x) => x !== v.id) : [...(vm.values ?? []), v.id],
+                            )}
+                            style={{
+                              padding: '7px 11px', borderRadius: 100, cursor: full ? 'default' : 'pointer',
+                              border: 0, opacity: full ? 0.35 : 1, fontFamily: FONT,
+                              background: on ? accent : 'rgba(255,255,255,0.10)',
+                              color: on ? T.bg : T.ink, fontSize: 11, fontWeight: 700,
+                            }}>
+                            {v.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+              </motion.div>
+            )}
           </div>
         </div>
 
-        {/* Action row */}
-        <div style={{ padding: '22px 20px 0', display: 'flex', justifyContent: 'space-between' }}>
-          {ACTIONS.map(({ id, label, sub, Icon }) => (
-            <button key={id} onClick={() => onAction(id)}
-              style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT }}>
-              <div style={{ width: 58, height: 58, borderRadius: 100, background: T.surface, display: 'grid', placeItems: 'center' }}><Icon size={22} color={T.ink} /></div>
-              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, alignItems: 'center' }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.ink }}>{label}</span>
-                <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{sub}</span>
-              </span>
+        {/* ── THE FILTER STRIP ───────────────────────────────────────────
+            The same six the swipe walks, so the gesture has somewhere to read
+            itself. Tapping is the shortcut; swiping the card is the gesture a
+            rider already knows from every other photo editor they own. */}
+        <div ref={stripRef} style={{
+          display: 'flex', gap: 8, overflowX: 'auto', scrollbarWidth: 'none',
+          padding: '0 20px 10px', flex: 'none',
+        }}>
+          {STORY_FORMATS.map((f) => {
+            const on = f.id === format
+            return (
+              <button key={f.id} type="button" data-on={on ? '1' : '0'} onClick={() => pickFormat(f.id)}
+                style={{
+                  flex: 'none', padding: '8px 12px', borderRadius: 12, border: 0, cursor: 'pointer',
+                  background: on ? accent : T.surface, fontFamily: FONT,
+                  display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-start',
+                }}>
+                <span style={{ fontSize: 10.5, fontWeight: 700, whiteSpace: 'nowrap', color: on ? T.bg : T.ink }}>{f.name}</span>
+                <span style={{ fontSize: 8.5, fontWeight: 600, whiteSpace: 'nowrap', color: on ? `${T.bg}A6` : T.quiet }}>{f.drops}</span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* ── OUT ────────────────────────────────────────────────────────
+            One button shares the finished file; the three glyphs beside it go
+            somewhere else — the sticker to Instagram's own compositor, the crew
+            into the app, the link to the clipboard. */}
+        <div style={{
+          display: 'flex', gap: 10, alignItems: 'center', flex: 'none',
+          padding: '0 20px calc(12px + env(safe-area-inset-bottom))',
+        }}>
+          <button type="button" onClick={onShare} disabled={!vm.posterDataUrl}
+            style={{
+              flex: 1, height: 50, borderRadius: 100, border: 0, cursor: 'pointer',
+              background: accent, color: T.bg, fontFamily: FONT, fontSize: 15, fontWeight: 700,
+              opacity: vm.posterDataUrl ? 1 : 0.5,
+            }}>
+            {vm.canShare ? 'Teilen' : 'Speichern'}
+          </button>
+          {SECONDARY.map(({ id, label, Icon }) => (
+            <button key={id} type="button" aria-label={label}
+              onClick={() => { if (id === 'sticker') onSticker?.(); else if (id === 'crew') onCrew?.(); else onLink?.() }}
+              style={{ width: 44, height: 44, flex: 'none', borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+              <Icon size={17} color={T.ink} />
             </button>
           ))}
         </div>
 
-        {/* Primary share CTA */}
-        <div style={{ padding: '24px 20px calc(28px + env(safe-area-inset-bottom))', marginTop: 'auto' }}>
-          <button onClick={onShare} disabled={!vm.posterDataUrl}
-            style={{ width: '100%', height: 58, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: vm.posterDataUrl ? 'pointer' : 'default', fontFamily: FONT, opacity: vm.posterDataUrl ? 1 : 0.6 }}>
-            <Share2 size={19} color={T.ink} />
-            <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.ink }}>
-                {vm.canShare ? 'Teilen' : 'Speichern & teilen'}
-              </span>
-              {/* WHERE IT GOES, because "Teilen" alone is the reason a rider
-                  hunts for an Instagram button that was never the point: this
-                  one file works in every app they already message in. */}
-              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.ink, opacity: 0.7 }}>
-                {vm.videoNote ?? 'WhatsApp, iMessage, Instagram — überall'}
-              </span>
-            </span>
-          </button>
-        </div>
+        {/* Images and video through one control — the rider's library already
+            answers which kind they picked. */}
+        <input
+          ref={fileRef} type="file" accept="image/*,video/*" style={HIDDEN_FILE_INPUT}
+          onChange={async (e) => {
+            const f = e.target.files?.[0]
+            e.target.value = ''   // picking the SAME file twice must still fire
+            if (!f) return
+            if (f.type.startsWith('video/')) { onPickVideo?.(f); return }
+            onPickPhoto?.(await fileToDownscaledDataUrl(f, 1440).catch(() => null))
+          }} />
       </div>
     </div>
   )

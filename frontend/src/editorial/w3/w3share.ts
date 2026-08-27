@@ -1148,6 +1148,48 @@ export interface StoryStat { v: string; l: string }
  */
 export type StoryLayout = 'full' | 'silent' | 'trace' | 'headline' | 'viewfinder' | 'effort'
 
+/**
+ * THE FIVE THINGS A RIDER MAY REWRITE — the card's LANGUAGE, never its numbers.
+ *
+ * A share sheet where you can retype the wattage is a lie generator, which is
+ * why nobody trusts a screenshot of a training app. What is the rider's is what
+ * the route is called, what the day was, and the sentence made about it.
+ */
+export type StoryField = 'routeName' | 'dateline' | 'lead' | 'emphasis' | 'ticker'
+
+/** Where one editable word ended up, in 1080x1920 canvas space. */
+export interface StoryTextZone { field: StoryField; x: number; y: number; w: number; h: number }
+
+/**
+ * A tap target smaller than this is not reachable with a thumb, and an EMPTY
+ * field measures zero — the one a rider most needs to tap. In canvas units on
+ * a 1080-wide card, 96 is about 31 CSS px at a 360-wide preview.
+ */
+const MIN_ZONE_H = 96
+
+/**
+ * Stop the minimum from eating the next word.
+ *
+ * `MIN_ZONE_H` exists because an empty field measures nothing and is the one a
+ * rider most needs to tap. But applied blindly it grows a short zone straight
+ * into the one below it: on the Laufband card the dateline is 40 tall at y=114
+ * and the headline starts at y=171, so a 96 minimum put 39px of dateline target
+ * on top of the headline — tapping the big word opened the little one's
+ * keyboard, or would have if the paint order had been the other way round.
+ *
+ * A zone may take the space up to its neighbour and not one pixel more. It
+ * still never shrinks below what it actually drew.
+ */
+function resolveZones(zones: StoryTextZone[]): StoryTextZone[] {
+  const byTop = [...zones].sort((a, b) => a.y - b.y)
+  return byTop.map((z, i) => {
+    const next = byTop[i + 1]
+    if (!next) return z
+    const room = next.y - z.y
+    return room > 0 && z.h > room ? { ...z, h: room } : z
+  })
+}
+
 export interface StoryData {
   /** Which of the five. Defaults to `full`. */
   layout?: StoryLayout
@@ -1283,8 +1325,26 @@ export function laufbandStrings(d: StoryData): { figures: string; verdicts: stri
 
 interface CardSource { src: CanvasImageSource; w: number; h: number }
 
-function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: CardSource | null) {
+function paintStoryCard(
+  ctx: CanvasRenderingContext2D, d: StoryData, photo: CardSource | null,
+  sink?: StoryTextZone[],
+) {
   const layout = d.layout ?? 'full'
+  /**
+   * THE RENDERER REPORTS ITS OWN GEOMETRY.
+   *
+   * The editor draws invisible tap targets over the finished bitmap so a rider
+   * can touch a word instead of hunting for its field in a list below. Those
+   * rectangles could have been a table next to this file — and a table is a
+   * second copy of every coordinate below, which goes stale the first time a
+   * layout is nudged and fails silently, because a tap target that has drifted
+   * looks exactly like one that has not.
+   *
+   * So the paint pass emits them. If the type moved, the target moved with it.
+   */
+  const zone = (field: StoryField, x: number, y: number, w: number, h: number) => {
+    sink?.push({ field, x, y, w, h: Math.max(MIN_ZONE_H, h) })
+  }
   const mono = "'JetBrains Mono', ui-monospace, monospace"
   const accent = d.accent || CARD.acid
   const bare = d.transparent === true
@@ -1428,6 +1488,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     if (!bare) vscrim([[0, 0.702], [0.28, 0.439], [0.55, 0.38], [0.82, 0.58], [1, 0.722]])
 
     text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 114, 28.5, '700', 'rgba(255,255,255,0.65)', 3.9, 'left', FONT, 'top')
+    zone('dateline', MX, 114, CW, 40)
 
     // 138px is the pen's size, not a starting guess: it shrinks only when a
     // route name is longer than "RHEINSCHLEIFE", which is the one thing a
@@ -1440,6 +1501,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
       ctx.font = `700 ${size}px ${NARROW}`
     }
     text(ctx, name, MX, 171, size, '700', CARD.ink, -1.5, 'left', NARROW, 'top')
+    zone('routeName', MX, 171, CW, size * 1.15)
 
     // THE TWO BANDS: acid at 1596 (144 high), ink at 1740 (108 high).
     //
@@ -1452,6 +1514,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     const { figures, verdicts } = laufbandStrings(d)
     laufband(1596, 144, accent, CARD.bg, figures, 72, 1.2, 1629, -42)
     laufband(1740, 108, CARD.bg, accent, verdicts, 51, 2.4, 1767, -288)
+    zone('ticker', 0, 1740, SW, 108)
     return
   }
 
@@ -1483,6 +1546,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     ctx.fillStyle = CARD.bad
     ctx.fill()
     text(ctx, `${d.footer.split(' · ')[0]}  ${(d.routeName ?? '').toUpperCase()}`, 132, 60, 27, '500', 'rgba(255,255,255,0.80)', 1.2, 'left', mono, 'top')
+    zone('routeName', 132, 52, SW - 132 - MX, 44)
 
     // The hero: the number at 234px with its unit set small, bottom-aligned and
     // in the accent — the one loud thing on a card that is pretending to be a
@@ -1492,6 +1556,7 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     text(ctx, d.bigValue, 87, 1203, 234, '700', CARD.ink, -9, 'left', ARCHIVO, 'top')
     text(ctx, d.bigUnit.toUpperCase(), 87 + hv + 21, 1366.5, 36, '700', accent, 3, 'left', mono, 'top')
     text(ctx, [...d.stats.map((x) => x.v), d.dateline ?? ''].filter(Boolean).join('  //  '), 96, 1464, 28.5, '500', 'rgba(255,255,255,0.65)', 1.8, 'left', mono, 'top')
+    zone('dateline', 96, 1456, CW, 44)
 
     // Three labelled cells on the pen's own column stops. Not evenly divided —
     // 96 / 444 / 756 is a monospace grid, and evenly-divided thirds would put
@@ -1534,14 +1599,19 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     if (!bare) vscrim([[0, 0.839], [0.28, 0.78], [0.5, 0.678], [0.72, 0.38], [1, 0.278]])
 
     text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 87, 30, '700', 'rgba(255,255,255,0.70)', 3.6, 'left', FONT, 'top')
+    zone('dateline', MX, 80, CW, 44)
     let ey = 153
+    const leadTop = ey
     for (const line of wrap(ctx, d.lead, 114, '700', CW, ARCHIVO)) {
       text(ctx, line, MX, ey, 114, '700', CARD.ink, -3.6, 'left', ARCHIVO, 'top'); ey += 116.28
     }
+    zone('lead', MX, leadTop, CW, ey - leadTop)
     ey += 30
+    const emphTop = ey
     for (const line of wrap(ctx, d.emphasis, 114, '700', CW, ARCHIVO)) {
       text(ctx, line, MX, ey, 114, '700', accent, -3.6, 'left', ARCHIVO, 'top'); ey += 116.28
     }
+    zone('emphasis', MX, emphTop, CW, ey - emphTop)
 
     // ── THE CHART, 1530 DOWN, FULL BLEED ────────────────────────────────
     // An area and not bars: this is a shape over time, and bars count things.
@@ -1613,6 +1683,8 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
     // No chips, no big number — the line already said how far it went, and a
     // second statement of the same fact is what turns a card into a dashboard.
     text(ctx, (d.routeName ?? '').toUpperCase(), MX, CONTENT_BOTTOM - 120, 58, '700', CARD.ink, -1.4)
+    // Drawn on an ALPHABETIC baseline, so the box starts a cap-height above it.
+    zone('routeName', MX, CONTENT_BOTTOM - 120 - 58, CW, 74)
     const meta = [
       `${d.bigValue} ${d.bigUnit.toUpperCase()}`,
       ...d.stats.map((x) => x.v),
@@ -1683,9 +1755,13 @@ function paintStoryCard(ctx: CanvasRenderingContext2D, d: StoryData, photo: Card
   let y = typeFirst
   if (layout === 'full') {
     ctx.textAlign = 'left'
+    // Alphabetic baselines again: the block's top edge is one size above the
+    // first of them.
+    zone('lead', MX, y - 62, CW, Math.max(1, leadLines.length) * LINE_H)
     for (const line of leadLines) {
       text(ctx, line, MX, y, 62, '700', CARD.ink, -1.4); y += LINE_H
     }
+    zone('emphasis', MX, y - 62, CW, Math.max(1, emphLines.length) * LINE_H)
     for (const line of emphLines) {
       text(ctx, line, MX, y, 62, '700', accent, -1.4); y += LINE_H
     }
@@ -1742,11 +1818,13 @@ export async function renderStoryOverlay(d: StoryData): Promise<{ blob: Blob | n
 }
 
 /** The rider's photograph with their ride written over it. 1080 × 1920. */
-export async function renderStoryCard(d: StoryData): Promise<{ blob: Blob | null; dataUrl: string }> {
+export async function renderStoryCard(
+  d: StoryData,
+): Promise<{ blob: Blob | null; dataUrl: string; zones: StoryTextZone[] }> {
   const canvas = document.createElement('canvas')
   canvas.width = SW; canvas.height = SH
   const ctx = canvas.getContext('2d')
-  if (!ctx) return { blob: null, dataUrl: '' }
+  if (!ctx) return { blob: null, dataUrl: '', zones: [] }
 
   let photo: CardSource | null = null
   if (d.photo) {
@@ -1756,11 +1834,12 @@ export async function renderStoryCard(d: StoryData): Promise<{ blob: Blob | null
       photo = { src: img, w: img.width, h: img.height }
     } catch { photo = null }
   }
-  paintStoryCard(ctx, d, photo)
+  const zones: StoryTextZone[] = []
+  paintStoryCard(ctx, d, photo, zones)
 
   const dataUrl = canvas.toDataURL('image/png')
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
-  return { blob, dataUrl }
+  return { blob, dataUrl, zones: resolveZones(zones) }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
