@@ -49,6 +49,15 @@ export type BriefingTone = 'go' | 'easy' | 'rest' | 'unknown'
 export interface Contributor {
   key: string
   label: string
+  /**
+   * WHAT THE POSITION MEANS, in a clause — the half a spectrum cannot say.
+   *
+   * "HRV · 68 ms" plus a marker leaves the rider to work out whether being
+   * right of the band is the good side; for a resting pulse the answer flips.
+   * The sentence carries the reading and the graph carries the amount, and
+   * together they say the whole thing without either repeating the other.
+   */
+  sentence: string
   value: string
   /** Where the reading landed, 0..1 of the row's scale. Null → no marker. */
   at: number | null
@@ -332,6 +341,10 @@ export function useMorningBriefing(): MorningBriefing {
       contributors.push({
         key: 'sleep', label: 'Schlaf',
         value: `${Math.floor(sleepV.totalS / 3600)}:${String(Math.round((sleepV.totalS % 3600) / 60)).padStart(2, '0')} h`,
+        sentence: hrs >= 7 && hrs <= 9 ? 'Volle Nacht, mitten im Bereich'
+          : hrs > 9 ? 'Länger als sonst'
+          : hrs >= 6 ? 'Etwas kurz, aber tragbar'
+          : 'Deutlich zu kurz',
         at: clamp01(hrs / 10), band: { lo: 0.7, hi: 0.9 }, bandLabel: '7–9 h',
         tone: hrs >= 7 && hrs <= 9 ? 'good' : hrs < 6 ? 'warn' : 'flat',
         dir: hrs >= 7 ? 'up' : hrs < 6 ? 'down' : 'flat',
@@ -344,6 +357,9 @@ export function useMorningBriefing(): MorningBriefing {
         contributors.push({
           key: 'deep', label: 'Tiefschlaf',
           value: `${Math.round(sleepV.deepS / 60)} min`,
+          sentence: share >= 0.13 && share <= 0.23 ? 'Gesunder Anteil an der Nacht'
+            : share > 0.23 ? 'Ungewöhnlich viel Tiefschlaf'
+            : 'Wenig Tiefschlaf für diese Nacht',
           at: clamp01(share / 0.35), band: { lo: 0.13 / 0.35, hi: 0.23 / 0.35 },
           bandLabel: '13–23 %',
           tone: share >= 0.13 && share <= 0.23 ? 'good' : share < 0.10 ? 'warn' : 'flat',
@@ -371,6 +387,9 @@ export function useMorningBriefing(): MorningBriefing {
       const sp = ownSpectrum(hrvV.value, hrvV.band)
       contributors.push({
         key: 'hrv', label: 'HRV', value: `${Math.round(hrvV.value)} ${hrvV.unit}`,
+        sentence: hrvV.band?.position === 'above' ? 'HRV über deinem Bereich — erholt'
+          : hrvV.band?.position === 'below' ? 'HRV unter deinem Bereich'
+          : 'HRV in deinem gewohnten Bereich',
         at: sp.at, band: sp.band,
         bandLabel: hrvV.band ? `${Math.round(hrvV.band.low)}–${Math.round(hrvV.band.high)} ${hrvV.unit}` : null,
         tone: hrvV.band?.position === 'above' ? 'good' : hrvV.band?.position === 'below' ? 'warn' : 'flat',
@@ -381,6 +400,11 @@ export function useMorningBriefing(): MorningBriefing {
       const sp = ownSpectrum(rhrV.value, rhrV.band)
       contributors.push({
         key: 'rhr', label: 'Ruhepuls', value: `${Math.round(rhrV.value)} ${rhrV.unit}`,
+        // Under the band is the GOOD side here, and a marker on the left says
+        // nothing about that on its own.
+        sentence: rhrV.band?.position === 'below' ? 'Ruhepuls niedriger als sonst — gut'
+          : rhrV.band?.position === 'above' ? 'Ruhepuls höher als sonst'
+          : 'Ruhepuls wie gewohnt',
         at: sp.at, band: sp.band,
         bandLabel: rhrV.band ? `${Math.round(rhrV.band.low)}–${Math.round(rhrV.band.high)} ${rhrV.unit}` : null,
         // Below your own band is the best news on the screen for this one.
@@ -507,15 +531,15 @@ export function useMorningBriefing(): MorningBriefing {
     const slept = sleepV ? sleepV.totalS / 3600 : null
     let welcome: string | null = null
     if (slept != null && slept >= 7.5 && (hrvV?.band?.position ?? 'in') !== 'below') {
-      welcome = 'Die Nacht war lang genug. Damit lässt sich was anfangen.'
+      welcome = 'Die Nacht war lang genug.'
     } else if (hrvV?.band?.position === 'above') {
       welcome = 'Dein Körper hat die Nacht gut genutzt.'
     } else if (days >= 7) {
-      welcome = `${days} Tage am Stück. Das ist die Sorte Form, die man sich nicht kauft.`
+      welcome = `${days} Tage am Stück.`
     } else if (body?.yesterdayTss != null && body.yesterdayTss >= 90) {
-      welcome = 'Gestern war ein großer Tag. Heute zählt, was du daraus machst.'
+      welcome = 'Gestern war ein großer Tag.'
     } else if (slept != null && slept < 6) {
-      welcome = 'Kurze Nacht. Nimm dir den Tag entsprechend.'
+      welcome = 'Kurze Nacht — nimm dir den Tag entsprechend.'
     }
 
     return {

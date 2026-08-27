@@ -14,16 +14,16 @@ import type { MorningBriefing } from './useMorningBriefing'
 
 const FULL: MorningBriefing = {
   greeting: 'Guten Morgen, Jannis',
-  welcome: 'Die Nacht war lang genug. Damit lässt sich was anfangen.',
+  welcome: 'Die Nacht war lang genug.',
   readinessVerdict: 'Solide Basis',
   contributors: [
-    { key: 'sleep', label: 'Schlaf', value: '7:24 h', at: 0.74,
+    { key: 'sleep', sentence: 'Volle Nacht, mitten im Bereich', label: 'Schlaf', value: '7:24 h', at: 0.74,
       band: { lo: 0.7, hi: 0.9 }, bandLabel: '7–9 h', tone: 'good', dir: 'up' },
-    { key: 'deep', label: 'Tiefschlaf', value: '96 min', at: 0.62,
+    { key: 'deep', sentence: 'Gesunder Anteil an der Nacht', label: 'Tiefschlaf', value: '96 min', at: 0.62,
       band: { lo: 0.37, hi: 0.66 }, bandLabel: '13–23 %', tone: 'good', dir: 'flat' },
-    { key: 'hrv', label: 'HRV', value: '68 ms', at: 0.78,
+    { key: 'hrv', sentence: 'HRV über deinem Bereich — erholt', label: 'HRV', value: '68 ms', at: 0.78,
       band: { lo: 0.31, hi: 0.69 }, bandLabel: '54–63 ms', tone: 'good', dir: 'up' },
-    { key: 'rhr', label: 'Ruhepuls', value: '46 bpm', at: 0.18,
+    { key: 'rhr', sentence: 'Ruhepuls niedriger als sonst — gut', label: 'Ruhepuls', value: '46 bpm', at: 0.18,
       band: { lo: 0.31, hi: 0.69 }, bandLabel: '48–53 bpm', tone: 'good', dir: 'down' },
   ],
   dateLabel: 'Donnerstag, 27. August',

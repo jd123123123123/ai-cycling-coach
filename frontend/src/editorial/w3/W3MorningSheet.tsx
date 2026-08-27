@@ -255,10 +255,10 @@ function SegmentMeter({ frac, hue, reduce }: { frac: number; hue: string; reduce
  * The marker carries the tone, because being outside the band is good news on
  * one row and bad on another.
  */
-function ContributorRow({ c, accent, reduce, i }: {
-  c: Contributor; accent: string; reduce: boolean; i: number
+function ContributorRow({ c, reduce, i }: {
+  c: Contributor; reduce: boolean; i: number
 }) {
-  const hue = c.tone === 'good' ? accent : c.tone === 'warn' ? T.warn : T.ink
+  const hue = c.tone === 'good' ? T.acidDeep : c.tone === 'warn' ? T.warn : T.d4
   const TRACK = 6
   const Arrow = c.dir === 'up' ? ArrowUpRight : c.dir === 'down' ? ArrowDownRight : ArrowRight
   return (
@@ -273,18 +273,16 @@ function ContributorRow({ c, accent, reduce, i }: {
           }}>
             <Arrow size={11} color={hue} strokeWidth={2.4} />
           </span>
-          <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>{c.label}</span>
+          <span style={{
+            fontSize: 12.5, fontWeight: 500, lineHeight: 1.3, color: T.mid,
+            minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{c.sentence}</span>
         </span>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
-          {c.bandLabel && (
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, color: T.quiet, ...TNUM }}>
-              opt. {c.bandLabel}
-            </span>
-          )}
-          <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink, ...TNUM }}>{c.value}</span>
-        </div>
+        <span style={{ fontSize: 13.5, fontWeight: 600, letterSpacing: -0.1, color: T.ink, flex: 'none', ...TNUM }}>
+          {c.value}
+        </span>
       </div>
-      <div style={{ position: 'relative', width: '100%', height: TRACK }}>
+      <div style={{ position: 'relative', width: '100%', height: TRACK + 14 }}>
         <div style={{ position: 'absolute', inset: 0, borderRadius: 100, background: T.d1 }} />
         {c.band && (
           <motion.div
@@ -295,6 +293,12 @@ function ContributorRow({ c, accent, reduce, i }: {
               position: 'absolute', top: 0, height: TRACK, borderRadius: 100, background: T.d3,
               left: `${c.band.lo * 100}%`, width: `${Math.max(2, (c.band.hi - c.band.lo) * 100)}%`,
             }} />
+        )}
+        {c.band && c.bandLabel && (
+          <span aria-hidden style={{
+            position: 'absolute', top: TRACK + 3, fontSize: 8.5, fontWeight: 500, color: T.quiet,
+            left: `${c.band.lo * 100}%`, ...TNUM,
+          }}>{c.bandLabel}</span>
         )}
         {c.at != null && (
           <motion.div
@@ -345,7 +349,7 @@ function WorkoutProfile({ blocks, reduce, selected, onSelect }: {
   const watts = blocks.map((b) => b.watts ?? 0).filter((w) => w > 0)
   const lo = watts.length ? Math.min(...watts) * 0.72 : 0
   const hi = watts.length ? Math.max(...watts) : 1
-  const H = 54
+  const H = 46
   const h = (w: number | null) => w == null ? 10 : Math.max(8, Math.round(((w - lo) / (hi - lo || 1)) * H))
   const pick = selected != null ? blocks[selected] : null
   return (
@@ -412,7 +416,7 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
     transition: { duration: 0.4, delay: reduce ? 0 : 0.05 + i * 0.07, ease: [0.22, 1, 0.36, 1] as const },
   })
 
-  const card = { ...lux(22), padding: '12px 12px', gap: 9 }
+  const card = { ...lux(22), padding: '12px 12px', gap: 8 }
 
   return (
     <motion.div
@@ -420,14 +424,14 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
       initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.26 }}
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', justifyContent: 'center', background: T.bg }}>
+      style={{ position: 'fixed', inset: 0, zIndex: 130, display: 'flex', justifyContent: 'center', background: T.heroBg }}>
       <div
         role="dialog" aria-modal="true" aria-labelledby="w3-morning-title"
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'relative', width: 390, maxWidth: '100%', height: '100dvh',
           overflowY: 'auto', overflowX: 'hidden',
-          fontFamily: FONT, display: 'flex', flexDirection: 'column', background: T.bg,
+          fontFamily: FONT, display: 'flex', flexDirection: 'column', background: T.heroBg,
         }}>
 
         <div aria-hidden style={{
@@ -465,8 +469,8 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
             {/* ONE line of prose, not three. The date was the least useful of
                 them — a rider opening the app in the morning knows what day it
                 is — and the greeting and the warm line say more together. */}
-            <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>
-              <span style={{ fontWeight: 700, color: T.quiet }}>{briefing.greeting}.</span>
+            <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
+              <span style={{ fontWeight: 600, color: T.quiet }}>{briefing.greeting}.</span>
               {briefing.welcome ? ` ${briefing.welcome}` : ''}
             </span>
           </motion.div>
@@ -488,32 +492,33 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
               generic. */}
           {(briefing.readiness || briefing.why) && (
             <motion.div {...step(2)} style={{ ...card, gap: 12 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%' }}>
+              {/* SYMMETRY IS RESTFUL, and it is the move every calm score
+                  screen makes: the figure centred, the verdict under it, the
+                  working below that. Read left-aligned with the delta pinned
+                  to the right edge, the same three facts scan as a toolbar. */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, width: '100%' }}>
+                <span style={{ fontSize: 11, fontWeight: 500, letterSpacing: 0.2, color: T.quiet }}>Bereitschaft</span>
                 <span style={{
-                  fontSize: 44, fontWeight: 700, lineHeight: 0.86, flex: 'none', ...TNUM,
+                  fontSize: 50, fontWeight: 700, lineHeight: 1.02, ...TNUM,
                   color: briefing.readiness ? accent : T.heroOff,
                 }}>{briefing.readiness?.score ?? DASH}</span>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minWidth: 0 }}>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>Bereitschaft</span>
-                  {/* The verdict when there is one, the reason when there is
-                      not — same slot, same size, so the block never changes
-                      shape between a good morning and a missed sync. */}
-                  <span style={{
-                    fontSize: 17, fontWeight: 700, letterSpacing: -0.4, minWidth: 0,
-                    color: briefing.readiness ? T.ink : T.mid,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {briefing.readinessVerdict ?? briefing.why ?? 'Noch keine Messung'}
-                  </span>
-                </div>
-                {briefing.readiness?.delta != null && briefing.readiness.delta !== 0 && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', flex: 'none' }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>Gestern</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: T.ink, ...TNUM }}>
-                      {briefing.readiness.delta > 0 ? '+' : '−'}{Math.abs(Math.round(briefing.readiness.delta))}
+                {/* The verdict when there is one, the reason when there is not
+                    — same slot, same size, so the block never changes shape
+                    between a good morning and a missed sync. */}
+                <span style={{
+                  fontSize: 17, fontWeight: 600, letterSpacing: -0.2, textAlign: 'center',
+                  color: briefing.readiness ? T.ink : T.mid, textWrap: 'balance',
+                }}>
+                  {briefing.readinessVerdict ?? briefing.why ?? 'Noch keine Messung'}
+                  {briefing.readiness?.delta != null && briefing.readiness.delta !== 0 && (
+                    // Inline, not on a line of its own: the change is a footnote
+                    // to the verdict, and giving it its own row made the hero
+                    // four stacked texts deep.
+                    <span style={{ fontWeight: 500, color: T.quiet, ...TNUM }}>
+                      {'  '}{briefing.readiness.delta > 0 ? '+' : '−'}{Math.abs(Math.round(briefing.readiness.delta))}
                     </span>
-                  </div>
-                )}
+                  )}
+                </span>
               </div>
 
               {briefing.readiness && (
@@ -521,9 +526,9 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
               )}
 
               {briefing.contributors.length > 0 && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 13, width: '100%' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 11, width: '100%' }}>
                   {briefing.contributors.map((c, i) => (
-                    <ContributorRow key={c.key} c={c} accent={accent} reduce={!!reduce} i={i} />
+                    <ContributorRow key={c.key} c={c} reduce={!!reduce} i={i} />
                   ))}
                 </div>
               )}
