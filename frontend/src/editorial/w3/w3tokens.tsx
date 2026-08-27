@@ -88,6 +88,29 @@ const DARK = {
   training: '#2BE68F', evening: '#7B5CFF', cool: '#6B8CFF',
   warn: '#FFB020', bad: '#FF4356',
 
+  // ── THE MORNING BRIEFING'S OWN SET (pen `AfZLS`) ───────────────────────
+  // The one surface in the app with an ambient sky behind it rather than a
+  // flat ground, and the one that draws a session in its own colours. These
+  // are palette values, not accents: they never mark data, they paint the
+  // atmosphere and the shape of a workout.
+  //
+  // The three washes are the pen's own — warm at the top where the sun would
+  // be, violet low on the left, acid low on the right — and together they are
+  // what stops a 6 a.m. screen from being a black rectangle.
+  skyWarm: '#FFA35C', skyGlow: '#FF7A2E', skyGround: '#07080B',
+  // The readiness arc runs warm → acid as it fills, so a low score is orange
+  // and a high one is the brand's green without either being a verdict colour.
+  ringWarm: '#FF9A4D', ringMid: '#E8F53C',
+  //: The score sits in a pale acid rather than white — lit by its own arc.
+  scoreInk: '#EAFFA8',
+  // A workout profile in two materials: effort is hot, recovery is cool. It is
+  // the convention every training app uses and the reason a profile reads as a
+  // session at a glance rather than as a chart.
+  effortFrom: '#FF8A00', effortTo: '#F5C518',
+  easyFrom: '#2F5FC4', easyTo: '#3E7BFA',
+  //: The pill's own gradient, top highlight to bottom shade.
+  acidHi2: '#DDFF6E', acidMid: '#A9DE00',
+
   // ── VITAL SIGNS ────────────────────────────────────────────────────────
   // Cyan was not a decision anyone made; it appeared as a literal in five
   // files (the HRV number, the HRV spark, the REM sleep stage, a studio

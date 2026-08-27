@@ -166,8 +166,8 @@ export interface MorningBriefing {
     bestFrom: number | null
     bestTo: number | null
   } | null
-  /** Today's readiness, for the ring. Null whenever the gate withholds it —
-   *  the ring then draws empty rather than at an invented angle. */
+  /** Today's readiness. Null whenever the gate withholds it — the arc then
+   *  draws empty rather than at an invented angle. */
   readiness: { score: number; delta: number | null } | null
 
   /**
@@ -341,10 +341,10 @@ export function useMorningBriefing(): MorningBriefing {
       contributors.push({
         key: 'sleep', label: 'Schlaf',
         value: `${Math.floor(sleepV.totalS / 3600)}:${String(Math.round((sleepV.totalS % 3600) / 60)).padStart(2, '0')} h`,
-        sentence: hrs >= 7 && hrs <= 9 ? 'Volle Nacht, mitten im Bereich'
+        sentence: hrs >= 7 && hrs <= 9 ? 'Volle Nacht'
           : hrs > 9 ? 'Länger als sonst'
-          : hrs >= 6 ? 'Etwas kurz, aber tragbar'
-          : 'Deutlich zu kurz',
+          : hrs >= 6 ? 'Etwas kurz'
+          : 'Zu kurz',
         at: clamp01(hrs / 10), band: { lo: 0.7, hi: 0.9 }, bandLabel: '7–9 h',
         tone: hrs >= 7 && hrs <= 9 ? 'good' : hrs < 6 ? 'warn' : 'flat',
         dir: hrs >= 7 ? 'up' : hrs < 6 ? 'down' : 'flat',
@@ -357,9 +357,9 @@ export function useMorningBriefing(): MorningBriefing {
         contributors.push({
           key: 'deep', label: 'Tiefschlaf',
           value: `${Math.round(sleepV.deepS / 60)} min`,
-          sentence: share >= 0.13 && share <= 0.23 ? 'Gesunder Anteil an der Nacht'
-            : share > 0.23 ? 'Ungewöhnlich viel Tiefschlaf'
-            : 'Wenig Tiefschlaf für diese Nacht',
+          sentence: share >= 0.13 && share <= 0.23 ? 'Gesunder Tiefschlaf'
+            : share > 0.23 ? 'Viel Tiefschlaf'
+            : 'Wenig Tiefschlaf',
           at: clamp01(share / 0.35), band: { lo: 0.13 / 0.35, hi: 0.23 / 0.35 },
           bandLabel: '13–23 %',
           tone: share >= 0.13 && share <= 0.23 ? 'good' : share < 0.10 ? 'warn' : 'flat',
@@ -387,12 +387,13 @@ export function useMorningBriefing(): MorningBriefing {
       const sp = ownSpectrum(hrvV.value, hrvV.band)
       contributors.push({
         key: 'hrv', label: 'HRV', value: `${Math.round(hrvV.value)} ${hrvV.unit}`,
-        sentence: hrvV.band?.position === 'above' ? 'HRV über deinem Bereich — erholt'
+        sentence: hrvV.band?.position === 'above' ? 'HRV über deinem Bereich'
           : hrvV.band?.position === 'below' ? 'HRV unter deinem Bereich'
-          : 'HRV in deinem gewohnten Bereich',
+          : 'HRV in deinem Bereich',
         at: sp.at, band: sp.band,
         bandLabel: hrvV.band ? `${Math.round(hrvV.band.low)}–${Math.round(hrvV.band.high)} ${hrvV.unit}` : null,
-        tone: hrvV.band?.position === 'above' ? 'good' : hrvV.band?.position === 'below' ? 'warn' : 'flat',
+        // In band = good. Outside it, either way, = worth a look.
+        tone: hrvV.band == null ? 'flat' : hrvV.band.position === 'in' ? 'good' : 'warn',
         dir: hrvV.band?.position === 'above' ? 'up' : hrvV.band?.position === 'below' ? 'down' : 'flat',
       })
     }
@@ -402,13 +403,13 @@ export function useMorningBriefing(): MorningBriefing {
         key: 'rhr', label: 'Ruhepuls', value: `${Math.round(rhrV.value)} ${rhrV.unit}`,
         // Under the band is the GOOD side here, and a marker on the left says
         // nothing about that on its own.
-        sentence: rhrV.band?.position === 'below' ? 'Ruhepuls niedriger als sonst — gut'
-          : rhrV.band?.position === 'above' ? 'Ruhepuls höher als sonst'
-          : 'Ruhepuls wie gewohnt',
+        sentence: rhrV.band?.position === 'below' ? 'Ruhepuls niedriger — erholt'
+          : rhrV.band?.position === 'above' ? 'Ruhepuls über deinem Bereich'
+          : 'Ruhepuls in deinem Bereich',
         at: sp.at, band: sp.band,
         bandLabel: rhrV.band ? `${Math.round(rhrV.band.low)}–${Math.round(rhrV.band.high)} ${rhrV.unit}` : null,
-        // Below your own band is the best news on the screen for this one.
-        tone: rhrV.band?.position === 'below' ? 'good' : rhrV.band?.position === 'above' ? 'warn' : 'flat',
+        // Directional: below or inside the band is good; only above is a flag.
+        tone: rhrV.band == null ? 'flat' : rhrV.band.position === 'above' ? 'warn' : 'good',
         dir: rhrV.band?.position === 'above' ? 'up' : rhrV.band?.position === 'below' ? 'down' : 'flat',
       })
     }
