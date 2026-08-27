@@ -286,11 +286,16 @@ _ANALYSIS = {
         "single most common way this likeness goes wrong. If there is none, say so plainly.\n"
         "3. SKIN TONE and ethnic features — described accurately and respectfully. This must be "
         "reproduced truthfully and must never be lightened or altered.\n"
-        "4. THE OVERALL SHAPE of the face — round, square, long, heart-shaped — and eye colour.\n\n"
+        "4. THE OVERALL SHAPE of the face — round, square, long, heart-shaped — and the eye "
+        "colour as a single colour word.\n\n"
         "Keep it to those. Do NOT describe pores, wrinkles, blemishes, skin texture, fine jawline "
         "structure, or anything that would push an artist toward photorealism — that detail makes "
         "this style worse, not better. Describe the person warmly and flatteringly; this is "
         "someone's own avatar and they should be pleased with it.\n\n"
+        "THE EXPRESSION BELONGS TO THE STYLE, exactly as the kit does. The avatar wears one "
+        "fixed look on its face on every rider, so describe this person AT REST — the shapes "
+        "that are true of them whatever their face happens to be doing in the photograph. "
+        "What the four points above ask for is bone and hair, and that is the whole job.\n\n"
         "Say nothing about their clothing: the avatar wears a fixed kit."
     ),
     "bike": (
