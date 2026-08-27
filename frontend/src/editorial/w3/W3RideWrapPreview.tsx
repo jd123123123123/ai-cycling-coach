@@ -1,10 +1,15 @@
 import W3RideWrap, { type W3RideWrapVm } from './W3RideWrap'
-import W3RideDetailPreview from './W3RideDetailPreview'
 import { T } from './w3tokens'
 
 /** Backend-free preview of the ride wrap — /e/w3-ride-wrap-preview, unguarded.
  *  Feeds the REAL component the view model the live page will build, so the
  *  design can be judged without a session. Values mirror pen frame `tN23S`. */
+
+/** A short demo track, so the route-as-ground can be looked at without a ride. */
+const DEMO_ROUTE: [number, number][] = Array.from({ length: 60 }, (_, i) => {
+  const t = i / 59
+  return [38.70 + Math.sin(t * 5) * 0.006 + t * 0.012, -9.19 + t * 0.055] as [number, number]
+})
 
 const VM: W3RideWrapVm = {
   chip: 'SONNENAUFGANG · SOLO',
@@ -20,29 +25,20 @@ const VM: W3RideWrapVm = {
     { key: 'climb', label: 'HÖHENMETER', value: '612', unit: 'm', note: 'BESTWERT', fill: 1, best: true },
     { key: 'power', label: 'Ø LEISTUNG', value: '234', unit: 'W', note: '+12 zur Basis', fill: 0.64 },
   ],
-  ctaLabel: 'FAHRT TEILEN',
+  rewardRc: 128,
+  polyline: DEMO_ROUTE,
 }
 
 /** Stands in for the hero room's bike-on-a-scene until it is portalled in. */
-function HeroStandIn() {
-  return (
-    <div style={{
-      height: 260, width: '100%',
-      // Tokens only — `isolation.test` rejects a raw hex here, and it is right
-      // to: a stand-in is exactly where a seventh violet gets invented.
-      background: `radial-gradient(circle at 50% 62%, ${T.acid}26, ${T.acid}0d 42%, transparent 68%), linear-gradient(180deg, ${T.nightMid}, ${T.bg})`,
-    }} />
-  )
-}
 
 export default function W3RideWrapPreview() {
   return (
     <div className="w3-root">
-      <div className="w3-frame" style={{ minHeight: '100dvh', background: T.bg }}>
-        {/* The composition the celebration route renders: the wrap is the lede
-            and the whole ride detail runs underneath it, one scroll. */}
-        <W3RideWrap vm={VM} hero={<HeroStandIn />} />
-        <W3RideDetailPreview />
+      <div className="w3-frame" style={{ height: '100dvh', overflow: 'hidden', background: T.bg }}>
+        {/* ONE PAGE. The ride detail used to run underneath this — the screen a
+            rider most wants to screenshot ended in a scroll into analysis. It
+            is reached by name now, from the link under the button. */}
+        <W3RideWrap vm={VM} onClose={() => {}} onUnlock={() => {}} onShare={() => {}} onDetails={() => {}} />
       </div>
     </div>
   )

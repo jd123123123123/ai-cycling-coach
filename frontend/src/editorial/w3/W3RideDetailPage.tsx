@@ -6,6 +6,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useActivity } from '../../hooks/useActivity'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
+import { useChest } from '../../hooks/useWallet'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
 import type { W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
@@ -379,7 +380,9 @@ const SCENE_STATUSES: W3SceneStatus[] = ['ok', 'not_generated', 'needs_rider', '
  * no power meter does not get an empty tile — it gets its average speed, which
  * it does have.
  */
-function toWrapVm(d: RaceDebrief, activity: ActivityRead | null): W3RideWrapVm {
+function toWrapVm(
+  d: RaceDebrief, activity: ActivityRead | null, rewardRc: number | null,
+): W3RideWrapVm {
   const h = d.header
   const nf = (n: number, dp = 0) =>
     n.toLocaleString('de-DE', { minimumFractionDigits: dp, maximumFractionDigits: dp })
@@ -426,7 +429,9 @@ function toWrapVm(d: RaceDebrief, activity: ActivityRead | null): W3RideWrapVm {
     heroValue: h.distance_km != null ? nf(h.distance_km, 1) : '—',
     heroUnit: 'km',
     stats,
-    ctaLabel: 'FAHRT TEILEN',
+    // The route IS this screen's ground now, not a panel further down it.
+    polyline: activity?.route_polyline ?? null,
+    rewardRc,
   }
 }
 
@@ -453,6 +458,14 @@ export default function W3RideDetailPage() {
   // The composed hero: a cheap cache read on open (it never generates), plus the
   // slow compose behind an explicit tap. While the read is in flight the View
   // shows the route trace — instant and real — instead of a spinner.
+  // What is in the chest for THIS ride. `useChest` answers about the newest
+  // sealed one, so it only counts when it is the ride on screen — otherwise the
+  // button would offer another day's coins.
+  const { data: chest } = useChest()
+  const rewardRc = chest?.sealed && chest.activity_id === activityId && chest.total != null
+    ? chest.total
+    : null
+
   const { data: sceneData } = useRideScene(activityId)
   const compose = useRenderRideScene()
   const scene: W3RideSceneState = useMemo(() => {
@@ -489,8 +502,8 @@ export default function W3RideDetailPage() {
   )
 
   const wrapVm = useMemo(
-    () => (celebrate && data ? toWrapVm(data, activity) : null),
-    [celebrate, data, activity],
+    () => (celebrate && data ? toWrapVm(data, activity, rewardRc) : null),
+    [celebrate, data, activity, rewardRc],
   )
 
   if (!vm || !heroVm) return <W3Loading label="Lade deine Fahrt…" />
@@ -512,27 +525,24 @@ export default function W3RideDetailPage() {
     />
   )
 
-  // ── ONE RIDE, ONE SCROLL ────────────────────────────────────────────────
-  // The celebration is not a second screen: the wrap is the lede and the whole
-  // ride detail runs underneath it, so "scroll down for everything" is literally
-  // true and there is one fetch, one view model and one page to keep right.
+  // ── THE CELEBRATION IS ONE PAGE, AND THE DETAIL IS A LINK ───────────────
+  // The whole ride detail used to run underneath the wrap, so the screen a
+  // rider most wants to screenshot ended in a scroll into analysis. It is a
+  // poster now — one viewport, the route as its ground — and the analysis is
+  // reached by name, on the same page a past ride opens.
   if (!wrapVm) return detail
   return (
     <div className="w3-root">
-      <div className="w3-frame" style={{ minHeight: '100dvh', background: T.bg }}>
+      <div className="w3-frame" style={{ height: '100dvh', overflow: 'hidden', background: T.bg }}>
         <W3RideWrap
           vm={wrapVm}
           // Back to Today, not `navigate(-1)`: the chest that opens this lives
           // on Today, and history here can be the share screen the rider just
           // backed out of.
           onClose={() => navigate('/e/w3-today')}
-          hero={
-            scene.status === 'ok' && scene.image
-              ? <img src={scene.image} alt="" style={{ display: 'block', width: '100%', objectFit: 'cover' }} />
-              : undefined
-          }
+          onUnlock={() => id && navigate(`/e/w3-ride-points/${id}`)}
+          onDetails={() => id && navigate(`/e/w3-ride/${id}`)}
           onShare={() => id && navigate(`/e/w3-share/${id}`)} />
-        {detail}
       </div>
     </div>
   )
