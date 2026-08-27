@@ -1131,8 +1131,26 @@ const SAFE_BOTTOM = 370
 // too far.
 const MX = 72
 
-/** The last baseline that will not sit under Instagram's reply bar. */
+/** The last baseline that will not sit under Instagram's reply bar. Anything
+ *  that must be READ — a headline, a number, a stat — stops here. */
 const CONTENT_BOTTOM = SH - SAFE_BOTTOM
+
+/**
+ * WHERE THE CARD ENDS, WHICH IS NOT WHERE THE READING ENDS.
+ *
+ * The pen's own transcribed cards sign much lower than `CONTENT_BOTTOM`: the
+ * HUD's waveform runs to 1842, the Laufband's second band to 1848, the
+ * Effort-Kurve's mark to 1861. The four layouts built from `markAndFooter` put
+ * their footer at 1550 instead, and side by side that reads as those four
+ * stopping a fifth of the card early — the same content, floating well above
+ * where the rest of the family sits.
+ *
+ * So the FURNITURE — the dateline, the signature, the tile row that carries no
+ * sentence — lands on this line with the rest of them. It is inside the reply
+ * bar's band, and that is a real cost, paid knowingly: nothing here is prose,
+ * and a family of cards that do not agree where their own bottom is costs more.
+ */
+const FOOT = SH - 72
 
 /** Usable width between the margins. */
 const CW = SW - MX * 2
@@ -1424,8 +1442,8 @@ function paintStoryCard(
   // The footer sits ON the bottom safe line, not 74px from the canvas edge —
   // where it used to be, it was behind Instagram's reply bar on every post.
   const markAndFooter = (footerColor = 'rgba(255,255,255,0.5)') => {
-    text(ctx, d.footer, MX, CONTENT_BOTTOM, 24, '600', footerColor, 0.6)
-    signature(ctx, SW - MX, CONTENT_BOTTOM, 26, CARD.ink, accent)
+    text(ctx, d.footer, MX, FOOT, 24, '600', footerColor, 0.6)
+    signature(ctx, SW - MX, FOOT, 26, CARD.ink, accent)
   }
 
   const strip = (top: number) => {
@@ -1525,7 +1543,7 @@ function paintStoryCard(
   // against the wrong margin, one band, and a bar rule under it — is why the
   // screen did not look like the drawing.
   if (layout === 'headline') {
-    if (!bare) vscrim([[0, 0.702], [0.28, 0.439], [0.55, 0.38], [0.82, 0.58], [0.962, 0.66], [1, 0.34]])
+    if (!bare) vscrim([[0, 0.7], [0.23, 0.36], [0.5, 0.14], [0.72, 0.34], [0.87, 0.6], [0.962, 0.66], [1, 0.34]])
 
     text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 114, 28.5, '700', 'rgba(255,255,255,0.65)', 3.9, 'left', FONT, 'top')
     zone('dateline', MX, 114, CW, 40)
@@ -1564,7 +1582,7 @@ function paintStoryCard(
   // is the opposite pitch to the Laufband — that one shouts a verdict, this one
   // claims not to have an opinion.
   if (layout === 'viewfinder') {
-    if (!bare) vscrim([[0, 0.749], [0.24, 0.478], [0.5, 0.259], [0.78, 0.322], [1, 0.58]])
+    if (!bare) vscrim([[0, 0.74], [0.24, 0.4], [0.46, 0.16], [0.62, 0.22], [0.82, 0.44], [1, 0.6]])
 
     // The grid: four verticals, three horizontals, 7% white. Furniture that
     // says "instrument" without ever being mistaken for data.
@@ -1636,7 +1654,7 @@ function paintStoryCard(
   // above threshold is not the same statement as a card about a personal best,
   // and the colour is how a rider says which one they are making.
   if (layout === 'effort') {
-    if (!bare) vscrim([[0, 0.839], [0.28, 0.78], [0.5, 0.678], [0.72, 0.38], [1, 0.278]])
+    if (!bare) vscrim([[0, 0.86], [0.29, 0.74], [0.43, 0.32], [0.58, 0.15], [0.76, 0.22], [1, 0.3]])
 
     text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 87, 30, '700', 'rgba(255,255,255,0.70)', 3.6, 'left', FONT, 'top')
     zone('dateline', MX, 80, CW, 44)
@@ -1661,7 +1679,12 @@ function paintStoryCard(
       const pts2 = d.series.slice(0, 96)
       const step = SW / (pts2.length - 1)
       const base = 1920
-      const at = (v: number) => 1920 - 60 - Math.max(0, Math.min(1, v)) * 330
+      //: THE CURVE STOPS BELOW THE LABELS. At 330 of amplitude a full-effort
+      //: peak reached 1530 and ran straight through the readings row above it
+      //: — invisible while the area was a flat acid slab, obvious the moment
+      //: the fill became a fade. The label row ends at 1582; the chart starts
+      //: under it.
+      const at = (v: number) => 1920 - 60 - Math.max(0, Math.min(1, v)) * 246
       ctx.beginPath()
       ctx.moveTo(0, base)
       pts2.forEach((v, i) => ctx.lineTo(i * step, at(v)))
@@ -1678,7 +1701,7 @@ function paintStoryCard(
       ctx.fillStyle = area
       ctx.fill()
       ctx.fillStyle = accent + '8C'
-      ctx.fillRect(0, 1704, SW, 3)
+      ctx.fillRect(0, 1736, SW, 3)
       ctx.beginPath()
       pts2.forEach((v, i) => (i === 0 ? ctx.moveTo(0, at(v)) : ctx.lineTo(i * step, at(v))))
       ctx.strokeStyle = accent
@@ -1735,7 +1758,11 @@ function paintStoryCard(
    * when that picture never arrives — see `groundIsRoute`.
    */
   if (layout === 'wrap') {
-    if (!bare) vscrim([[0, 0.82], [0.3, 0.52], [0.55, 0.42], [0.78, 0.7], [0.83, 0.72], [1, 0.4]])
+    //: BOOKENDS, NOT A WASH. The old stops never dropped below 0.42, which
+    //: fogged the middle of the card — the part the ride is drawn on — to make
+    //: room for type that lives at the two ends. The weight is at the ends now
+    //: and the middle is nearly clear: the road is what the card is about.
+    if (!bare) vscrim([[0, 0.8], [0.19, 0.36], [0.38, 0.15], [0.56, 0.17], [0.74, 0.5], [0.9, 0.74], [1, 0.5]])
     if (!d.groundIsRoute && d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
 
     // ONE top line, and it must not say the route twice. `dateline` already
@@ -1780,7 +1807,7 @@ function paintStoryCard(
     if (shown.length > 0) {
       const gap = 18
       const tw = (CW - gap * (shown.length - 1)) / shown.length
-      const ty = CONTENT_BOTTOM - 214
+      const ty = FOOT - 214
       shown.forEach((st, i) => {
         const tx = MX + i * (tw + gap)
         //: GLASS HAS AN EDGE. At 62% over the ground colour these were tiles;
@@ -1835,15 +1862,15 @@ function paintStoryCard(
     // Pen `i4lb4E`: the name in caps, ONE meta line under it, both hard left.
     // No chips, no big number — the line already said how far it went, and a
     // second statement of the same fact is what turns a card into a dashboard.
-    text(ctx, (d.routeName ?? '').toUpperCase(), MX, CONTENT_BOTTOM - 120, 58, '700', CARD.ink, -1.4)
+    text(ctx, (d.routeName ?? '').toUpperCase(), MX, FOOT - 120, 58, '700', CARD.ink, -1.4)
     // Drawn on an ALPHABETIC baseline, so the box starts a cap-height above it.
-    zone('routeName', MX, CONTENT_BOTTOM - 120 - 58, CW, 74)
+    zone('routeName', MX, FOOT - 120 - 58, CW, 74)
     const meta = [
       `${d.bigValue} ${d.bigUnit.toUpperCase()}`,
       ...d.stats.map((x) => x.v),
       d.dateline ?? '',
     ].filter(Boolean).join('  ·  ')
-    text(ctx, meta, MX, CONTENT_BOTTOM - 66, 26, '600', CARD.mid, 1)
+    text(ctx, meta, MX, FOOT - 66, 26, '600', CARD.mid, 1)
     markAndFooter(CARD.quiet)
     return
   }
@@ -1861,8 +1888,8 @@ function paintStoryCard(
   const FOOTER_GAP = 46
   const STRIP_H = 74
   const hasStrip = d.series.length > 0
-  const stripTop = CONTENT_BOTTOM - FOOTER_GAP - STRIP_H
-  const baseline = (hasStrip ? stripTop : CONTENT_BOTTOM - FOOTER_GAP) - 52
+  const stripTop = FOOT - FOOTER_GAP - STRIP_H
+  const baseline = (hasStrip ? stripTop : FOOT - FOOTER_GAP) - 52
 
   // The headline is measured before anything is drawn, so the scrim can start
   // above the type block instead of at a fixed height that knows nothing about
@@ -1903,13 +1930,14 @@ function paintStoryCard(
   // is at its heaviest through the type and lifts after the footer, so the
   // picture runs off the bottom of the card instead of fading into furniture.
   const scrimTop = Math.max(SAFE_TOP + 220, typeTop - 260)
-  const release = (CONTENT_BOTTOM + 40 - scrimTop) / (SH - scrimTop)
+  const release = (FOOT + 30 - scrimTop) / (SH - scrimTop)
   const bottom = ctx.createLinearGradient(0, scrimTop, 0, SH)
   bottom.addColorStop(0, 'rgba(0,0,0,0)')
-  bottom.addColorStop(0.55, 'rgba(0,0,0,0.78)')
-  bottom.addColorStop(Math.min(0.8, release), 'rgba(0,0,0,0.86)')
-  bottom.addColorStop(Math.min(0.99, release + 0.01), 'rgba(0,0,0,0.82)')
-  bottom.addColorStop(1, 'rgba(0,0,0,0.34)')
+  bottom.addColorStop(0.42, 'rgba(0,0,0,0.5)')
+  bottom.addColorStop(0.62, 'rgba(0,0,0,0.76)')
+  bottom.addColorStop(Math.min(0.92, release), 'rgba(0,0,0,0.82)')
+  bottom.addColorStop(Math.min(0.99, release + 0.01), 'rgba(0,0,0,0.78)')
+  bottom.addColorStop(1, 'rgba(0,0,0,0.42)')
   ctx.fillStyle = bottom
   ctx.fillRect(0, scrimTop, SW, SH - scrimTop)
 

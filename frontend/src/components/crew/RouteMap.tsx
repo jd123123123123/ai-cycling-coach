@@ -89,6 +89,10 @@ export interface RouteMapProps {
    * asks for it — never the maps a rider actually looks at.
    */
   snapshot?: boolean
+  /** Overrides the fit padding, in CSS pixels. An object pushes the route off
+   *  one edge more than another — which is how a share card gets the ride in
+   *  its MIDDLE band, with the top and bottom left clear for type. */
+  fitPadding?: number | { top: number; bottom: number; left: number; right: number }
   /** Called once the tiles have settled, with a reader for the composited
    *  frame. Returns null when the context is gone or the buffer was not kept. */
   onSnapshot?: (read: () => string | null) => void
@@ -303,7 +307,7 @@ function repaint(map: MlMap, p: MapPalette): void {
 
 export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
-  snapshot = false, onSnapshot,
+  snapshot = false, onSnapshot, fitPadding,
   lineColors, markerLatLng = null,
   lineColor = '#FF5A3C', lineWidth = 4, startColor = '#16E08A', endColor = '#FF5A3C',
   attributionBottom, palette, terrain = false,
@@ -336,7 +340,7 @@ export default function RouteMap({
           container: holder.current,
           style: STYLE_URL[styleKey],
           bounds: boundsOf(polyline),
-          fitBoundsOptions: { padding: interactive ? 48 : 34, animate: false },
+          fitBoundsOptions: { padding: fitPadding ?? (interactive ? 48 : 34), animate: false },
           interactive,
           cooperativeGestures: interactive,
           attributionControl: false,
@@ -556,7 +560,7 @@ export default function RouteMap({
     // change to one would mean a different screen rather than a new value on
     // this one. Pass them as literals; animating them will not work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polyline, styleKey, interactive, failed, palette, terrain])
+  }, [polyline, styleKey, interactive, failed, palette, terrain, fitPadding])
 
   // Scrub position. Deliberately NOT part of the effect above: rebuilding a
   // MapLibre instance per pointer-move would be unusable on a phone.

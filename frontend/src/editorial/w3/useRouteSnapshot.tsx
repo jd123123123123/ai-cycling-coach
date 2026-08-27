@@ -40,6 +40,21 @@ const SNAP_H = 1280
  *  fails silently, so the only way out is a clock. */
 const GIVE_UP_MS = 6000
 
+/**
+ * THE RIDE GOES IN THE MIDDLE.
+ *
+ * Fitted to the frame the route runs edge to edge, and every card then prints
+ * its headline over the top of the road and its tiles over the bottom of it.
+ * The shape a rider recognises is the shape they can SEE, so the fit is pushed
+ * into the middle band and the two ends are left to the type — the same reason
+ * a poster leaves a margin, applied to a picture that has none.
+ *
+ * These are snapshot pixels (720x1280); the card is 1.5x that. 300 top and
+ * bottom leaves the route the middle 53% of the card — clear of the headline
+ * block above it and the tile row below.
+ */
+const FIT = { top: 300, bottom: 300, left: 72, right: 72 }
+
 export function useRouteSnapshot(polyline: [number, number][] | null | undefined): {
   /** The map as a JPEG data URL, or null while it is coming / if it never does. */
   image: string | null
@@ -97,6 +112,7 @@ export function useRouteSnapshot(polyline: [number, number][] | null | undefined
           lineWidth={10}
           startColor={T.ink}
           endColor={T.acid}
+          fitPadding={FIT}
           snapshot
           onSnapshot={(read) => {
             const url = read()
