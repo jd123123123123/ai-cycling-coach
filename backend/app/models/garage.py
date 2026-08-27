@@ -59,6 +59,46 @@ class GarageAsset(Base):
     name it, never guessed here.
     """
 
+    #: The rider's own photograph, kept so a re-render can still be THEM.
+    #:
+    #: WHAT BREAKS WITHOUT IT. Until this column existed the only thing that
+    #: survived onboarding was ``description`` — roughly 120 words of prose. Every
+    #: later render went through that bottleneck: `/garage/asset/{kind}/restyle`
+    #: re-renders from prose, and every scene composition (`RideScene`,
+    #: `DayScene`) describes the rider to the image model in words. A hundred and
+    #: twenty words is on the order of forty bits once you account for how little
+    #: of English prose is actually free choice, and a face is not a forty-bit
+    #: object. So the second render was never the same person as the first: same
+    #: hair colour, same skin tone, same glasses — a different face. The rider
+    #: read that, correctly, as the app losing them. The fix upstream is to hand
+    #: the image model the actual photograph instead of a paragraph about it, and
+    #: that fix is worth nothing on a RE-render if the photograph is gone. It was:
+    #: `render_asset` passed the upload through the studio and dropped it on the
+    #: floor, so identity was destroyed permanently the moment onboarding
+    #: finished. This column is the photograph surviving that moment.
+    #:
+    #: IT IS A CROP, NOT THE PHOTOGRAPH. What goes in is a head crop — about
+    #: 512 px on the long edge, WebP q82, well under 60 KB as a
+    #: ``data:image/webp;base64`` URL — produced the same way `crew_avatars`
+    #: makes its thumbnails. Three reasons it is not the original upload. The
+    #: renders that need it are portraits, so the shoulders down are pixels no
+    #: consumer ever looks at. This row is read on many requests and is already
+    #: carrying a rendered collectible; the upload itself is multi-megabyte and
+    #: base64 adds another third on top. And keeping the least of someone's photo
+    #: that still does the job is the right default for a picture of their face:
+    #: what is not stored cannot leak.
+    #:
+    #: NULLABLE, AND STAYS THAT WAY. Every row that predates this column has
+    #: none, and no backfill is possible — the originals were never kept. A rider
+    #: from before simply keeps re-rendering from prose exactly as they do today;
+    #: nothing reads this column expecting it to be there. Only the rider slot
+    #: fills it: a bicycle is not an identity and `render_bike_from_photo`
+    #: already renders bikes from the photo directly.
+    #:
+    #: IT BELONGS TO THE RENDER PATH AND NOWHERE ELSE. It is never returned by
+    #: `/garage` or by any other response schema — see the field-by-field
+    #: `AssetOut` in `api/garage.py`, and the test that pins its absence.
+
     __tablename__ = "garage_assets"
     __table_args__ = (
         UniqueConstraint("user_id", "kind", name="uq_garage_asset_user_kind"),
@@ -72,6 +112,7 @@ class GarageAsset(Base):
     name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_photo: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,
     )

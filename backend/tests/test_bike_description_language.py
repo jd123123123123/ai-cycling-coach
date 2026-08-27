@@ -37,10 +37,22 @@ def test_an_empty_german_half_falls_back_rather_than_showing_a_blank():
 
 
 def test_the_renderer_is_only_ever_handed_the_prompt_half():
+    """The German read-out never reaches the image model.
+
+    ASSERTED ON A NORMALISED SOURCE, not on a literal substring. This used to
+    grep for `render_isolated(prompt_text` and broke the moment that call grew a
+    second argument and wrapped across lines — a formatting change, not a
+    behaviour one. Collapsing whitespace first keeps the test about what it is
+    for: that the value handed to the renderer is the split's PROMPT half and
+    never the whole stored description.
+    """
     import inspect
+    import re
 
     from app.services import cyclr_studio
 
-    src = inspect.getsource(cyclr_studio.render_from_photo)
+    src = re.sub(r"\s+", " ", inspect.getsource(cyclr_studio.render_from_photo))
     assert "split_description(description)" in src
-    assert "render_isolated(prompt_text" in src
+    assert "render_isolated( prompt_text" in src or "render_isolated(prompt_text" in src
+    # And the un-split description must never be what gets rendered.
+    assert "render_isolated(description" not in src

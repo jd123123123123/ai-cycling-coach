@@ -201,6 +201,40 @@ def _to_out(asset: GarageAsset | None) -> AssetOut | None:
     )
 
 
+async def _source_crop(photo_b64: str) -> str | None:
+    """The rider's photo, cropped to the head and shrunk, or None. Never raises.
+
+    Sized the way `crew_avatars.thumbnail` sizes its faces and for the same
+    reason — this lands on a row that is read on many requests and already
+    carries a rendered collectible, and a raw upload is megabytes before base64
+    adds a third on top. 512px on the long edge at WebP q82 comes in comfortably
+    under 60KB, and the consumers are portrait renders that never look below the
+    collar anyway.
+
+    A photo that will not crop or will not encode simply has no stored source,
+    exactly as `crew_avatars` treats a face that will not decode: the rider
+    keeps the prose path they had before this existed, and onboarding does not
+    fail over a picture the model found difficult.
+    """
+    try:
+        import base64 as _b64
+        import io as _io
+
+        from PIL import Image
+
+        crop = await cyclr_studio.face_crop(photo_b64)
+        raw = crop.split(",", 1)[1] if crop.startswith("data:") else crop
+        im = Image.open(_io.BytesIO(_b64.b64decode(raw))).convert("RGB")
+        if max(im.size) > 512:
+            im.thumbnail((512, 512), Image.LANCZOS)
+        buf = _io.BytesIO()
+        im.save(buf, format="WEBP", quality=82, method=6)
+        return "data:image/webp;base64," + _b64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        logger.info("source photo crop failed; rider keeps the prose path", exc_info=True)
+        return None
+
+
 async def _get_asset(db: AsyncSession, user_id: int, kind: str) -> GarageAsset | None:
     result = await db.execute(
         select(GarageAsset).where(
@@ -1245,6 +1279,19 @@ async def render_asset(
         asset.name = out["name"]
         asset.description = out["description"]
         asset.image_url = out["image"]
+        # KEEP THE RIDER'S OWN PHOTOGRAPH, because every later render needs it
+        # and this endpoint used to drop it on the floor. `restyle` re-renders
+        # from `description` alone, and so does every scene composition — a
+        # hundred and twenty words of prose standing in for a face, which is why
+        # the second render was never quite the same person as the first. Stored
+        # as a head crop rather than the upload: the renders that read it are
+        # portraits, the row is read on hot paths, and the least of somebody's
+        # photograph that still does the job is the right amount of it to keep.
+        #
+        # RIDERS ONLY. A bicycle has no identity to lose, and `render_bike_from_photo`
+        # already hands the machine's photograph straight to the model.
+        if body.kind == "rider":
+            asset.source_photo = await _source_crop(body.photo_base64)
         if replaced:
             await db.execute(delete(RideScene).where(RideScene.user_id == current_user.id))
             await db.execute(delete(DayScene).where(DayScene.user_id == current_user.id))

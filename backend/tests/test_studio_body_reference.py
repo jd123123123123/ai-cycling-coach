@@ -55,11 +55,24 @@ def test_the_scene_prompt_no_longer_demands_correct_anatomy():
         assert limb in prompt
 
 
-def test_the_scene_prompt_still_carries_the_build_ratio():
-    """The proportions are stated positively and numerically. Written as a
-    negative test ('if the figure reads five or more heads tall...') the render
-    got WORSE, because a negation has to name the thing it forbids — the rule
-    this module documents at the top of the file."""
+def test_the_scene_prompt_states_the_build_positively():
+    """The build is stated positively and specifically.
+
+    THE PINNED VALUE CHANGED, and it is worth saying why rather than quietly
+    editing a string. This used to assert "three and a half heads tall" and "two
+    thirds as wide as the shoulders" — a designer-toy ratio. Measuring the
+    render the art direction actually points at showed a head at close to
+    natural adult scale on a real athletic build; the toy ratio was one of the
+    three things dragging every rider toward a vinyl figure, along with the
+    "short wide head" mandate and the beard rendered as moulded volume.
+
+    What the test is FOR survives unchanged: the build must be described in
+    positive, concrete terms. Written as a negation ("if the figure reads five
+    or more heads tall...") the render got worse, because a negation has to name
+    the thing it forbids — the rule this module documents at the top of the
+    file. So this still pins prose, not a particular ratio."""
     prompt = c._scene_prompt("a rider", "a bike", "riding hard")
-    assert "three and a half heads tall" in prompt
-    assert "two thirds as wide as the shoulders" in prompt
+    assert "athletic adult build" in prompt
+    assert "close to natural scale" in prompt
+    # The toy ratio is gone and must not creep back in.
+    assert "heads tall" not in prompt

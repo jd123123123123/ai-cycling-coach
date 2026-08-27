@@ -27,6 +27,8 @@ from __future__ import annotations
 
 import base64
 import importlib.util
+import io
+import json
 import logging
 import pathlib
 from typing import Any
@@ -95,74 +97,110 @@ GENERAL_STYLE = (
 # failure is severe (inventing brand text on a frame, changing someone's skin
 # colour). Everywhere else, describe the target.
 CHARACTER_STYLE = (
-    "A warm, instantly likeable stylised 3D collectible character. The look is one contrast: a "
-    "simple, clean, beautifully designed face against a hyper-detailed outfit.\n\n"
+    "A 3D collectible character built from ONE COLLISION: a completely real, beautifully lit "
+    "human head, with flat cartoon marks stuck onto it.\n\n"
 
-    # ── THE FEATURES ARE GRAPHIC, AND THAT IS THE WHOLE LOOK ───────────────
-    # Twice now the mood has been dialled down in prose — from beaming to
-    # composed — and twice the render came back as a semi-realistic adult with
-    # modelled eyelids, a shaded beard, nasolabial creases and a polite little
-    # smile. Prose was never going to win that: the model has an overwhelming
-    # prior for "3D character face" and every sentence here was an adjustment to
-    # it rather than a different thing to draw.
+    # ── TWO CHANNELS, NEVER BLENDED ────────────────────────────────────────
+    # This paragraph has now been wrong in three different directions and the
+    # reason is always the same, so it is worth stating once and plainly.
     #
-    # The different thing to draw is what the shipped build reference already
-    # does, and what every collectible in this register does: the head is ONE
-    # unbroken matte surface and the features are FLAT GRAPHIC MARKS laid onto
-    # it, like decals on a vinyl toy. Not small eyes — hard-edged shapes. That
-    # is the difference between a character and a caricature of a person, and
-    # it costs nothing in likeness, because the likeness was never in the eyes:
-    # it lives in the four anchors below (hair, facial hair, skin tone, face
-    # shape), which is what the paragraph after this one has always said.
-    "THE FACE IS ONE UNBROKEN MATTE SURFACE WITH FLAT GRAPHIC FEATURES LAID ON IT, the way a "
-    "designer vinyl toy is finished: the features are crisp decal shapes with hard clean edges, "
-    "not modelled geometry. There is no eyelid, no eye socket, no nostril, no crease beside the "
-    "mouth, no shading across the cheek — the surface runs smooth and uninterrupted from brow to "
-    "jaw and the marks simply sit on it.\n"
-    "THE EYES are two hard-edged white almonds, tilted very slightly down at the outer corner, "
-    "each holding one small solid dark pupil and no other detail. Directly above each, cutting "
-    "into its top edge, sits a heavy black brow — a thick angled wedge, low and driven down "
-    "toward the nose. That single angle is the expression and it is the point: level, "
-    "unimpressed, entirely unbothered, looking straight down the lens. The mouth is a short "
-    "straight line, closed and flat, set low and small — never a smile, never a grin, never "
-    "teeth. The nose is the faintest soft ridge or nothing at all. The ears are small, "
-    "simple and tucked close to the head.\n"
-    "FACIAL HAIR FOLLOWS THE SAME RULE — it is sculpted VOLUME, not hair: one matte mass "
-    "with a clean carved edge against the skin, the way a beard is moulded on a toy. Never "
-    "individual strands, never a soft photographic stipple across the jaw.\n"
-    "Those four marks — two eyes, two brows, the mouth — are the whole face. The skin around "
-    "and between them is clean, bare and unbroken, and it stays that way. "
-    "THE HEAD PROPORTIONS ARE ALWAYS THE STYLE'S, never the description's: whatever face shape "
-    "the person is described as having — oval, long, narrow — it is compressed into this style's "
-    "short wide head. The described shape survives only as a light character cue. The head "
-    "is short and wide — no longer than it is across — with the features low on it and a generous "
-    "rounded forehead above. A slim neck and a light jaw beneath.\n\n"
+    # The render everybody points at was MEASURED rather than described, and
+    # the measurement is unambiguous: the head is 100% real — a VFX-grade
+    # digital double with real skin, real groom, real anatomy — and the marks
+    # on it are 0% real. There is nothing in between. No "semi-realistic", no
+    # "60% stylised".
+    #
+    # Every failure this file has produced is the SAME failure at a different
+    # point on one axis. Ask for a globally stylised head and the model averages
+    # the two channels and hands back a vinyl toy. Ask for a photoreal one and
+    # it gives the marks real eyes and the graphic channel disappears. The only
+    # instruction that lands is: build a real head, then stick graphic objects
+    # on it, and never let the two negotiate.
+    #
+    # AND THE STYLISATION IS SUBTRACTIVE. Nothing is exaggerated. Pores,
+    # blemishes and the tight specular lobe are DELETED from an otherwise
+    # literal head; what remains is literal.
+    "THE HEAD IS RENDERED FOR REAL, at full fidelity, and this is half the look. True skull "
+    "proportions with a temple, a cheekbone and a jaw. Ears with a modelled rim and lobe. A real "
+    "nose with a bridge, a tip and nostrils. Lips with volume and a philtrum above them.\n"
+    "THE SKIN IS REAL SKIN, not a surface — a subsurface shader with a shallow red scatter radius, "
+    "so light sinks in and comes back warmer than it went in. The zones read separately: forehead "
+    "and temples palest and most olive-yellow, nose and cheekbones a redder and more saturated "
+    "flush, the ears the most saturated of all and thin enough to glow amber-pink along the helix "
+    "and lobe where light passes through cartilage, and the philtrum and the ring around the mouth "
+    "reddest. The surface is DRY AND MATTE: one broad, high-roughness sheen across the forehead, "
+    "the bridge of the nose and the cheekbones, and no discrete highlight anywhere on the face. "
+    "The skin itself is clean, carrying only the faintest low-amplitude grain.\n"
+    "WHAT MAKES IT READ AS REAL IS THE GROOM, and this is the part that gets forgotten: individual "
+    "eyebrow hairs running in real directions; facial hair of separate strands with fine flyaways "
+    "breaking its silhouette; the beard, the moustache and any cropped temples DISSOLVING into the "
+    "skin through a soft field of stubble dots rather than stopping at an edge; and a whisper of "
+    "vellus fuzz catching the light along the jaw and the top of the cheekbone. Once the pores are "
+    "gone, the groom is carrying the realism single-handed.\n\n"
 
-    "THE PERSON comes entirely from the written description, through four anchors: the hair's cut "
-    "and curl, the exact moustache or beard shape, the true skin tone, and the face shape. "
-    "HAIR IS THE STRONGEST ANCHOR, so render its curl pattern at full strength: sculpt it as "
-    "distinct, separated clusters of curl with clear gaps and shadow between them and real height "
-    "off the scalp, so the texture reads instantly from a distance. When the description says "
-    "curly or wavy, commit to it fully — a smoothed-down, softly-waved cap of hair loses the one "
-    "feature that makes this person recognisable. Facial hair is rendered literally at the "
-    "density described — only a full beard is modelled as geometry; light stubble is the faintest "
-    "shift in skin tone on an unbroken surface. An adult in their thirties, simplified but never "
-    "childlike.\n\n"
+    # ── THE OTHER CHANNEL ──────────────────────────────────────────────────
+    # These are drawn INTO the render today. They are on their way out — the
+    # app is moving to compositing them as separate artwork, which is the only
+    # way they can be swapped, bought, and made to land in the same place twice.
+    # Until that lands they are described here, and the description is written
+    # to be deleted.
+    "AND THEN THE EYES ARE FLAT GRAPHIC SHAPES LAID ON TOP OF THAT FACE, like vinyl decals stuck "
+    "onto a photograph, carrying NO geometry at all: no eyelid, no eye socket, no sclera shading, "
+    "no cornea, no reflection. Each is a hard-edged flat white shape with a straight top edge and "
+    "a rounded bottom, holding one solid dark shape biting into its upper edge toward the nose and "
+    "nothing else. Above each sits a separate thick flat bar with rounded ends, angled down toward "
+    "the nose. The rider's OWN eyebrows stay, real and lit, above those bars — they are not "
+    "replaced by them. The mouth stays real geometry, closed and level.\n"
+    "THE COLLISION IS THE POINT: a photographic head wearing cartoon eyes. The sharper the contrast "
+    "between the real skin and the flat marks, the better it works.\n\n"
 
-    "THE BODY IS A RATIO, and the ratio is the look: a designer art-toy collectible. The head is a "
-    "big smooth sphere, two thirds as wide as the shoulders are broad, and the whole standing "
-    "figure is three and a half heads tall. The head nests straight down into the collar the way a "
-    "toy's head sits on its garment. Shoulders broad, soft and gently sloped, ending just past the "
-    "head's outer edge, with a short compressed torso beneath them. Everything else is volume "
-    "rather than anatomy — thick cylindrical limbs of even girth, mitten hands.\n\n"
+    # ── THE PERSON, AND WHY THIS PARAGRAPH USED TO BE THE BUG ──────────────
+    # This file used to say, in capitals, that the head proportions were ALWAYS
+    # the style's and never the description's, and it handed every rider the
+    # same brow — "a thick angled wedge, low and driven down toward the nose".
+    #
+    # That is the single reason nobody recognised themselves. Sadr, Jarudi &
+    # Sinha (2003) erased the eyebrows from fifty famous faces and recognition
+    # fell FURTHER than when they erased the eyes. Ellis, Shepherd & Davies
+    # (1979) found that FAMILIAR faces — and nobody is more familiar with a face
+    # than its owner, who is the only judge of this render — are recognised from
+    # internal features, while hair and face outline only carry faces you do not
+    # know. So the old prompt bet the likeness on the stranger's cue set and
+    # nailed the owner's cue set to a constant.
+    #
+    # Stylisation was never the problem. Caricature — exaggerating how a face
+    # DEVIATES from the average — is recognised as well as or better than the
+    # veridical face. It is not stylisation that costs the likeness. It is
+    # sameness.
+    "THE PERSON COMES FROM THE REFERENCE PHOTOGRAPH AND FROM THE DESCRIPTION, and these features "
+    "in particular are theirs and must never be normalised toward a house look:\n"
+    "· THE EYEBROWS above all — their thickness, their angle, whether they are straight or arched, "
+    "how far apart they sit and how low they ride above the eye. This is the strongest single "
+    "identity signal on a face; a standard-issue brow is a standard-issue stranger.\n"
+    "· THE EYE REGION — how far apart the eyes are relative to the width of the face, how large "
+    "they are, their tilt, how hooded or open.\n"
+    "· THE CONFIGURAL GEOMETRY — where the eye line sits on the head, the distance from eyes to "
+    "mouth, and the head's own width against its height. Where the description gives a proportion, "
+    "build that proportion rather than the style's.\n"
+    "· THE CONTRAST PATTERN — how dark the brows and the facial hair read against this particular "
+    "skin tone.\n"
+    "· Then the nose and mouth width, the jaw and hairline shape, and the hair's cut and curl.\n"
+    "Render the curl pattern at full strength when the description asks for it — distinct, "
+    "separated clusters with real height off the scalp — and the facial hair literally at the "
+    "density described. Where this person departs from an average face, LEAN INTO the departure "
+    "rather than softening it: the exaggeration is what makes them recognisable.\n\n"
 
-    "THE CONTRAST IS WHAT MAKES IT EXPENSIVE: simplified vinyl-toy geometry wearing "
-    "photorealistic technical clothing. Skin and hair stay one flawless soft-matte surface, "
-    "uniform and completely clean, and the whole detail budget goes to the kit — woven with real "
-    "physical relief, a weave with depth you could feel, seams that stand proud of the panels they "
-    "join, hardware with actual thickness. Hard trim anchors the soft forms: metal, enamel and "
-    "satin against matte vinyl, under a controlled key with a crisp rim light separating the "
-    "figure from the ground and deep ambient occlusion where forms meet."
+    "THE BODY is an athletic adult build under the kit — shoulders with real deltoids, a neck that "
+    "exists, a chest and arms a cyclist would recognise. The head sits on it at close to natural "
+    "scale, a touch large for presence and no more.\n\n"
+
+    "WHAT MAKES IT EXPENSIVE is that every real surface is rendered like a product photograph — "
+    "skin, hair and technical fabric all carrying genuine physical detail, the kit woven with real "
+    "relief, seams standing proud of the panels they join, hardware with actual thickness, metal "
+    "and enamel and satin under a controlled key with a crisp rim light and deep ambient occlusion "
+    "where forms meet — while the flat marks on the face refuse to join in. The flatness has to be "
+    "perfect flatness against perfect realism; anything in between reads as a mistake rather than "
+    "as a decision."
 )
 BIKE_STYLE = (
     "The bicycle must maintain perfect, realistic mechanical geometry but with slightly chunky, "
@@ -460,7 +498,8 @@ def _is_size_refusal(err: Exception) -> bool:
 
 
 async def _render(
-    contents: list, seed_src: str, size: str, aspect: str = "1:1",
+    contents: list, seed_src: str, size: str, aspect: str = "1:1", *,
+    model: str | None = None,
 ) -> str | None:
     """Ask the image model for one picture. Returns None rather than raising.
 
@@ -491,7 +530,10 @@ async def _render(
     from google.genai import types
 
     client = genai.Client(api_key=settings.GEMINI_API_KEY)
-    model = getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
+    # PER-CALL OVERRIDE, because riders and bikes want different models and
+    # this used to read one global setting for both. `settings.IMAGE_MODEL`
+    # remains the deployment-wide default; a caller that knows better says so.
+    model = model or getattr(settings, "IMAGE_MODEL", "") or DEFAULT_IMAGE_MODEL
 
     for attempt_size in (size, FALLBACK_SIZE):
         try:
@@ -897,36 +939,29 @@ _BODY_REF = pathlib.Path(__file__).resolve().parents[1] / "data/style/character_
 #: Used with the reference. The danger of a style image is that the model copies
 #: the WRONG things from it, so what to take and what to ignore is spelled out.
 _BUILD_MANDATE = (
-    "\n\nTHE ATTACHED IMAGE IS A STYLE REFERENCE, NOT A PERSON, and it decides three things.\n"
-    "FIRST, THE FACE TREATMENT. Its features are flat graphic marks on one unbroken matte "
-    "surface — hard-edged white eye shapes, a heavy angled brow cutting into each, a small flat "
-    "mouth, no modelled eyelids or creases anywhere. Build your face by the same method. If your "
-    "eyes have lids, sockets or catchlit corneas, or your cheeks carry shading, you have drifted "
-    "back toward realism; go back to the reference. Take its METHOD and its ATTITUDE, never its "
-    "actual eye shape, brow angle or colouring, which belong to that character.\n"
-    "SECOND, THE PROPORTIONS: the size of that head against those shoulders, the head sitting "
-    "straight into the collar with no neck showing, the broad softly-sloped shoulders, the whole "
-    "figure built from simple heavy volume.\n"
-    "THIRD, THE MATERIAL FIDELITY: how clean and matte the skin is, against how densely real the "
-    "garment is — visible fabric weave, a moulded zip, an enamel badge, crisp stitching, all lit "
-    "like a product photograph. Match that gap between the smooth figure and the expensive "
-    "clothing.\n"
-    "TAKE ONLY THOSE THREE, and carry the reference's material fidelity onto THIS rider's "
-    "own kit rather than onto its clothes. Take nothing else: not its "
-    "hair, its skin tone, its colours, its pose or its background. Everything this rider "
-    "wears and carries is specified in the description and the kit above, and that list is "
-    "complete: the reference's own wardrobe and markings stay with the character they "
-    "belong to.\n"
-    "THE REFERENCE SUPPLIES THE SCULPT, THE FINISH AND THE FACE'S METHOD. THE DESCRIPTION "
-    "SUPPLIES THE PERSON — their hair's cut and colour, their facial hair, their true skin "
-    "tone and their face shape all come from the written description and from nowhere "
-    "else. If your rider's hair or skin matches the reference's rather than the "
-    "description's, you have copied the character instead of the style.\n"
+    "\n\nYOU HAVE BEEN GIVEN TWO IMAGES AND THEY DO DIFFERENT JOBS. Read this before anything "
+    "else, because getting them the wrong way round produces a competent portrait of somebody who "
+    "does not exist.\n\n"
+    "IMAGE 1 IS THE PERSON. It is a photograph of the actual rider this avatar is of, and their "
+    "identity is the thing that has to survive. Take from it: the shape, thickness, angle and "
+    "spacing of the EYEBROWS; the spacing, size and tilt of the EYES; the width of the head against "
+    "its height and where the eye line sits on it; the width of the nose and of the mouth; the "
+    "hairline, the cut and the curl of the hair; the shape and density of the facial hair and "
+    "exactly where it stops; and the true skin tone. Somebody who knows this person has to "
+    "recognise them immediately. Where their face departs from an average face, keep the departure "
+    "— that is what makes it them.\n\n"
+    "IMAGE 2 IS A STYLE REFERENCE. It is a different character and it is not a person here. Take "
+    "from it ONLY the rendering method: the sculpt language, how clean and matte the skin is "
+    "against how densely real the garment is, the material fidelity, the lighting. Its face, its "
+    "hair, its skin tone, its colouring, its markings and its wardrobe all belong to that "
+    "character and stay with it.\n\n"
+    "IF YOUR RENDER'S BROWS, EYE SPACING, HAIR OR SKIN MATCH IMAGE 2 RATHER THAN IMAGE 1, you have "
+    "copied the character instead of the style, and the rider will not recognise themselves.\n\n"
     "THE HAIR IS FULLY VISIBLE, with the head otherwise bare.\n"
-    "AND LAST, THE GARMENT, because it is the one thing that has to survive the reference: "
-    "this rider wears the fitted technical cycling jersey specified above — matte black "
-    "with acid lime side panels, a full front zip and a lime enamel R badge at the chest — "
-    "and that jersey is what is on their body in this render."
+    "AND LAST, THE GARMENT, because it is the one thing that has to survive both images: this "
+    "rider wears the fitted technical cycling jersey specified above — matte black with acid lime "
+    "side panels, a full front zip and a lime enamel R badge at the chest — and that jersey is "
+    "what is on their body in this render."
 )
 
 
@@ -969,8 +1004,115 @@ def _style_references() -> list[str]:
     return [ref] if ref else []
 
 
-async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> str | None:
-    """One render conditioned on several style references at once.
+#: The rider model. Riders and bikes do not want the same model and it is worth
+#: one constant to say so.
+#:
+#: Google's own developer forum, asked whether the flash image model can do
+#: precise face transfer, answered that flash "is not a good candidate" and that
+#: the Pro image model performs better. A bicycle has no identity to lose and
+#: stays on flash. A rider bust is rendered ONCE and cached in `garage_assets`
+#: forever, so the difference is about three cents per rider, one time — which
+#: is not a cost decision, it is a quality one.
+RIDER_IMAGE_MODEL = "gemini-3-pro-image"
+
+#: How much of the frame the head crop keeps around the face box the vision pass
+#: reports. A box drawn tight to the eyes and mouth loses the hairline and the
+#: jaw, and those are two of the identity carriers the render is being given the
+#: photograph FOR.
+_CROP_PAD = 0.55
+
+#: Gemini tiles an input image into 768px tiles. Below that the face is spending
+#: a fraction of one tile — a full-body selfie puts perhaps a few dozen useful
+#: pixels of face into the call, which is most of the reason a photograph in the
+#: prompt was not enough on its own.
+_CROP_MIN_PX = 768
+
+
+async def face_crop(photo_b64: str) -> str:
+    """A square crop around the head, upscaled, as a data URL. Never raises.
+
+    WHY CROP AT ALL, when the photograph is already in the call. Because the
+    model does not see pixels, it sees tiles: inputs are cut into 768px tiles at
+    a fixed token cost each, so a head occupying a tenth of a full-length
+    selfie arrives as a smear. Handing it a head that fills the frame is the
+    cheapest available increase in how much face the model actually receives,
+    and unlike the model choice or the prompt it costs nothing per render.
+
+    THE FAILURE MODE IS RETURNING THE WHOLE PICTURE, which is exactly what it
+    does when anything goes wrong — a refusal, a malformed box, no Pillow, a
+    photo with no findable face. That degrades to the behaviour of the day
+    before this function existed rather than failing an onboarding step on a
+    picture the model merely found difficult.
+    """
+    if not _gemini_ready():
+        return pad_to_square(photo_b64)
+    try:
+        from google import genai
+        from google.genai import types
+        from PIL import Image
+
+        raw = photo_b64.split(",", 1)[1] if photo_b64.startswith("data:") else photo_b64
+        blob = base64.b64decode(raw)
+        client = genai.Client(api_key=settings.GEMINI_API_KEY)
+        resp = client.models.generate_content(
+            model="gemini-flash-latest",
+            contents=[
+                "Find the person's head in this photograph and give its bounding box as "
+                "fractions of the image width and height, where 0,0 is the top-left corner. "
+                "Include the whole head: all of the hair including its outline, both ears, and "
+                "the chin and jaw. If there are several people, use the most prominent one.",
+                types.Part.from_bytes(data=blob, mime_type="image/jpeg"),
+            ],
+            config=types.GenerateContentConfig(
+                temperature=0.0, response_mime_type="application/json",
+                response_schema={
+                    "type": "object",
+                    "properties": {
+                        "x0": {"type": "number"}, "y0": {"type": "number"},
+                        "x1": {"type": "number"}, "y1": {"type": "number"},
+                    },
+                    "required": ["x0", "y0", "x1", "y1"],
+                },
+            ),
+        )
+        box = json.loads(resp.text or "{}")
+        im = Image.open(io.BytesIO(blob)).convert("RGB")
+        W, H = im.size
+        x0, y0 = float(box["x0"]) * W, float(box["y0"]) * H
+        x1, y1 = float(box["x1"]) * W, float(box["y1"]) * H
+        if not (x1 > x0 and y1 > y0):
+            return pad_to_square(photo_b64)
+        # Square, centred on the box, padded out — then clamped back inside the
+        # picture, which is why the crop can end up off-centre on a face near an
+        # edge. An off-centre head beats a head with its hair cut off.
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        half = max(x1 - x0, y1 - y0) * (1 + _CROP_PAD) / 2
+        half = min(half, min(W, H) / 2)
+        cx = min(max(cx, half), W - half)
+        cy = min(max(cy, half), H - half)
+        im = im.crop((int(cx - half), int(cy - half), int(cx + half), int(cy + half)))
+        if im.width < _CROP_MIN_PX:
+            im = im.resize((_CROP_MIN_PX, _CROP_MIN_PX), Image.LANCZOS)
+        buf = io.BytesIO()
+        im.save(buf, format="WEBP", quality=88, method=6)
+        return "data:image/webp;base64," + base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        log.info("face crop failed; sending the whole photograph", exc_info=True)
+        return pad_to_square(photo_b64)
+
+
+async def _generate_with_refs(
+    prompt: str, refs: list[str], seed_src: str, *,
+    person: str | None = None, model: str | None = None,
+) -> str | None:
+    """One render conditioned on a person and on style references at once.
+
+    THE ORDER IS THE CONTRACT. There is no typed reference-image field in this
+    API — nothing marks one input as "the subject" and another as "style". Roles
+    are assigned by the prompt naming the images positionally, and by the
+    convention that the image which must SURVIVE the edit comes first. So the
+    person leads and `_BUILD_MANDATE` calls them IMAGE 1 and IMAGE 2 in that
+    order. Swap them and the mandate is describing the wrong pictures.
 
     THE SEED DOES NOT MAKE THIS REPRODUCIBLE, and it is worth knowing before you
     trust a single render as evidence. Measured 2026-08-20: the same description
@@ -987,29 +1129,39 @@ async def _generate_with_refs(prompt: str, refs: list[str], seed_src: str) -> st
     The practical consequence when tuning these prompts: one render is one
     sample, and two prompts cannot be compared on one draw each.
     """
-
-    return await _render([_img_part(r) for r in refs] + [prompt], seed_src, RENDER_SIZE)
+    images = ([_img_part(person)] if person else []) + [_img_part(r) for r in refs]
+    return await _render(images + [prompt], seed_src, RENDER_SIZE, model=model)
 
 
 async def render_isolated(
     description: str, kind: str, *, seed_src: str | None = None, wear: str = "",
+    photo_b64: str | None = None,
 ) -> tuple[str | None, str, str]:
-    """Render the standalone avatar bust or isolated bike from a description.
+    """Render the standalone avatar bust or isolated bike.
 
-    The RIDER is conditioned on TWO shipped style references — the face
-    treatment and the body sculpt — because prose could not hold either. Both
-    were described in careful narrative and both still drifted toward a
-    semi-realistic adult; the images hold them. The bike takes no style
-    reference: its shape must come from the rider's own photograph, which is
-    what `render_bike_from_photo` is for.
+    `photo_b64` IS THE WHOLE POINT AND IT USED TO BE MISSING. For most of this
+    module's life the rider's photograph reached the image model exactly zero
+    times: it went to `analyze_asset`, which turned it into a hundred and twenty
+    words, and to `_seed`, which HASHED IT TO AN INTEGER. The only picture the
+    model ever saw was a style reference of somebody else, and the person was
+    expected to survive as four adjectives about hair, beard, skin tone and face
+    shape. That is a few dozen bits standing in for a face, and it is the entire
+    reason riders did not recognise themselves. Pass the photograph and it goes
+    into the call as IMAGE 1, ahead of the style reference.
+
+    It stays OPTIONAL, and without it this behaves exactly as it did before —
+    scene composition and `restyle` still call in from paths that may hold no
+    photograph, and a worse avatar beats a failed one.
+
+    The bike takes no style reference at all: its shape must come from the
+    rider's own machine, which is what `render_bike_from_photo` is for.
 
     SEED FROM THE PHOTO, NOT THE DESCRIPTION. `seed_src` exists because the
     module's promise — "the same photo always yields the same asset" — was
     false. The seed used to come from the description, and the vision pass
     returns different prose on every run even at temperature 0, so two renders
-    of one selfie produced two different faces. Measured: same photo, two runs,
-    two descriptions of different lengths and two unrelated images. Callers that
-    hold the photo pass it here; the description is only the fallback.
+    of one selfie produced two different faces. Callers that hold the photo pass
+    it here; the description is only the fallback.
     """
     prompt = _isolated_prompt(description, kind, wear)
     seed = seed_src or description
@@ -1020,7 +1172,12 @@ async def render_isolated(
             prompt += _BUILD_MANDATE
             if not _gemini_ready():
                 return None, prompt, "image_model_unavailable"
-            img = await _generate_with_refs(prompt, refs, seed)
+            # Cropped to the head before it goes in — see `face_crop` for why a
+            # full-length photograph arrives as a smear.
+            person = await face_crop(photo_b64) if photo_b64 else None
+            img = await _generate_with_refs(
+                prompt, refs, seed, person=person, model=RIDER_IMAGE_MODEL,
+            )
             return img, prompt, "ok" if img else "image_model_unavailable"
 
     if not _gemini_ready():
@@ -1046,7 +1203,13 @@ async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
     # ONLY THE PROMPT HALF REACHES THE IMAGE MODEL. Handing it the German
     # read-out as well would put two languages in one prompt for no gain.
     prompt_text, _ = split_description(description)
-    img, prompt, status = await render_isolated(prompt_text, kind, seed_src=photo_b64)
+    # AND THE PHOTOGRAPH ITSELF GOES IN, not just its hash. This line used to
+    # pass `seed_src=photo_b64` and nothing else, so the only thing the picture
+    # contributed to the render was an integer. It is the subject; it belongs in
+    # the call.
+    img, prompt, status = await render_isolated(
+        prompt_text, kind, seed_src=photo_b64, photo_b64=photo_b64,
+    )
     if img and kind == "bike":
         img = _cut_out(img)
     return {"name": name, "description": description, "image": img, "prompt": prompt, "status": status}
