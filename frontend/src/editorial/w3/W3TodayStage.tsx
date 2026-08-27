@@ -5,6 +5,7 @@ import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
 import W3NavMenu from './W3NavMenu'
 import { W3CoachFab } from './W3CoachChat'
+import W3SyncChip from './W3SyncChip'
 
 /**
  * W3 · Today — THE STAGE. A 1:1 rebuild of pen frames `YIU3g` / `qv4Aw`
@@ -296,6 +297,12 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         <W3NavMenu size={44} iconSize={20} background={T.heroChip} Icon={Settings} />
         {/* The coach, moved off the floating FAB that was landing on the dock. */}
         <W3CoachFab variant="chip" background={T.heroChip} iconColor={T.acid} />
+        {/* Force a Garmin pull. It lives HERE, on Today, because this is the
+            screen a rider opens straight off the bike to look for a ride that
+            the hourly scheduler has not fetched yet — the settings screen is
+            where you go once you already know what is wrong. Draws nothing
+            when no watch is connected. */}
+        <W3SyncChip size={44} iconSize={20} />
       </div>
 
       <div style={{
