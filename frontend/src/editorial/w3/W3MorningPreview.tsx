@@ -18,7 +18,10 @@ const FULL: MorningBriefing = {
   dateLabel: 'Donnerstag, 27. August',
   headline: 'Schwellenintervalle',
   headlineMeta: '75 min',
-  why: 'Deine Bereitschaft liegt bei 74 (+6 zu gestern). Deine Form ist frisch.',
+  // NULL on a normal morning: the ring already says 74 and carries its own
+  // delta, and form is drawn in block 04. This field exists only for the
+  // morning the ring CANNOT be drawn — see `?stale`.
+  why: null,
   tone: 'go',
   window: {
     label: '08:00–10:00', detail: '14° · 11 km/h NW · trocken', verdict: 'RAUS DAMIT',
@@ -53,7 +56,6 @@ const FULL: MorningBriefing = {
     hrv: { value: '68 ms', delta: 4, position: 'above' },
     rhr: { value: '46 bpm', delta: -2, position: 'below' },
     battery: 82,
-    note: '96 min Tiefschlaf, deine HRV lag über deinem Bereich, dein Ruhepuls war niedriger als sonst.',
   },
   body: {
     yesterdayTss: 78,
@@ -65,7 +67,6 @@ const FULL: MorningBriefing = {
     ],
     weekSpent: 235,
     weekPlanned: 480,
-    note: 'Über Nacht hat dein Körper 4.2 Ermüdung abgebaut, gestern hast du 78 TSS eingefahren.',
   },
   streak: '12 Tage in Folge',
   bare: false,

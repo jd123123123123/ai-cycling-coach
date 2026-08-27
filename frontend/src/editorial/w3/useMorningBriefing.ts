@@ -51,8 +51,16 @@ export interface MorningBriefing {
    *  headline let a wrap put "· 75 min" alone on the second line, which reads
    *  as a broken string rather than as a duration. */
   headlineMeta: string | null
-  /** Why that is the answer — one sentence, built from what resolved. */
-  why: string
+  /**
+   * ONLY WHEN THE RING CANNOT SPEAK.
+   *
+   * This used to carry a sentence on every morning — "Deine Bereitschaft liegt
+   * bei 74 (+6 zu gestern). Deine Form ist frisch." — next to a ring showing 74
+   * with +6 under it and a form figure two blocks down. Three statements of the
+   * same two numbers. It survives for exactly the case the graphics CANNOT
+   * cover: no score to draw, and a rider owed the reason why.
+   */
+  why: string | null
   tone: BriefingTone
   /**
    * The ride window, plus the whole day behind it so the sheet can DRAW it.
@@ -91,8 +99,6 @@ export interface MorningBriefing {
     rhr: { value: string; delta: number | null; position: 'below' | 'in' | 'above' | null } | null
     /** Body battery at wake — how much of the night the body actually banked. */
     battery: number | null
-    /** One sentence about the night, composed from what resolved. */
-    note: string
   } | null
 
   /**
@@ -111,7 +117,6 @@ export interface MorningBriefing {
     week: { letter: string; tss: number | null }[]
     weekSpent: number | null
     weekPlanned: number | null
-    note: string
   } | null
   /** Consecutive days, when the streak is worth a word. */
   streak: string | null
@@ -160,23 +165,15 @@ export function useMorningBriefing(): MorningBriefing {
     // on a watch having synced.
     const gate = model.readinessGate
     const score = isPresent(model.readiness) ? model.readiness.value : null
-    const form = isPresent(model.pmc) ? model.pmc.value.form : null
     const recovery = isPresent(model.recovery) ? model.recovery.value : null
 
-    let why: string
+    let why: string | null
     if (!planned) {
-      why = 'Stell dir in ein paar Klicks einen Plan zusammen — oder bau dir heute eine Einheit nach Lust.'
+      why = 'Stell dir in wenigen Klicks einen Plan zusammen.'
     } else if (score) {
-      const dir = score.deltaVsYesterday
-      const move = dir == null || dir === 0
-        ? ''
-        : ` (${dir > 0 ? '+' : '−'}${Math.abs(Math.round(dir))} zu gestern)`
-      const formNote = form == null
-        ? ''
-        : form > 5 ? ' Deine Form ist frisch.'
-        : form < -15 ? ' Deine Form ist tief — das ist Absicht in einem Block, aber halte die Zügel kurz.'
-        : ''
-      why = `Deine Bereitschaft liegt bei ${Math.round(score.score)}${move}.${formNote}`
+      // The ring already says it, with its own delta. Silence here is the
+      // whole point: one fact, one place.
+      why = null
     } else if (gate === 'stale') {
       why = model.readinessGateHeadline
         ? `${model.readinessGateHeadline} — der Plan gilt trotzdem.`
@@ -243,7 +240,6 @@ export function useMorningBriefing(): MorningBriefing {
         hrv: hrvV ? { value: `${Math.round(hrvV.value)} ${hrvV.unit}`, delta: hrvV.delta, position: hrvV.band?.position ?? null } : null,
         rhr: rhrV ? { value: `${Math.round(rhrV.value)} ${rhrV.unit}`, delta: rhrV.delta, position: rhrV.band?.position ?? null } : null,
         battery: isPresent(model.bodyBattery) ? Math.round(model.bodyBattery.value.wake) : null,
-        note: parts.length ? `${parts.join(', ')}.` : 'Die Nacht war unauffällig.',
       }
     }
 
@@ -271,7 +267,6 @@ export function useMorningBriefing(): MorningBriefing {
         week: weekDays,
         weekSpent: load ? Math.round(load.spent) : null,
         weekPlanned: load ? Math.round(load.planned) : null,
-        note: noteParts.length ? `${noteParts.join(', ')}.` : 'Noch nichts zu verrechnen.',
       }
     }
 
