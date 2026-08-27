@@ -425,10 +425,18 @@ export default function W3SharePage() {
       footer: poster.footer,
       // The rider's own picture first — a still they chose, or the frame pulled
       // from their clip — then the ride's composed scene. Never a stock image.
-      photo: ownPhoto ?? video?.poster ?? poster.sceneSrc ?? routeShot ?? null,
-      // Only the last link in that chain IS the map — a photograph the rider
-      // brought, or a composed scene, still wants the line drawn over it.
-      groundIsRoute: !ownPhoto && !video?.poster && !poster.sceneSrc && !!routeShot,
+      // The rider's own picture first — a still they chose, or the frame pulled
+      // from their clip — and then THE ROUTE, not the composed scene.
+      //
+      // The scene is a render of their bike. It is the right ground for a card
+      // about the machine and the wrong one for a card about a ride: a rider
+      // posting 118 km wants the road they rode behind the number, and the bike
+      // is the same picture on every ride they will ever post. It stays as the
+      // last fallback, for the ride that has no GPS at all.
+      photo: ownPhoto ?? video?.poster ?? routeShot ?? poster.sceneSrc ?? null,
+      // True only when the map itself is the ground — a photograph the rider
+      // brought, or the composed scene, still wants the line drawn over it.
+      groundIsRoute: !ownPhoto && !video?.poster && !!routeShot,
       polyline: poster.polyline,
       routeName: activity?.title ?? '',
       dateline: poster.footer,
@@ -500,7 +508,7 @@ export default function W3SharePage() {
   }, [edited])
 
   const caption = useMemo(() => {
-    if (!poster) return 'w3.ride'
+    if (!poster) return 'Ridr'
     return `${poster.footer} — ${poster.sentence} #w3ride`
   }, [poster])
 

@@ -238,7 +238,7 @@ function Slide({ s, sc, reduce }: { s: W3WrappedSlide; sc: Scene; reduce: boolea
       <motion.div {...rise} transition={{ duration: 0.55, ease: EASE, delay: 0.28 }}
         style={{ display: 'flex', alignItems: 'center', gap: 6, paddingTop: 2 }}>
         <span style={{ width: 5, height: 5, borderRadius: 100, background: T.acid }} />
-        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, color: sc.ink, opacity: 0.7 }}>w3.ride</span>
+        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 0.4, color: sc.ink, opacity: 0.7 }}>Ridr</span>
       </motion.div>
     </div>
   )

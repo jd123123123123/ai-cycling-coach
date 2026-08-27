@@ -289,6 +289,33 @@ function ridrMark(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.restore()
 }
 
+/**
+ * HOW A CARD SIGNS ITSELF.
+ *
+ * `w3.ride` was the working title of the design system, not the name of the
+ * app — and it was printed on the one surface that leaves the app and gets
+ * posted in public. Every exported card now signs `Ridr`, next to the mark, so
+ * the thing a rider's followers see named is the thing they can go and install.
+ *
+ * Right-anchored: the signature is the last thing on its line on every layout,
+ * and measuring back from the right edge is what keeps the mark and the word
+ * together when the word changes length.
+ */
+function signature(ctx: CanvasRenderingContext2D, right: number, baseline: number, size: number, color: string, markColor = RIDR_LIME) {
+  const word = 'Ridr'
+  ctx.font = `700 ${size}px ${FONT}`
+  const w = ctx.measureText(word).width
+  const r = size * 0.58
+  text(ctx, word, right, baseline, size, '700', color, 0.4, 'right')
+  //: PLACED BY ITS BOX, AND THE BOX IS NOT THE GLYPH. `RIDR_PATH` draws inside
+  //: a 200-unit square but only occupies x 47..179 of it and hangs 4 units past
+  //: the bottom — so a mark centred on the word's optical centre sits low and
+  //: laps its first letter. The box's right edge goes a hair left of the word,
+  //: and the glyph's own centre (0.61 down the box, not 0.5) is what gets lined
+  //: up with the cap height.
+  ridrMark(ctx, right - w - size * 0.6, baseline - size * 0.34 - r * 0.22, r, markColor)
+}
+
 function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
   ctx.save(); ctx.translate(cx, cy); ctx.fillStyle = color; ctx.beginPath()
   for (let i = 0; i < 4; i++) {
@@ -1398,7 +1425,7 @@ function paintStoryCard(
   // where it used to be, it was behind Instagram's reply bar on every post.
   const markAndFooter = (footerColor = 'rgba(255,255,255,0.5)') => {
     text(ctx, d.footer, MX, CONTENT_BOTTOM, 24, '600', footerColor, 0.6)
-    text(ctx, 'w3.ride', SW - MX, CONTENT_BOTTOM, 24, '700', accent, 0.6, 'right')
+    signature(ctx, SW - MX, CONTENT_BOTTOM, 26, CARD.ink, accent)
   }
 
   const strip = (top: number) => {
@@ -1498,7 +1525,7 @@ function paintStoryCard(
   // against the wrong margin, one band, and a bar rule under it — is why the
   // screen did not look like the drawing.
   if (layout === 'headline') {
-    if (!bare) vscrim([[0, 0.702], [0.28, 0.439], [0.55, 0.38], [0.82, 0.58], [1, 0.722]])
+    if (!bare) vscrim([[0, 0.702], [0.28, 0.439], [0.55, 0.38], [0.82, 0.58], [0.962, 0.66], [1, 0.34]])
 
     text(ctx, (d.dateline ?? d.footer).toUpperCase(), MX, 114, 28.5, '700', 'rgba(255,255,255,0.65)', 3.9, 'left', FONT, 'top')
     zone('dateline', MX, 114, CW, 40)
@@ -1680,9 +1707,9 @@ function paintStoryCard(
       cx += widths[i] + spread
     })
 
-    // The mark, bottom right on the pen's own coordinates.
-    ridrMark(ctx, 868.5, 1861, 19, RIDR_LIME)
-    text(ctx, 'w3.ride', 900, 1842, 31.5, '700', 'rgba(255,255,255,0.80)', 0, 'left', FONT, 'top')
+    // The signature, on the pen's own baseline, flush with the readings' right
+    // column so it lines up with the card rather than with the canvas.
+    signature(ctx, MX + 936, 1872, 31.5, 'rgba(255,255,255,0.82)', RIDR_LIME)
     return
   }
 
@@ -1708,7 +1735,7 @@ function paintStoryCard(
    * when that picture never arrives — see `groundIsRoute`.
    */
   if (layout === 'wrap') {
-    if (!bare) vscrim([[0, 0.82], [0.3, 0.52], [0.55, 0.42], [0.78, 0.68], [1, 0.88]])
+    if (!bare) vscrim([[0, 0.82], [0.3, 0.52], [0.55, 0.42], [0.78, 0.7], [0.83, 0.72], [1, 0.4]])
     if (!d.groundIsRoute && d.polyline && d.polyline.length > 1) paintStoryTrace(ctx, d.polyline, accent)
 
     // ONE top line, and it must not say the route twice. `dateline` already
@@ -1793,9 +1820,14 @@ function paintStoryCard(
 
   if (layout === 'trace') {
     if (!bare) {
+      // Heaviest under the name and the meta line, then lifting — see the
+      // release on the Karte's scrim below. Nothing is printed under the
+      // footer, so nothing down there needs protecting.
       const bottom0 = ctx.createLinearGradient(0, SH - 760, 0, SH)
       bottom0.addColorStop(0, 'rgba(0,0,0,0)')
-      bottom0.addColorStop(1, 'rgba(0,0,0,0.9)')
+      bottom0.addColorStop(0.52, 'rgba(0,0,0,0.76)')
+      bottom0.addColorStop(0.62, 'rgba(0,0,0,0.8)')
+      bottom0.addColorStop(1, 'rgba(0,0,0,0.3)')
       ctx.fillStyle = bottom0
       ctx.fillRect(0, SH - 760, SW, 760)
     }
@@ -1862,12 +1894,22 @@ function paintStoryCard(
   // part below the fold where it protected nothing. It now begins a fixed
   // distance above the first line, reaches full strength BY that line, and
   // holds from there down. Everything above the ramp is photograph.
+  //
+  // AND IT RELEASES BELOW THE LAST LINE. Holding 0.9 all the way to the canvas
+  // edge painted a black bar across the bottom fifth of every card — the part
+  // Instagram's reply bar covers, where there is no type to protect. It read as
+  // the card ending early and the content sitting a long way in from the edge,
+  // which is the one thing a full-bleed layout must never look like. The wash
+  // is at its heaviest through the type and lifts after the footer, so the
+  // picture runs off the bottom of the card instead of fading into furniture.
   const scrimTop = Math.max(SAFE_TOP + 220, typeTop - 260)
+  const release = (CONTENT_BOTTOM + 40 - scrimTop) / (SH - scrimTop)
   const bottom = ctx.createLinearGradient(0, scrimTop, 0, SH)
   bottom.addColorStop(0, 'rgba(0,0,0,0)')
   bottom.addColorStop(0.55, 'rgba(0,0,0,0.78)')
-  bottom.addColorStop(0.8, 'rgba(0,0,0,0.9)')
-  bottom.addColorStop(1, 'rgba(0,0,0,0.9)')
+  bottom.addColorStop(Math.min(0.8, release), 'rgba(0,0,0,0.86)')
+  bottom.addColorStop(Math.min(0.99, release + 0.01), 'rgba(0,0,0,0.82)')
+  bottom.addColorStop(1, 'rgba(0,0,0,0.34)')
   ctx.fillStyle = bottom
   ctx.fillRect(0, scrimTop, SW, SH - scrimTop)
 
@@ -2263,7 +2305,7 @@ export async function renderWrappedCard(d: WrappedCardData): Promise<{ blob: Blo
   // ── THE MARK. On every card, because a card that leaves without it is a
   //    week somebody admired and could not place. ──
   text(ctx, d.weekLabel.toUpperCase(), MX, SH - 88, 26, '600', scene.ink, 2)
-  text(ctx, 'w3.ride', SW - MX, SH - 88, 30, '600', scene.accent, 1, 'right')
+  signature(ctx, SW - MX, SH - 88, 30, scene.ink, scene.accent)
 
   const dataUrl = canvas.toDataURL('image/png')
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))

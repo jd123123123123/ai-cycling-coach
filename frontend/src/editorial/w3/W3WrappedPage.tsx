@@ -66,7 +66,7 @@ export default function W3WrappedPage() {
           series: slide.series, photo: slide.image, scene: sc,
           weekLabel: vm.weekLabel,
         })
-        await sharePoster(out.blob, `Meine Woche · ${vm.weekLabel} · w3.ride`, 'w3-woche.png')
+        await sharePoster(out.blob, `Meine Woche · ${vm.weekLabel} · Ridr`, 'w3-woche.png')
       }}
     />
   )

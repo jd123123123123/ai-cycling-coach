@@ -263,7 +263,7 @@ export default function W3ShareView({
             So the card stays pristine — it is the product — and its chrome sits
             in a slim row of its own. Tapping the picture is still how you
             change the picture; this only adds the button that SAYS so. ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 20px 8px', flex: 'none' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 16px 6px', flex: 'none' }}>
           {vm.angles.length > 0 && (
             <button type="button"
               onClick={() => {
@@ -304,7 +304,7 @@ export default function W3ShareView({
         </div>
 
         {/* ── THE CARD, AND THE WORDS ON IT ─────────────────────────────── */}
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '6px 20px 10px' }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '2px 12px 6px' }}>
           <div
             ref={cardRef}
             onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp}
@@ -476,8 +476,8 @@ export default function W3ShareView({
             itself. Tapping is the shortcut; swiping the card is the gesture a
             rider already knows from every other photo editor they own. */}
         <div ref={stripRef} style={{
-          display: 'flex', gap: 10, overflowX: 'auto', scrollbarWidth: 'none',
-          padding: '0 20px 12px', flex: 'none', scrollSnapType: 'x proximity',
+          display: 'flex', gap: 9, overflowX: 'auto', scrollbarWidth: 'none',
+          padding: '0 14px 8px', flex: 'none', scrollSnapType: 'x proximity',
         }}>
           {STORY_FORMATS.map((f) => {
             const on = f.id === format
@@ -486,7 +486,7 @@ export default function W3ShareView({
               <button key={f.id} type="button" data-on={on ? '1' : '0'} onClick={() => pickFormat(f.id)}
                 style={{
                   flex: 'none', padding: 0, border: 0, background: 'transparent', cursor: 'pointer',
-                  fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 6,
+                  fontFamily: FONT, display: 'flex', flexDirection: 'column', gap: 5,
                   alignItems: 'center', scrollSnapAlign: 'center',
                 }}>
                 {/* THE CARD ITSELF, small. A row of text chips is a settings
@@ -498,7 +498,7 @@ export default function W3ShareView({
                   animate={{ scale: on ? 1 : 0.92, opacity: on ? 1 : 0.62 }}
                   transition={{ type: 'spring', stiffness: 420, damping: 32 }}
                   style={{
-                    display: 'block', width: 46, height: 82, borderRadius: 9, overflow: 'hidden',
+                    display: 'block', width: 40, height: 71, borderRadius: 8, overflow: 'hidden',
                     background: T.surface, position: 'relative',
                     boxShadow: on ? `0 0 0 2px ${accent}` : `0 0 0 1px ${T.stroke}`,
                   }}>
@@ -522,7 +522,7 @@ export default function W3ShareView({
             into the app, the link to the clipboard. */}
         <div style={{
           display: 'flex', gap: 10, alignItems: 'center', flex: 'none',
-          padding: '0 20px calc(12px + env(safe-area-inset-bottom))',
+          padding: '0 16px calc(10px + env(safe-area-inset-bottom))',
         }}>
           <button type="button" onClick={onShare} disabled={!vm.posterDataUrl}
             style={{
