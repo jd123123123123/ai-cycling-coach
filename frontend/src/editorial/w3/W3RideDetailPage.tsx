@@ -476,10 +476,16 @@ export default function W3RideDetailPage() {
   const heroVm = useMemo(
     () => (vm ? {
       ...vm.hero,
-      sceneImage: scene.status === 'ok' && !scene.pending ? scene.image : null,
+      // THE SCENE IS SHOWN ONCE. In celebrate mode the wrap above is already
+      // showing this exact picture, and the hero repeating it put the same
+      // render on screen twice a few hundred pixels apart — which reads as the
+      // page having loaded twice. Suppressed here rather than in the view, so
+      // the hero falls back to the ROUTE MAP: a different picture answering a
+      // different question, not a hole where one used to be.
+      sceneImage: celebrate ? null : (scene.status === 'ok' && !scene.pending ? scene.image : null),
       routePending,
     } : null),
-    [vm, scene.status, scene.image, scene.pending, routePending],
+    [vm, celebrate, scene.status, scene.image, scene.pending, routePending],
   )
 
   const wrapVm = useMemo(
@@ -495,8 +501,11 @@ export default function W3RideDetailPage() {
       scene={scene}
       onCompose={() => { if (activityId != null && !compose.isPending) compose.mutate(activityId) }}
       onOpenStudio={(kind) => navigate(kind === 'rider' ? '/e/w3-avatar-onboard' : '/e/w3-bike-studio')}
-      // In celebrate mode the wrap above already carries both, and a second
-      // pair a few hundred pixels down reads as two screens stacked.
+      // The SHARE button is the wrap's in celebrate mode — a second one a few
+      // hundred pixels down reads as two screens stacked. THE BACK BUTTON IS
+      // NOT: dropping it left the celebration with no exit at all, because the
+      // hero's back arrow is the only one this view has and the wrap had none
+      // of its own. A rider who swiped the chest open was stuck on the page.
       onBack={celebrate ? undefined : () => navigate(-1)}
       onShare={celebrate ? undefined : () => id && navigate(`/e/w3-share/${id}`)}
       onExpandMap={vm.hero.polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
@@ -513,6 +522,10 @@ export default function W3RideDetailPage() {
       <div className="w3-frame" style={{ minHeight: '100dvh', background: T.bg }}>
         <W3RideWrap
           vm={wrapVm}
+          // Back to Today, not `navigate(-1)`: the chest that opens this lives
+          // on Today, and history here can be the share screen the rider just
+          // backed out of.
+          onClose={() => navigate('/e/w3-today')}
           hero={
             scene.status === 'ok' && scene.image
               ? <img src={scene.image} alt="" style={{ display: 'block', width: '100%', objectFit: 'cover' }} />

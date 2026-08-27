@@ -343,13 +343,27 @@ export default function W3SharePage() {
    * slots beside it, and a template that shows fewer simply uses fewer.
    */
   const story = useMemo<StoryData | null>(() => {
-    if (!poster || !debrief) return null
+    // ── THE DEBRIEF IS AN ENRICHMENT, NOT A PREREQUISITE ─────────────────
+    // This used to be `if (!poster || !debrief) return null`, and a null story
+    // means `edited` is null, which means the render effect returns before it
+    // paints — so the screen sat on "Bild wird erstellt…" forever with nothing
+    // to say. That is exactly what a JUST-UPLOADED ride hits: the race debrief
+    // is generated after the fact, so the one moment a rider most wants to
+    // share is the one moment this screen could not.
+    //
+    // The debrief only ever fed the optional value chips below. Everything the
+    // card actually needs — the sentence, the figure, the photo, the route,
+    // the footer — comes from `poster`, which needs only the activity. So the
+    // card paints now and the chips fill in when the debrief lands.
+    if (!poster) return null
     const kg = profile?.weight_kg ?? null
-    const picked = values
-      .map((id) => VALUES.find((v) => v.id === id))
-      .filter((v): v is NonNullable<typeof v> => v != null)
-      .map((v) => ({ id: v.id, short: v.short, value: v.resolve(debrief, kg) }))
-      .filter((v): v is { id: ValueId; short: string; value: string } => v.value != null)
+    const picked = debrief
+      ? values
+          .map((id) => VALUES.find((v) => v.id === id))
+          .filter((v): v is NonNullable<typeof v> => v != null)
+          .map((v) => ({ id: v.id, short: v.short, value: v.resolve(debrief, kg) }))
+          .filter((v): v is { id: ValueId; short: string; value: string } => v.value != null)
+      : []
 
     const [lead, ...rest] = picked
     // The leading value is split into figure and unit so the card can set them

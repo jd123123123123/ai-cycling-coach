@@ -1,7 +1,10 @@
+import { useEffect, useRef } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, X } from 'lucide-react'
 import { T, FONT, grow } from './w3tokens'
 import { TNUM } from './w3surfaces'
+import { fireConfetti } from '../../lib/confetti'
+import { hapticCelebrate } from '../../lib/haptics'
 
 /**
  * THE RIDE, WRAPPED — pen frame `tN23S` (W3 · 09 FAHRT · EDITORIAL).
@@ -85,16 +88,40 @@ function StatTile({ s, i, reduce }: { s: W3WrapStat; i: number; reduce: boolean 
   )
 }
 
-export default function W3RideWrap({ vm, hero, onShare }: {
+export default function W3RideWrap({ vm, hero, onShare, onClose }: {
   vm: W3RideWrapVm
   /** The bike on its scene. Whatever the hero room already renders. */
   hero?: React.ReactNode
   onShare?: () => void
+  /** The way out. Without it this screen has none — the detail below hides its
+   *  own back arrow in celebrate mode, so the rider is stuck on the page. */
+  onClose?: () => void
 }) {
   const reduce = useReducedMotion()
 
+  // ── THE CELEBRATION, FIRED ONCE ────────────────────────────────────────
+  // A ride landing is the one moment in this app that has earned confetti, and
+  // it fired none: nothing in this component or the page above it ever called
+  // it, so swiping the chest open produced a silent screen. It runs on MOUNT
+  // (this component only exists in celebrate mode) and the ref makes a
+  // re-render from a late scene or a resolved query unable to re-fire it.
+  //
+  // `fireConfetti` returns its own canceller and `hapticCelebrate` no-ops on a
+  // platform without a vibrator, so neither needs a capability check here.
+  // Reduced motion silences the confetti and KEEPS the haptic — the reason to
+  // turn animation down is not a reason to lose the confirmation.
+  const firedRef = useRef(false)
+  useEffect(() => {
+    if (firedRef.current) return
+    firedRef.current = true
+    hapticCelebrate()
+    if (reduce) return
+    const cancel = fireConfetti()
+    return () => cancel?.()
+  }, [reduce])
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', fontFamily: FONT, background: T.bg }}>
+    <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', fontFamily: FONT, background: T.bg }}>
 
       {/* ── The machine, on the scene the ride earned ── */}
       {hero && (
@@ -111,6 +138,18 @@ export default function W3RideWrap({ vm, hero, onShare }: {
             </div>
           )}
         </div>
+      )}
+
+      {onClose && (
+        <button type="button" onClick={onClose} aria-label="Schließen"
+          style={{
+            position: 'absolute', top: 'calc(12px + env(safe-area-inset-top))', right: 16, zIndex: 5,
+            width: 36, height: 36, borderRadius: 100, border: 0, cursor: 'pointer',
+            background: T.glass, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+            display: 'grid', placeItems: 'center',
+          }}>
+          <X size={17} color={T.ink} strokeWidth={2.4} />
+        </button>
       )}
 
       <div style={{ padding: '18px 20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>

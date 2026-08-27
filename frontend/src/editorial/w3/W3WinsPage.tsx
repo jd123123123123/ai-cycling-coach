@@ -260,7 +260,9 @@ export default function W3WinsPage() {
             ...(big.also_highest ? [{ label: 'HÖCHSTER TAG', icon: Mountain }] : []),
           ],
           cta: 'Als Karte teilen',
-          onShare: () => nav(`/e/w3-share?ride=${big.activity_id}`),
+          // The route is `/e/w3-share/:id` — a query param left the page with no
+          // id at all, so it fell back to the newest ride with a GPS track.
+          onShare: () => nav(`/e/w3-share/${big.activity_id}`),
         }
       : null
 
