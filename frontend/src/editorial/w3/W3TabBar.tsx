@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Activity, Route as RouteIcon, Bike, Trophy, UserRound } from 'lucide-react'
+import { Activity, Route as RouteIcon, CalendarRange, Trophy, UserRound } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import { preloadTab, scheduleW3TabPrefetch } from './w3TabChunks'
 
@@ -32,7 +32,7 @@ import { preloadTab, scheduleW3TabPrefetch } from './w3TabChunks'
 const TABS: { key: string; label: string; icon: typeof Activity; route: string }[] = [
   { key: 'today', label: 'HEUTE', icon: Activity, route: 'w3-today' },
   { key: 'rides', label: 'FAHRTEN', icon: RouteIcon, route: 'w3-rides' },
-  { key: 'garage', label: 'GARAGE', icon: Bike, route: 'w3-garage' },
+  { key: 'plan', label: 'PLAN', icon: CalendarRange, route: 'w3-plan' },
   { key: 'wins', label: 'ERFOLGE', icon: Trophy, route: 'w3-wins' },
   { key: 'biker', label: 'BIKER', icon: UserRound, route: 'w3-biker' },
 ]
@@ -45,12 +45,17 @@ export default function W3TabBar() {
   // active = the tab whose route base appears in the current path; secondary
   // screens map to their closest tab so the bar never wrongly lights "Today".
   const p = loc.pathname
+  // GARAGE IS NOT A TAB ANY MORE. The route still exists and the bike still
+  // lives on Today, but the training plan earns the slot: a rider opens this
+  // app to find out what to do, and that answer was two taps deep behind a
+  // screen about equipment. The garage screens therefore point at Today, which
+  // is where the bike is shown.
   const related: [RegExp, string][] = [
-    [/w3-bike-studio/, 'garage'],
+    [/w3-garage|w3-bike-studio/, 'today'],
     [/w3-session|w3-ride/, 'rides'],
     [/w3-crew|w3-referral/, 'biker'],
     [/w3-challenge/, 'wins'],
-    [/w3-plan|w3-goal/, 'today'],
+    [/w3-goal/, 'plan'],
   ]
   const activeKey = TABS.find((t) => p.includes(t.route))?.key
     ?? related.find(([re]) => re.test(p))?.[1]

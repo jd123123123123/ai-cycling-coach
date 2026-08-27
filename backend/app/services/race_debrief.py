@@ -115,16 +115,63 @@ def _grade_from_score(score: float) -> str:
     return "F"
 
 
+def _split_story(pacing, efficiency) -> str:
+    """Did the second half get slower because he CRACKED, or because he EASED?
+
+    THIS EXISTS BECAUSE THE APP CALLED A REAL RIDER A QUITTER. He rode the
+    second half of a long day in a group, his power dropped the way everybody's
+    power drops behind four other wheels, and the debrief told him he had
+    "eingebrochen" — broken. He had done nothing of the sort. He had found a
+    group, which is the single most sensible thing you can do on the way home.
+
+    POWER ALONE CANNOT TELL THE TWO APART, and that was the whole bug: a fade
+    and a tow are the same line on a power graph. What separates them is the
+    HEART RATE.
+
+      · A CRACK is power down while the heart stays up. The rider is paying the
+        same or more for less — that is what falling apart costs, and it shows
+        as elevated aerobic decoupling.
+      · EASING is power down AND heart down. Sitting in, a tailwind, a long
+        descent, riding home. Nothing is wrong; less was being asked.
+
+    So a positive split is only reported as a fade when the decoupling
+    corroborates it. When the heart came down with the power, the ride is
+    described and not diagnosed. And when there is no heart-rate data at all we
+    say we cannot tell, because an accusation is a bad default: being wrongly
+    told you blew up is far more expensive than being told nothing.
+
+    Returns 'cracked' | 'eased' | 'unknown'.
+    """
+    if pacing is None:
+        return "unknown"
+    drift = getattr(efficiency, "decoupling_pct", None) if efficiency is not None else None
+    if drift is None:
+        return "unknown"
+    return "cracked" if drift > 5 else "eased"
+
+
 def _rule_based_grade(pacing, efficiency, matchbook_, efforts, durability_drop, de: bool = False):
     """Deterministic 0–100 ride-execution score from the analyzer blocks."""
     score = 80.0
     good: list[str] = []
     bad: list[str] = []
     if pacing is not None:
-        if pacing.split_pct < -8:
-            score -= 10; bad.append("Positiver Split — in der zweiten Hälfte eingebrochen" if de else "Positive split — faded in the second half")
+        story = _split_story(pacing, efficiency)
+        if pacing.split_pct < -8 and story == "cracked":
+            # Only now is it a fade: the power fell and the heart did not.
+            score -= 10
+            bad.append(
+                "Zweite Hälfte kostete mehr und gab weniger — da war der Tank leer"
+                if de else "Second half cost more and gave less — that is an empty tank"
+            )
+        elif pacing.split_pct < -8 and story == "eased":
+            # NOT a penalty. He eased, and easing is a decision, not a failure.
+            good.append(
+                "Zweite Hälfte lockerer gefahren — Puls runter, Beine gespart. Clever."
+                if de else "Took the second half easier — pulse down, legs saved. Smart."
+            )
         elif pacing.split_pct > -3:
-            score += 4; good.append("Gleichmäßig eingeteilt" if de else "Evenly paced")
+            score += 4; good.append("Gleichmäßig eingeteilt — sauber" if de else "Evenly paced — clean")
         if pacing.variability_index and pacing.variability_index > 1.25:
             score -= 4; bad.append("Sehr antrittslastig (hohe Variabilität)" if de else "Very surgy (high variability)")
     if efficiency is not None and efficiency.decoupling_pct is not None:
@@ -199,12 +246,16 @@ def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs
             race_tactic=(f"Erste 2 h bewusst 5–8 W unter Wohlfühl-Pace; trinken + kühlen ab der ersten Verpflegung." if de else "Ride the first 2 h a deliberate 5–8 W under comfortable pace; drink + cool from the first feed."),
             training_fix="Lange Zone-2-Fahrten (3–4 h) für aerobe Ausdauer und Fettstoffwechsel." if de else "Long Zone-2 rides (3–4 h) to build aerobic durability and fat metabolism.",
             tone="caution"))
-    if pacing is not None and pacing.split_pct < -3:
+    # THE COACHING ONLY FIRES IF HE ACTUALLY CRACKED. Handing someone a
+    # "pace yourself better" plan for a ride they finished in a group is
+    # correcting a mistake they did not make, and it teaches them to distrust
+    # the whole screen.
+    if pacing is not None and pacing.split_pct < -3 and _split_story(pacing, efficiency) != "eased":
         hard = pacing.split_pct < -8
         plan.append(dict(priority=len(plan) + 1,
-            headline=("Erste Hälfte konservativer angehen" if hard else "Gleichmäßiger einteilen") if de else ("Pace the first half more conservatively" if hard else "Flatten out your pacing"),
-            race_tactic=("Negativ splitten: ~5 % leichter starten, als es sich richtig anfühlt." if de else "Negative-split it: start ~5% easier than it feels right."),
-            training_fix="Schwellenarbeit am Ende langer Fahrten für Ermüdungsresistenz." if de else "Threshold work at the end of long rides for durability.",
+            headline=("Erste Hälfte etwas ruhiger angehen" if hard else "Etwas gleichmäßiger einteilen") if de else ("Start the first half a touch calmer" if hard else "Even it out a little"),
+            race_tactic=("Negativ splitten: rund 5 % leichter losfahren, als sich richtig anfühlt — die Beine danken es dir hinten raus." if de else "Negative-split it: go about 5% easier than feels right — your legs collect the interest later."),
+            training_fix="Schwellenarbeit ans Ende langer Fahrten — genau da, wo es zählt." if de else "Threshold work at the end of long rides — exactly where it counts.",
             tone="caution" if hard else "neutral"))
     if durability_drop is not None and durability_drop > 15:
         plan.append(dict(priority=len(plan) + 1,

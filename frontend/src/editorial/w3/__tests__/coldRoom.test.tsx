@@ -51,9 +51,12 @@ describe('the room on a cold, logged-in start', () => {
     // as the rider's own.
     expect(text).toContain('BEISPIEL')
     expect(text).toContain('NOCH KEIN RAD')
-    // The tab bar is always reachable, so a cold room is navigable.
+    // The tab bar is always reachable, so a cold room is navigable. Checked on
+    // two tabs rather than one, and PLAN is the second because it replaced
+    // GARAGE in the bar — the garage route still exists, it is simply no longer
+    // one of the five things the bottom bar reaches.
     expect(text).toContain('HEUTE')
-    expect(text).toContain('GARAGE')
+    expect(text).toContain('PLAN')
     // And the room is not an empty box.
     expect(container.querySelectorAll('img').length).toBeGreaterThan(0)
   })

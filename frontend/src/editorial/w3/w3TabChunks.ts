@@ -47,7 +47,11 @@ import { lazyWithRetry } from '../../lib/lazyWithRetry'
 const TAB_LOADERS: Record<string, () => Promise<unknown>> = {
   'w3-today': () => import('./W3TodayPage'),
   'w3-rides': () => import('./W3RidesPage'),
-  'w3-garage': () => import('./W3EconomyPages'),
+  // PLAN TOOK THE GARAGE'S SLOT in the bar. The garage chunk is deliberately
+  // not warmed any more: nothing in the tab bar reaches it, and warming a
+  // chunk no tab can navigate to is bandwidth spent on a screen the rider is
+  // not on their way to.
+  'w3-plan': () => import('./W3PlanPage'),
   'w3-wins': () => import('./W3WinsPage'),
   'w3-biker': () => import('./W3BikerPage'),
 }
