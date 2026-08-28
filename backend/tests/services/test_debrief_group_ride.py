@@ -77,3 +77,31 @@ def test_the_pacing_plan_still_fires_on_a_real_crack():
     plan = rd._build_plan(_Pacing(-14), None, _Eff(11.0), None, None, de=True)
     heads = " ".join((p.get("headline") or "") for p in plan)
     assert "ruhiger" in heads
+
+
+def test_a_known_companion_settles_it_without_guessing():
+    """The heart-rate rule exists because a power drop is AMBIGUOUS. When
+    `ride_together` has matched somebody on the same road at the same second,
+    the ambiguity is gone and the app should stop deducing a fact it has been
+    told — including when the drift number would have said otherwise."""
+    # Decoupling that would read as a crack on its own.
+    assert rd._split_story(_Pacing(-14), _Eff(11.0)) == "cracked"
+    assert rd._split_story(_Pacing(-14), _Eff(11.0), rode_with=1) == "eased"
+
+
+def test_the_group_ride_says_it_was_a_group():
+    score, good, bad = rd._rule_based_grade(
+        _Pacing(-14), _Eff(1.2), None, [], None, de=True, rode_with=1,
+    )
+    joined = " ".join(good + bad)
+    assert "Gruppe" in joined
+    assert "eingebrochen" not in joined
+    assert score >= 80.0
+
+
+def test_alone_still_reads_as_alone():
+    """The companion path must not swallow the solo wording — a rider who was
+    genuinely on their own gets the sentence about their own pacing."""
+    _, good, _ = rd._rule_based_grade(_Pacing(-14), _Eff(1.2), None, [], None, de=True)
+    assert any("lockerer" in g for g in good)
+    assert not any("Gruppe" in g for g in good)

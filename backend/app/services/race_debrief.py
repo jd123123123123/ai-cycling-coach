@@ -115,7 +115,7 @@ def _grade_from_score(score: float) -> str:
     return "F"
 
 
-def _split_story(pacing, efficiency) -> str:
+def _split_story(pacing, efficiency, rode_with: int = 0) -> str:
     """Did the second half get slower because he CRACKED, or because he EASED?
 
     THIS EXISTS BECAUSE THE APP CALLED A REAL RIDER A QUITTER. He rode the
@@ -144,19 +144,27 @@ def _split_story(pacing, efficiency) -> str:
     """
     if pacing is None:
         return "unknown"
+    # WHEN WE KNOW THERE WAS SOMEBODY ELSE THERE, we do not have to infer any of
+    # this. The heart-rate rule below exists because a power drop is ambiguous;
+    # a companion detected on the same road at the same second removes the
+    # ambiguity, and the app should not go on deducing a fact it has been told.
+    # See `ride_together` — it matches on time AND space precisely so that this
+    # can be trusted.
+    if rode_with > 0:
+        return "eased"
     drift = getattr(efficiency, "decoupling_pct", None) if efficiency is not None else None
     if drift is None:
         return "unknown"
     return "cracked" if drift > 5 else "eased"
 
 
-def _rule_based_grade(pacing, efficiency, matchbook_, efforts, durability_drop, de: bool = False):
+def _rule_based_grade(pacing, efficiency, matchbook_, efforts, durability_drop, de: bool = False, rode_with: int = 0):
     """Deterministic 0–100 ride-execution score from the analyzer blocks."""
     score = 80.0
     good: list[str] = []
     bad: list[str] = []
     if pacing is not None:
-        story = _split_story(pacing, efficiency)
+        story = _split_story(pacing, efficiency, rode_with)
         if pacing.split_pct < -8 and story == "cracked":
             # Only now is it a fade: the power fell and the heart did not.
             score -= 10
@@ -167,8 +175,13 @@ def _rule_based_grade(pacing, efficiency, matchbook_, efforts, durability_drop, 
         elif pacing.split_pct < -8 and story == "eased":
             # NOT a penalty. He eased, and easing is a decision, not a failure.
             good.append(
-                "Zweite Hälfte lockerer gefahren — Puls runter, Beine gespart. Clever."
-                if de else "Took the second half easier — pulse down, legs saved. Smart."
+                ("Zweite Hälfte in der Gruppe — weniger Watt für dasselbe Tempo. Genau so geht das."
+                 if rode_with else
+                 "Zweite Hälfte lockerer gefahren — Puls runter, Beine gespart. Clever.")
+                if de else
+                ("Second half in a group — fewer watts for the same speed. That is the point of it."
+                 if rode_with else
+                 "Took the second half easier — pulse down, legs saved. Smart.")
             )
         elif pacing.split_pct > -3:
             score += 4; good.append("Gleichmäßig eingeteilt — sauber" if de else "Evenly paced — clean")
