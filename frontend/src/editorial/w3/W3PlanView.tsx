@@ -5,6 +5,7 @@ import {
   Zap, ArrowRight, RefreshCw, Repeat, ChevronDown, ChevronUp, X, Minus, Plus, Check,
 } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
+import { TNUM } from './w3surfaces'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import type { PhaseSeg, WeekBar } from './w3plan'
@@ -446,7 +447,10 @@ function SheetShell({ children, onClose }: { children: ReactNode; onClose: () =>
 }
 
 // ── main view ──
-export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, onAdapt, onRebuild, onSwitchGoal }: { vm: W3PlanVm } & W3PlanActions) {
+export default function W3PlanView({
+  vm, chromeless = false,
+  onBack, onGoal, onLoad, onStartRide, onAdapt, onRebuild, onSwitchGoal,
+}: { vm: W3PlanVm; chromeless?: boolean } & W3PlanActions) {
   const reduce = useReducedMotion()
   const [sheet, setSheet] = useState<null | 'adjust' | 'goal'>(null)
   const [swapOpen, setSwapOpen] = useState(false)
@@ -466,19 +470,38 @@ export default function W3PlanView({ vm, onBack, onGoal, onLoad, onStartRide, on
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-        <W3StatusBar />
-
-        {/* Nav */}
-        <W3TopBar title="Trainingsplan" onBack={onBack}
-          extra={<IconBtn onClick={() => setSheet('adjust')} label="Plan anpassen"><SlidersHorizontal size={17} color={T.ink} /></IconBtn>} />
+        {/* IN THE ROOM THE CHROME IS THE ROOM'S. The hero already carries the
+            status bar, the machine and the tab bar, so drawing a second header
+            underneath it is the "weird other top menu" that made moving between
+            tabs feel like moving between apps. Standalone — the preview route,
+            a deep link past the shell — this page is still a page and keeps its
+            own bar. The plan-adjust control moves into the goal header below,
+            where it is next to the thing it adjusts. */}
+        {!chromeless && <>
+          <W3StatusBar />
+          <W3TopBar title="Trainingsplan" onBack={onBack}
+            extra={<IconBtn onClick={() => setSheet('adjust')} label="Plan anpassen"><SlidersHorizontal size={17} color={T.ink} /></IconBtn>} />
+        </>}
 
         {/* Goal header */}
-        <div style={{ ...band(20), paddingTop: 8, gap: 14 }}>
+        <div style={{ ...band(20), paddingTop: chromeless ? 16 : 8, gap: 14 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>DEIN ZIEL</span>
-            <button onClick={onGoal} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 12px', borderRadius: 100, border: `1px solid ${T.stroke}`, background: 'transparent', cursor: 'pointer', fontFamily: FONT }}>
-              <Pencil size={12} color={T.mid} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, color: T.mid }}>ZIEL ÄNDERN</span>
-            </button>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <button onClick={onGoal} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '7px 12px', borderRadius: 100, border: `1px solid ${T.stroke}`, background: 'transparent', cursor: 'pointer', fontFamily: FONT }}>
+                <Pencil size={12} color={T.mid} /><span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 0.6, color: T.mid }}>ZIEL ÄNDERN</span>
+              </button>
+              {/* THE ADJUST CONTROL FOLLOWS THE CHROME. It lived in the top
+                  bar's `extra`, so dropping the bar in the room would have
+                  stranded the only way to reach "Plan anpassen". Here it is
+                  beside the goal it adjusts, which is arguably where it always
+                  belonged. */}
+              {chromeless && (
+                <IconBtn onClick={() => setSheet('adjust')} label="Plan anpassen">
+                  <SlidersHorizontal size={17} color={T.ink} />
+                </IconBtn>
+              )}
+            </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {/* ── ONE HERO, AND IT IS THE COUNTDOWN ────────────────────────
@@ -703,5 +726,57 @@ function AdaptBtn({ label, sub, icon, busy, onClick, active }: { label: string; 
       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>{icon}<span style={{ fontSize: 12.5, fontWeight: 600, color: T.ink }}>{busy ? '…' : label}</span></div>
       <span style={{ fontSize: 10, fontWeight: 600, color: active ? T.acid : T.quiet }}>{sub}</span>
     </button>
+  )
+}
+
+
+/**
+ * THE PLAN, AS THE ROOM'S BOTTOM PANEL.
+ *
+ * Plan was the one tab that built its own page — status bar, top bar, its own
+ * scroll — while Today, Fahrten, Garage and Erfolge all share the hero room and
+ * differ only in the panel docked under the machine. Moving between them, the
+ * bike vanished and came back, which is the one thing the shared room exists to
+ * prevent.
+ *
+ * WHAT GOES IN THE DOCK is the answer to "what am I training for", in the three
+ * figures that answer it: how long until the day, where in the plan this week
+ * sits, and which block is running. Everything else — the phases, the week, the
+ * session — stays in the content below, because a dock that tried to hold the
+ * whole plan would be the page again, three hundred pixels shorter.
+ *
+ * Deliberately the same shape as `W3WinsDock`: a row of figures with quiet
+ * labels. Two panels in one room that were laid out differently would make the
+ * room look like it was rebuilding itself on every tab, which is exactly the
+ * impression the shared shell was built to remove.
+ */
+export function W3PlanDock({ vm }: { vm: W3PlanVm }) {
+  const items: { key: string; value: string; unit?: string; label: string }[] = [
+    {
+      key: 'days',
+      value: vm.daysToStart == null ? DASH : String(vm.daysToStart),
+      unit: vm.daysToStart == null ? undefined : 'Tage',
+      label: 'BIS ZUM START',
+    },
+    { key: 'week', value: String(vm.planWeekNum), unit: `/ ${vm.totalWeeks}`, label: 'PLANWOCHE' },
+    { key: 'block', value: vm.block?.phase ?? DASH, label: 'BLOCK' },
+  ]
+  return (
+    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 10, padding: '0 4px' }}>
+      {items.map((it) => (
+        <div key={it.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', minWidth: 0 }}>
+            <span style={{
+              fontSize: 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1,
+              color: it.value === DASH ? T.quiet : T.ink,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              ...TNUM,
+            }}>{it.value}</span>
+            {it.unit && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet, paddingBottom: 2, whiteSpace: 'nowrap' }}>{it.unit}</span>}
+          </div>
+          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet, whiteSpace: 'nowrap' }}>{it.label}</span>
+        </div>
+      ))}
+    </div>
   )
 }

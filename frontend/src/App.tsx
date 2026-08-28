@@ -219,6 +219,9 @@ function App() {
  */
 const ROOMS: Record<string, string> = {
   '/e/w3-today': 'w3-room',
+  // Plan is the same machine asked "what am I training for", so it shares the
+  // room rather than building a page that tears it down to answer.
+  '/e/w3-plan': 'w3-room',
   '/e/w3-rides': 'w3-room',
   '/e/w3-garage': 'w3-room',
   // Erfolge is the same machine asked a fourth question — "what has it done" —
@@ -455,6 +458,7 @@ function AppRoutes() {
             <Route path="/e/w3-rides" element={<W3RidesPage />} />
             <Route path="/e/w3-garage" element={<W3GarageHome />} />
             <Route path="/e/w3-wins" element={<W3WinsPage />} />
+            <Route path="/e/w3-plan" element={<W3PlanPage />} />
           </Route>
           <Route path="/e/w3-gear" element={<ProtectedRoute checkOnboarding><W3Guard><W3GearScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-workshop" element={<ProtectedRoute checkOnboarding><W3Guard><W3WorkshopScreen /></W3Guard></ProtectedRoute>} />
@@ -539,7 +543,6 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-goals-preview" element={<W3OnboardGoalsPreview />} />
           <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />
           {/* Trainingsplan: periodized plan, goal detail, load forecast */}
-          <Route path="/e/w3-plan" element={<ProtectedRoute checkOnboarding><W3PlanPage /></ProtectedRoute>} />
           <Route path="/e/w3-plan-preview" element={<W3PlanPreview />} />
           <Route path="/e/w3-goal" element={<ProtectedRoute checkOnboarding><W3GoalPage /></ProtectedRoute>} />
           <Route path="/e/w3-goal-preview" element={<W3GoalPreview />} />

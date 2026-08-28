@@ -16,7 +16,9 @@ import {
 } from './w3plan'
 import { hasPlanFromWeek } from './w3hasPlan'
 import W3PlanEmptyView, { type W3PlanEmptyVm } from './W3PlanEmptyView'
+import { useHeroPanel } from './W3HeroShell'
 import W3PlanView, {
+  W3PlanDock,
   type W3PlanVm, type GoalOption, type AdaptKind, type AdaptResult,
   type RebuildPayload, type GoalSwitchPayload,
 } from './W3PlanView'
@@ -325,6 +327,18 @@ export default function W3PlanPage() {
     }
   }, [seasonActs, seasonStart])
 
+  // IN THE ROOM, the machine is the hero and the plan's three figures dock
+  // under it; the page below carries the rest. `inShell` is false on the
+  // preview route and on a deep link that skips the shell, and there the view
+  // keeps drawing its own status bar and header exactly as before — a page
+  // outside the room is a legitimate thing to be.
+  //
+  // ABOVE THE EMPTY-PLAN RETURN, because it is a hook. Called below it, the
+  // hook order changes the moment a rider has no plan — React's rule, and a
+  // real bug rather than a lint nag: the empty state and the built state would
+  // disagree about how many hooks this component runs.
+  const { inShell, portal } = useHeroPanel(hasPlan ? <W3PlanDock vm={vm} /> : null)
+
   if (!hasPlan) {
     return (
       <W3PlanEmptyView
@@ -338,8 +352,11 @@ export default function W3PlanPage() {
   }
 
   return (
+    <>
+    {portal}
     <W3PlanView
       vm={vm}
+      chromeless={inShell}
       onBack={() => navigate(-1)}
       onGoal={() => navigate('/e/w3-goal')}
       onLoad={() => navigate('/e/w3-load')}
@@ -348,6 +365,7 @@ export default function W3PlanPage() {
       onRebuild={onRebuild}
       onSwitchGoal={onSwitchGoal}
     />
+    </>
   )
 }
 
