@@ -7,6 +7,7 @@ import {
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import { TNUM } from './w3surfaces'
 import W3StatusBar from './W3StatusBar'
+import W3TabBar from './W3TabBar'
 import W3TopBar from './W3TopBar'
 import type { PhaseSeg, WeekBar } from './w3plan'
 import './w3.css'
@@ -711,6 +712,17 @@ export default function W3PlanView({
             <Repeat size={15} color={T.ink} /><span style={{ fontSize: 13.5, fontWeight: 600, color: T.ink }}>Ziel wechseln</span>
           </button>
         </div>
+
+        {/* THE BOTTOM NAV BELONGS TO WHOEVER OWNS THE PAGE. In the room the
+            shell already draws it, so drawing a second one here would stack two
+            bars. Standalone — the preview route, a deep link past the shell —
+            this page is the page, and every other W3 view (`W3TodayView`,
+            `W3RidesView`, `W3GarageHero`) ends with the bar for exactly that
+            reason. Plan was the one that did not, so the only screen a rider
+            could reach with no way out of it was the one about the whole
+            season. Before the sheets, so an open sheet still covers it — both
+            sit at z-index 50 and the later element wins. */}
+        {!chromeless && <W3TabBar />}
 
         {sheet === 'adjust' && <PlanAdjustSheet vm={vm} onClose={() => setSheet(null)} onRebuild={onRebuild} />}
         {sheet === 'goal' && <GoalSwitchSheet vm={vm} onClose={() => setSheet(null)} onSwitchGoal={onSwitchGoal} />}
