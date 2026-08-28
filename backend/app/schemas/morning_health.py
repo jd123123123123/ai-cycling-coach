@@ -7,7 +7,16 @@ from pydantic import BaseModel
 
 
 class MorningHealthSignal(BaseModel):
-    """One deviating morning marker, cited with its value vs the athlete's baseline."""
+    """One morning marker, cited with its value against the athlete's baseline.
+
+    EVERY MEASURED MARKER IS RETURNED, not only the deviating ones. This used
+    to say "one deviating morning marker" and the service matched it, which is
+    why HRV was missing from two screens on any morning it happened to be
+    normal: the app measured it, decided it was unremarkable, and dropped it.
+    "Your HRV is where it should be" is worth saying, and it can only be said
+    if the number survives being fine. `triggered` is how a consumer tells the
+    two apart.
+    """
     metric: str          # 'resting_hr' | 'hrv' | 'respiration' | 'spo2' | 'sleep_score'
     value: float         # today's reading
     baseline: float | None  # personal rolling-median baseline (None if unavailable)
@@ -16,6 +25,7 @@ class MorningHealthSignal(BaseModel):
     unit: str            # 'bpm' | '%' | 'brpm' | ''
     severity: str        # 'mild' | 'strong'
     series: list[float] = []   # trailing values for the sparkline; [] when too few to draw
+    triggered: bool = False    # part of why a warning fired, vs. shown for context
 
 
 class MorningHealthCheck(BaseModel):

@@ -302,15 +302,56 @@ function buildRangeBand(
   positionOverride?: 'below' | 'in' | 'above' | 'unknown',
 ): RangeBand | null {
   if (!signal || signal.series.length === 0) return null
-  const low = Math.min(...signal.series)
-  const high = Math.max(...signal.series)
+
+  /**
+   * THE BAND IS THE USUAL RANGE, NOT THE OBSERVED ONE.
+   *
+   * This was `Math.min(series)` to `Math.max(series)`, and that band is
+   * guaranteed to contain every reading it was built from — including today's.
+   * So the "optimal area" spanned the whole spectrum, the marker was always
+   * inside it, and the graphic said nothing on any morning. A single bad night
+   * four weeks ago widened it permanently; one outlier and the band was junk
+   * for a month.
+   *
+   * What a vital sign wants is the middle of its own distribution. This takes
+   * the interquartile range — the middle half of the trailing readings — which
+   * is the standard robust answer: it ignores the tails entirely, so the one
+   * night the rider had a fever does not redefine "normal" for them.
+   *
+   * A rider inside it is having an ordinary morning. A rider outside it is
+   * having an unusual one, which is exactly the thing the spectrum exists to
+   * show and could not previously express.
+   */
+  const sorted = [...signal.series].sort((a, b) => a - b)
+  const at = (q: number) => {
+    const i = (sorted.length - 1) * q
+    const lo = Math.floor(i)
+    const hi = Math.ceil(i)
+    return lo === hi ? sorted[lo]! : sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (i - lo)
+  }
+  let low = at(0.25)
+  let high = at(0.75)
+
+  // A rider whose readings barely move gets a band of nearly zero width, and a
+  // zero-width band is a line rather than a range — every reading then falls
+  // outside it. Widened to a minimum of 4% of the value so a steady rider reads
+  // as steady rather than as permanently abnormal.
+  const mid = (low + high) / 2 || signal.value
+  const floor = Math.abs(mid) * 0.04
+  if (high - low < floor) {
+    low = mid - floor / 2
+    high = mid + floor / 2
+  }
+
   let position: 'below' | 'in' | 'above'
   if (positionOverride && positionOverride !== 'unknown') {
     position = positionOverride
-  } else if (signal.baseline == null || signal.value === signal.baseline) {
-    position = 'in'
+  } else if (signal.value < low) {
+    position = 'below'
+  } else if (signal.value > high) {
+    position = 'above'
   } else {
-    position = signal.value < signal.baseline ? 'below' : 'above'
+    position = 'in'
   }
   return { low, high, position }
 }

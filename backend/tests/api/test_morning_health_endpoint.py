@@ -88,9 +88,16 @@ class TestNormal:
         assert resp.status_code == 200
         body = resp.json()
         assert body["level"] == "none"
-        assert body["signals"] == []
         assert body["recommendation"] is None
         assert body["polarity"] is None
+        # NOT `signals == []`. That assertion used to stand in for "no card
+        # renders", and the service matched it — which is why a rider having a
+        # perfectly ordinary morning got a response with no markers at all, and
+        # why HRV was missing from the Today nudge and from the morning
+        # report's spectrum. `level` is what suppresses the card; what must
+        # hold here is that nothing claims to be a reason.
+        assert not any(s["triggered"] for s in body["signals"])
+        assert "hrv" in {s["metric"] for s in body["signals"]}
 
 
 class TestClusterEndToEnd:

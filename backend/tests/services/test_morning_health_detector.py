@@ -34,11 +34,28 @@ def _today(**over):
 
 class TestNormal:
     def test_steady_normal_vitals_return_none(self):
+        """A normal morning raises no warning — and still reports its markers.
+
+        THE ASSERTION CHANGED, and the reason is worth keeping. This used to
+        require `signals == []`, treating an empty list as the proof that no
+        card would render. That proxy was wrong and it was expensive: the
+        service matched it, so a rider having an ordinary morning got a
+        response with no markers in it at all, and HRV was consequently missing
+        from the Today nudge and from the morning report's spectrum. The app
+        measured the marker, decided it was unremarkable, and dropped it.
+
+        What must actually hold is that nothing is FLAGGED — `level == "none"`
+        is what suppresses the card, and no marker claims to be a reason. That
+        is asserted directly now, which is strictly stronger than counting the
+        list.
+        """
         daily = _series(20) + [_today()]
         out = detect_morning_health(daily)
         assert out["level"] == "none"
-        assert out["signals"] == []
         assert out["recommendation_de"] is None
+        assert not any(s["triggered"] for s in out["signals"])
+        # And the measurements survive being fine, which is the whole point.
+        assert {s["metric"] for s in out["signals"]} >= {"resting_hr", "hrv"}
 
     def test_empty_history_returns_none(self):
         out = detect_morning_health([])

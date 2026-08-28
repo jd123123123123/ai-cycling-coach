@@ -9,6 +9,11 @@ export interface MorningHealthSignal {
   unit: string
   severity: 'mild' | 'strong'
   series: number[]
+  /** Whether this marker is part of why a warning fired. Every MEASURED marker
+   *  now arrives, not only the deviating ones — so this is what separates "here
+   *  for context" from "here because something is off". Optional because a
+   *  cached response from before the field existed simply reads as false. */
+  triggered?: boolean
 }
 
 export interface MorningHealthCheck {

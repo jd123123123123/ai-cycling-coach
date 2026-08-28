@@ -167,8 +167,24 @@ def detect_morning_health(daily: list[dict]) -> dict:
             "no personal baseline yet (too few morning readings)",
         )
 
+    # EVERY MARKER WE MEASURED, not only the ones sounding an alarm.
+    #
+    # This used to append only `triggered` signals, and that one condition was
+    # the reason two separate screens were missing HRV. A rider whose HRV was
+    # perfectly normal — which is most riders, most mornings — got a response
+    # with no HRV in it at all, so the Today nudge had no HRV row to draw and
+    # the morning report's HRV spectrum had no series to build its band from
+    # and rendered nothing. The app was monitoring the marker and then throwing
+    # it away for being unremarkable, which is precisely backwards: "your HRV
+    # is where it should be" is the thing a rider wants to see every morning,
+    # and it is only legible if the number is on screen when it is FINE.
+    #
+    # `triggered` survives as a FIELD rather than as the filter. The verdict
+    # below is unchanged and still counts only triggered markers — being
+    # visible and being a warning are different things, and conflating them is
+    # what produced a health screen that could only ever deliver bad news.
     for s in (rhr, hrv, resp, spo2, sleep):
-        if s and s.get("triggered"):
+        if s:
             signals.append(_public(s, _series_for(_SERIES_KEY[s["metric"]], daily)))
 
     core = [s for s in (rhr, hrv, resp) if s and s.get("triggered")]
@@ -193,7 +209,7 @@ def detect_morning_health(daily: list[dict]) -> dict:
         level = "none"
 
     if level == "none":
-        return _opportunity_verdict(daily, today, prior)
+        return _opportunity_verdict(daily, today, prior, context=signals)
 
     reco_de, reco_en, head_de, head_en = _copy(level, signals)
     return {
@@ -371,7 +387,20 @@ def _sleep_opportunity_signal(today: dict, prior: list[dict]) -> dict | None:
     }
 
 
-def _opportunity_verdict(daily: list[dict], today: dict, prior: list[dict]) -> dict:
+def _opportunity_verdict(
+    daily: list[dict], today: dict, prior: list[dict],
+    context: list[dict] | None = None,
+) -> dict:
+    """The second opinion, for a morning the deviation check found unremarkable.
+
+    `context` is every marker the first pass MEASURED, already public-shaped. It
+    exists because this function's quiet path used to `return _none(...,
+    signals=[])` — so a rider having a completely ordinary morning got a
+    response with no markers in it whatsoever. That empty list was the reason
+    HRV never appeared on the Today nudge and the morning report's HRV spectrum
+    had no series to build a band from: the calm path, which is the path almost
+    every morning takes, threw the measurements away.
+    """
     rhr_opp = _opportunity_rhr(daily)
     hrv_opp = _opportunity_hrv(daily)
     sleep_opp = _sleep_opportunity_signal(today, prior)
@@ -393,12 +422,19 @@ def _opportunity_verdict(daily: list[dict], today: dict, prior: list[dict]) -> d
         level = "none"
 
     if level == "none":
-        return _none(None, None, signals=[])
+        # The markers still go out. Nothing is wrong, and "nothing is wrong" is
+        # a thing worth showing a rider with the numbers that say so.
+        return _none(None, None, signals=list(context or []))
 
+    # The opportunity markers lead, because they are the reason this fired —
+    # then any measured marker the first pass saw that is not already named, so
+    # the card still carries the full morning rather than only its complaints.
     signals = [
         _public(s, _series_for(_SERIES_KEY[s["metric"]], daily))
         for s in (rhr_opp, hrv_opp, sleep_opp) if s and s["triggered"]
     ]
+    named = {sig["metric"] for sig in signals}
+    signals += [c for c in (context or []) if c["metric"] not in named]
     reco_de, reco_en, head_de, head_en = _opportunity_copy(level, signals)
     return {
         "level": level,
@@ -558,6 +594,11 @@ def _public(sig: dict, series: list[float] | None = None) -> dict:
         "unit": sig.get("unit") or "",
         "severity": sig["severity"],
         "series": series or [],
+        # Whether this marker is part of why a warning fired. Every measured
+        # marker is now returned, so a consumer needs this to tell "here for
+        # context" from "here because something is off" — the nudge sorts by it
+        # and the morning report colours by it.
+        "triggered": bool(sig.get("triggered")),
     }
 
 

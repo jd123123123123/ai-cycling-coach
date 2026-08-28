@@ -99,7 +99,17 @@ export default function W3RecoveryNudge() {
 
         {/* Signal chips — W3 pills, per-signal colour on the trend + delta */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-          {data.signals.slice(0, 3).map((s) => {
+          {/* TRIGGERED FIRST, and the cap is why it matters.
+              Every measured marker now arrives, not only the deviating ones —
+              which is what finally puts HRV on this card on an ordinary
+              morning. But only three are drawn, so arrival order would let a
+              perfectly normal SpO2 push the actual reason for the warning off
+              the card. Sorted so the markers that earned the warning are the
+              ones the rider sees, and the calm ones fill whatever room is
+              left. */}
+          {[...data.signals]
+            .sort((a, b) => Number(b.triggered ?? false) - Number(a.triggered ?? false))
+            .slice(0, 3).map((s) => {
             const label = (METRIC_LABEL[s.metric]?.[de ? 'de' : 'en']) ?? s.metric
             const d = s.delta ?? 0
             const sign = d > 0 ? '+' : d < 0 ? '−' : ''
