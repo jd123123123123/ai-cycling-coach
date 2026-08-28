@@ -1,7 +1,8 @@
 import type { ComponentType } from 'react'
 import { Watch, Activity as ActivityIcon, Zap, HeartPulse, ChevronRight, Ticket } from 'lucide-react'
 import W3RiderHighlights, { type W3RiderHighlightsProps } from './W3RiderHighlights'
-import W3NavMenu from './W3NavMenu'
+import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
 import { T, FONT, Kicker, band } from './w3tokens'
 import './w3.css'
@@ -66,21 +67,21 @@ export default function W3BikerView({ vm, onReferral, onBadges, onRecord, onCrea
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
 
-        {/* The chrome sits ABOVE the portrait rather than over it: the two
-            lifetime pills already occupy the picture's top-right corner, and a
-            menu button landing on top of them is how a clean composition turns
-            into a collision on the one screen size that matters. */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          padding: 'max(12px, env(safe-area-inset-top)) 16px 10px',
-        }}>
-          <span style={{
-            minWidth: 0, fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.ink,
-            padding: '8px 13px', borderRadius: 100, background: T.heroChip,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>BIKER</span>
-          <div style={{ flex: 'none' }}><W3NavMenu /></div>
-        </div>
+        {/* ── THE SAME CHROME AS EVERY OTHER SCREEN ─────────────────────
+            This was a bespoke header — a "BIKER" pill on the left and a lone
+            menu button on the right — and it was the odd one out. Every other
+            W3 screen that is not the hero room uses `W3TopBar`: back button,
+            centred title, the rider's avatar, then the menu. Biker had no
+            avatar and no back button, at a slightly different height, so
+            moving between tabs the furniture jumped.
+
+            The original note here was about not covering the portrait's own
+            lifetime pills with a menu button. That still holds and is still
+            respected: the bar sits ABOVE the picture rather than over it, so
+            nothing lands on the pills — it is simply the shared bar now
+            rather than a second design of the same thing. */}
+        <W3StatusBar />
+        <W3TopBar title="Biker" />
 
         <W3RiderHighlights
           {...vm.rider}

@@ -1,7 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Asterisk, ChevronsUp, Flame, Settings, Star, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
-import { skyGradient } from './w3sky'
 import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
 import W3NavMenu from './W3NavMenu'
@@ -273,31 +272,8 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
 
-      {/* ── THE SKY, BEHIND EVERYTHING ────────────────────────────────────
-          The stage was one static grey studio plate. Defensible — the bike
-          renders are product photographs of a toy, and a studio is where you
-          photograph a toy — but it made the first screen of an app somebody
-          opens every morning the same picture every morning.
-
-          It is a gradient rather than a plate for the reason the procedural
-          bike spike established: a few hundred bytes that always load, against
-          artwork that has to be authored and can fail on a slow connection.
-          And a sky with no detail in it cannot compete with the machine
-          standing in front of it, which a photographed one would.
-
-          Which sky is a function of the DATE — see `skyGradient`. Stable all
-          day, different tomorrow. */}
-      <div aria-hidden style={{
-        position: 'absolute', inset: 0, background: skyGradient(new Date()),
-        pointerEvents: 'none',
-      }} />
-
-      {/* The room itself, composited over the sky with its own floor kept:
-          the machine has to stand on something, and this is what makes it
-          stand rather than float. `screen` lets the sky read through the
-          plate's dark upper half while the floor stays solid underneath the
-          bike, so the two MEET at the horizon instead of one covering the
-          other. */}
+      {/* The room itself. Covers the stage, anchored to the bottom so the pool
+          of light and the floor line land where the bike stands. */}
       <img aria-hidden src={STAGE_PLATE} alt=""
         style={{
           position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -307,12 +283,6 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
           // a flat two-plane gradient is invisible and pins the floor at
           // `FLOOR` on every screen.
           objectFit: 'fill', pointerEvents: 'none',
-          // Only the plate's FLOOR half is wanted now — its grey wall would
-          // cover the sky it is standing in front of. Faded out across the
-          // horizon so the sky owns everything above the line and the plate
-          // owns everything below it.
-          WebkitMaskImage: 'linear-gradient(180deg, transparent 0%, transparent 58%, #000 78%, #000 100%)',
-          maskImage: 'linear-gradient(180deg, transparent 0%, transparent 58%, #000 78%, #000 100%)',
         }} />
 
       {/* ── the corner chips: real figures, floating on the floor ── */}

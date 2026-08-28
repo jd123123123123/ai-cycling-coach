@@ -78,39 +78,6 @@ const DARK = {
   // The floor: a linear sweep that gets LIGHTER toward the bottom, so the bike
   // reads as standing in a studio rather than floating on a void.
   heroFloor: ['#0B0B0C', '#141416', '#333336', '#47474B'] as const,
-  /**
-   * THE SKY BEHIND THE BIKE, AND WHY THERE ARE SEVEN OF THEM.
-   *
-   * The stage used to be one static grey studio plate. It was defensible — the
-   * bike renders are product photographs of a toy and a studio is where you
-   * photograph a toy — but it made the first screen of the app the same picture
-   * every morning, and a rider opens this thing daily.
-   *
-   * So the wall behind the machine is a sky now, and which sky it is depends on
-   * the date. Seven of them, one per day, cycling by day-of-year: the rider
-   * sees a different morning each time they open it and the same one all day,
-   * which is the property that matters — a backdrop that changed while you
-   * looked at it would read as a bug.
-   *
-   * THEY ARE GRADIENTS, NOT PICTURES. The same argument the procedural bike
-   * spike made: this is a few hundred bytes that always loads, against a plate
-   * per day that has to be authored, shipped, and can fail on a slow
-   * connection. It also cannot fight the bike, because a sky with no detail in
-   * it has nothing to compete with.
-   *
-   * Each is [zenith, upper, horizon-glow] and is composited ABOVE the floor,
-   * which keeps its own values — the machine has to stand on something, and the
-   * floor is what makes it stand rather than float.
-   */
-  heroSkies: [
-    ['#101828', '#233252', '#7C5A6E'] as const,  // Mo — blue hour, the last of the night
-    ['#151C2E', '#3A3355', '#B4657A'] as const,  // Di — first light, cold going warm
-    ['#1A1B27', '#4A3A58', '#E0855F'] as const,  // Mi — the real sunrise
-    ['#101C24', '#2C4A54', '#D9A05B'] as const,  // Do — clear morning, low sun
-    ['#131A22', '#33424C', '#9FB0A8'] as const,  // Fr — overcast, the honest one
-    ['#161221', '#43305A', '#C96F8E'] as const,  // Sa — high cloud catching colour
-    ['#0E1A20', '#26454E', '#6FA2A0'] as const,  // So — clear and cold, no drama
-  ] as const,
   rule: '#FFFFFF14', stroke: '#FFFFFF1A',
   // The data ramp. `d1` is the empty end of it — an unlit meter step or an
   // unfilled slot, present enough to be counted and far enough below every
