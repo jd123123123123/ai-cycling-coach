@@ -99,7 +99,12 @@ export function buildWrappedVm(w: Wrapped, art: WrappedArt = {}): W3WrappedVm {
       // The row, the way the template sets it — distance, time, climbing, all
       // at one weight. A week is three numbers, not one with two footnotes.
       stats: [
-        { label: 'zeit', value: w.totals.saddle_hm.replace(' h', ''), unit: 'h' },
+        // `saddle_hm` already carries its own units — the server formats it as
+        // "1h 06m" (`weekly_wrapped._fmt_hm`), so it needs no unit beside it.
+        // It used to strip a trailing " h" and re-add "h", which only ever
+        // matched the "8:15 h" shape the fixtures used and the server never
+        // sends — so every real week rendered "1h 06m h".
+        { label: 'zeit', value: w.totals.saddle_hm, unit: '' },
         ...(w.elevation_m != null && w.elevation_m > 0
           ? [{ label: 'hm', value: de(Math.round(w.elevation_m)), unit: 'hm' }] : []),
       ],

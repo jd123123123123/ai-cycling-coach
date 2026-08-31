@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useShareInvite } from './useShareInvite'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Camera, Sparkles, Users, Trophy, ArrowRight, ArrowLeft, Loader2, Plus, BadgeCheck, Share2, Check, ScanFace, Wand2, Bike, Mountain, Route as RouteIcon } from 'lucide-react'
 import { T, FONT, EASE, DASH, band } from './w3tokens'
@@ -209,6 +210,8 @@ function W3PayoutOverlay({ rc, onDone }: { rc: number; onDone: () => void }) {
 }
 
 export default function W3AvatarOnboardView({ heroImageUrl, stage = 'intro', reveal, failure, onPick, onSkip, onTake }: W3AvatarOnboardProps) {
+  // The avatar card is an exported image too — it carries the invite.
+  useShareInvite()
   const reduce = useReducedMotion()
 
 

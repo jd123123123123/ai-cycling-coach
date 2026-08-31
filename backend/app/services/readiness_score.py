@@ -198,6 +198,12 @@ def _sleep_component(inputs: ReadinessInputs) -> tuple[float | None, str]:
     return score, ", ".join(note_parts)
 
 
+#: Half-width, in TSB points, of the ramp centred on each band boundary. Small
+#: enough that the middle of every band keeps its own value, wide enough that no
+#: single day's TSB drift can move readiness more than ~1.4 points.
+_TSB_BLEND = 2.0
+
+
 def _tsb_component(inputs: ReadinessInputs) -> tuple[float | None, str]:
     """TSB readiness bands, calibrated for athletes who *train* rather than
     perpetually taper. TSB -10..-22 is normal productive-training fatigue —
@@ -216,18 +222,50 @@ def _tsb_component(inputs: ReadinessInputs) -> tuple[float | None, str]:
     if inputs.tsb is None:
         return None, "no TSB"
     tsb = inputs.tsb
-    if tsb > 20:
-        score = 65.0
-    elif tsb > 5:
-        score = 85.0
-    elif tsb > -10:
-        score = 80.0
-    elif tsb > -22:
-        score = 72.0
-    elif tsb > -30:
-        score = 52.0
-    else:
-        score = 25.0
+    # PLATEAUS WITH SOFTENED EDGES, not a staircase — and not a straight line
+    # either. The bands below are unchanged in value and meaning: each one is a
+    # real training state (severe negative, functional overreach, productive,
+    # fresh, over-tapered), and a rider sitting in the middle of one should get
+    # that band's score.
+    #
+    # WHAT WAS WRONG: as hard steps, crossing a boundary moved this component
+    # 20 points for an arbitrarily small change in TSB. At weight 0.28 that is
+    # a 5.6-point jump in overall readiness (7.6 at the -30 edge) between two
+    # mornings in which nothing about the athlete changed, and the surrounding
+    # copy would then narrate a physiological story for an artefact of
+    # rounding. An athlete mid-build sits exactly in -30..-10, where the two
+    # largest steps were, so this was not an edge case.
+    #
+    # WHAT WOULD ALSO BE WRONG: interpolating straight between band values.
+    # That drags the middle of every band toward its neighbours — TSB +10 is
+    # squarely fresh and must not be pulled down by the over-tapered penalty
+    # that only applies past +20.
+    #
+    # So: hold each plateau, and blend only within _TSB_BLEND of a boundary.
+    # The bands keep their meaning; the cliff becomes a short ramp.
+    bounds = [(-30.0, 25.0, 52.0), (-22.0, 52.0, 72.0), (-10.0, 72.0, 80.0),
+              (5.0, 80.0, 85.0), (20.0, 85.0, 65.0)]
+
+    def plateau(v: float) -> float:
+        if v <= -30.0:
+            return 25.0
+        if v <= -22.0:
+            return 52.0
+        if v <= -10.0:
+            return 72.0
+        if v <= 5.0:
+            return 80.0
+        if v <= 20.0:
+            return 85.0
+        return 65.0
+
+    score = plateau(tsb)
+    for edge, below, above in bounds:
+        if abs(tsb - edge) < _TSB_BLEND:
+            # linear across the 2*_TSB_BLEND window centred on the boundary
+            t = (tsb - (edge - _TSB_BLEND)) / (2 * _TSB_BLEND)
+            score = below + (above - below) * t
+            break
     return score, f"TSB {tsb:.1f}"
 
 

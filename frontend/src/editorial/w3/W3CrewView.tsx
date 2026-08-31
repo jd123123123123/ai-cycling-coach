@@ -134,17 +134,17 @@ function MemberCard({ m, i, reduce, onOpen }: {
           faces are all letters is a spreadsheet. */}
       {m.avatar
         ? <img src={m.avatar} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-        : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 52, fontWeight: 800, color: T.d2 }}>{initial}</div>}
+        : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 52, fontWeight: 600, color: T.d2 }}>{initial}</div>}
 
       {/* name + rank pill */}
       <div style={{ position: 'absolute', left: 8, right: 8, top: 8, display: 'flex', justifyContent: 'center' }}>
-        <span style={{ padding: '5px 12px', borderRadius: 100, background: mine ? YOU_TINT : T.glass, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', fontSize: 11, fontWeight: 800, color: mine ? T.bg : T.ink, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.rank} · {m.name}</span>
+        <span style={{ padding: '5px 12px', borderRadius: 100, background: mine ? YOU_TINT : T.glass, backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', fontSize: 11, fontWeight: 600, color: mine ? T.bg : T.ink, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.rank} · {m.name}</span>
       </div>
       {/* window TSS + distance + share of the leader */}
       <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '22px 11px 10px', background: `linear-gradient(0deg, ${T.bg}, transparent)`, display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
-          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 800, letterSpacing: -0.4, color: T.ink }}>{m.tssLabel}<span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.6, color: T.mid }}> TSS</span></span>
-          <span style={{ flex: 'none', fontSize: 13, fontWeight: 800, color: pctColor }}>{m.pct}%</span>
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 600, letterSpacing: -0.4, color: T.ink }}>{m.tssLabel}<span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.6, color: T.mid }}> TSS</span></span>
+          <span style={{ flex: 'none', fontSize: 13, fontWeight: 600, color: pctColor }}>{m.pct}%</span>
         </div>
         {/* KM AND HOURS BESIDE THE TSS, because TSS is the one number on this
             board a rider cannot feel. "84 km · 3,2 h" is a week somebody
@@ -153,7 +153,7 @@ function MemberCard({ m, i, reduce, onOpen }: {
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, overflow: 'hidden' }}>
           {[m.kmLabel, m.hoursLabel].filter(Boolean).map((v, i) => (
             <span key={i} style={{
-              whiteSpace: 'nowrap', fontSize: 10.5, fontWeight: 700, color: T.mid,
+              whiteSpace: 'nowrap', fontSize: 10.5, fontWeight: 600, color: T.mid,
               ...(i > 0 ? { opacity: 0.8 } : null),
             }}>{i > 0 ? '· ' : ''}{v}</span>
           ))}
@@ -170,15 +170,15 @@ function MemberCard({ m, i, reduce, onOpen }: {
  * every render remounts its subtree, which would replay the entrance
  * animations each time the period tab changes. */
 const NumBadge = ({ n }: { n: number }) => (
-  <span style={{ width: 24, height: 24, borderRadius: 100, background: T.evening, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 800, color: T.ink, flex: 'none' }}>{n}</span>
+  <span style={{ width: 24, height: 24, borderRadius: 100, background: T.evening, display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 600, color: T.ink, flex: 'none' }}>{n}</span>
 )
 const Chip = ({ children }: { children: React.ReactNode }) => (
-  <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: 0.8, color: T.acid, padding: '6px 11px', borderRadius: 100, background: T.acidDim, flex: 'none', whiteSpace: 'nowrap' }}>{children}</span>
+  <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.8, color: T.acid, padding: '6px 11px', borderRadius: 100, background: T.acidDim, flex: 'none', whiteSpace: 'nowrap' }}>{children}</span>
 )
 const SectionHead = ({ n, title, chip }: { n: number; title: string; chip?: string }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
     <NumBadge n={n} />
-    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{title}</span>
+    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 21, fontWeight: 600, letterSpacing: -0.5, color: T.ink }}>{title}</span>
     {chip ? <Chip>{chip}</Chip> : null}
   </div>
 )
@@ -221,7 +221,7 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
         <div style={{ ...band(18), gap: 16, paddingTop: 6 }}>
           <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: T.ink, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color={T.bg} /></button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1.02, color: T.ink }}>{vm.crewName}</span>
+            <span style={{ fontSize: 38, fontWeight: 600, letterSpacing: -1.4, lineHeight: 1.02, color: T.ink }}>{vm.crewName}</span>
             <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.blurb}</span>
           </div>
         </div>
@@ -244,7 +244,7 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
             <div style={{ ...band(24), gap: 12 }}>
               <div style={{ ...card(), padding: '20px 18px', gap: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-                  <span style={{ fontSize: 56, fontWeight: 800, letterSpacing: -2.4, lineHeight: 0.9, color: T.acid }}>{vm.rankOrdinal}</span>
+                  <span style={{ fontSize: 56, fontWeight: 600, letterSpacing: -2.4, lineHeight: 0.9, color: T.acid }}>{vm.rankOrdinal}</span>
                   <span style={{ fontSize: 13.5, fontWeight: 600, color: T.mid }}>{vm.rankSub}</span>
                 </div>
                 {you && (
@@ -257,7 +257,7 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
                         style={{ height: '100%', borderRadius: 100, background: you.pct >= 100 ? T.acid : T.evening }} />
                     </div>
                     <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>
-                      <span style={{ color: you.pct >= 100 ? T.acid : T.ink, fontWeight: 800 }}>{you.pct}%</span> deiner eigenen Woche{ahead ? ` · ${ahead}` : ''}
+                      <span style={{ color: you.pct >= 100 ? T.acid : T.ink, fontWeight: 600 }}>{you.pct}%</span> deiner eigenen Woche{ahead ? ` · ${ahead}` : ''}
                     </span>
                   </div>
                 )}
@@ -293,15 +293,15 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
                           initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                           transition={{ duration: 0.45, ease: EASE, delay: 0.04 * i }}
                           style={{
-                            fontSize: 26, fontWeight: 800, letterSpacing: -1, lineHeight: 1,
+                            fontSize: 26, fontWeight: 600, letterSpacing: -1, lineHeight: 1,
                             color: t.quiet ? T.mid : T.acid,
                             minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis',
                           }}>{t.value}</motion.span>
                         {t.unit && (
-                          <span style={{ fontSize: 11, fontWeight: 800, color: t.quiet ? T.quiet : T.acid }}>{t.unit}</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: t.quiet ? T.quiet : T.acid }}>{t.unit}</span>
                         )}
                       </div>
-                      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet, textAlign: 'center' }}>{t.label}</span>
+                      <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 0.9, color: T.quiet, textAlign: 'center' }}>{t.label}</span>
                     </div>
                   </div>
                 ))}
@@ -324,7 +324,7 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
             {/* Give props — a real crew_week cheer */}
             <div style={{ ...band(10) }}>
               <button onClick={onProps} style={{ width: '100%', height: 60, borderRadius: 100, background: vm.propsGiven ? T.acid : T.evening, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-                <Sparkles size={19} color={vm.propsGiven ? T.bg : T.ink} /><span style={{ fontSize: 16, fontWeight: 700, color: vm.propsGiven ? T.bg : T.ink }}>{vm.propsGiven ? 'Props vergeben 👏' : 'Props geben'}</span>
+                <Sparkles size={19} color={vm.propsGiven ? T.bg : T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: vm.propsGiven ? T.bg : T.ink }}>{vm.propsGiven ? 'Props vergeben 👏' : 'Props geben'}</span>
               </button>
             </div>
             <div style={{ ...band(26) }}>
@@ -342,12 +342,12 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
                 <div style={{ ...card(), gap: 14 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-                      <span style={{ fontSize: 40, fontWeight: 800, letterSpacing: -1.6, color: T.ink }}>{vm.distanceKm}</span>
+                      <span style={{ fontSize: 40, fontWeight: 600, letterSpacing: -1.6, color: T.ink }}>{vm.distanceKm}</span>
                       <button onClick={onEditGoal} disabled={!onEditGoal} style={{ background: 'transparent', border: 0, padding: 0, cursor: onEditGoal ? 'pointer' : 'default', fontSize: 13, fontWeight: 600, color: onEditGoal ? T.evening : T.mid, display: 'flex', gap: 4, alignItems: 'center', fontFamily: FONT, whiteSpace: 'nowrap' }}>
                         von {vm.distanceGoalKm} km{onEditGoal && <Pencil size={11} />}
                       </button>
                     </div>
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, color: T.quiet, flex: 'none' }}>NOCH {vm.distanceToGo} KM</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.6, color: T.quiet, flex: 'none' }}>NOCH {vm.distanceToGo} KM</span>
                   </div>
                   <div style={{ position: 'relative', height: 12, borderRadius: 100, background: T.rule, overflow: 'hidden' }}>
                     <motion.div
@@ -359,7 +359,7 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
                     <span style={{ minWidth: 0, fontSize: 11, fontWeight: 500, color: T.mid }}>{vm.yourDistanceNote}</span>
-                    <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 0.6, color: T.acid, flex: 'none' }}>{vm.yourSharePct}% DER CREW</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.6, color: T.acid, flex: 'none' }}>{vm.yourSharePct}% DER CREW</span>
                   </div>
                 </div>
               </div>
@@ -398,10 +398,10 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
             {/* Footer — seats + invite */}
             <div style={{ ...band(30) }}>
               <div style={{ ...card(), gap: 12, border: `1px solid ${T.stroke}`, background: 'transparent' }}>
-                <span style={{ fontSize: 24, fontWeight: 700, letterSpacing: -0.8, color: T.ink }}>{vm.seatsOpen > 0 ? `${vm.seatsOpen} ${vm.seatsOpen === 1 ? 'Platz' : 'Plätze'} frei` : 'Crew ist voll'}</span>
+                <span style={{ fontSize: 24, fontWeight: 600, letterSpacing: -0.8, color: T.ink }}>{vm.seatsOpen > 0 ? `${vm.seatsOpen} ${vm.seatsOpen === 1 ? 'Platz' : 'Plätze'} frei` : 'Crew ist voll'}</span>
                 <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.seatsCopy}</span>
                 <button onClick={onInvite} style={{ marginTop: 4, width: '100%', height: 56, borderRadius: 100, background: T.evening, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-                  <UserPlus size={18} color={T.ink} /><span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Fahrer einladen</span>
+                  <UserPlus size={18} color={T.ink} /><span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>Fahrer einladen</span>
                 </button>
               </div>
             </div>
@@ -411,10 +411,10 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
           <div style={{ ...band(30), gap: 16 }}>
             <div style={{ ...card(), gap: 12, alignItems: 'center', textAlign: 'center', padding: 28 }}>
               <div style={{ width: 56, height: 56, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Sparkles size={24} color={T.acid} /></div>
-              <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Noch keine Crew</span>
+              <span style={{ fontSize: 20, fontWeight: 600, letterSpacing: -0.5, color: T.ink }}>Noch keine Crew</span>
               <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.blurb}</span>
               <button onClick={onInvite} style={{ marginTop: 4, width: '100%', height: 56, borderRadius: 100, background: T.evening, border: 0, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>
-                <UserPlus size={18} color={T.ink} /><span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>Fahrer einladen</span>
+                <UserPlus size={18} color={T.ink} /><span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>Fahrer einladen</span>
               </button>
             </div>
           </div>

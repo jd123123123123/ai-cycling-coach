@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useBuyGear, useEquipGear, useGear, useUnequipGear } from '../../hooks/useGear'
 import W3Gear from './W3Gear'
+import W3LoadError from './W3LoadError'
 
 /**
  * W3 · the gear shop, wired. Drop `<W3GearPanel />` into the garage.
@@ -14,7 +15,7 @@ import W3Gear from './W3Gear'
  * and the grid only needs to know WHICH TILE is busy, not which verb it is.
  */
 export default function W3GearPanel() {
-  const { data: gear, isLoading } = useGear()
+  const { data: gear, isLoading, isError, refetch, isFetching } = useGear()
   const buy = useBuyGear()
   const equip = useEquipGear()
   const unequip = useUnequipGear()
@@ -23,6 +24,20 @@ export default function W3GearPanel() {
   const run = (m: { mutate: (id: string, o: object) => void }) => (id: string) => {
     setBusyId(id)
     m.mutate(id, { onSettled: () => setBusyId(null) })
+  }
+
+  // A FAILED FETCH IS NOT AN EMPTY SHOP. Without this branch `loading` was
+  // false and `gear` null, so W3Gear fell into its skeleton and left a blank
+  // grey box on screen permanently — indistinguishable from still loading.
+  if (isError && !gear) {
+    return (
+      <W3LoadError
+        title="Deine Ausrüstung lädt nicht"
+        detail="Wir konnten deine Teile gerade nicht abrufen. Was dir gehört, bleibt dir — das ist nur die Verbindung."
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+      />
+    )
   }
 
   return (

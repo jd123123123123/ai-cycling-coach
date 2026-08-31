@@ -117,11 +117,13 @@ export default function W3BikerPage() {
         tier,
         milestone,
         records: highlightRecords(records),
-        badges: {
-          unlocked: counts?.unlocked ?? 0,
-          total: counts?.total ?? 0,
-          latest: achievements?.latest?.title ?? null,
-        },
+        // NULL, NOT `?? 0`. The zero fallback rendered "0 von 0 Erfolgen"
+        // whenever /achievements/mine was still in flight or had failed — a
+        // sentence that is never true of anybody, shown to riders who have
+        // earned a dozen. With null the row withholds instead of inventing.
+        badges: counts
+          ? { unlocked: counts.unlocked, total: counts.total, latest: achievements?.latest?.title ?? null }
+          : null,
       },
       coin: wallet ? { balance: nf.format(wallet.balance), note: 'aus echten Fahrten verdient' } : null,
       referral: referrals?.code

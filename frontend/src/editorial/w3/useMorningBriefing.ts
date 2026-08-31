@@ -449,8 +449,15 @@ export function useMorningBriefing(): MorningBriefing {
           : 'HRV in deinem Bereich',
         at: sp.at, band: sp.band,
         bandLabel: hrvV.band ? `${Math.round(hrvV.band.low)}–${Math.round(hrvV.band.high)} ${hrvV.unit}` : null,
-        // In band = good. Outside it, either way, = worth a look.
-        tone: hrvV.band == null ? 'flat' : hrvV.band.position === 'in' ? 'good' : 'warn',
+        // DIRECTIONAL, like the resting pulse two blocks below — and for the
+        // same reason. "Outside the band either way is worth a look" flagged
+        // HRV ABOVE baseline in red, which is the one HRV reading that is
+        // unambiguously good news: it is the basis of HRV-guided training
+        // (Plews 2013), and this app's own readiness model scores above-band
+        // HRV monotonically upward (`readiness_score._hrv_component`). So the
+        // morning sheet was painting a red arrow on the signal the score two
+        // centimetres above it was rewarding. Below the band is the flag.
+        tone: hrvV.band == null ? 'flat' : hrvV.band.position === 'below' ? 'warn' : 'good',
         dir: hrvV.band?.position === 'above' ? 'up' : hrvV.band?.position === 'below' ? 'down' : 'flat',
       })
     }

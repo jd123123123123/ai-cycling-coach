@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion, useReducedMotion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, MessageCircle, Send, Plus } from 'lucide-react'
 import { useCrewStandings } from '../../hooks/useCrew'
@@ -11,6 +12,7 @@ import { T, FONT, DASH, Kicker } from './w3tokens'
 import { S, lux, luxTile, hairline, TNUM } from './w3surfaces'
 import { km, hm, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
+import { projectRouteShape } from './w3routeShape'
 
 /**
  * W3 · Today "Deine Crew fährt" — the crew's real rides, and a place to say
@@ -307,6 +309,157 @@ export function RideRow({ ride, avatar, open, onToggle, accent }: {
   )
 }
 
+// ── the crew screen's feed: one ride, one post ──────────────────────────────
+
+/** Media width inside a full-bleed post card at 390. */
+const POST_W = 350
+/** 4:3, not 1:1. A ride's outline is usually wider than it is tall — roads run
+ *  along valleys and coasts — so a square plate spends its height on empty
+ *  ground. Instagram's own landscape aspect, for the same reason. */
+const POST_H = Math.round((POST_W * 3) / 4)
+
+/**
+ * THE RIDE, AS A POST.
+ *
+ * The crew screen asked for a feed people actually read, and the reference for
+ * that is the one everybody already knows: avatar and name up top, the picture
+ * at full bleed, what people did about it underneath, then the caption and the
+ * conversation.
+ *
+ * THE PICTURE IS THE ROUTE. A ride has no photograph, and inventing one — a
+ * stock landscape, a generated scene — is exactly the fabrication this app
+ * refuses everywhere else. What a ride does have is its own shape, and
+ * `W3RouteCard` already made the argument that the outline is the recognisable
+ * thing: a rider knows their own loop, and their crew-mates know the roads it
+ * runs on. That IS a photograph of the ride, drawn from its own GPS.
+ *
+ * A RIDE WITH NO GPS GETS NO MAP. Indoor sessions and rides recorded with the
+ * satellite off come back with `route: null`, and the plate prints the ride's
+ * distance instead of drawing a shape nobody rode. The post keeps its
+ * proportions either way, so the column stays a column.
+ *
+ * WHY THE PAGE VARIANT ONLY. Today deliberately keeps the crew as a compact
+ * column inside one card — a stack of full-bleed posts would make somebody
+ * else's afternoon the loudest thing on the rider's own morning. The crew
+ * screen is where the feed IS the subject, so that is where it gets the room.
+ */
+function RidePost({ ride, avatar, open, onToggle, accent }: {
+  ride: CrewRide
+  avatar: string | null
+  open: boolean
+  onToggle: () => void
+  accent: string
+}) {
+  const reduce = useReducedMotion()
+  const mine = ride.is_mine
+  const tint = mine ? YOU_TINT : accent
+  const name = mine ? 'Du' : `@${ride.handle}`
+  const initial = (ride.handle || '?').trim().charAt(0).toUpperCase() || '?'
+  const shape = projectRouteShape(ride.route as [number, number][] | null, POST_W, POST_H, 26)
+  const allStats = [km(ride.distance_m), hm(ride.elevation_gain_m), dur(ride.duration_seconds)]
+    .filter((v) => v !== DASH)
+  // With no map the plate prints ONE number big — and the scrim must then not
+  // print it again four millimetres below. A distance shown twice in two sizes
+  // is the same restatement this file already deleted its highlights strip for.
+  const heroStat = shape ? null : (allStats[0] ?? null)
+  const stats = heroStat ? allStats.filter((v) => v !== heroStat) : allStats
+
+  return (
+    <div style={{ ...lux(26), padding: 0, overflow: 'hidden', minWidth: 0 }}>
+      {/* ── header: who, and when ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: `${S.md}px ${S.lg}px` }}>
+        <Face url={avatar} initial={initial} mine={mine} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <span style={{ ...ellipsis, fontSize: 13, fontWeight: 600, color: mine ? YOU_TINT : T.ink }}>{name}</span>
+          <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{ago(ride.started_at)}</span>
+        </div>
+      </div>
+
+      {/* ── the picture ── */}
+      <div style={{
+        position: 'relative', width: '100%', height: POST_H, overflow: 'hidden',
+        background: `radial-gradient(120% 120% at 30% 15%, ${tint}1A, transparent 70%), ${T.heroDock}`,
+      }}>
+        {shape ? (
+          <svg width="100%" height={POST_H} viewBox={`0 0 ${POST_W} ${POST_H}`} preserveAspectRatio="xMidYMid meet" aria-hidden>
+            {/* The soft under-stroke is what stops a 2px line reading as a
+                scratch on a dark plate — the two-pass draw the route tile and
+                the wrapped card already use. */}
+            <path d={shape.d} fill="none" stroke={`${tint}30`} strokeWidth={9}
+              strokeLinecap="round" strokeLinejoin="round" />
+            <motion.path d={shape.d} fill="none" stroke={tint} strokeWidth={2.6}
+              strokeLinecap="round" strokeLinejoin="round"
+              initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }}
+              transition={{ duration: 1.1, ease: 'easeOut' }} />
+            <circle cx={shape.pts[0][0]} cy={shape.pts[0][1]} r={4} fill={T.ink} />
+          </svg>
+        ) : (
+          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
+            <span style={{ ...TNUM, fontSize: 44, fontWeight: 600, letterSpacing: -1.6, color: T.ink }}>
+              {heroStat ?? dur(ride.duration_seconds)}
+            </span>
+          </div>
+        )}
+
+        {/* Stats sit ON the picture under a scrim — read without leaving the
+            image, which is why the plate needs no second row of tiles below. */}
+        {stats.length > 0 && (
+          <div style={{
+            position: 'absolute', left: 0, right: 0, bottom: 0,
+            padding: `26px ${S.lg}px ${S.md}px`,
+            background: `linear-gradient(180deg, transparent, ${T.bg}D9)`,
+            display: 'flex', gap: S.md, alignItems: 'baseline',
+          }}>
+            {stats.map((v) => (
+              <span key={v} style={{ ...TNUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{v}</span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── what people did about it ── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: `${S.md}px ${S.lg}px 0`, minWidth: 0 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Reactions rideId={ride.id} seed={ride.reactions} accent={tint} />
+        </div>
+        <button type="button" onClick={onToggle} aria-label={`Kommentare öffnen (${ride.comment_count})`}
+          style={{ ...bare, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 100, background: T.surface2 }}>
+          <MessageCircle size={13} color={ride.comment_count > 0 ? tint : T.quiet} />
+          <span style={{ ...TNUM, fontSize: 11, fontWeight: 600, color: ride.comment_count > 0 ? tint : T.quiet }}>{ride.comment_count}</span>
+        </button>
+      </div>
+
+      {/* ── the caption: name, then what they rode ── */}
+      <div style={{ padding: `${S.sm}px ${S.lg}px ${S.lg}px`, display: 'flex', flexDirection: 'column', gap: S.sm, minWidth: 0 }}>
+        <span style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4 }}>
+          <span style={{ fontWeight: 600, color: mine ? YOU_TINT : T.mid }}>{name}</span>
+          {'  '}
+          <span style={{ fontWeight: 600 }}>{ride.title || 'Fahrt'}</span>
+        </span>
+
+        {ride.comment_count > 0 && !open && (
+          <button type="button" onClick={onToggle}
+            style={{ ...bare, alignSelf: 'flex-start', fontSize: 12, fontWeight: 600, color: T.quiet }}>
+            {ride.comment_count === 1 ? '1 Kommentar ansehen' : `Alle ${ride.comment_count} Kommentare ansehen`}
+          </button>
+        )}
+
+        {open && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: S.md, minWidth: 0 }}>
+            <div style={{ ...luxTile(16), padding: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
+              <Cell label="TSS" value={ride.tss != null ? nf.format(ride.tss) : DASH} />
+              <Cell label="Ø WATT" value={ride.avg_power_w != null ? nf.format(ride.avg_power_w) : DASH} />
+              <Cell label="Ø PULS" value={ride.avg_hr != null ? nf.format(ride.avg_hr) : DASH} />
+              <Cell label="KCAL" value={ride.calories != null ? nf.format(ride.calories) : DASH} />
+            </div>
+            <Thread rideId={ride.id} accent={tint} />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── the section ─────────────────────────────────────────────────────────────
 
 export function W3CrewFeedView({ rides, avatars, variant = 'today' }: {
@@ -371,7 +524,25 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today' }: {
     </div>
   )
 
-  if (page) return feedCard
+  // THE CREW SCREEN IS A FEED OF POSTS, not a column inside one card. Today's
+  // reasoning ("a stack of cards would be the loudest thing on the rider's own
+  // morning") is about Today; here the crew IS the subject, so each ride gets
+  // its own full-bleed post.
+  if (page) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+        {shown.map((r) => (
+          <RidePost
+            key={r.id}
+            ride={r}
+            avatar={avatars?.[r.user_id] ?? null}
+            open={openId === r.id}
+            onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
+            accent={accent} />
+        ))}
+      </div>
+    )
+  }
 
   return (
     <div style={{ ...band(26), gap: 14 }}>

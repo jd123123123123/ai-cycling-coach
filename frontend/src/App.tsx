@@ -18,6 +18,7 @@ import { lazyWithRetry } from './lib/lazyWithRetry'
 // The five bottom-bar screens are declared next to the bar that preloads them.
 import { W3BikerPage, W3GarageHome, W3RidesPage, W3TodayPage, W3WinsPage } from './editorial/w3/w3TabChunks'
 import { resolveLandingPath } from './editorial/state/designSystem'
+import { REGISTER_PATH } from './editorial/w3/w3invite'
 
 // Auth entry points stay eager so first paint is instant.
 
@@ -247,6 +248,19 @@ function roomKey(pathname: string): string {
 function LegacyRedirect({ to }: { to: string }) {
   const { search } = useLocation()
   return <Navigate to={`${to}${search}`} replace />
+}
+
+/**
+ * `/r/:code` — the short invite link printed on every shared card.
+ *
+ * It exists because the printed one has to be retyped by hand from a picture:
+ * `/e/w3-register?ref=ABC123` is 25 characters of ceremony on top of an already
+ * long host, and every one of them is a chance to mistype. This lands on the
+ * same screen with the same parameter. See `editorial/w3/w3invite.ts`.
+ */
+function InviteRedirect() {
+  const { code } = useParams()
+  return <Navigate to={`${REGISTER_PATH}?ref=${encodeURIComponent(code ?? '')}`} replace />
 }
 
 function AppRoutes() {
@@ -556,6 +570,8 @@ function AppRoutes() {
           <Route path="/e/w3-readiness-preview" element={<W3ReadinessPreview />} />
           <Route path="/e/w3-login" element={<W3LoginPage />} />
           <Route path="/e/w3-register" element={<W3RegisterPage />} />
+          {/* The short invite link that every shared card prints. */}
+          <Route path="/r/:code" element={<InviteRedirect />} />
           <Route path="/e/w3-auth-preview" element={<W3AuthPreview />} />
           <Route path="/e/w3-threshold-preview" element={<W3ThresholdPreview />} />
           <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />

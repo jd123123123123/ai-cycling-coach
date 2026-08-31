@@ -34,6 +34,11 @@ export interface CrewRide {
   is_mine: boolean
   reactions: ReactionState
   comment_count: number
+  /** The ride's own shape as `[[lat, lng], ...]`, downsampled for a feed
+   *  thumbnail — the crew post projects it with `projectRouteShape`. Null when
+   *  the ride carries no usable GPS track (indoor, trainer, satellite off), and
+   *  the post then draws no map rather than inventing one. */
+  route?: [number, number][] | null
 }
 
 export interface CrewRideComment {

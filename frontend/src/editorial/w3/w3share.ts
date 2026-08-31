@@ -4,6 +4,7 @@ import {
   type BlockData, type BlockId,
 } from './w3shareBlocks'
 import { RIDR_LIME } from '../../components/RidrMark'
+import { inviteDisplay } from './w3invite'
 /**
  * W3 · Ride-teilen — the share-poster renderer + native-share plumbing.
  *
@@ -314,6 +315,69 @@ function signature(ctx: CanvasRenderingContext2D, right: number, baseline: numbe
   //: and the glyph's own centre (0.61 down the box, not 0.5) is what gets lined
   //: up with the cap height.
   ridrMark(ctx, right - w - size * 0.6, baseline - size * 0.34 - r * 0.22, r, markColor)
+}
+
+/**
+ * THE SHARER'S INVITE CODE, set once per session rather than threaded through
+ * five card interfaces.
+ *
+ * Every render path would otherwise need a new required field, five call sites
+ * would need to pass it, and the first new card type would silently ship
+ * without one. A module-level value means a card cannot forget: it either has
+ * the code or it draws nothing extra, and that is the same decision in one
+ * place. `useShareInvite()` is what sets it — see `hooks/useReferrals`.
+ */
+let _inviteCode: string | null = null
+
+export function setShareInviteCode(code: string | null): void {
+  const c = code?.trim()
+  _inviteCode = c ? c : null
+}
+
+export function shareInviteCode(): string | null {
+  return _inviteCode
+}
+
+/**
+ * Draw the invite line, if there is a code to draw.
+ *
+ * `maxW` is honoured by SHRINKING, never by truncating — half a URL is worse
+ * than a small one, because a truncated link is indistinguishable from a
+ * working one until somebody has typed it. Returns false when nothing was
+ * drawn so a caller can keep its own layout decisions.
+ *
+ * The code inside the URL is drawn in the card's accent: it is the part a
+ * reader can use on its own, by typing it into the register screen's code
+ * field, and it is the part they have to get exactly right.
+ */
+function inviteLine(
+  ctx: CanvasRenderingContext2D,
+  x: number, baseline: number, size: number,
+  mutedColor: string, codeColor: string, maxW: number,
+  align: CanvasTextAlign = 'left',
+): boolean {
+  const code = _inviteCode
+  if (!code) return false
+  const display = inviteDisplay(code)
+  // The code is the tail of the display string; splitting on it rather than
+  // re-deriving keeps the two halves guaranteed to reassemble.
+  const head = display.slice(0, display.length - code.length)
+
+  let s = size
+  ctx.font = `600 ${s}px ${FONT}`
+  const full = () => ctx.measureText(display).width
+  while (full() > maxW && s > 11) {
+    s -= 1
+    ctx.font = `600 ${s}px ${FONT}`
+  }
+  const headW = ctx.measureText(head).width
+  ctx.font = `700 ${s}px ${FONT}`
+  const codeW = ctx.measureText(code).width
+  const startX = align === 'right' ? x - (headW + codeW) : x
+
+  text(ctx, head, startX, baseline, s, '600', mutedColor, 0.2)
+  text(ctx, code, startX + headW, baseline, s, '700', codeColor, 0.2)
+  return true
 }
 
 function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
@@ -720,6 +784,9 @@ async function paint(
   text(ctx, d.footer, px, y, 26, '600', 'rgba(255,255,255,0.55)')
   ridrMark(ctx, W - px - 150, y - 8, 15, RIDR_LIME)
   text(ctx, 'Ridr', W - px - 128, y, 28, '700', T.ink)
+  // The way in, under the name. 1720-tall poster: FOOTER_BOTTOM is 64, so a
+  // 22px line on the +30 baseline sits inside the card with room to spare.
+  inviteLine(ctx, px, y + 30, 22, 'rgba(255,255,255,0.42)', t.acid, W - px * 2)
 }
 
 /** Render the poster once. Retries without the avatar if a cross-origin avatar
@@ -938,6 +1005,7 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   if (d.footer) text(ctx, d.footer, px, fy, 26, '600', 'rgba(255,255,255,0.55)')
   ridrMark(ctx, AW - px - 150, fy - 8, 15, RIDR_LIME)
   text(ctx, 'Ridr', AW - px - 128, fy, 28, '700', T.ink)
+  inviteLine(ctx, px, fy + 30, 22, 'rgba(255,255,255,0.42)', T.acid, AW - px * 2)
 }
 
 /** Render the "AVATAR UNLOCKED" card. Never throws: a missing or tainting
@@ -1064,6 +1132,7 @@ function paintChallengeCard(ctx: CanvasRenderingContext2D, d: ChallengeCardData)
   text(ctx, d.handle, px, foot, 28, '700', 'rgba(255,255,255,0.55)')
   ridrMark(ctx, AW - px - 150, foot - 8, 15, RIDR_LIME)
   text(ctx, 'Ridr', AW - px - 128, foot, 28, '700', T.ink)
+  inviteLine(ctx, px, foot + 30, 22, 'rgba(255,255,255,0.42)', ACID, AW - px * 2)
 }
 
 /** Render the challenge poster. Pure canvas — no images to taint it, so unlike
@@ -1444,6 +1513,21 @@ function paintStoryCard(
   const markAndFooter = (footerColor = 'rgba(255,255,255,0.5)') => {
     text(ctx, d.footer, MX, FOOT, 24, '600', footerColor, 0.6)
     signature(ctx, SW - MX, FOOT, 26, CARD.ink, accent)
+    // ── THE WAY IN, ON THE SIGN-OFF LINE ────────────────────────────────
+    // It goes UNDER the signature rather than above the content, and that is
+    // a deliberate trade, not an oversight. The five story layouts build their
+    // stacks UP from `FOOT` and the last one bottoms out at ~1802 — there is
+    // no free readable space above the fold to put this in without re-laying
+    // out all five.
+    //
+    // What makes the trade safe is that the invite is exactly as visible as
+    // the `Ridr` signature it sits beneath: same furniture band, same reply-bar
+    // risk. A reader who can see the mark can read the invite; one who cannot
+    // sees neither, which is precisely today's behaviour. So this is strictly
+    // additive — it can never be worse than the card that shipped without it.
+    // The real fix is a short domain (see `w3invite`), which would let the
+    // whole line move above the safe line.
+    inviteLine(ctx, MX, FOOT + 30, 20, footerColor, accent, CW)
   }
 
   const strip = (top: number) => {
@@ -2334,6 +2418,9 @@ export async function renderWrappedCard(d: WrappedCardData): Promise<{ blob: Blo
   //    week somebody admired and could not place. ──
   text(ctx, d.weekLabel.toUpperCase(), MX, SH - 88, 26, '600', scene.ink, 2)
   signature(ctx, SW - MX, SH - 88, 30, scene.ink, scene.accent)
+  // Same reasoning as the story cards' `markAndFooter`: beneath the mark, so
+  // the invite inherits exactly the mark's visibility and nothing more.
+  inviteLine(ctx, MX, SH - 50, 20, scene.ink, scene.accent, SW - MX * 2)
 
   const dataUrl = canvas.toDataURL('image/png')
   const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))

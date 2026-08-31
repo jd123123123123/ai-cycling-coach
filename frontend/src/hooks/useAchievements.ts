@@ -4,7 +4,12 @@ import { fetchAchievements, type AchievementsPayload } from '../api/achievements
 
 // The real training-milestone grid behind the W3 Wins badges. Detected
 // server-side from the athlete's own rides, so a slightly stale read is fine.
-export function useAchievements(lang: 'en' | 'de' = 'en') {
+// The UI is German-only, so the default language is German. It used to default
+// to 'en', and only the Wins page passed 'de' — so Today's next-badge card and
+// the Biker screen rendered the English catalogue ("100 rides", "62 of 100
+// rides") inside a German app, and fetched a second copy of the payload to do
+// it. The catalogue has carried `title_de`/`detail_de` all along.
+export function useAchievements(lang: 'en' | 'de' = 'de') {
   return useQuery<AchievementsPayload>({
     queryKey: ['achievements', 'mine', lang],
     queryFn: () => fetchAchievements(lang),

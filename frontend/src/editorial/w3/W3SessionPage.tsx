@@ -5,6 +5,7 @@ import { useTodaySession } from '../../hooks/useTodaySession'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useStreak } from '../../hooks/useStreak'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useGarage } from '../../hooks/useGarage'
 import { downloadWorkoutExport } from '../../api/coach'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
@@ -54,6 +55,8 @@ export default function W3SessionPage() {
   const { data: streak } = useStreak()
   // Season-to-date totals for the saddle-time + TSS earn tiles.
   const { data: seasonActs } = useActivitiesRange(new Date(new Date().getFullYear(), 0, 1), new Date())
+  // The rider's own bike for the cover — never the stock one (see W3SessionView).
+  const { data: garage } = useGarage()
 
   const vm = useMemo<W3SessionVm>(() => {
     // Season-to-date, counted only over the activities that actually carry the
@@ -192,6 +195,7 @@ export default function W3SessionPage() {
 
     return {
       navTitle: 'Einheit heute',
+      bikeImage: garage?.bike?.image_base64 ?? null,
       funName: hero,
       title: title ?? 'Einheit',
       numeral: num ? num.text : '—',
@@ -240,7 +244,7 @@ export default function W3SessionPage() {
       canExport: workout != null,
       primaryLabel: workout != null ? 'Zum Head-Unit exportieren' : 'Zurück zu heute',
     }
-  }, [model, session.workout, adaptive, streak, seasonActs])
+  }, [model, session.workout, adaptive, streak, seasonActs, garage])
 
   const onExport = useCallback(async () => {
     // The real export path — GET /coach/workout/export serves today's

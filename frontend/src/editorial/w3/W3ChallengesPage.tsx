@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useShareInvite } from './useShareInvite'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import {
@@ -34,6 +35,8 @@ const UNIT: Record<ChallengeMetric, string> = Object.fromEntries(
 ) as Record<ChallengeMetric, string>
 
 export default function W3ChallengesPage() {
+  // Every image this screen exports carries the rider's invite.
+  useShareInvite()
   const navigate = useNavigate()
   const { user } = useAuth()
   const { data, isLoading } = useRewardChallenges()

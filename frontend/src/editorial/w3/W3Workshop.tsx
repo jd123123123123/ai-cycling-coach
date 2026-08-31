@@ -53,12 +53,21 @@ function scaleLabel(c: WorkshopComponent): string {
 }
 
 /** Status → how loud. Never red: nothing here is an error.
- *  `fresh` is the acid, because a fresh drivetrain is EARNING the bonus.
- *  `due` and `overdue` are warm — an invitation to collect, not a warning. */
+ *
+ *  THIS WAS INVERTED, and the intent behind it was sound: `fresh` took the acid
+ *  because a fresh drivetrain is EARNING the bonus. The consequence on screen
+ *  was not: bar tape at 3 % wear rendered in the loudest colour on the page
+ *  while brake pads at 4 310 km on a 2 000 km interval rendered in `T.mid`, the
+ *  same grey as body copy. Seven cards, seven identical acid CTAs, and the one
+ *  row that actually needed attention was the quietest of them.
+ *
+ *  So the ramp now runs the way urgency does — overdue is the loudest, fresh is
+ *  calm — while keeping the no-red rule and the "invitation, not a warning"
+ *  register. Fresh still reads as earned; it just no longer shouts over a job. */
 const TONE: Record<WorkshopComponent['status'], string> = {
-  fresh: T.acid,
+  fresh: T.mid,
   due: T.warn,
-  overdue: T.mid,
+  overdue: T.acid,
   // Not a severity at all — the absence of a claim. Quiet as the meta text,
   // because "we have not asked yet" must not compete with a real job.
   unknown: T.quiet,
@@ -600,8 +609,17 @@ export default function W3Workshop({
         onMeasure={(pct) => onMeasure('chain', pct)}
         onReplace={() => onReplace('chain')} />
 
-      {/* ── the components ── */}
-      {workshop.components.map((c) => (
+      {/* ── the components, MOST URGENT FIRST ──
+          They used to render in catalogue order, so an overdue part could sit
+          fifth on a screen of seven identical cards. Sorting by status puts the
+          job that needs doing at the top, where the eye already is; `progress`
+          breaks ties within a status so "nearly due" outranks "just serviced".
+          UNKNOWN sits last: it is a question, not a job. */}
+      {[...workshop.components].sort((a, b) => {
+        const rank: Record<WorkshopComponent['status'], number> = { overdue: 0, due: 1, fresh: 2, unknown: 3 }
+        const d = rank[a.status] - rank[b.status]
+        return d !== 0 ? d : (b.progress ?? 0) - (a.progress ?? 0)
+      }).map((c) => (
         <ComponentRow
           key={c.id} c={c}
           busy={busyId === c.id}

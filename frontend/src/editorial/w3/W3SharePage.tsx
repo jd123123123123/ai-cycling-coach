@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useShareInvite } from './useShareInvite'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
@@ -66,6 +67,8 @@ export function prDelta(pctOfBest: number | null): string | null {
  */
 
 export default function W3SharePage() {
+  // Every image this screen exports carries the rider's invite.
+  useShareInvite()
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const { user } = useAuth()

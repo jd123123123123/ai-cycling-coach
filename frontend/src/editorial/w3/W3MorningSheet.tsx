@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, Crown, X } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
+import { scoreHue } from './W3TodayDock'
 import { TNUM } from './w3surfaces'
 import type { Contributor, MorningBriefing } from './useMorningBriefing'
 import './w3.css'
@@ -120,7 +121,12 @@ function Arc({ score, verdict, reduce }: {
 }) {
   const c = RING / 2
   const r = c - RING_STROKE / 2
-  const frac = score == null ? 0 : Math.max(0, Math.min(100, score)) / 100
+  // FLOORED SO A LOW SCORE IS STILL AN ARC. With a round cap, 1/100 draws a
+  // single dot floating on the track — which reads as a rendering fault rather
+  // than as "almost nothing". 0.02 is the smallest sweep that still shows a
+  // stroke with two ends; it rounds the drawing, never the number beside it.
+  const raw = score == null ? 0 : Math.max(0, Math.min(100, score)) / 100
+  const frac = score == null ? 0 : Math.max(0.02, raw)
   const len = Math.PI * 2 * r * (SWEEP / 360)
   return (
     <div style={{ position: 'relative', width: RING, height: RING, flex: 'none' }}>
@@ -132,16 +138,32 @@ function Arc({ score, verdict, reduce }: {
             <stop offset="80%" stopColor={T.acid} />
             <stop offset="100%" stopColor={T.acid} />
           </linearGradient>
+          {/* A LIT ARC, NOT A SMEARED ONE. stdDeviation 7 on a 10px stroke
+              spread the bloom wider than the stroke itself, so the arc lost its
+              edge and the ring read as unfinished rather than luminous. 3 keeps
+              the light and gives the stroke its edge back. */}
           <filter id="w3-arc-glow" x="-50%" y="-50%" width="200%" height="200%">
-            <feGaussianBlur stdDeviation="7" result="b" />
+            <feGaussianBlur stdDeviation="3" result="b" />
             <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
           </filter>
         </defs>
-        <path d={arcPath(c, c, r, START, SWEEP)} fill="none" stroke={`${T.ink}12`}
+        {/* THE TRACK HAS TO BE VISIBLE TO BE A TRACK. At `ink12` — white at 7 %
+            — the unfilled remainder disappeared into the card, so the arc had
+            no circle to sit in and looked broken off rather than partly full.
+            `heroOff` is the token the dock meters already use for an unlit
+            segment, so the two meters now say "not yet" the same way. */}
+        <path d={arcPath(c, c, r, START, SWEEP)} fill="none" stroke={T.heroOff}
           strokeWidth={RING_STROKE} strokeLinecap="round" />
         {score != null && (
           <motion.path
-            d={arcPath(c, c, r, START, SWEEP)} fill="none" stroke="url(#w3-arc)"
+            d={arcPath(c, c, r, START, SWEEP)} fill="none"
+            // THE ARC AGREES WITH ITS OWN NUMBER. The gradient this replaced
+            // was documented as running "warm→acid as it fills, so a low score
+            // arrives orange" — but it is a SPATIAL gradient, painted across
+            // the ring's box rather than along the value, so a 1 was drawn in
+            // the same green as a 95 and sat under a red numeral. One value,
+            // one hue, graded by `scoreHue` like Today's meter.
+            stroke={score == null ? T.heroOff : scoreHue(score)}
             strokeWidth={RING_STROKE} strokeLinecap="round" filter="url(#w3-arc-glow)"
             strokeDasharray={len}
             initial={reduce ? false : { strokeDashoffset: len }}
@@ -160,7 +182,12 @@ function Arc({ score, verdict, reduce }: {
           transition={{ duration: 0.5, delay: reduce ? 0 : 0.35, ease: [0.16, 1, 0.3, 1] }}
           style={{
             fontSize: 54, fontWeight: 700, letterSpacing: -2.4, lineHeight: 1.1, ...TNUM,
-            color: score == null ? T.heroOff : T.scoreInk,
+            // THE SAME RULE THE DOCK USES. `scoreHue` grades 65/45, and
+            // Today's readiness panel already refuses to draw a low score in
+            // lime for exactly this reason: a 1 set in the same pale acid as a
+            // 95 tells the rider they are good to go when they are not. One
+            // number, two surfaces, one hue.
+            color: score == null ? T.heroOff : scoreHue(score),
           }}>{score ?? DASH}</motion.span>
         {verdict && (
           <span style={{
@@ -230,7 +257,7 @@ function Spectrum({ c, reduce, i }: { c: Contributor; reduce: boolean; i: number
             transition={{ duration: 0.7, delay: reduce ? 0 : 0.25 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
             style={{
               position: 'absolute', top: -4, width: 5, height: TRACK + 8, borderRadius: 100,
-              background: hue, marginLeft: -2.5, boxShadow: `0 0 12px ${hue}A6`,
+              background: hue, marginLeft: -2.5, boxShadow: `0 0 6px ${hue}80`,
             }} />
         )}
       </div>
@@ -279,7 +306,8 @@ function Profile({ blocks, reduce, selected, onSelect }: {
                 background: work
                   ? `linear-gradient(180deg, ${T.acidHi2} 0%, ${T.acid} 100%)`
                   : `linear-gradient(180deg, ${T.ink}2E 0%, ${T.ink}1A 100%)`,
-                boxShadow: work ? `0 0 14px ${T.acid}52` : 'none',
+                // 14px of bloom on bars this close merged them into one wash.
+                boxShadow: work ? `0 0 6px ${T.acid}3D` : 'none',
                 outline: on ? `1.5px solid ${T.ink}` : 'none',
                 outlineOffset: 1,
               }} />
@@ -449,13 +477,24 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
                   reading on top of it still has to clear contrast. */}
               {briefing.heroImage && (
                 <>
+                  {/* ATMOSPHERE, NOT SUBJECT. At 0.85 with a scrim that only
+                      reached full black at 78 %, the bike was the loudest thing
+                      on the card: the saddle sat behind the score, the down
+                      tube ran through the verdict, and the readings underneath
+                      were set on top of a photograph. The intent — a poster,
+                      not a dashboard — is right; the exposure was not.
+                      Halved, blurred a touch so it reads as depth of field
+                      rather than a competing object, and the scrim now reaches
+                      the card's own ground by the time the first sentence
+                      starts. The picture still lights the ring, which is the
+                      part worth screenshotting. */}
                   <img src={briefing.heroImage} alt="" aria-hidden style={{
                     position: 'absolute', inset: 0, width: '100%', height: '100%',
-                    objectFit: 'cover', opacity: 0.85,
+                    objectFit: 'cover', opacity: 0.4, filter: 'blur(1.5px)',
                   }} />
                   <div aria-hidden style={{
                     position: 'absolute', inset: 0,
-                    background: `linear-gradient(180deg, ${T.bg}3D 0%, ${T.bg}8C 38%, ${T.bg}F2 62%, ${T.bg} 78%)`,
+                    background: `linear-gradient(180deg, ${T.bg}59 0%, ${T.bg}B8 26%, ${T.bg}F5 46%, ${T.bg} 56%)`,
                   }} />
                 </>
               )}
@@ -584,7 +623,15 @@ export default function W3MorningSheet({ briefing, onClose, onToday, primaryRef 
               boxShadow: `0 10px 34px ${T.acid}59`,
               color: T.bg, fontFamily: FONT, fontSize: 17, fontWeight: 700, letterSpacing: -0.4,
               display: 'flex', gap: SP.snug, justifyContent: 'center', alignItems: 'center',
-            }}>
+              // THE SHEET FOCUSES THIS BUTTON ON OPEN, so the UA's default ring
+              // is what a rider sees the moment the briefing arrives — a
+              // red-orange halo around the one acid control, which reads as an
+              // error on a screen that is telling them good news. Focus still
+              // has to be visible; it just has to belong to this palette.
+              outline: 'none',
+            }}
+            onFocus={(e) => { e.currentTarget.style.boxShadow = `0 10px 34px ${T.acid}59, 0 0 0 3px ${T.bg}, 0 0 0 5px ${T.acid}` }}
+            onBlur={(e) => { e.currentTarget.style.boxShadow = `0 10px 34px ${T.acid}59` }}>
             Zum Tag<ArrowRight size={18} color={T.bg} />
           </motion.button>
         </div>

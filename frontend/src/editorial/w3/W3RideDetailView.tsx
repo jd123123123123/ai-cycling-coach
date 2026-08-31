@@ -162,8 +162,8 @@ const SectionHead = ({ n, eyebrow, finding, method }: {
 }) => (
   <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 4 }}>
     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: 1.2, color: T.acid, ...TNUM }}>{n}</span>
-      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>
+      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.acid, ...TNUM }}>{n}</span>
+      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.quiet }}>
         — {eyebrow.toUpperCase()}
       </span>
     </div>
@@ -226,10 +226,10 @@ function SceneComposing() {
         <motion.span
           animate={reduce ? undefined : { scale: [1, 1.08, 1] }}
           transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ fontSize: 19, fontWeight: 800, color: T.acid, letterSpacing: -1 }}>✱</motion.span>
+          style={{ fontSize: 19, fontWeight: 600, color: T.acid, letterSpacing: -1 }}>✱</motion.span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '0 30px', textAlign: 'center' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>Wir malen dich auf diese Straße…</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: -0.2, color: T.ink }}>Wir malen dich auf diese Straße…</span>
         <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>Dein Fahrer, dein Rad, das Terrain dieser Fahrt. Bis zu zwei Minuten.</span>
       </div>
     </div>
@@ -241,7 +241,7 @@ function SceneComposing() {
 const ScenePill = ({ label, onClick }: { label: string; onClick?: () => void }) => (
   <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px 7px 10px', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT }}>
     <Sparkles size={12} color={T.bg} />
-    <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: T.bg }}>{label}</span>
+    <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 0.7, textTransform: 'uppercase', color: T.bg }}>{label}</span>
   </button>
 )
 
@@ -256,7 +256,7 @@ function SceneNote({ text, action, onClick }: { text: string; action?: string; o
     <>
       <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>{text}</span>
       {action && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9.5, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase', color: T.acid }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.7, textTransform: 'uppercase', color: T.acid }}>
           {action}<ChevronRight size={12} color={T.acid} />
         </span>
       )}
@@ -346,14 +346,14 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           <div style={{ ...band(26), gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between' }}>
               <Kicker>Leistung · ganze Fahrt</Kicker>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.acid }}>
+              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.acid }}>
                 {hov != null ? `${Math.round(vm.power[hov])} W` : vm.powerNote}
               </span>
             </div>
             <div style={{ position: 'relative', height: 56, display: 'flex', gap: 2, alignItems: 'flex-end' }}
               onPointerLeave={() => setHov(null)}>
               <div style={{ position: 'absolute', left: 0, right: 0, bottom: Math.round((pAvg / pMax) * 56), height: 1, background: `${T.ink}55`, zIndex: 1, pointerEvents: 'none' }}>
-                <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 700, color: T.mid }}>Ø</span>
+                <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 600, color: T.mid }}>Ø</span>
               </div>
               {vm.power.map((p, i) => {
                 const on = hov === i
@@ -390,7 +390,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
             <span style={{ fontSize: 100, fontWeight: 600, letterSpacing: -4.5, lineHeight: 0.86, color: T.acid }}>{vm.execScore}</span>
             <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
-              <span style={{ fontSize: 16, fontWeight: 700, color: T.quiet }}>/ {vm.execTotal}</span>
+              <span style={{ fontSize: 16, fontWeight: 600, color: T.quiet }}>/ {vm.execTotal}</span>
               <Kicker>Ausführung</Kicker>
             </div>
           </div>
@@ -415,7 +415,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                 return (
                   <div key={i} style={{ flex: 1, padding: '15px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ width: 30, height: 30, borderRadius: 9, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Ic size={16} color={T.acid} /></div>
-                    <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.7, color: s.v === DASH ? T.quiet : T.ink }}>{s.v}</span>
+                    <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.7, color: s.v === DASH ? T.quiet : T.ink }}>{s.v}</span>
                     <Kicker>{s.l}</Kicker>
                     <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{s.s}</span>
                   </div>
@@ -432,10 +432,10 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               finding={vm.repeatsScore ? `${vm.repeatsScore} auf oder über Ziel.` : 'Jede Wiederholung gegen ihr Ziel.'}
               method="Rechts der Linie heißt über Ziel." />
             <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', paddingBottom: 4 }}>
-              <span style={{ fontSize: 38, fontWeight: 700, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
+              <span style={{ fontSize: 38, fontWeight: 600, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4 }}>
                 <Kicker>Wdh. auf oder über Ziel</Kicker>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: T.ink }}>{vm.repeatsSub}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.ink }}>{vm.repeatsSub}</span>
               </div>
             </div>
             <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
@@ -445,8 +445,8 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                 return (
                   <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '13px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
                     <div style={{ width: 66, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{r.label}</span>
-                      <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{r.watts}</span>
+                      <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>{r.label}</span>
+                      <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.3, color: T.ink }}>{r.watts}</span>
                     </div>
                     <div style={{ flex: 1, height: 24, display: 'flex', alignItems: 'center', position: 'relative' }}>
                       <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{!held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'right', width: `${mag * 100}%`, height: 14, borderRadius: '3px 0 0 3px', background: T.d3 }} />}</div>
@@ -454,8 +454,8 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                       <div style={{ flex: 1 }}>{held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'left', width: `${mag * 100}%`, height: 14, borderRadius: '0 3px 3px 0', background: T.acid }} />}</div>
                     </div>
                     <div style={{ width: 56, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 700, color: held ? T.acid : T.mid }}>{r.delta >= 0 ? '+' : ''}{r.delta} W</span>
-                      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>{r.verdict}</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: held ? T.acid : T.mid }}>{r.delta >= 0 ? '+' : ''}{r.delta} W</span>
+                      <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: 0.8, color: T.quiet }}>{r.verdict}</span>
                     </div>
                   </div>
                 )
@@ -479,7 +479,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               {vm.zones.map((z, i) => (
                 <div key={z.z} style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '9px 0' }}>
                   <span style={{ width: 9, height: 9, borderRadius: 2, background: zoneTint(i) }} />
-                  <span style={{ width: 48, fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{z.z}</span>
+                  <span style={{ width: 48, fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>{z.z}</span>
                   {/* The zone the ride lived in is still called out — by WEIGHT
                       now, not by colour, because colour has a job here. */}
                   <span style={{ width: 74, fontSize: 11.5, fontWeight: z.peak ? 800 : 600, color: z.peak ? T.ink : T.mid }}>{z.name}</span>
@@ -490,7 +490,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                       percentages made five rows carry two numbers where one was
                       new. Minutes stay because they are the part the bar cannot
                       tell you: how long, in units a rider feels. */}
-                  <span style={{ fontSize: 11, fontWeight: 700, color: T.mid, ...TNUM }}>{z.min}</span>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, ...TNUM }}>{z.min}</span>
                 </div>
               ))}
             </div>
@@ -519,10 +519,10 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               <div key={r.dur} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '15px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
-                    <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.5, color: T.quiet, width: 42, flex: 'none' }}>{r.dur}</span>
-                    <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: r.pr ? T.acid : T.ink, ...TNUM }}>{r.watts}</span>
+                    <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet, width: 42, flex: 'none' }}>{r.dur}</span>
+                    <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: -0.5, color: r.pr ? T.acid : T.ink, ...TNUM }}>{r.watts}</span>
                   </div>
-                  <span style={{ flex: 'none', fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: r.pr ? T.acid : T.mid, ...TNUM }}>{r.note}</span>
+                  <span style={{ flex: 'none', fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: r.pr ? T.acid : T.mid, ...TNUM }}>{r.note}</span>
                 </div>
 
                 <div style={{ position: 'relative', height: 10, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
@@ -557,11 +557,11 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                 <Kicker>An dir</Kicker>
-                <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -2, color: T.acid }}>{vm.onYouDelta}<span style={{ fontSize: 16, letterSpacing: 0 }}> W</span></span>
+                <span style={{ fontSize: 42, fontWeight: 600, letterSpacing: -2, color: T.acid }}>{vm.onYouDelta}<span style={{ fontSize: 16, letterSpacing: 0 }}> W</span></span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
                 <Kicker>{vm.ceilingLabel}</Kicker>
-                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>{vm.ceilingBefore} → {vm.ceilingAfter}</span>
+                <span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{vm.ceilingBefore} → {vm.ceilingAfter}</span>
               </div>
             </div>
             <div style={{ height: 1, background: T.rule }} />
@@ -583,11 +583,11 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
                 return (
                   <div key={sh.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>{sh.label}</span>
+                      <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1.1, color: T.quiet }}>{sh.label}</span>
                       <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.5, color: T.ink, ...TNUM }}>{sh.value}</span>
+                        <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: -0.5, color: T.ink, ...TNUM }}>{sh.value}</span>
                         {sh.delta && (
-                          <span style={{ fontSize: 10.5, fontWeight: 700, color: tint, ...TNUM }}>{sh.delta}</span>
+                          <span style={{ fontSize: 10.5, fontWeight: 600, color: tint, ...TNUM }}>{sh.delta}</span>
                         )}
                       </div>
                     </div>
@@ -622,15 +622,15 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           <div style={{ ...band(44), gap: 12 }}>
             <SectionHead n={ch('moved')} eyebrow="Worauf sie dich zubewegt hat" {...splitFinding(vm.movedSub)} />
             <div style={{ ...card(), gap: 18 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.acid }}>AUF DAS JAHR</span>
+              <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1, color: T.acid }}>AUF DAS JAHR</span>
               {vm.moved.map((m, i) => (
                 <div key={m.label} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{m.label}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 700, color: T.bg, padding: '3px 8px', borderRadius: 100, background: T.acid }}>{m.delta}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{m.label}</span>
+                      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.bg, padding: '3px 8px', borderRadius: 100, background: T.acid }}>{m.delta}</span>
                     </div>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>{m.value} <span style={{ color: T.quiet, fontWeight: 600 }}>/ {m.goal}</span></span>
+                    <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>{m.value} <span style={{ color: T.quiet, fontWeight: 600 }}>/ {m.goal}</span></span>
                   </div>
                   <div style={{ height: 8, borderRadius: 100, background: T.surface2, overflow: 'hidden', display: 'flex' }}>
                     <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(m.beforePct * 100)}%` }} transition={{ duration: 0.7, ease: EASE, delay: i * 0.08 }}

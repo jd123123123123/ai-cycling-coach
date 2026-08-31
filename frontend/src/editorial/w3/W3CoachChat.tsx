@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react'
 import { Sparkles, X, ArrowUp, Loader2, Wrench, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { useChatStream, type ChatMessage } from '../../hooks/useChatStream'
@@ -87,7 +88,18 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
   const submit = () => { const t = text.trim(); if (!t) return; setText(''); void chat.send(t) }
   const empty = chat.messages.length === 0 && !chat.isStreaming
 
-  return (
+  // PORTALLED TO THE BODY, and it has to be. `position: fixed` positions against
+  // the viewport but it does NOT escape a stacking context, and every mount site
+  // this sheet has is inside one: on Today the coach is a chip in the stage's
+  // corner column, which is `position:absolute; zIndex:2` (`W3TodayStage.tsx:290`).
+  // Rendered in place, the whole overlay — backdrop and sheet — competes with its
+  // siblings at z=2, so the fixed tab bar (z=50) and the stage rail paint straight
+  // over the coach. Raising `zIndex: 100` cannot fix that; the number is only
+  // compared inside the trapping context. The portal lifts it out of every
+  // ancestor at once, which also keeps the FAB safe to mount anywhere, as its
+  // docblock promises. AnimatePresence still drives the exit: the component stays
+  // in the React tree, only its DOM node moves.
+  return createPortal(
     <motion.div
       initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       style={{ position: 'fixed', inset: 0, zIndex: 100, background: '#000000B0', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'flex-end' }}
@@ -154,7 +166,8 @@ export default function W3CoachChat({ onClose }: { onClose: () => void }) {
           </button>
         </div>
       </motion.div>
-    </motion.div>
+    </motion.div>,
+    document.body,
   )
 }
 

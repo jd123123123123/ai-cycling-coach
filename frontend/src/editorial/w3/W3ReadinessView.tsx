@@ -27,6 +27,8 @@ export interface W3ReadinessVm {
   dateNote: string
   trend: number[]
   drivers: DriverVm[]
+  /** Shown as context, not as drivers — these carry weight 0 in the model. */
+  context?: DriverVm[]
   limiterNote: string | null
   sleep: { total: string; stages: SleepStage[]; spo2: string | null; resp: string | null; note: string } | null
   recovery: { hours: string; frac: number; note: string } | null
@@ -92,6 +94,35 @@ function Sec({ title, sub }: { title: string; sub?: string }) {
   )
 }
 
+/** One signal row. Extracted so the weighted DRIVERS and the unweighted
+ *  context signals below them render identically without duplicating markup. */
+function DriverRow({ d, reduce }: { d: DriverVm; reduce: boolean }) {
+            const Ic = ICONS[d.icon]; const hue = HUE[d.icon]; const dim = d.value === DASH
+            const dh = d.deltaGood == null ? T.quiet : d.deltaGood ? T.acid : T.warn
+            return (
+              <div style={{ ...bubble(), flexDirection: 'row', alignItems: 'center', gap: 14, padding: '15px 18px' }}>
+                <div style={{ width: 42, height: 42, borderRadius: 14, background: dim ? T.surface2 : `${hue}1F`, display: 'grid', placeItems: 'center', flex: 'none', boxShadow: dim ? 'none' : `0 0 14px ${hue}22` }}><Ic size={19} color={dim ? T.quiet : hue} /></div>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: T.mid }}>{d.label}</span>
+                    <div style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
+                      <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: dim ? T.quiet : T.ink }}>{d.value}</span>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{d.unit}</span>
+                    </div>
+                  </div>
+                  <div style={{ height: 6, borderRadius: 100, background: T.surface2, overflow: 'hidden' }}>
+                    <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(d.frac * 100)}%` }} transition={{ duration: 0.7, ease: EASE }}
+                      style={{ height: '100%', borderRadius: 100, background: dim ? T.d3 : hue, boxShadow: dim ? 'none' : `0 0 8px ${hue}66` }} />
+                  </div>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flex: 'none' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: dh }}>{d.delta ?? '—'}</span>
+                  {d.spark.length > 0 && <Spark series={d.spark} hue={dim ? T.d3 : hue} />}
+                </div>
+              </div>
+  )
+}
+
 export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & W3ReadinessActions) {
   const reduce = useReducedMotion()
   const trendMax = Math.max(1, ...vm.trend)
@@ -125,33 +156,19 @@ export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & 
               <span style={{ fontSize: 11.5, fontWeight: 600, color: T.ink }}>{vm.limiterNote}</span>
             </div>
           )}
-          {vm.drivers.map((d) => {
-            const Ic = ICONS[d.icon]; const hue = HUE[d.icon]; const dim = d.value === DASH
-            const dh = d.deltaGood == null ? T.quiet : d.deltaGood ? T.acid : T.warn
-            return (
-              <div key={d.icon} style={{ ...bubble(), flexDirection: 'row', alignItems: 'center', gap: 14, padding: '15px 18px' }}>
-                <div style={{ width: 42, height: 42, borderRadius: 14, background: dim ? T.surface2 : `${hue}1F`, display: 'grid', placeItems: 'center', flex: 'none', boxShadow: dim ? 'none' : `0 0 14px ${hue}22` }}><Ic size={19} color={dim ? T.quiet : hue} /></div>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: T.mid }}>{d.label}</span>
-                    <div style={{ display: 'flex', gap: 5, alignItems: 'baseline' }}>
-                      <span style={{ fontSize: 21, fontWeight: 700, letterSpacing: -0.5, color: dim ? T.quiet : T.ink }}>{d.value}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{d.unit}</span>
-                    </div>
-                  </div>
-                  <div style={{ height: 6, borderRadius: 100, background: T.surface2, overflow: 'hidden' }}>
-                    <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(d.frac * 100)}%` }} transition={{ duration: 0.7, ease: EASE }}
-                      style={{ height: '100%', borderRadius: 100, background: dim ? T.d3 : hue, boxShadow: dim ? 'none' : `0 0 8px ${hue}66` }} />
-                  </div>
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flex: 'none' }}>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: dh }}>{d.delta ?? '—'}</span>
-                  {d.spark.length > 0 && <Spark series={d.spark} hue={dim ? T.d3 : hue} />}
-                </div>
-              </div>
-            )
-          })}
+          {vm.drivers.map((d) => <DriverRow key={d.icon} d={d} reduce={!!reduce} />)}
         </div>
+
+        {/* Context — measured, but NOT part of the score. Kept separate so
+            "Was es treibt" only ever lists things that actually drive it. */}
+        {vm.context && vm.context.some((d) => d.value !== DASH) && (
+          <>
+            <Sec title="Weitere Nachtwerte" sub="Gemessen, aber nicht Teil der Bereitschaft" />
+            <div style={{ ...band(26), gap: 8 }}>
+              {vm.context.map((d) => <DriverRow key={d.icon} d={d} reduce={!!reduce} />)}
+            </div>
+          </>
+        )}
 
         {/* Sleep */}
         {vm.sleep && (

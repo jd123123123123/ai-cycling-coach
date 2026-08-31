@@ -9,7 +9,7 @@ const FIXTURE: Wrapped = {
   week_start: '2026-08-18',
   week_end: '2026-08-24',
   has_rides: true,
-  totals: { sessions: 5, hours: 8.25, km: 214.6, tss: 486, active_days: 5, saddle_hm: '8:15 h' },
+  totals: { sessions: 5, hours: 8.25, km: 214.6, tss: 486, active_days: 5, saddle_hm: '8h 15m' },
   planned_tss: 450,
   ctl_delta: 2.4,
   // A real closed loop so the route mark has a shape to draw.

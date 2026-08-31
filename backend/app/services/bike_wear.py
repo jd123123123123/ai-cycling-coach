@@ -426,7 +426,7 @@ def which_clock(spec: ComponentSpec, km_since: float, days_since: int | None) ->
     return "days" if day_r > km_r else "km"
 
 
-def is_undated(spec: ComponentSpec, days_since: int | None) -> bool:
+def is_undated(spec: ComponentSpec, days_since: int | None, km_since: float = 0.0) -> bool:
     """Whether we are missing the ONE reading this component needs.
 
     A part worn only by the calendar has no other clock to fall back on, so
@@ -435,10 +435,24 @@ def is_undated(spec: ComponentSpec, days_since: int | None) -> bool:
     brake fluid we have never asked about is not fresh, it is UNKNOWN, and the
     difference is the entire reason the seeding question exists.
 
-    A part with a kilometre interval is never undated, because kilometres are
-    measured rather than remembered.
+    A kilometre part normally IS its own reading — kilometres are measured
+    rather than remembered, so a chain at 300 km is due whether or not anybody
+    told us when it was last oiled.
+
+    THE ONE EXCEPTION IS ZERO. `km_since` counts the kilometres we have
+    observed, so on a rider's first day it is 0 for a chain of entirely unknown
+    age — and 0 is not a measurement of freshness, it is the absence of one.
+    Before this, a brand-new rider was told every part on their bicycle was
+    FRISCH and the garage lane summarised it "Alles gewartet — fahr sie.",
+    about a bicycle the app had been told nothing about. Once real kilometres
+    accumulate the clock is a genuine reading again and the rule above resumes.
     """
-    return bool(spec.interval_days) and not spec.interval_km and days_since is None
+    if days_since is not None:
+        return False
+    if spec.interval_km:
+        # Only the "we have observed nothing at all" case is unknown.
+        return km_since <= 0
+    return bool(spec.interval_days)
 
 
 def is_dormant(spec: ComponentSpec, owned: bool | None) -> bool:
@@ -497,7 +511,7 @@ def state_of(
 ) -> ComponentState:
     spec = spec_of(component_id, method)
     dormant = is_dormant(spec, owned)
-    undated = is_undated(spec, days_since)
+    undated = is_undated(spec, days_since, km_since)
     f = elapsed(spec, km_since, days_since)
     return ComponentState(
         id=spec.id,

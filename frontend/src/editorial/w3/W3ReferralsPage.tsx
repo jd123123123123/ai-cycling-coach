@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { inviteUrl } from './w3invite'
 import { useNavigate } from 'react-router-dom'
 import { useMyReferrals } from '../../hooks/useReferrals'
 import type { ReferralCard } from '../../api/referral'
@@ -39,9 +40,10 @@ export default function W3ReferralsPage() {
   // string on the way. The register screen has always read `?ref=` off the
   // URL — nothing anywhere ever built that URL. Now it does, from the app's
   // own origin, so the link works wherever the app is served from.
-  const inviteUrl = (code: string) =>
-    `${window.location.origin}/e/w3-register?ref=${encodeURIComponent(code)}`
-
+  //
+  // The URL itself now comes from `w3invite`, which is also what every shared
+  // CARD prints. Two builders of the same link is one builder too many: the
+  // day the app gets a short domain, only that module should have to know.
   const share = async () => {
     const code = data?.code
     if (!code) return

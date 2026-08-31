@@ -5,7 +5,6 @@ import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
-import { STARTER_BIKE } from './starterBike'
 
 /**
  * W3 · 06 SESSION DETAIL — pure function of `vm`; `W3SessionPage` builds the
@@ -56,6 +55,8 @@ export interface W3EarnLedger {
 export interface W3RouteInfo { name: string; lastRidden: string; stats: { v: string; l: string }[]; notes: string[]; foot: string }
 
 export interface W3SessionVm {
+  /** The rider's own garage render, or null. Never the stock bike. */
+  bikeImage?: string | null
   navTitle: string
   funName: string            // characterful display name (helper)
   title: string              // the REAL prescribed title, kept as subtitle
@@ -165,7 +166,6 @@ function LedgerRow({ row, delay }: { row: W3EarnLedger; delay: number }) {
 
 export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }: { vm: W3SessionVm } & W3SessionActions) {
   const reduce = useReducedMotion()
-  const [openStep, setOpenStep] = useState<number | null>(null)
   const [place, setPlace] = useState<'outdoor' | 'indoor'>(vm.route ? 'outdoor' : 'indoor')
   const [exporting, setExporting] = useState(false)
   const [exportErr, setExportErr] = useState<string | null>(null)
@@ -197,12 +197,19 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
         <W3TopBar title={vm.navTitle} onBack={onBack}
           extra={<button onClick={onShare} aria-label="Einheit teilen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Share2 size={16} color={T.ink} /></button>} />
 
-        {/* Cover — the rider's bike, faded into the page (real header image). */}
-        <div style={{ position: 'relative', height: 224, marginTop: 6, overflow: 'hidden' }}>
+        {/* Cover — THE RIDER'S OWN BIKE, or nothing. This used to render the
+            stock STARTER_BIKE under a comment calling it the "real header
+            image", so a rider who had photographed their own bicycle was shown
+            a catalogue one on their session page. The stock-bike rule is that
+            it is never presented as theirs; with no garage render we keep the
+            glow and the gradient, which read as a header on their own. */}
+        <div style={{ position: 'relative', height: vm.bikeImage ? 224 : 96, marginTop: 6, overflow: 'hidden' }}>
           <div style={{ position: 'absolute', bottom: 34, left: '50%', transform: 'translateX(-50%)', width: 300, height: 150, borderRadius: '50%', background: `radial-gradient(closest-side, ${T.acid}24, transparent)` }} />
-          <motion.img src={STARTER_BIKE} alt=""
-            initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 44%' }} />
+          {vm.bikeImage && (
+            <motion.img src={vm.bikeImage} alt=""
+              initial={reduce ? false : { opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.7 }}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 44%' }} />
+          )}
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 130, background: `linear-gradient(180deg, transparent, ${T.bg})` }} />
         </div>
 
@@ -308,15 +315,21 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
               <span style={{ fontSize: 10.5, fontWeight: 700, color: T.mid }}>{vm.stepsMeta}</span>
             </div>
             <div style={{ padding: '6px 20px 12px', borderRadius: 24, background: T.surface, display: 'flex', flexDirection: 'column' }}>
+              {/* NOT BUTTONS. These rows were `cursor: pointer` buttons whose
+                  onClick set `openStep`, which nothing ever read for rendering
+                  — nine full-width controls with no effect. There is also
+                  nothing to reveal: the row already prints every field W3Step
+                  carries (index, name, note, watts, duration, gauge). So the
+                  affordance goes rather than inventing detail to hide behind
+                  it. */}
               {vm.steps.map((st, i) => {
-                const open = openStep === i
                 const segs = Array.from({ length: 18 }, (_, k) => {
                   const on = k / 18 < st.fill
                   return { h: on ? (st.isMain ? 9 : 6) : 4, on }
                 })
                 return (
-                  <button key={st.idx} onClick={() => setOpenStep(open ? null : i)}
-                    style={{ padding: '14px 0', display: 'flex', flexDirection: 'column', gap: 9, borderTop: i === 0 ? 'none' : `1px solid ${T.rule}`, background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
+                  <div key={st.idx}
+                    style={{ padding: '14px 0', display: 'flex', flexDirection: 'column', gap: 9, borderTop: i === 0 ? 'none' : `1px solid ${T.rule}`, fontFamily: FONT, textAlign: 'left' }}>
                     <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start' }}>
                       <span style={{ width: 19, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: st.isMain ? T.acid : T.quiet }}>{st.idx}</span>
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -329,7 +342,7 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
                       </div>
                     </div>
                     <div style={{ height: 9, display: 'flex', alignItems: 'flex-end' }}><GaugeBar segs={segs} delay={i * 0.02} /></div>
-                  </button>
+                  </div>
                 )
               })}
             </div>

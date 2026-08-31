@@ -8,7 +8,7 @@ import type { Wrapped } from '../../../pages/WeeklyWrapped'
 
 const BASE: Wrapped = {
   week_start: '2026-08-18', week_end: '2026-08-24', has_rides: true,
-  totals: { sessions: 5, hours: 8.25, km: 214.6, tss: 486, active_days: 5, saddle_hm: '8:15 h' },
+  totals: { sessions: 5, hours: 8.25, km: 214.6, tss: 486, active_days: 5, saddle_hm: '8h 15m' },
   planned_tss: 450, ctl_delta: 2.4, route: null,
   distance_comparison: null, saddle_line: null, daily_effort: [],
   elevation_m: 2140, peak_power: null, best_ride: null, rides: 5, zero_missed: true,

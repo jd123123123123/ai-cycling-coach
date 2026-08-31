@@ -33,7 +33,7 @@ export default function W3Guard({ children }: { children: ReactNode }) {
   // CATALOGUE bike, so somebody who had photographed their actual bicycle —
   // the thing this app is about — was still bounced to a shop to pick a
   // stand-in. A garage asset is the stronger claim of the two.
-  const { data: garage } = useGarage()
+  const { data: garage, isLoading: garageLoading } = useGarage()
 
   // The intro first — it needs no network, so a cold start never waits on one.
   if (!hasSeenW3Onboarding()) {
@@ -42,7 +42,14 @@ export default function W3Guard({ children }: { children: ReactNode }) {
 
   // Hold only on the very first read; a background refetch must never blank a
   // screen the rider is already looking at.
-  if (isLoading && !data) return <W3Loading label="Einen Moment…" />
+  //
+  // BOTH queries, not just the collection. `ownsBike` below reads `garage`, so
+  // waiting only on `useGarageCollection` made ownership depend on a race:
+  // photographing a bike never sets `loadout.bike`, so a rider whose only bike
+  // is their own photo was bounced to the bike studio whenever the small /shop
+  // payload beat the ~90 kB /garage one. Intermittent, and it read as "the app
+  // randomly kicks me out of the garage".
+  if ((isLoading && !data) || (garageLoading && !garage)) return <W3Loading label="Einen Moment…" />
 
   // Their own bike, or a claimed one. Either is a bike.
   const ownsBike = garage?.bike?.image_base64 != null || (data?.loadout.bike ?? null) != null

@@ -175,7 +175,7 @@ export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange, now }
             </div>
           ) : (
             <button type="button" onClick={() => setCodeOpen(true)}
-              style={{ alignSelf: 'flex-start', display: 'flex', gap: 8, alignItems: 'center', padding: '4px 2px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT }}>
+              style={{ alignSelf: 'flex-start', display: 'flex', gap: 8, alignItems: 'center', minHeight: 44, padding: '4px 2px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT }}>
               <Ticket size={14} color={T.mid} />
               <span style={{ fontSize: 12, fontWeight: 700, color: T.mid }}>Ich habe einen Einladungscode</span>
             </button>
@@ -190,7 +190,12 @@ export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange, now }
             <div style={fieldWrap}>
               <Lock size={17} color={T.mid} />
               <input style={fieldStyle} type={show ? 'text' : 'password'} autoComplete={isRegister ? 'new-password' : 'current-password'} placeholder="Passwort" value={pw} onChange={(e) => setPw(e.target.value)} />
-              <button onClick={() => setShow((s) => !s)} aria-label="Passwort anzeigen" style={{ background: 'transparent', border: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
+              {/* 44x44 HIT AREA, 16px glyph. Measured at 16x16 before — the
+                  smallest control in the app, on the first screen anybody
+                  touches. The field is 54 high so this costs nothing visually;
+                  the negative margin keeps the icon optically where it was. */}
+              <button type="button" onClick={() => setShow((s) => !s)} aria-label={show ? 'Passwort verbergen' : 'Passwort anzeigen'}
+                style={{ width: 44, height: 44, marginRight: -12, flex: 'none', background: 'transparent', border: 0, cursor: 'pointer', display: 'grid', placeItems: 'center' }}>
                 {show ? <EyeOff size={16} color={T.quiet} /> : <Eye size={16} color={T.quiet} />}
               </button>
             </div>
@@ -206,9 +211,9 @@ export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange, now }
             <div style={{ width: 40, height: 40, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={field} /></div>
           </button>
 
-          <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', gap: 6, paddingTop: 10 }}>
+          <div style={{ marginTop: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 6, paddingTop: 10 }}>
             <span style={{ fontSize: 12.5, fontWeight: 600, color: T.quiet }}>{isRegister ? 'Schon dabei?' : 'Noch kein Konto?'}</span>
-            <button onClick={onSwitch} style={{ background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: field }}>
+            <button type="button" onClick={onSwitch} style={{ minHeight: 44, padding: '0 8px', marginTop: -12, background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 700, color: field }}>
               {isRegister ? 'Anmelden' : 'Konto erstellen'}
             </button>
           </div>

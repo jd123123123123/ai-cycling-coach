@@ -39,6 +39,11 @@ export interface W3PlanEmptyVm {
 }
 
 export interface W3PlanEmptyActions {
+  /** True when this renders INSIDE the hero room, which already draws the
+   *  status bar, the top bar and the tab bar. Without it the empty page stacked
+   *  a second status bar and a back arrow mid-screen, and that back arrow left
+   *  the room from inside a bottom tab. */
+  chromeless?: boolean
   onBack: () => void
   /** The three ways in — all land on the goal screen, which is where a goal
    *  becomes a plan. The key travels so the caller can open the right editor
@@ -95,7 +100,7 @@ function Chapter({ n, title, children }: { n: string; title: string; children: R
   )
 }
 
-export default function W3PlanEmptyView({ vm, onBack, onStart, onBuilder, onImport }: {
+export default function W3PlanEmptyView({ vm, onBack, onStart, onBuilder, onImport, chromeless = false }: {
   vm: W3PlanEmptyVm
 } & W3PlanEmptyActions) {
   const reduce = useReducedMotion()
@@ -105,8 +110,10 @@ export default function W3PlanEmptyView({ vm, onBack, onStart, onBuilder, onImpo
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-        <W3StatusBar />
-        <W3TopBar title="Trainingsplan" onBack={onBack} />
+        {!chromeless && <>
+          <W3StatusBar />
+          <W3TopBar title="Trainingsplan" onBack={onBack} />
+        </>}
 
         {/* ── the opening ── */}
         <div style={{ ...band(24), paddingTop: 10, gap: 14 }}>

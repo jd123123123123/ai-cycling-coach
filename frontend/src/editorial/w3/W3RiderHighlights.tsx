@@ -50,7 +50,8 @@ export interface W3RiderHighlightsProps {
   tier: { label: string; pct: number; note: string }
   milestone: { pct: number; label: string; note: string } | null
   records: HighlightRecord[]
-  badges: { unlocked: number; total: number; latest: string | null }
+  /** Null while /achievements/mine is unresolved — the row is withheld. */
+  badges: { unlocked: number; total: number; latest: string | null } | null
   onAllBadges?: () => void
   onRecord?: (key: string) => void
   /** Sends a rider with no figurine to the avatar studio. Without it the empty
@@ -317,7 +318,10 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
         </div>
       )}
 
-      {/* ── ACHIEVEMENTS ────────────────────────────────────────────────── */}
+      {/* ── ACHIEVEMENTS ──────────────────────────────────────────────────
+          Withheld entirely until the counts resolve, rather than rendering
+          "0 von 0 Erfolgen" from a `?? 0` fallback. */}
+      {p.badges && (
       <div style={{ padding: '18px 20px 30px' }}>
         <button
           type="button" onClick={p.onAllBadges}
@@ -345,7 +349,7 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
           </span>
           <ChevronRight size={18} color={T.mid} style={{ flex: 'none' }} />
         </button>
-      </div>
+      </div>)}
     </div>
   )
 }

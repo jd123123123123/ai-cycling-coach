@@ -5,6 +5,7 @@ import {
   useSeedComponent, useServiceComponent, useSetMethod, useWorkshop,
 } from '../../hooks/useWorkshop'
 import W3Workshop from './W3Workshop'
+import W3LoadError from './W3LoadError'
 import type { ServiceResult } from '../../api/workshop'
 
 /**
@@ -22,7 +23,7 @@ import type { ServiceResult } from '../../api/workshop'
  */
 export default function W3WorkshopPanel() {
   const navigate = useNavigate()
-  const { data: workshop, isLoading } = useWorkshop()
+  const { data: workshop, isLoading, isError, refetch, isFetching } = useWorkshop()
   const service = useServiceComponent()
   const seed = useSeedComponent()
   const declare = useDeclareComponent()
@@ -73,6 +74,20 @@ export default function W3WorkshopPanel() {
   const onReplace = (componentId: string) => {
     setBusyId(componentId)
     replace.mutate({ componentId }, { onSettled: () => setBusyId(null) })
+  }
+
+  // A FAILED FETCH IS NOT A SERVICED BIKE. Without this the panel fell into
+  // W3Workshop's skeleton and left a permanent grey box, so a broken read was
+  // indistinguishable from a slow one.
+  if (isError && !workshop) {
+    return (
+      <W3LoadError
+        title="Die Werkstatt lädt nicht"
+        detail="Wir konnten den Zustand deiner Teile gerade nicht abrufen. Nichts ist verloren — das ist nur die Verbindung."
+        onRetry={() => void refetch()}
+        retrying={isFetching}
+      />
+    )
   }
 
   return (

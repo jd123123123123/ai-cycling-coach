@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
 from app.services.crew_notify import notify_ride_comment
 from app.models.crew import CrewMembership
 from app.models.crew_social import CrewMessage
@@ -116,6 +117,11 @@ class RideRead(BaseModel):
     is_mine: bool = False
     reactions: ReactionSummary
     comment_count: int = 0
+    #: The ride's shape, as `[[lat, lng], ...]` downsampled for a feed
+    #: thumbnail — the client projects it (`W3RouteCard.project`). None when the
+    #: ride carries no usable GPS track (indoor, trainer, a watch with GPS off),
+    #: and the card then draws no map rather than inventing one.
+    route: list[list[float]] | None = None
 
 
 class CommentSend(BaseModel):
@@ -255,6 +261,69 @@ async def list_chat(
 # ──────────────────────────────────────────────────────────────────────
 
 
+
+#: How many points a feed thumbnail keeps. The shape of a loop survives heavy
+#: downsampling — `W3RouteCard` makes the same argument for its 104px tile —
+#: and this is what keeps a 20-ride feed a few kB rather than a few hundred.
+FEED_ROUTE_POINTS = 70
+
+
+async def _route_thumbs(
+    db: AsyncSession, *, activity_ids: list[int]
+) -> dict[int, list[list[float]]]:
+    """{activity_id → [[lat, lng], ...]} for a page of rides, in one query.
+
+    Only rides flagged `has_gps` are read, and a track that does not survive
+    cleaning simply does not appear in the result — the card then draws no map.
+    Nothing here fabricates a shape for a ride that has none, which is the same
+    rule `weekly_wrapped.project_route` follows for the wrapped route card.
+    """
+    if not activity_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(ActivityStream.activity_id, ActivityStream.streams).where(
+                ActivityStream.activity_id.in_(activity_ids),
+                ActivityStream.has_gps.is_(True),
+            )
+        )
+    ).all()
+
+    out: dict[int, list[list[float]]] = {}
+    for act_id, streams in rows:
+        if not isinstance(streams, dict):
+            continue
+        lats = streams.get("latitude") or []
+        lngs = streams.get("longitude") or []
+        n = min(len(lats), len(lngs))
+        pts: list[list[float]] = []
+        for i in range(n):
+            la, ln = lats[i], lngs[i]
+            if not isinstance(la, (int, float)) or not isinstance(ln, (int, float)):
+                continue
+            fla, fln = float(la), float(ln)
+            # NaN never equals itself; drop null-island noise the same way
+            # `project_route` does.
+            if fla != fla or fln != fln:
+                continue
+            if abs(fla) > 90 or abs(fln) > 180:
+                continue
+            if fla == 0.0 and fln == 0.0:
+                continue
+            pts.append([round(fla, 5), round(fln, 5)])
+        if len(pts) < 2:
+            continue
+        if len(pts) > FEED_ROUTE_POINTS:
+            step = len(pts) / FEED_ROUTE_POINTS
+            sampled = [pts[int(i * step)] for i in range(FEED_ROUTE_POINTS)]
+            # Always keep the real finish, so a loop closes where it truly ends.
+            if sampled[-1] != pts[-1]:
+                sampled.append(pts[-1])
+            pts = sampled
+        out[act_id] = pts
+    return out
+
+
 @router.get("/rides", response_model=list[RideRead])
 async def list_crew_rides(
     current_user: Annotated[User, Depends(get_current_active_user)],
@@ -297,6 +366,7 @@ async def list_crew_rides(
         target_ids=ride_ids,
     )
     counts = await _comment_counts(db, crew_id=mem.crew_id, activity_ids=ride_ids)
+    routes = await _route_thumbs(db, activity_ids=ride_ids)
 
     out: list[RideRead] = []
     for act, user in rows:
@@ -325,6 +395,7 @@ async def list_crew_rides(
                 is_mine=act.user_id == current_user.id,
                 reactions=ReactionSummary(counts=summ["counts"], mine=summ["mine"]),
                 comment_count=counts.get(act.id, 0),
+                route=routes.get(act.id),
             )
         )
     return out

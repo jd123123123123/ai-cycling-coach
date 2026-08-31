@@ -44,9 +44,9 @@ function Shell({ title, back, right, children }: {
         <W3StatusBar />
         <div style={{ padding: '8px 20px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
           {back && (
-            <button onClick={() => navigate('/e/w3-garage')} aria-label="Zurück"
+            <button type="button" onClick={() => navigate('/e/w3-garage')} aria-label="Zurück"
               style={{
-                width: 36, height: 36, borderRadius: 100, border: 0, background: T.heroChip,
+                width: 44, height: 44, borderRadius: 100, border: 0, background: T.heroChip,
                 display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none', padding: 0,
               }}>
               <ArrowLeft size={17} color={T.ink} />

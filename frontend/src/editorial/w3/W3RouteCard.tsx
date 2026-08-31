@@ -4,6 +4,7 @@ import { useMyRoutes, useRecommendedRoute } from '../../hooks/useRecommendedRout
 import { T, EASE, band } from './w3tokens'
 import { S, lux } from './w3surfaces'
 import type { RidableRoute, RouteMatch } from '../../api/routeRecommendation'
+import { projectRouteShape } from './w3routeShape'
 
 /**
  * W3 · TODAY — "Empfohlene Route", from pen frame `Vt2TQ` (`lrOUf`).
@@ -29,31 +30,6 @@ import type { RidableRoute, RouteMatch } from '../../api/routeRecommendation'
  * recommended for a rest day is worse than silence.
  */
 
-/** The route's own outline, normalised into the tile.
- *
- *  Latitude is compressed by cos(lat) so the loop keeps its real proportions —
- *  at 52° N an uncorrected drawing is about 40 % too wide, and a rider
- *  recognises their own roads well enough to notice the difference. */
-function project(poly: [number, number][], size: number, pad = 12) {
-  const lats = poly.map((p) => p[0]), lngs = poly.map((p) => p[1])
-  const minLat = Math.min(...lats), maxLat = Math.max(...lats)
-  const minLng = Math.min(...lngs), maxLng = Math.max(...lngs)
-  const kx = Math.cos(((minLat + maxLat) / 2 * Math.PI) / 180)
-  const gw = (maxLng - minLng) * kx || 1e-6
-  const gh = (maxLat - minLat) || 1e-6
-  const scale = Math.min((size - 2 * pad) / gw, (size - 2 * pad) / gh)
-  const ox = pad + ((size - 2 * pad) - gw * scale) / 2
-  const oy = pad + ((size - 2 * pad) - gh * scale) / 2
-  const pts = poly.map(([lat, lng]): [number, number] => [
-    ox + (lng - minLng) * kx * scale,
-    oy + (maxLat - lat) * scale,
-  ])
-  return {
-    pts,
-    d: pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' '),
-  }
-}
-
 const TILE = 104
 
 function Thumb({ poly, reduce }: { poly: [number, number][] | null; reduce: boolean | null }) {
@@ -64,7 +40,7 @@ function Thumb({ poly, reduce }: { poly: [number, number][] | null; reduce: bool
       display: 'grid', placeItems: 'center',
     }}>
       {poly && poly.length > 1 ? (() => {
-        const { d, pts } = project(poly, TILE)
+        const { d, pts } = projectRouteShape(poly, TILE)!
         return (
           <svg width={TILE} height={TILE} viewBox={`0 0 ${TILE} ${TILE}`} aria-hidden>
             <path d={d} fill="none" stroke={`${T.acid}33`} strokeWidth={7}

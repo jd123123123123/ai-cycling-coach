@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { useShareInvite } from './useShareInvite'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { apiClient } from '../../api/client'
@@ -19,6 +20,8 @@ import { useGarage, useRideScene } from '../../hooks/useGarage'
  * deck only decides what order to reveal it in.
  */
 export default function W3WrappedPage() {
+  // Every image this screen exports carries the rider's invite.
+  useShareInvite()
   const navigate = useNavigate()
 
   const { data, isLoading } = useQuery({

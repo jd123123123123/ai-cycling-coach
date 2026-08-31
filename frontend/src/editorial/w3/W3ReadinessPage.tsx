@@ -5,6 +5,7 @@ import { useDailyMetrics } from '../../hooks/useDailyMetrics'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { usePMC } from '../../hooks/usePMC'
 import { computeReadiness, canonicalReadiness, readinessTier } from '../../utils/metrics'
+import { readinessFreshness, withholdReadiness } from '../../utils/readinessGate'
 import type { DailyMetric } from '../../api/dashboard'
 import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon, type SleepStage } from './W3ReadinessView'
 import { T } from './w3tokens'
@@ -50,7 +51,18 @@ export default function W3ReadinessPage() {
       num(snapshot?.body_battery.now ?? latest?.body_battery ?? null),
       num(latest?.sleep_score ?? null),
     )
-    const { score, tier } = canonicalReadiness(adaptive?.daily_decision?.readiness ?? null, fallback)
+    // THE SAME FRESHNESS GATE TODAY USES. `readinessGate`'s own docblock exists
+    // because two surfaces once disagreed about this exact number on the same
+    // day — Today withholding it while another tab showed a confident score
+    // built on an old overnight record. This page was resolving
+    // `canonicalReadiness` with an UNGATED composite fallback, so it was a
+    // fresh instance of that defect: on a stale-wearable morning Today withheld
+    // and this screen still printed a number.
+    const todayKey = new Date().toISOString().slice(0, 10)
+    const freshness = readinessFreshness(metrics, todayKey)
+    const withhold = withholdReadiness({ gate: freshness.gate, trainedToday: false, sidelined: false })
+    const gated = canonicalReadiness(adaptive?.daily_decision?.readiness ?? null, withhold ? null : fallback)
+    const { score, tier } = gated
     const rtier = tier ?? readinessTier(score)
     const TIER_DE: Record<string, string> = { peak: 'Spitzenform', ready: 'Bereit', caution: 'Vorsicht', rest: 'Ruhen' }
     const tierLabel = rtier ? (TIER_DE[rtier] ?? null) : null
@@ -91,12 +103,40 @@ export default function W3ReadinessPage() {
       }
     }
 
+    // WHAT ACTUALLY DRIVES THE SCORE, in the model's own weight order:
+    // hrv .28 · tsb .28 · sleep .24 · rhr .12 · body_battery .08
+    // (`backend/app/services/readiness_score.py:_COMPONENT_DEFS`).
+    //
+    // This list used to open with HRV and then show Stress and Erholung —
+    // both weighted ZERO — while omitting TSB entirely, which is tied for the
+    // heaviest and is the one input the rider steers directly. So the screen
+    // whose whole job is "where does this number come from" answered with two
+    // signals that contribute nothing and hid the biggest one. Stress and
+    // Erholung are still shown, below, as context rather than as drivers.
     const drivers: DriverVm[] = [
       build('hrv', 'HRV', 'ms', (m) => m.hrv_status, { goodHigher: true, fracOf: (v) => v / 120 }),
-      build('rhr', 'Ruhepuls', 'bpm', (m) => m.resting_hr, { goodHigher: false, fracOf: (v) => 1 - Math.min(1, (v - 38) / 42) }),
       build('sleep', 'Schlaf', 'h', (m) => (m.sleep_detail?.total_s != null ? m.sleep_detail.total_s / 3600 : (m.sleep_score != null ? m.sleep_score / 12.5 : null)),
         { goodHigher: true, fracOf: (v) => v / 9, fmt: (v) => `${Math.floor(v)}:${String(Math.round((v % 1) * 60)).padStart(2, '0')}`, deltaFmt: (x) => `${x > 0 ? '+' : '−'}${Math.floor(Math.abs(x))}:${String(Math.round((Math.abs(x) % 1) * 60)).padStart(2, '0')}` }),
+      build('rhr', 'Ruhepuls', 'bpm', (m) => m.resting_hr, { goodHigher: false, fracOf: (v) => 1 - Math.min(1, (v - 38) / 42) }),
       build('battery', 'Body Battery', '%', (m) => m.body_battery, { goodHigher: true, fracOf: (v) => v / 100 }),
+    ]
+    // Form (TSB) — weight 0.28, straight from the PMC the page already loads.
+    // Scored the way the model scores it: positive TSB is fresh, deeply
+    // negative is overreached.
+    const lastPmcEntry = (pmc?.entries ?? []).at(-1) ?? null
+    if (lastPmcEntry) {
+      const tsbVal = lastPmcEntry.tsb
+      drivers.splice(1, 0, {
+        icon: 'recovery', label: 'Form (TSB)', unit: '',
+        value: `${tsbVal >= 0 ? '+' : ''}${Math.round(tsbVal)}`,
+        delta: tsbVal >= 5 ? 'frisch' : tsbVal >= -10 ? 'im Trainingsbereich' : tsbVal >= -22 ? 'ermüdet' : 'stark ermüdet',
+        deltaGood: tsbVal >= -10 ? true : tsbVal >= -22 ? null : false,
+        frac: Math.max(0.06, Math.min(1, (tsbVal + 40) / 60)),
+        spark: [],
+      })
+    }
+    // Context, NOT drivers — both carry weight 0 in the model.
+    const context: DriverVm[] = [
       build('stress', 'Stress', '', (m) => m.stress_level, { goodHigher: false, fracOf: (v) => 1 - Math.min(1, v / 100) }),
       build('recovery', 'Erholung', 'h', (m) => m.recovery_time_hours, { goodHigher: false, fracOf: (v) => 1 - Math.min(1, v / 48) }),
     ]
@@ -115,9 +155,19 @@ export default function W3ReadinessPage() {
     const worst = present.length ? present.reduce((m, x) => (x.frac < m.frac ? x : m), present[0]) : null
     const limiterNote = worst && worst.frac < 0.5 ? `${worst.label} begrenzt deine Bereitschaft heute am stärksten.` : null
 
-    const dateNote = latest?.date
-      ? `Overnight-Signale · Stand ${new Date(latest.date).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })}`
-      : 'Overnight-Signale erscheinen nach der ersten Nacht mit deiner Uhr.'
+    // The note names WHY, because "pending this morning" and "your watch has
+    // not synced in days" are different situations and only the second has an
+    // action attached — the distinction the gate module was written to carry.
+    const stamp = (d: string) => new Date(d).toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'short' })
+    const dateNote = freshness.gate === 'none'
+      ? 'Overnight-Signale erscheinen nach der ersten Nacht mit deiner Uhr.'
+      : freshness.gate === 'stale'
+        ? `Letzte Overnight-Messung ${freshness.lastOvernightKey ? stamp(freshness.lastOvernightKey) : '—'} · deine Uhr hat seitdem nicht synchronisiert.`
+        : freshness.gate === 'pending'
+          ? 'Die Messung von heute Nacht ist noch nicht da. Sie erscheint nach dem nächsten Sync.'
+          : latest?.date
+            ? `Overnight-Signale · Stand ${stamp(latest.date)}`
+            : 'Overnight-Signale erscheinen nach der ersten Nacht mit deiner Uhr.'
 
     // ── sleep breakdown ──
     const sd = latest?.sleep_detail ?? null
@@ -156,7 +206,7 @@ export default function W3ReadinessPage() {
 
     const vo2 = num(latest?.vo2max ?? null) != null ? `${Math.round(latest!.vo2max as number)}` : null
 
-    return { score, word, tierLabel, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, limiterNote, sleep, recovery, fitness, vo2 }
+    return { score, word, tierLabel, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, context, limiterNote, sleep, recovery, fitness, vo2 }
   }, [metricsResp, snapshot, adaptive, pmc])
 
   return <W3ReadinessView vm={vm} onBack={() => navigate(-1)} />

@@ -174,11 +174,11 @@ const LIGHT: typeof DARK = {
   acidTop: '#F4FBE4',          // the warm-lit top of a card that has EARNED it
 
   // ── Ink ────────────────────────────────────────────────────────────────
-  ink: '#0B0B0B', mid: '#5A6068', quiet: '#868C94',
+  ink: '#0B0B0B', mid: '#5A6068', quiet: '#5C626A',
 
   // ── Today's hero keeps its own small palette, one mode over ────────────
   heroBg: '#F2F2EE', heroChip: '#E4E4DE', heroDock: '#FFFFFF',
-  heroMid: '#6B7079', heroOff: '#C9C9C2',
+  heroMid: '#5F646D', heroOff: '#C9C9C2',
   // Text set ON the accent. The accent is dark in this mode, so this flips.
   heroInk: '#FFFFFF',
   bar: '#FFFFFFF2', handle: '#0B0B0B40',
@@ -191,15 +191,23 @@ const LIGHT: typeof DARK = {
   // ── THE ACCENT GOES DEEPER, AND THIS IS THE ONE REAL COMPROMISE ─────────
   // `T.acid` is both a fill and a text colour across 121 files, and one value
   // has to serve both. #BFFF3C on white is about 1.4:1 — illegible as type — so
-  // white mode runs a deeper lime that clears 4.5:1 as text and still reads as
-  // the same hue when it fills a button. The alternative was auditing every
-  // accent in the app for whether it paints or writes, which is a bigger change
-  // than this whole mode.
-  acid: '#5F8A00', acidDeep: '#456300', acidLite: '#7FAE12', acidHi: '#6E9C05',
-  acidDim: '#5F8A0018',
+  // white mode runs a deeper lime. The alternative was auditing every accent in
+  // the app for whether it paints or writes, which is a bigger change than this
+  // whole mode.
+  //
+  // MEASURED, not asserted. The previous #5F8A00 came with a comment claiming
+  // it "clears 4.5:1 as text"; it does not — 4.10 on white, 3.65 on `bg` and
+  // 3.21 on `chip`, so it failed AA on every ground including the one it was
+  // chosen for. These values are computed against all four light grounds
+  // (bg / surface / chip / heroChip) and the worst case is the one quoted.
+  acid: '#447200',      // worst 4.50 (heroChip) — the LIGHTEST lime that clears AA on all four grounds
+  acidDeep: '#3E5A00',  // worst 6.17
+  acidLite: '#5F8A00',  // decorative only — never set as body text
+  acidHi: '#5A8200',    // gradient stop, not type
+  acidDim: '#44720018',
 
   // ── Chart hues that only worked because the ground was black ────────────
-  training: '#0F9E5E', warn: '#B87200', bad: '#D32741',
+  training: '#0F9E5E', warn: '#8A5500', bad: '#C22036',
   hrv: '#0090A6', rem: '#0090A6', rhr: '#D14A68', sleep: '#B01BC0',
   zone5: '#D24E15', orbit: '#6F5BC9', cool: '#3E60CE', evening: '#5B41D6',
 }

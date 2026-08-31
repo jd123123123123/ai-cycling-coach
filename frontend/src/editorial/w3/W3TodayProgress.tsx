@@ -376,7 +376,11 @@ export default function W3TodayProgress() {
             {ach && <span style={{ flex: 'none', fontSize: 10.5, fontWeight: 700, color: T.mid, fontVariantNumeric: 'tabular-nums' }}>{ach.counts.unlocked}/{ach.counts.total}</span>}
           </div>
           <div style={{ height: 5, width: '100%', borderRadius: 100, background: '#FFFFFF0F', overflow: 'hidden' }}>
-            <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.max(0, Math.min(100, nextBadge.pct ?? 0))}%` }} transition={grow(0.12)} style={{ height: '100%', borderRadius: 100, background: T.d3 }} />
+            {/* `pct` arrives 0–1 from /achievements/mine, the same as the Wins
+                grid reads it (W3WinsPage `Math.round(p.pct * 100)`). Without
+                the ×100 a badge at 62 % drew a 0.62 % bar under the label
+                "62 of 100 rides". */}
+            <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.max(0, Math.min(100, (nextBadge.pct ?? 0) * 100))}%` }} transition={grow(0.12)} style={{ height: '100%', borderRadius: 100, background: T.d3 }} />
           </div>
           <span style={{ ...ellipsis, width: '100%', fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{nextBadge.progress.label}</span>
         </button>

@@ -4,6 +4,7 @@ import { Bike, Flag, Gauge, Medal, Mountain, Route, Sunrise, Timer, Trophy, Zap 
 import type { LucideIcon } from 'lucide-react'
 import { usePowerProfileView } from '../../hooks/usePowerProfileView'
 import { useAchievements } from '../../hooks/useAchievements'
+import W3LoadError from './W3LoadError'
 import { useFtpHistory } from '../../hooks/useFtpHistory'
 import { DASH } from './w3tokens'
 import { useHeroPanel } from './W3HeroShell'
@@ -77,9 +78,14 @@ function hms(total: number): string {
 
 export default function W3WinsPage() {
   const nav = useNavigate()
-  const { data: curveData } = usePowerProfileView()
-  const { data: ach } = useAchievements('de')
-  const { data: ftp } = useFtpHistory()
+  const { data: curveData, isLoading: curveLoading } = usePowerProfileView()
+  const { data: ach, isLoading: achLoading, isError: achError, refetch: refetchAch, isFetching: achFetching } = useAchievements('de')
+  const { data: ftp, isLoading: ftpLoading } = useFtpHistory()
+  // "You have never ridden" is a CLAIM, and it needs all three reads to have
+  // actually landed. While they are in flight every chapter is null, so the
+  // page used to flash that sentence at every rider — and on a 500 it stayed
+  // there, telling somebody with hundreds of rides they had none.
+  const stillLoading = curveLoading || achLoading || ftpLoading
 
   const vm = useMemo<W3WinsVm>(() => {
     const a = ach?.all_time
@@ -277,13 +283,29 @@ export default function W3WinsPage() {
       beams,
       medals,
       biggestDay,
-      empty: nothing
+      empty: nothing && !stillLoading
         ? 'Deine erste gewertete Fahrt füllt diese Seite. Bis dahin gibt es hier nichts zu zeigen.'
         : null,
     }
-  }, [curveData, ach, ftp, nav])
+  }, [curveData, ach, ftp, nav, stillLoading])
 
   const { portal } = useHeroPanel(<W3WinsDock items={vm.ledger} />)
+
+  // A failed achievements read must say so and offer a retry, never fall
+  // through to the "you have never ridden" sentence.
+  if (achError && !ach) {
+    return (
+      <>
+        {portal}
+        <W3LoadError
+          title="Deine Erfolge laden nicht"
+          detail="Wir konnten deine Abzeichen gerade nicht abrufen. Nichts davon geht verloren — das ist nur die Verbindung."
+          onRetry={() => void refetchAch()}
+          retrying={achFetching}
+        />
+      </>
+    )
+  }
 
   return (
     <>

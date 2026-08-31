@@ -76,13 +76,21 @@ export default function W3LoadForecastPage() {
           ? 'Leicht über dem Zielkorridor – wenn eine harte Einheit schwer fällt, kürzt der Plan die VO2max-Einheit.'
           : 'Im Zielkorridor – der lockere Anteil trägt die harten Einheiten.')
         : 'Das Verhältnis erscheint, sobald diese Woche Einheiten mit Leistungsdaten hat.',
-      forecastSub: proj?.samples_used ? `Hochrechnung aus ${proj.samples_used} Trainingsdaten` : 'Hochrechnung aus deinen Trainingsdaten',
+      forecastSub: proj?.samples_used
+        ? `Hochrechnung aus ${proj.samples_used} Trainingsdaten · 80 % liegen im Band`
+        : 'Hochrechnung aus deinen Trainingsdaten · 80 % liegen im Band',
       threshold: central != null ? String(central) : '—',
       thresholdUnit: central != null ? `${unit}${wkg ? ` · ${wkg} W/kg` : ''}` : (proj?.metric_label ?? 'Schwelle'),
       delta: delta != null && delta !== 0 ? `${delta > 0 ? '+' : ''}${delta} ${unit}` : null,
-      rangeLow: { v: low != null ? `${low} ${unit}` : '—', l: 'wenn du kürzt' },
+      // THESE ARE THE 80 % BAND'S EDGES, NOT COMPLIANCE SCENARIOS. `band_80` is
+      // p10/p90 around the central path (`performance_projection`), i.e. model
+      // uncertainty — it would be exactly this wide if the rider executed every
+      // session perfectly. Labelling p10 "wenn du kürzt" and p90 "voll
+      // umgesetzt" told the rider that a statistical interval was the
+      // consequence of their own choices, which the model never claimed.
+      rangeLow: { v: low != null ? `${low} ${unit}` : '—', l: 'unteres Ende' },
       rangeMid: { v: central != null ? `${central} ${unit}` : '—', l: 'erwartet' },
-      rangeHigh: { v: high != null ? `${high} ${unit}` : '—', l: 'voll umgesetzt' },
+      rangeHigh: { v: high != null ? `${high} ${unit}` : '—', l: 'oberes Ende' },
       rangePos,
       compliancePct: pct != null ? `${pct} %` : '—',
       complianceDone: done ?? 0,

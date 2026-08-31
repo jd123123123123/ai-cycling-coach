@@ -15,13 +15,21 @@ import {
   displayPhase, phaseRail, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
 } from './w3plan'
 import { hasPlanFromWeek } from './w3hasPlan'
+import W3Loading from './W3Loading'
+import W3LoadError from './W3LoadError'
 import W3PlanEmptyView, { type W3PlanEmptyVm } from './W3PlanEmptyView'
 import { useHeroPanel } from './W3HeroShell'
 import W3PlanView, {
-  W3PlanDock,
   type W3PlanVm, type GoalOption, type AdaptKind, type AdaptResult,
-  type RebuildPayload, type GoalSwitchPayload,
+  type RebuildPayload, type GoalSwitchPayload, type PlanDaySession,
 } from './W3PlanView'
+import { DASH } from './w3tokens'
+// THE DOCK, in the idiom Today and Fahrten share. The plan used to open on a
+// flat three-stat row while the other two bottom tabs opened on one big number
+// and its meter — so the plan was the odd screen out on the first thing a
+// rider sees. Its own big number is the countdown, and its meter is the
+// periodisation: Grundlage · Aufbau · Spezifisch · Taper.
+import W3PlanDock from './W3PlanDock'
 
 /**
  * W3 · TRAININGSPLAN, wired to the REAL periodization engine. Route /e/w3-plan.
@@ -48,7 +56,7 @@ const EVENT_NAME: Record<string, string> = {
 export default function W3PlanPage() {
   const navigate = useNavigate()
   const qc = useQueryClient()
-  const { data: week } = useCurrentWeek(0)
+  const { data: week, isLoading: weekLoading, isError: weekError, refetch: refetchWeek, isFetching: weekFetching } = useCurrentWeek(0)
   const { data: profile } = useAthleteProfile()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: seasonActs } = useActivitiesRange(seasonStart, new Date())
@@ -61,6 +69,14 @@ export default function W3PlanPage() {
   // would give every visitor a plan they never asked for and delete the empty
   // state by visiting it. Gated on the same rule the render branches on.
   const hasPlan = hasPlanFromWeek(week)
+  // A PLAN AND A GOAL ARE DIFFERENT THINGS. The engine keeps a mesocycle
+  // running for everybody, so `hasPlan` is true for a rider who has never named
+  // an event — and the full plan apparatus then draws a 12-week periodisation
+  // aimed at nothing, with GRUNDLAGE lit and a countdown to "Kein Ziel
+  // gesetzt". Seen on the real account. Until there is a dated event, this
+  // route is the one-page case: what a plan does for you, and how to pick a
+  // goal. `W3PlanEmptyView` is exactly that page.
+  const hasGoal = !!profile?.target_event_date
   const { data: plan } = useQuery({
     queryKey: ['plan', 'build'],
     queryFn: () => buildPlan('onboarding'),
@@ -134,6 +150,9 @@ export default function W3PlanPage() {
           phase: active,
           dateRange: blockStart && blockEnd ? fmtRange(blockStart, blockEnd) : '—',
           weekOfBlock: `Woche ${weekOfBlock} von ${phaseLen}`,
+          // The real fraction behind the meter. It used to animate to a
+          // hardcoded '50%'/'66%' directly under this honest label.
+          weekOfBlockPct: Math.round((weekOfBlock / phaseLen) * 100),
           restNote: restWeekInBlock >= 0 ? `Woche ${restWeekInBlock + 1} ist eine Ruhewoche` : null,
           text: blurb.text,
           tags: blurb.tags,
@@ -173,7 +192,35 @@ export default function W3PlanPage() {
 
     const dayStrip = buildDayStrip(days, today)
 
-    // ── today's session ──
+    // ── every day's session, not just today's ──
+    // The strip used to be a read-only chart beside a card that could only ever
+    // describe TODAY, so the one question a plan screen exists to answer —
+    // "what is coming, and how hard" — needed a different screen. `days` is the
+    // whole /weeks/current week, so each day can carry its own session and the
+    // strip can drive which one is shown.
+    const daySessions: PlanDaySession[] = days.map((d) => {
+      const isSess = isSessionDay(d)
+      const tss = isSess && d.target_tss != null ? Math.round(d.target_tss) : null
+      const secs = isSess ? planDurSec(d) : 0
+      const iff = isSess ? planIF(d) : null
+      const w = isSess ? planTargetWatts(d, ftp) : null
+      const dt = parseISO(d.date)
+      return {
+        title: isSess ? (d.title ?? 'Einheit') : null,
+        weekday: dt ? DE_WD[(dt.getDay() + 6) % 7] : '',
+        dateLabel: dt ? fmtDEShort(dt) : '',
+        isToday: !!d.is_today,
+        isPast: !!dt && !d.is_today && dt < today,
+        dur: secs > 0 ? `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m` : null,
+        tss: tss != null ? String(tss) : DASH,
+        targetW: w != null ? `${w} W` : DASH,
+        ftpPct: iff != null ? `${Math.round(iff * 100)}%` : DASH,
+        bars: isSess
+          ? (d.intervals.length > 0 ? blocksFromIntervals(d.intervals) : enduranceEnvelope())
+          : [],
+      }
+    })
+
     const todayPlan = days.find((d) => d.is_today) ?? null
     const hasSession = todayPlan != null && isSessionDay(todayPlan)
     const sTss = hasSession && todayPlan!.target_tss != null ? Math.round(todayPlan!.target_tss) : null
@@ -241,6 +288,7 @@ export default function W3PlanPage() {
         { value: weekHm > 0 ? Math.round(weekHm).toLocaleString('de-DE') : '—', label: 'Höhenmeter' },
       ],
       dayStrip,
+      daySessions,
       sessionTitle: hasSession ? todayPlan!.title : null,
       sessionDur: sSecs > 0 ? `${Math.floor(sSecs / 3600)}h ${Math.round((sSecs % 3600) / 60)}m` : null,
       targetW: sW != null ? `${sW} W` : '—',
@@ -263,7 +311,6 @@ export default function W3PlanPage() {
 
   // ── real adapt (persists via /workouts/today/modify) ──
   const onAdapt = useCallback(async (kind: AdaptKind): Promise<AdaptResult | null> => {
-    if (kind === 'rest') return { title: 'Ruhetag', tss: 0, note: 'Voller Ruhetag – die Last verteilt sich neu.', railsDowngraded: false }
     const modType: TodayModificationType = kind === 'shorter' ? 'shorten' : kind
     const durationMin = kind === 'shorter' ? 45 : undefined
     const res = await modifyTodayWorkout(modType, durationMin)
@@ -337,17 +384,51 @@ export default function W3PlanPage() {
   // hook order changes the moment a rider has no plan — React's rule, and a
   // real bug rather than a lint nag: the empty state and the built state would
   // disagree about how many hooks this component runs.
-  const { inShell, portal } = useHeroPanel(hasPlan ? <W3PlanDock vm={vm} /> : null)
+  const { inShell, portal } = useHeroPanel((
+    <W3PlanDock
+      vm={{
+        daysToStart: vm.daysToStart,
+        eventName: vm.eventName,
+        planWeekNum: vm.planWeekNum,
+        totalWeeks: vm.totalWeeks,
+        phases: vm.phases,
+        blockName: vm.block?.phase ?? null,
+      }}
+      onOpen={() => navigate('/e/w3-goal')} />
+  ))
 
-  if (!hasPlan) {
+  // "YOU HAVE NO PLAN" IS A CLAIM, and it needs the read to have landed.
+  // `hasPlanFromWeek(undefined)` is false, so the empty page used to render on
+  // every load — and permanently on a 401/403/404/409, where the query does not
+  // retry. A rider with a live 12-week plan was told "NOCH KEIN PLAN" and
+  // offered onboarding.
+  if (weekLoading && !week) {
+    return <W3Loading label="Dein Plan lädt…" />
+  }
+  if (weekError && !week) {
     return (
+      <W3LoadError
+        title="Dein Plan lädt nicht"
+        detail="Wir konnten deine Woche gerade nicht abrufen. Am Plan ändert das nichts — das ist nur die Verbindung."
+        onRetry={() => void refetchWeek()}
+        retrying={weekFetching}
+      />
+    )
+  }
+
+  if (!hasPlan || !hasGoal) {
+    return (
+      <>
+      {portal}
       <W3PlanEmptyView
         vm={emptyVm}
+        chromeless={inShell}
         onBack={() => navigate(-1)}
-        onStart={() => navigate('/e/w3-goal')}
+        onStart={(key) => navigate(`/e/w3-goal?intent=${key}`)}
         onBuilder={() => navigate('/workouts/builder')}
         onImport={() => navigate('/plan/import')}
       />
+      </>
     )
   }
 

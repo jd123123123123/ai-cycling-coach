@@ -58,6 +58,26 @@ const FIXTURE: W3PlanVm = {
     { letter: 'S', date: '16', frac: 140, isToday: false, isRest: false },
     { letter: 'S', date: '17', frac: 70, isToday: false, isRest: false },
   ],
+  // One entry per weekday, in the shape the page builds from /weeks/current —
+  // including a rest day and a past day, because those are the two branches
+  // the session panel gets wrong when it is only ever handed today.
+  daySessions: [
+    { title: 'Grundlage', weekday: 'Montag', dateLabel: 'Mo, 11. Aug.', isToday: false, isPast: true,
+      dur: '2h 00m', tss: '62', targetW: '205 W', ftpPct: '70%', bars: [{ w: 1, work: false }] },
+    { title: '4 × 8 Schwelle', weekday: 'Dienstag', dateLabel: 'Di, 12. Aug.', isToday: true, isPast: false,
+      dur: '1h 15m', tss: '112', targetW: '285 W', ftpPct: '98%', bars: [] },
+    { title: 'Regeneration', weekday: 'Mittwoch', dateLabel: 'Mi, 13. Aug.', isToday: false, isPast: false,
+      dur: '1h 00m', tss: '38', targetW: '150 W', ftpPct: '51%', bars: [{ w: 1, work: false }] },
+    { title: '3 × 12 Sweetspot', weekday: 'Donnerstag', dateLabel: 'Do, 14. Aug.', isToday: false, isPast: false,
+      dur: '1h 30m', tss: '90', targetW: '262 W', ftpPct: '90%',
+      bars: [{ w: 0.5, work: false }, { w: 1, work: true }, { w: 0.4, work: false }, { w: 1, work: true }, { w: 0.5, work: false }] },
+    { title: null, weekday: 'Freitag', dateLabel: 'Fr, 15. Aug.', isToday: false, isPast: false,
+      dur: null, tss: '—', targetW: '—', ftpPct: '—', bars: [] },
+    { title: 'Lange Ausfahrt', weekday: 'Samstag', dateLabel: 'Sa, 16. Aug.', isToday: false, isPast: false,
+      dur: '4h 00m', tss: '140', targetW: '198 W', ftpPct: '68%', bars: [{ w: 1, work: false }] },
+    { title: 'Rollen', weekday: 'Sonntag', dateLabel: 'So, 17. Aug.', isToday: false, isPast: false,
+      dur: '1h 20m', tss: '70', targetW: '180 W', ftpPct: '62%', bars: [{ w: 1, work: false }] },
+  ],
   sessionTitle: '4 × 8 Schwelle',
   sessionDur: '1h 15m',
   targetW: '285 W',

@@ -22,7 +22,7 @@ const FULL: MorningBriefing = {
     { key: 'deep', sentence: 'Gesunder Tiefschlaf', label: 'Tiefschlaf', value: '96 min', at: 0.62,
       band: { lo: 0.37, hi: 0.66 }, bandLabel: '13–23 %', tone: 'good', dir: 'flat' },
     { key: 'hrv', sentence: 'HRV über deinem Bereich', label: 'HRV', value: '68 ms', at: 0.78,
-      band: { lo: 0.31, hi: 0.69 }, bandLabel: '54–63 ms', tone: 'warn', dir: 'up' },
+      band: { lo: 0.31, hi: 0.69 }, bandLabel: '54–63 ms', tone: 'good', dir: 'up' },
     { key: 'rhr', sentence: 'Ruhepuls niedriger — erholt', label: 'Ruhepuls', value: '46 bpm', at: 0.18,
       band: { lo: 0.31, hi: 0.69 }, bandLabel: '48–53 bpm', tone: 'good', dir: 'down' },
   ],

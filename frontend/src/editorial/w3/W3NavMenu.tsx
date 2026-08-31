@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react'
 import { ScanFace,
@@ -36,8 +37,8 @@ const ITEMS: { label: string; sub: string; icon: typeof Activity; route: string 
 export function W3NavIcon({ to, children, label }: { to: string; children: React.ReactNode; label: string }) {
   const nav = useNavigate()
   return (
-    <button onClick={() => nav(to)} aria-label={label}
-      style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+    <button type="button" onClick={() => nav(to)} aria-label={label}
+      style={{ width: 44, height: 44, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
       {children}
     </button>
   )
@@ -45,13 +46,13 @@ export function W3NavIcon({ to, children, label }: { to: string; children: React
 
 /**
  * The trigger is configurable because Today's stage (pen `YIU3g`/`qv4Aw`) shows
- * it as a 44px gear on the stage floor rather than a 38px burger in a header —
+ * it as a gear on the stage floor rather than a burger in a header —
  * but it must open the SAME sheet. Every route above is reachable only from
  * here, so giving that screen its own lookalike button would have stranded them
  * the moment the two drifted apart.
  */
 export default function W3NavMenu({
-  color = T.ink, size = 38, iconSize = 17, background = T.surface, Icon = Menu,
+  color = T.ink, size = 44, iconSize = 18, background = T.surface, Icon = Menu,
 }: {
   color?: string
   size?: number
@@ -69,6 +70,16 @@ export default function W3NavMenu({
         style={{ width: size, height: size, borderRadius: 100, background, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0 }}>
         <Icon size={iconSize} color={color} />
       </button>
+      {/* PORTALLED TO THE BODY, not merely raised. Both mount sites put this
+          button inside the stage's corner column — `position: absolute;
+          z-index: 2` (W3TodayStage) — which opens a stacking context, so the
+          sheet's own `zIndex: 100` was only ever compared against its siblings
+          INSIDE that context and the z=50 tab bar painted straight over it.
+          `position: fixed` positions against the viewport but does not escape a
+          stacking context. Measured on production before the fix: the topmost
+          element over the open sheet at the tab bar was the "PLAN" tab.
+          The same trap hit W3CoachChat, which is portalled for this reason. */}
+      {createPortal(
       <AnimatePresence>
         {open && (
           <motion.div
@@ -81,7 +92,7 @@ export default function W3NavMenu({
               style={{ width: 390, maxWidth: '100%', maxHeight: '86dvh', overflowY: 'auto', background: T.bg, borderRadius: '28px 28px 0 0', border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, padding: '18px 16px calc(20px + env(safe-area-inset-bottom))' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px 12px' }}>
                 <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>Gehe zu</span>
-                <button onClick={() => setOpen(false)} aria-label="Schließen" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
+                <button type="button" onClick={() => setOpen(false)} aria-label="Schließen" style={{ width: 44, height: 44, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {ITEMS.map((it, i) => (
@@ -111,7 +122,8 @@ export default function W3NavMenu({
             </motion.div>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body)}
     </>
   )
 }

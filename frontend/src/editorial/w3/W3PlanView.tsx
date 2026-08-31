@@ -5,7 +5,7 @@ import {
   Zap, ArrowRight, RefreshCw, Repeat, ChevronDown, ChevronUp, X, Minus, Plus, Check,
 } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
-import { TNUM } from './w3surfaces'
+
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import W3TopBar from './W3TopBar'
@@ -38,7 +38,7 @@ import './w3.css'
  * The rule now: acid marks the countdown (the page's subject), the CURRENT
  * phase/week/day, the block's progress fill, and the primary action. Nothing
  * else. Two acid marks in one card is the failure mode — the reward line and
- * the "Fahrt starten" pill were exactly that.
+ * the "Einheit ansehen" pill were exactly that.
  *
  * TYPOGRAPHY: THE W3:RIDE CEILING. The shipped app has no Bold — SemiBold is
  * the heaviest weight in the product (`docs/research/2026-08-w3ride`), and its
@@ -57,11 +57,29 @@ export interface ActiveBlockVm {
   phase: string
   dateRange: string
   weekOfBlock: string
+  /** How far through the block, 0–100 — the real ratio behind `weekOfBlock`. */
+  weekOfBlockPct?: number
   restNote: string | null
   text: string
   tags: string[]
   next: string
 }
+/** One day of the week, with whatever session it carries. A rest day has a
+ *  null title and no bars — the panel then says so rather than drawing an
+ *  empty chart. */
+export interface PlanDaySession {
+  title: string | null
+  weekday: string
+  dateLabel: string
+  isToday: boolean
+  isPast: boolean
+  dur: string | null
+  tss: string
+  targetW: string
+  ftpPct: string
+  bars: PlanSessionBar[]
+}
+
 export interface W3PlanVm {
   eventName: string
   eventSub: string
@@ -82,6 +100,8 @@ export interface W3PlanVm {
   weekBadge: string
   weekStats: [PlanStat, PlanStat, PlanStat, PlanStat]
   dayStrip: PlanDayCell[]
+  /** One entry per weekday, so the strip can show future sessions too. */
+  daySessions?: PlanDaySession[]
   sessionTitle: string | null
   sessionDur: string | null
   targetW: string
@@ -110,7 +130,15 @@ export interface GoalOption {
   real: boolean            // whether picking it maps to a real /plan/change/apply
 }
 
-export type AdaptKind = 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
+// NO 'rest' HERE. A rest day is not one of the five modifications the API can
+// persist (`POST /workouts/today/modify` takes shorten|lengthen|easier|harder|
+// indoor), and the page used to fake it: `onAdapt('rest')` returned a
+// hand-written success object before any network call, so the rider was told
+// "Voller Ruhetag – die Last verteilt sich neu." and nothing was written.
+// Making it real needs an endpoint plus decisions about the streak, the week's
+// rebalance and RideCoin — so the option is gone until it exists, rather than
+// shipping a button that lies.
+export type AdaptKind = 'easier' | 'harder' | 'shorter' | 'indoor'
 export interface AdaptResult { title: string | null; tss: number | null; note: string; railsDowngraded: boolean }
 export type OnAdapt = (kind: AdaptKind) => Promise<AdaptResult | null>
 
@@ -261,8 +289,12 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
   const [days, setDays] = useState<boolean[]>(vm.adjustDays)
   const [hours, setHours] = useState<number>(vm.adjustHours)
   const [longDay, setLongDay] = useState<number>(vm.adjustLongDay)
-  const [rest, setRest] = useState<'3:1' | '2:1'>('3:1')     // display cadence — fixture (no dedicated field)
-  const [indoor, setIndoor] = useState<'wenig' | 'mittel' | 'viel'>('mittel') // fixture (no dedicated field)
+  // NO REST-CADENCE OR INDOOR-SHARE STATE. Both were segmented controls whose
+  // values never reached `RebuildPayload` — `/plan/change/apply` has no field
+  // for either (`InterviewAnswers` carries weekly_hours / days_available /
+  // blackouts / experience / motivation / variety, and nothing else). So two of
+  // the five controls in a form that says "Plan neu berechnen" silently did
+  // nothing. They are gone until the engine can honour them.
   const [busy, setBusy] = useState(false)
   const dayCount = days.filter(Boolean).length
   const newTss = Math.round((hours / vm.adjustHours) * (Number(vm.weekStats[1].value.replace(/\D/g, '')) || 0)) || null
@@ -315,15 +347,6 @@ function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: ()
 
       <SheetRow title="Lange Ausfahrt" sub="Der Schlüsseltag der Woche">
         <Segmented options={[['SA', 5], ['SO', 6]]} value={longDay} onChange={setLongDay} />
-      </SheetRow>
-
-      <SheetRow title="Ruhewoche" sub="Entlastung im Rhythmus">
-        <Segmented options={[['3:1', 0], ['2:1', 1]]} value={rest === '3:1' ? 0 : 1} onChange={(v) => setRest(v === 0 ? '3:1' : '2:1')} />
-      </SheetRow>
-
-      <SheetRow title="Indoor-Anteil" sub="Wie viel auf der Rolle laufen darf">
-        <Segmented options={[['WENIG', 0], ['MITTEL', 1], ['VIEL', 2]]} value={indoor === 'wenig' ? 0 : indoor === 'mittel' ? 1 : 2}
-          onChange={(v) => setIndoor(v === 0 ? 'wenig' : v === 1 ? 'mittel' : 'viel')} />
       </SheetRow>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 14, border: `1px solid ${T.stroke}` }}>
@@ -461,12 +484,28 @@ export default function W3PlanView({
   const doAdapt = async (kind: AdaptKind) => {
     if (!onAdapt || adaptBusy) return
     setAdaptBusy(kind); setSwapOpen(false)
-    const res = await onAdapt(kind)
-    setAdaptBusy(null)
-    setAdaptMsg(res ? (res.railsDowngraded ? `${res.note} · Sicherheitsgrenze aktiv` : res.note) : 'Keine Einheit zum Anpassen.')
+    // try/finally, because `onAdapt` REJECTS on any 4xx/5xx or dropped
+    // connection. Without it `setAdaptBusy(null)` never ran, so the tapped
+    // button stayed on "…" and the `if (adaptBusy) return` guard above then
+    // swallowed every other adapt tap until the screen was remounted — one
+    // failed request disabled the whole row, silently.
+    try {
+      const res = await onAdapt(kind)
+      setAdaptMsg(res ? (res.railsDowngraded ? `${res.note} · Sicherheitsgrenze aktiv` : res.note) : 'Keine Einheit zum Anpassen.')
+    } catch {
+      setAdaptMsg('Konnte nicht gespeichert werden. Nochmal versuchen.')
+    } finally {
+      setAdaptBusy(null)
+    }
   }
 
   const stripMax = useMemo(() => Math.max(1, ...vm.dayStrip.map((d) => d.frac)), [vm.dayStrip])
+  // Which day the session panel is describing. Defaults to today, which is what
+  // the panel could only ever show before.
+  const todayIdx = Math.max(0, vm.dayStrip.findIndex((d) => d.isToday))
+  const [selDay, setSelDay] = useState(todayIdx)
+  const sel = vm.daySessions?.[selDay] ?? null
+  const selIsToday = sel ? sel.isToday : true
 
   return (
     <div className="w3-root">
@@ -556,7 +595,10 @@ export default function W3PlanView({
                   <span style={{ fontSize: 12, fontWeight: 600, color: T.mid, paddingTop: 6 }}>{vm.block.dateRange}</span>
                 </div>
                 <div style={{ height: 6, borderRadius: 100, background: T.surface2, overflow: 'hidden' }}>
-                  <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: vm.block.restNote ? '50%' : '66%' }} transition={{ duration: 0.7, ease: EASE }}
+                  {/* The REAL fraction (weekOfBlock / phaseLen). This used to
+                      animate to a hardcoded 50 % / 66 % — a fabricated meter
+                      sitting directly above the honest "Woche 2 von 4". */}
+                  <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.max(0, Math.min(100, vm.block.weekOfBlockPct ?? 0))}%` }} transition={{ duration: 0.7, ease: EASE }}
                     style={{ height: '100%', borderRadius: 100, background: T.acid }} />
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -612,30 +654,56 @@ export default function W3PlanView({
           <div style={{ display: 'flex', gap: 6 }}>
             {vm.dayStrip.map((d, i) => {
               const h = Math.max(6, Math.round((d.frac / stripMax) * 44))
+              const picked = i === selDay
+              const s = vm.daySessions?.[i] ?? null
               return (
-                <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <button key={i} type="button"
+                  onClick={() => setSelDay(i)}
+                  aria-pressed={picked}
+                  aria-label={`${s?.weekday ?? d.letter}${s?.title ? `, ${s.title}` : ', frei'}`}
+                  style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    background: 'transparent', border: 0, padding: 0, cursor: 'pointer', fontFamily: FONT }}>
                   <span style={{ fontSize: 10, fontWeight: 600, color: d.isToday ? T.acid : T.quiet }}>{d.letter}</span>
                   <span style={{ fontSize: 13, fontWeight: 600, color: d.isToday ? T.acid : T.ink }}>{d.date}</span>
-                  <div style={{ width: '100%', height: 52, display: 'flex', alignItems: 'flex-end', borderRadius: 10, background: d.isToday ? T.acidDim : T.surface2, padding: 4 }}>
+                  {/* SELECTION IS A RING, TODAY IS THE FILL. Two different
+                      facts — "the day you are on" and "the day you are reading"
+                      — and collapsing them into one highlight is what made the
+                      strip look decorative. */}
+                  <div style={{
+                    width: '100%', height: 52, display: 'flex', alignItems: 'flex-end',
+                    borderRadius: 10, padding: 4,
+                    background: d.isToday ? T.acidDim : T.surface2,
+                    boxShadow: picked ? `inset 0 0 0 1.5px ${T.acid}` : 'none',
+                  }}>
                     <div style={{ width: '100%', height: h, borderRadius: 5, background: d.isRest ? T.d2 : d.isToday ? T.acid : T.d3 }} />
                   </div>
-                </div>
+                </button>
               )
             })}
           </div>
         </div>
 
-        {/* Today's session */}
+        {/* THE SELECTED DAY'S SESSION. This card described today and only
+            today, while the strip above it held a whole week the rider could
+            not open — so "what is coming" was a question the plan screen could
+            not answer. It now follows the strip. */}
         <div style={{ ...band(26) }}>
           <div style={{ ...card(), gap: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Kicker>HEUTIGE EINHEIT</Kicker>
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{vm.sessionDur ?? DASH}</span>
+              <Kicker>{selIsToday ? 'HEUTIGE EINHEIT' : (sel?.isPast ? 'GEFAHREN' : 'GEPLANT')}</Kicker>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>
+                {selIsToday ? (vm.sessionDur ?? DASH) : [sel?.weekday, sel?.dur].filter(Boolean).join(' · ')}
+              </span>
             </div>
-            <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -0.9, color: vm.sessionTitle ? T.ink : T.ink }}>{vm.sessionTitle ?? 'Ruhetag'}</span>
-            {vm.sessionTitle ? (
+            <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -0.9, color: T.ink }}>
+              {(selIsToday ? vm.sessionTitle : sel?.title) ?? 'Ruhetag'}
+            </span>
+            {(selIsToday ? vm.sessionTitle : sel?.title) ? (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                {[[vm.targetW, 'ZIEL'], [vm.sessionTss, 'TSS'], [vm.ftpPct, 'DER FTP']].map(([v, l]) => (
+                {(selIsToday
+                  ? [[vm.targetW, 'ZIEL'], [vm.sessionTss, 'TSS'], [vm.ftpPct, 'DER FTP']]
+                  : [[sel?.targetW ?? DASH, 'ZIEL'], [sel?.tss ?? DASH, 'TSS'], [sel?.ftpPct ?? DASH, 'DER FTP']]
+                ).map(([v, l]) => (
                   <div key={l} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                     <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.6, color: v === '—' ? T.quiet : T.ink }}>{v}</span>
                     <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{l}</span>
@@ -643,11 +711,21 @@ export default function W3PlanView({
                 ))}
               </div>
             ) : (
-              <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>Erholung ist heute eingeplant — 0 TSS. Der Coach füllt Trainingstage eine Woche im Voraus und passt jeden Morgen an.</span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
+                {selIsToday
+                  ? 'Erholung ist heute eingeplant — 0 TSS. Der Coach füllt Trainingstage eine Woche im Voraus und passt jeden Morgen an.'
+                  : `${sel?.weekday ?? 'Dieser Tag'} ist als Ruhetag geplant — 0 TSS.`}
+              </span>
             )}
-            {vm.sessionBars.length > 0 && <SessionBeam bars={vm.sessionBars} ftpTag={vm.ftpTag} />}
+            {(selIsToday ? vm.sessionBars : (sel?.bars ?? [])).length > 0 && (
+              <SessionBeam bars={selIsToday ? vm.sessionBars : (sel?.bars ?? [])} ftpTag={vm.ftpTag} />
+            )}
 
-            {/* adapt row */}
+            {/* ADAPT IS TODAY-ONLY. `/workouts/today/modify` persists today's
+                session by definition, so offering it under Thursday's card
+                would have been three buttons that quietly changed a different
+                day. */}
+            {selIsToday && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>NICHT NACH DEM GEFÜHL?</span>
@@ -656,26 +734,38 @@ export default function W3PlanView({
               <div style={{ display: 'flex', gap: 8 }}>
                 <AdaptBtn label="Leichter" sub={vm.easierTss} icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'easier'} onClick={() => doAdapt('easier')} />
                 <AdaptBtn label="Härter" sub={vm.harderTss} icon={<ChevronUp size={13} color={T.mid} />} busy={adaptBusy === 'harder'} onClick={() => doAdapt('harder')} />
-                <AdaptBtn label="Tauschen" sub="3 Optionen" icon={<Repeat size={13} color={T.mid} />} busy={false} onClick={() => setSwapOpen((v) => !v)} active={swapOpen} />
+                <AdaptBtn label="Tauschen" sub="2 Optionen" icon={<Repeat size={13} color={T.mid} />} busy={false} onClick={() => setSwapOpen((v) => !v)} active={swapOpen} />
               </div>
               {swapOpen && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <AdaptBtn label="Kürzer" sub="45 min" icon={<Minus size={13} color={T.mid} />} busy={adaptBusy === 'shorter'} onClick={() => doAdapt('shorter')} />
                   <AdaptBtn label="Indoor" sub="Rolle" icon={<Repeat size={13} color={T.mid} />} busy={adaptBusy === 'indoor'} onClick={() => doAdapt('indoor')} />
-                  <AdaptBtn label="Ruhetag" sub="frei" icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'rest'} onClick={() => doAdapt('rest')} />
                 </div>
               )}
               {adaptMsg && <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{adaptMsg}</span>}
             </div>
+            )}
 
+            {/* THE EARN NOTE AND THE CTA ARE TODAY'S, like the adapt row.
+                Both describe the session `/e/w3-session` will open, which is
+                always today's — printed under Saturday's card they attach
+                today's reward and today's link to a different day, and under a
+                Ruhetag the earn line reads "Diese Einheit bringt…" about no
+                session at all. */}
+            {selIsToday && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <Zap size={13} color={T.acid} />
               <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{vm.earnNote}</span>
             </div>
-            {vm.sessionTitle && (
+            )}
+            {selIsToday && vm.sessionTitle && (
               <button onClick={onStartRide}
                 style={{ height: 54, borderRadius: 100, background: T.acid, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
-                <span style={{ fontSize: 16, fontWeight: 600, color: T.bg }}>Fahrt starten</span>
+                {/* "EINHEIT ANSEHEN", not "Fahrt starten". This goes to the
+                    read-only session page, whose own primary action is
+                    "Zum Head-Unit exportieren" — the app records nothing, so
+                    the old label promised a capability that does not exist. */}
+                <span style={{ fontSize: 16, fontWeight: 600, color: T.bg }}>Einheit ansehen</span>
                 <div style={{ width: 38, height: 38, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
               </button>
             )}
@@ -762,33 +852,8 @@ function AdaptBtn({ label, sub, icon, busy, onClick, active }: { label: string; 
  * room look like it was rebuilding itself on every tab, which is exactly the
  * impression the shared shell was built to remove.
  */
-export function W3PlanDock({ vm }: { vm: W3PlanVm }) {
-  const items: { key: string; value: string; unit?: string; label: string }[] = [
-    {
-      key: 'days',
-      value: vm.daysToStart == null ? DASH : String(vm.daysToStart),
-      unit: vm.daysToStart == null ? undefined : 'Tage',
-      label: 'BIS ZUM START',
-    },
-    { key: 'week', value: String(vm.planWeekNum), unit: `/ ${vm.totalWeeks}`, label: 'PLANWOCHE' },
-    { key: 'block', value: vm.block?.phase ?? DASH, label: 'BLOCK' },
-  ]
-  return (
-    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 10, padding: '0 4px' }}>
-      {items.map((it) => (
-        <div key={it.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end', minWidth: 0 }}>
-            <span style={{
-              fontSize: 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1,
-              color: it.value === DASH ? T.quiet : T.ink,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              ...TNUM,
-            }}>{it.value}</span>
-            {it.unit && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet, paddingBottom: 2, whiteSpace: 'nowrap' }}>{it.unit}</span>}
-          </div>
-          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet, whiteSpace: 'nowrap' }}>{it.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+// W3PlanDock MOVED to its own file (`W3PlanDock.tsx`) and rebuilt in the
+// Today/Fahrten dock idiom: one big number (the countdown) plus a meter that
+// IS the periodisation. The flat three-stat row that used to live here made
+// the plan the only bottom tab whose first surface spoke a different
+// language from the other two.
