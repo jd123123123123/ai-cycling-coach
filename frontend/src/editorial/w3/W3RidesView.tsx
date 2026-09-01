@@ -8,6 +8,7 @@ import W3TabBar from './W3TabBar'
 import W3RidesDock from './W3RidesDock'
 import { useHeroPanel } from './W3HeroShell'
 import { useDockOpenness } from './useDockOpenness'
+import { useActivityRhythm } from '../../hooks/useActivityRhythm'
 import W3TopBar from './W3TopBar'
 import './w3.css'
 
@@ -234,6 +235,9 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
   const nav = useNavigate()
   const [filter, setFilter] = useState<W3RideFilter>('all')
   const openness = useDockOpenness()
+  // The three windows the dock zooms between. Undefined until it lands, and
+  // the dock keeps its season behaviour until then rather than blanking.
+  const { data: rhythm } = useActivityRhythm()
 
   const shown = useMemo(() => vm.rides.filter((r) => {
     if (filter === 'outdoor') return !r.indoor
@@ -260,6 +264,7 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
       paceLabel: vm.paceLabel,
       paceAhead: vm.paceAhead,
       bars: vm.bars,
+      rhythm,
       barMonths: vm.barMonths,
       barsAccentFrom: vm.barsAccentFrom,
       stats: [

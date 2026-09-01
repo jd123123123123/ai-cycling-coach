@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -187,6 +187,70 @@ def _add_months(d: date, n: int) -> date:
     return date(total // 12, total % 12 + 1, 1)
 
 
+# ── The one bucketing rule, shared by every rhythm on every screen ──────────
+#
+# EVERY BUCKET IN A WINDOW IS PRESENT EVEN WHEN EMPTY. This was written out
+# three times (months, weeks, days) and is now written once: the bucket starts
+# are generated first and the rides are poured into them, so an empty period
+# cannot be dropped by construction rather than by remembering to keep it. A
+# chart that omits its empty buckets draws a season the rider did not have.
+
+
+def month_bucket_starts(last: date, count: int) -> list[date]:
+    """`count` month starts, oldest first, the last one being `last`'s month."""
+    end = _month_start(last)
+    return [_add_months(end, -(count - 1 - i)) for i in range(count)]
+
+
+def week_bucket_starts(last: date, count: int) -> list[date]:
+    """`count` Mondays, oldest first, the last one being `last`'s Monday."""
+    end = _week_start(last)
+    return [end - timedelta(weeks=count - 1 - i) for i in range(count)]
+
+
+def day_bucket_starts(last: date, count: int) -> list[date]:
+    """`count` days, oldest first, ending on `last`."""
+    return [last - timedelta(days=count - 1 - i) for i in range(count)]
+
+
+#: Public names for the two bucket keys, so a module that shares this bucketing
+#: (see `ride_rhythm`) does not have to reach for an underscore.
+month_start = _month_start
+week_start = _week_start
+
+
+def tally_by_bucket(
+    rides: Sequence[RideRow],
+    starts: Sequence[date],
+    bucket_of: Callable[[date], date],
+) -> dict[date, dict[str, float]]:
+    """Sum `rides` into the given bucket `starts`, oldest first.
+
+    Seeded from `starts`, so every bucket exists before a single ride is read
+    and a period with no riding comes back as a real zero rather than a hole.
+    Rides that fall outside the seeded window are ignored; a ride with no
+    `started_at` is not a ride that happened on any day and is skipped.
+
+    Null-safe on purpose: a ride whose device never recorded distance, moving
+    time or ascent contributes 0 to that sum and 1 to `rides`. It happened.
+    """
+    out: dict[date, dict[str, float]] = {
+        s: {"rides": 0.0, "metres": 0.0, "seconds": 0.0, "elevation_m": 0.0}
+        for s in starts
+    }
+    for r in rides:
+        if r.started_at is None:
+            continue
+        acc = out.get(bucket_of(r.started_at.date()))
+        if acc is None:
+            continue
+        acc["rides"] += 1
+        acc["metres"] += float(r.distance_m or 0)
+        acc["seconds"] += float(r.duration_s or 0)
+        acc["elevation_m"] += float(r.elevation_m or 0)
+    return out
+
+
 def monthly_rhythm(
     rides: Sequence[RideRow], now: datetime, months: int = 12
 ) -> list[dict[str, Any]]:
@@ -202,32 +266,14 @@ def monthly_rhythm(
     about the rider's year and a chart that silently omits it draws a
     continuous season they did not have.
     """
-    this_month = _month_start(now.date())
-    first_month = _add_months(this_month, -(months - 1))
-
-    buckets: dict[date, dict[str, float]] = {}
-    for r in rides:
-        if r.started_at is None:
-            continue
-        mo = _month_start(r.started_at.date())
-        if mo < first_month or mo > this_month:
-            continue
-        b = buckets.setdefault(mo, {"rides": 0, "metres": 0.0, "seconds": 0.0})
-        b["rides"] += 1
-        b["metres"] += float(r.distance_m or 0)
-        b["seconds"] += float(r.duration_s or 0)
-
-    out: list[dict[str, Any]] = []
-    for i in range(months):
-        mo = _add_months(first_month, i)
-        b = buckets.get(mo)
-        out.append({
-            "start": mo.isoformat(),
-            "rides": int(b["rides"]) if b else 0,
-            "km": round(b["metres"] / 1000, 1) if b else 0.0,
-            "minutes": round(b["seconds"] / 60) if b else 0,
-        })
-    return out
+    starts = month_bucket_starts(now.date(), months)
+    buckets = tally_by_bucket(rides, starts, _month_start)
+    return [{
+        "start": mo.isoformat(),
+        "rides": int(buckets[mo]["rides"]),
+        "km": round(buckets[mo]["metres"] / 1000, 1),
+        "minutes": round(buckets[mo]["seconds"] / 60),
+    } for mo in starts]
 
 
 def daily_rhythm(
@@ -240,32 +286,14 @@ def daily_rhythm(
     that drew only the days with rides would compress a fortnight of two rides
     into the same picture as a fortnight of twelve.
     """
-    today = now.date()
-    first = today - timedelta(days=days - 1)
-
-    buckets: dict[date, dict[str, float]] = {}
-    for r in rides:
-        if r.started_at is None:
-            continue
-        d = r.started_at.date()
-        if d < first or d > today:
-            continue
-        b = buckets.setdefault(d, {"rides": 0, "metres": 0.0, "seconds": 0.0})
-        b["rides"] += 1
-        b["metres"] += float(r.distance_m or 0)
-        b["seconds"] += float(r.duration_s or 0)
-
-    out: list[dict[str, Any]] = []
-    for i in range(days):
-        d = first + timedelta(days=i)
-        b = buckets.get(d)
-        out.append({
-            "start": d.isoformat(),
-            "rides": int(b["rides"]) if b else 0,
-            "km": round(b["metres"] / 1000, 1) if b else 0.0,
-            "minutes": round(b["seconds"] / 60) if b else 0,
-        })
-    return out
+    starts = day_bucket_starts(now.date(), days)
+    buckets = tally_by_bucket(rides, starts, lambda d: d)
+    return [{
+        "start": d.isoformat(),
+        "rides": int(buckets[d]["rides"]),
+        "km": round(buckets[d]["metres"] / 1000, 1),
+        "minutes": round(buckets[d]["seconds"] / 60),
+    } for d in starts]
 
 
 def season_compare(rides: Sequence[RideRow], now: datetime) -> dict[str, Any] | None:
@@ -337,32 +365,18 @@ def weekly_consistency(
     number printed beside it, and a streak the grid cannot show is a number the
     rider cannot check.
     """
-    this_week = _week_start(now.date())
-    first_week = this_week - timedelta(weeks=weeks - 1)
-
-    buckets: dict[date, dict[str, float]] = {}
-    for r in rides:
-        started = r.started_at
-        d = started.date() if started is not None else None
-        if d is None:
-            continue
-        wk = _week_start(d)
-        if wk < first_week or wk > this_week:
-            continue
-        b = buckets.setdefault(wk, {"rides": 0, "seconds": 0.0})
-        b["rides"] += 1
-        b["seconds"] += float(r.duration_s or 0)
+    starts = week_bucket_starts(now.date(), weeks)
+    buckets = tally_by_bucket(rides, starts, _week_start)
 
     out: list[dict[str, Any]] = []
     streak = best_streak = 0
-    for i in range(weeks):
-        wk = first_week + timedelta(weeks=i)
-        b = buckets.get(wk)
-        n = int(b["rides"]) if b else 0
+    for wk in starts:
+        b = buckets[wk]
+        n = int(b["rides"])
         out.append({
             "start": wk.isoformat(),
             "rides": n,
-            "minutes": round(b["seconds"] / 60) if b else 0,
+            "minutes": round(b["seconds"] / 60),
         })
         streak = streak + 1 if n else 0
         best_streak = max(best_streak, streak)

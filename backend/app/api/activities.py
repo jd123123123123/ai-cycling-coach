@@ -7,7 +7,7 @@ hypertable to filter rows by the authenticated user.
 import asyncio
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -21,7 +21,8 @@ from app.models.ride_feedback import RideFeedback
 from app.models.user import User
 from app.schemas.activity import ActivityCreate, ActivityListResponse, ActivityRead
 from app.schemas.ride_feedback import RideFeedbackIn, RideFeedbackRead
-from app.services import activity_service, route_match
+from app.schemas.ride_rhythm import RideRhythm
+from app.services import activity_service, ride_rhythm, route_match
 from app.services.activity_stream_analysis import (
     ROUTE_DETAIL_POINTS,
     ROUTE_DETAIL_TOLERANCE_M,
@@ -160,6 +161,38 @@ async def list_activities(
         out.append(item)
 
     return ActivityListResponse(activities=out, count=len(out))
+
+
+@router.get(
+    "/rhythm",
+    response_model=RideRhythm,
+    summary="Season / month / week totals and bars for the Fahrten dock",
+)
+async def get_rhythm(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> RideRhythm:
+    """The three grains behind the Fahrten grain switch.
+
+    Each of `season` / `month` / `week` carries its OWN totals (km, rides,
+    hours, ascent) and its OWN bar series, so whichever grain the rider selects
+    the dock reads as one period rather than a headline from one window over a
+    chart from another. A grain's totals are the sum of its own buckets.
+
+    - **season** — the current calendar year to date, in its twelve months
+    - **month** — the last 30 days, in the ISO weeks (Monday) they fall in
+    - **week** — the last 7 days, day by day
+
+    Every bucket in a window is present even when empty: a chart that dropped
+    its rest days and quiet weeks would draw a season the rider did not have.
+    Cycling only, RLS-scoped to the caller.
+
+    DECLARED BEFORE `/{activity_id}` on purpose — routes match in order, and
+    below it "rhythm" would be read as an activity id and 422.
+    """
+    return RideRhythm.model_validate(
+        await ride_rhythm.rhythm_for_user(db, current_user.id, datetime.now(timezone.utc))
+    )
 
 
 @router.get(

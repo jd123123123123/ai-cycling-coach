@@ -3,6 +3,8 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Gauge, Timer, TrendingUp, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
+import W3GrainSwitch, { type W3Grain } from './W3GrainSwitch'
+import type { ActivityRhythm, RhythmGrain } from '../../api/rhythm'
 
 /**
  * W3 · Fahrten — THE DOCK.
@@ -35,6 +37,23 @@ const ARCHIVO = 'Archivo, "Inter Tight", sans-serif'
 /** The pen's meter: 22 steps. Shared with `W3TodayDock` on purpose. */
 const SEGMENTS = 22
 
+/**
+ * ── THE DOCK ZOOMS NOW ────────────────────────────────────────────────────
+ *
+ * It answered one question at one grain: how far this season. A rider who
+ * wanted to know what the last week looked like had to read it off twelve
+ * monthly bars, which is not reading, it is arithmetic.
+ *
+ * SAISON / MONAT / WOCHE re-values everything below it — the headline, the
+ * meter, the bars and the three tiles all belong to the selected window. Same
+ * control and same gesture as Erfolge (`W3GrainSwitch`), because two screens
+ * letting a rider zoom the same data must not do it two different ways.
+ *
+ * THE BUCKET COUNT IS NOT FIXED. A season is twelve months, a week is seven
+ * days, and a month is the ISO weeks covering the last thirty — five most
+ * days, six on a Monday, when the window opens mid-week. Anything here that
+ * counted bars would drop one; the chart renders whatever arrives.
+ */
 export interface W3RidesDockVm {
   /** Season distance, already localised ("4.812"). Null → an em dash. */
   totalKm: string | null
@@ -54,6 +73,10 @@ export interface W3RidesDockVm {
   stats: [W3RideStat, W3RideStat, W3RideStat]
   /** How far open the panel is, 0 → 1, driven by the page's own scroll. */
   expand?: number
+  /** The three windows. Null while it loads — the dock then keeps its season
+   *  behaviour rather than blanking, because a panel that empties on a slow
+   *  read is worse than one that is briefly only a season. */
+  rhythm?: ActivityRhythm | null
 }
 
 export interface W3RideStat {
@@ -62,16 +85,56 @@ export interface W3RideStat {
   unit: string
 }
 
+/** How a bucket names itself, per grain: a month, the week it opens, a day. */
+function bucketLabel(iso: string, grain: W3Grain): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  if (grain === 'season') return d.toLocaleDateString('de-DE', { month: 'short' }).toUpperCase()
+  if (grain === 'month') return `AB ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}`
+  return d.toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit' }).toUpperCase()
+}
+
+/** The axis tick under a bar — one or two characters, never a date. */
+function tickLabel(iso: string, grain: W3Grain): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  if (grain === 'season') return d.toLocaleDateString('de-DE', { month: 'narrow' })
+  if (grain === 'month') return `${d.getDate()}.`
+  return d.toLocaleDateString('de-DE', { weekday: 'narrow' })
+}
+
+const nf0 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 })
+const nf1 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 })
+
+const GRAINS: { key: W3Grain; label: string }[] = [
+  { key: 'season', label: 'SAISON' },
+  { key: 'month', label: 'MONAT' },
+  { key: 'week', label: 'WOCHE' },
+]
+
 const STAT_ICON: Record<string, LucideIcon> = {
   'Ø TEMPO': Gauge,
   'Ø LEISTUNG': Zap,
   'SATTELZEIT': Timer,
+  FAHRTEN: Gauge,
+  STUNDEN: Timer,
+  'HÖHENMETER': TrendingUp,
 }
 
 export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
   const open = Math.max(0, Math.min(1, vm.expand ?? 0))
   const reduce = useReducedMotion()
+  const [grain, setGrain] = useState<W3Grain>('season')
   const [month, setMonth] = useState<number | null>(null)
+
+  // The switch only appears once there is something to switch to. Offering
+  // three tabs while the read is in flight would give two of them nothing.
+  const rhythm = vm.rhythm ?? null
+  const win: RhythmGrain | null = rhythm ? rhythm[grain] : null
+
+  // Changing grain drops the selection: bar 3 is a different period in each,
+  // and carrying the index across would silently re-point the headline.
+  const choose = (g: W3Grain) => { setGrain(g); setMonth(null) }
 
   // MEASURED, NOT GUESSED. The open height was a hardcoded number and the
   // content outgrew it, so the bottom row of the panel was quietly cut in half.
@@ -89,8 +152,32 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
     return () => ro.disconnect()
   }, [])
 
-  const filled = Math.round(Math.max(0, Math.min(1, vm.progress)) * SEGMENTS)
-  const picked = month != null ? vm.barMonths[month] : null
+  // ── what the bars are, at this grain ──────────────────────────────────
+  // Heights are computed here against the window's own peak rather than taken
+  // from `vm.bars`, which is a season-normalised series and would draw a
+  // week's seven days against a year's biggest month.
+  const buckets = win?.buckets ?? []
+  const peak = Math.max(...buckets.map((b) => b.km), 1)
+  const bars = win
+    ? buckets.map((b) => b.km / peak)
+    : vm.bars
+  const picked = win
+    ? (month != null && buckets[month]
+        ? { km: buckets[month].km, label: bucketLabel(buckets[month].start, grain), year: 0 }
+        : null)
+    : (month != null ? vm.barMonths[month] : null)
+
+  // ── what the meter means ──────────────────────────────────────────────
+  // For the season it stays the goal, which is what this dock has always
+  // promised and what the chip beside it names. A month and a week have no
+  // goal, so there the meter answers the question they can answer: how much
+  // of this window did you actually ride. Each is labelled, because a meter
+  // that silently changes meaning is worse than two meters.
+  const ridden = buckets.filter((b) => b.rides > 0).length
+  const share = grain === 'season'
+    ? Math.max(0, Math.min(1, vm.progress))
+    : buckets.length ? ridden / buckets.length : 0
+  const filled = Math.round(share * SEGMENTS)
 
   return (
     <div style={{
@@ -100,6 +187,21 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
       padding: `${12 + open * 4}px 16px ${12 + open * 4}px`,
       display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT,
     }}>
+
+      {/* ── which window ──────────────────────────────────────────────────
+          Above the number, because it says what the number IS. Only once the
+          three windows have arrived: a switch whose other two tabs resolve to
+          nothing is worse than no switch. */}
+      {rhythm && (
+        <W3GrainSwitch
+          value={grain}
+          options={GRAINS}
+          onChange={choose}
+          layoutId="w3-rides-grain"
+          track={T.heroOff}
+          off={T.heroMid}
+        />
+      )}
 
       {/* ── the number, and what it is a number of ── */}
       {/* A TAPPED MONTH TAKES THE HEADLINE. The big figure is whatever the
@@ -112,15 +214,26 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
           lineHeight: 0.85, color: vm.totalKm || picked ? T.ink : T.heroOff,
           fontVariantNumeric: 'tabular-nums',
         }}>
-          {picked ? Math.round(picked.km).toLocaleString('de-DE') : vm.totalKm ?? DASH}
+          {picked
+            ? nf0.format(Math.round(picked.km))
+            : win ? nf0.format(Math.round(win.km)) : vm.totalKm ?? DASH}
         </span>
         <span style={{ fontSize: 15, fontWeight: 700, color: T.heroMid, paddingBottom: 2 }}>{vm.totalUnit}</span>
         <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
+          {/* The chip NAMES THE METER, always. It is the season's goal on the
+              season and the ridden share elsewhere, and an unlabelled meter
+              that changes meaning would be the worst of both. */}
           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>
-            {picked ? `${picked.label.toUpperCase()} ${picked.year}` : vm.goalChip}
+            {picked
+              ? picked.label
+              : win && grain !== 'season' ? win.label.toUpperCase() : vm.goalChip}
           </span>
           <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.4, color: T.acid }}>
-            {picked ? 'MONAT' : vm.ofGoalPct}
+            {picked
+              ? `${nf0.format(picked.km)} km`
+              : grain === 'season'
+                ? vm.ofGoalPct
+                : `${ridden}/${buckets.length}`}
           </span>
         </div>
       </div>
@@ -149,27 +262,40 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
         marginTop: open * 2, pointerEvents: open > 0.6 ? 'auto' : 'none',
       }}>
 
-        {/* THE SEASON'S SHAPE. Twelve months, each one tappable — the numbers
-            are real, so the chart is allowed to be asked about them. */}
+        {/* THE WINDOW'S SHAPE — twelve months, five or six weeks, or seven
+            days, whichever the switch is on. Each bar tappable, because the
+            numbers are real and a chart holding real numbers should answer
+            when it is asked. */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>
-              12 MONATE
+              {win
+                ? grain === 'season' ? '12 MONATE' : grain === 'month' ? `${buckets.length} WOCHEN` : '7 TAGE'
+                : '12 MONATE'}
             </span>
             <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: picked ? T.acid : T.heroMid }}>
-              {picked ? `${Math.round(picked.km).toLocaleString('de-DE')} km` : 'tippen für den Monat'}
+              {picked
+                ? `${nf0.format(Math.round(picked.km))} km`
+                : grain === 'week' ? 'tippen für den Tag' : grain === 'month' ? 'tippen für die Woche' : 'tippen für den Monat'}
             </span>
           </div>
           <div style={{ display: 'flex', gap: 4, height: 54, alignItems: 'flex-end' }}
             onPointerLeave={() => setMonth(null)}>
-            {vm.bars.map((b, i) => {
+            {bars.map((b, i) => {
               const on = month === i
-              const recent = i >= vm.barsAccentFrom
+              // On a live window the last bar is the one still being written;
+              // on the season series the accent starts where it always did.
+              const recent = win ? i === bars.length - 1 : i >= vm.barsAccentFrom
+              const empty = win ? (buckets[i]?.km ?? 0) <= 0 : false
+              const label = win
+                ? `${bucketLabel(buckets[i].start, grain)}: ${nf0.format(Math.round(buckets[i].km))} Kilometer`
+                : `${vm.barMonths[i]?.label ?? ''}: ${Math.round(vm.barMonths[i]?.km ?? 0)} Kilometer`
               return (
-                <button key={i}
+                <button key={win ? buckets[i].start : i}
                   onPointerEnter={() => setMonth(i)}
                   onClick={() => setMonth(month === i ? null : i)}
-                  aria-label={`${vm.barMonths[i]?.label ?? ''}: ${Math.round(vm.barMonths[i]?.km ?? 0)} Kilometer`}
+                  aria-label={label}
+                  aria-pressed={on}
                   style={{
                     flex: 1, minWidth: 0, height: '100%', padding: 0, border: 0, background: 'transparent',
                     display: 'flex', alignItems: 'flex-end', cursor: 'pointer',
@@ -179,21 +305,52 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
                     transition={{ duration: 0.45, delay: reduce ? 0 : i * 0.025, ease: [0.22, 1, 0.36, 1] }}
                     style={{
                       display: 'block', width: '100%', transformOrigin: 'bottom',
+                      // An empty bucket is a visible stub in the track's own
+                      // tone — a rest day is a fact, not an absence of one.
                       height: `${Math.max(9, Math.round(b * 100))}%`, borderRadius: 3,
-                      background: on ? T.ink : recent ? T.acid : T.heroOff,
-                      boxShadow: on || recent ? `0 0 12px ${T.acid}33` : 'none',
+                      background: on ? T.ink : empty ? T.heroOff : recent ? T.acid : T.heroOff,
+                      boxShadow: on || (recent && !empty) ? `0 0 12px ${T.acid}33` : 'none',
                     }} />
                 </button>
               )
             })}
           </div>
+          {/* An axis only where the buckets are not self-evident. Twelve
+              months read from their own accent; five weeks and seven days do
+              not, and an unlabelled bar a rider cannot place is a decoration. */}
+          {win && grain !== 'season' && (
+            <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+              {buckets.map((b, i) => (
+                <span key={b.start} style={{
+                  flex: 1, minWidth: 0, textAlign: 'center', fontSize: 8, fontWeight: 700,
+                  color: month === i ? T.ink : T.heroMid,
+                }}>{tickLabel(b.start, grain)}</span>
+              ))}
+            </div>
+          )}
         </div>
 
-        {/* THE THREE AVERAGES, given weight. They were three grey captions in a
-            row; each one is its own lit tile now, with the icon that says which
-            question it answers before the number is read. */}
+        {/* THE THREE TILES BELONG TO THE SELECTED WINDOW.
+            They used to be season averages regardless of what the panel was
+            showing, which is the defect the switch would otherwise have
+            created: a rider taps WOCHE, the headline becomes seven days, and
+            three tiles underneath keep quoting the year.
+
+            They are counts and totals rather than the old Ø Tempo / Ø
+            Leistung, because those are averages this payload does not carry
+            per window — and a season average sitting under a week's headline
+            is exactly the lie being fixed. Sattelzeit survives as STUNDEN. */}
         <div style={{ display: 'flex', gap: 8, width: '100%' }}>
-          {vm.stats.map((s) => {
+          {(win ? [
+            // Units stay SHORT. Rendered as "{label} · {unit}" in a third of
+            // 390px, "FAHRTEN · gesamt" truncated to "FAHRTEN · ges…" — a
+            // label that ellipsises is a label that failed.
+            { label: 'FAHRTEN', value: nf0.format(win.rides), unit: '' },
+            { label: 'STUNDEN', value: nf1.format(win.hours), unit: 'h' },
+            // No unit: "HÖHENMETER · hm" still ellipsised at a third of
+            // 390px, and the word already IS the unit.
+            { label: 'HÖHENMETER', value: nf0.format(win.elevation_m), unit: '' },
+          ] : vm.stats).map((s) => {
             const Icon = STAT_ICON[s.label] ?? Gauge
             return (
               <div key={s.label} style={{
@@ -213,13 +370,18 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
                 }}>{s.value ?? DASH}</span>
                 <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1, color: T.heroMid,
                   minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.label} · {s.unit}
+                  {s.unit ? `${s.label} · ${s.unit}` : s.label}
                 </span>
               </div>
             )
           })}
         </div>
 
+        {/* THE GOAL FOOTER IS THE SEASON'S. "noch 7.188 km" and "312 km vor
+            Plan" are statements about the year; under a week's headline they
+            are the same lie the tiles were telling before the switch made it
+            visible. A month and a week are not behind or ahead of anything. */}
+        {grain === 'season' && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.heroMid, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.toGoLabel}</span>
           <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: vm.paceAhead ? T.acid : T.warn }}>
@@ -227,6 +389,7 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
             {vm.paceLabel}
           </span>
         </div>
+        )}
       </div>
     </div>
   )

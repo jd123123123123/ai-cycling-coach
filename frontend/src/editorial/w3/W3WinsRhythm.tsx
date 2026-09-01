@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { T, FONT, EASE } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
+import W3GrainSwitch, { type W3Grain as Grain } from './W3GrainSwitch'
 
 /**
  * W3 · ERFOLGE — DEIN RHYTHMUS. Three grains of one fact: when this rider
@@ -79,8 +80,6 @@ export interface W3RhythmVm {
   longestStreak: number
 }
 
-type Grain = 'season' | 'month' | 'week'
-
 // ── formatting ──────────────────────────────────────────────────────────────
 
 const nf = new Intl.NumberFormat('de-DE')
@@ -102,56 +101,6 @@ function hours(minutes: number): string {
 
 function Cap({ children }: { children: React.ReactNode }) {
   return <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>{children}</span>
-}
-
-/**
- * The grain switch.
- *
- * A real segmented control, not three links: the selected grain carries the
- * card's whole readout, so the control has to look like it holds state. The
- * lit pill slides between the three with a layout animation, which is the one
- * piece of motion on this card that is not data.
- */
-function GrainSwitch({ value, options, onChange }: {
-  value: Grain
-  options: { key: Grain; label: string }[]
-  onChange: (g: Grain) => void
-}) {
-  const reduce = useReducedMotion()
-  return (
-    <div role="tablist" style={{
-      display: 'flex', width: '100%', gap: 3, padding: 3,
-      background: T.d1, borderRadius: 100,
-    }}>
-      {options.map((o) => {
-        const on = o.key === value
-        return (
-          <button
-            key={o.key}
-            role="tab"
-            aria-selected={on}
-            onClick={() => onChange(o.key)}
-            style={{
-              position: 'relative', flex: 1, height: 30, border: 0, background: 'transparent',
-              cursor: 'pointer', fontFamily: FONT, padding: 0,
-            }}
-          >
-            {on && (
-              <motion.div
-                layoutId="w3-rhythm-grain"
-                transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
-                style={{ position: 'absolute', inset: 0, borderRadius: 100, background: T.acid }}
-              />
-            )}
-            <span style={{
-              position: 'relative', fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1,
-              color: on ? T.bg : T.mid,
-            }}>{o.label}</span>
-          </button>
-        )
-      })}
-    </div>
-  )
 }
 
 /**
@@ -507,7 +456,7 @@ export default function W3WinsRhythm({ vm }: { vm: W3RhythmVm }) {
 
   return (
     <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 16 }}>
-      <GrainSwitch value={grain} options={options} onChange={choose} />
+      <W3GrainSwitch value={grain} options={options} onChange={choose} layoutId="w3-rhythm-grain" />
       <Readout {...readout} />
       <div style={hairline(0)} />
       {grain === 'season' && vm.season && <SeasonGrain s={vm.season} />}
