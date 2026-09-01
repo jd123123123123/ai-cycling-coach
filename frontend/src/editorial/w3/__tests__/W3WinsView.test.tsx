@@ -18,8 +18,27 @@ afterEach(cleanup)
 const BLANK: W3WinsVm = {
   micro: 'ERFOLGE',
   ledger: [],
-  ftp: null, milestones: null, consistency: null, beams: null, medals: null, biggestDay: null,
+  ftp: null, milestones: null, rhythm: null, beams: null, medals: null, biggestDay: null,
   empty: null,
+}
+
+/** The rhythm chapter in the shape the server really sends it. */
+const RHYTHM = {
+  eyebrow: 'DEIN RHYTHMUS',
+  statement: 'In 46 von 52 Wochen bist du gefahren.',
+  rhythm: {
+    season: null,
+    months: Array.from({ length: 12 }, (_, i) => ({
+      start: `2026-${String(i + 1).padStart(2, '0')}-01`,
+      rides: 10, km: 300 + i * 10, minutes: 900,
+    })),
+    weeks: Array.from({ length: 52 }, (_, i) => ({
+      start: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+      rides: i % 4 === 0 ? 0 : 2,
+      minutes: i % 4 === 0 ? 0 : 210,
+    })),
+    ridden: 46, of: 52, longestStreak: 19,
+  },
 }
 
 describe('a chapter with no data does not render', () => {
@@ -43,13 +62,7 @@ describe('a chapter with no data does not render', () => {
   it('renders the chapters it does have without the ones it does not', () => {
     render(<W3WinsContent vm={{
       ...BLANK,
-      consistency: {
-        eyebrow: 'KONSTANZ · LETZTE 52 WOCHEN',
-        statement: 'In 46 von 52 Wochen bist du gefahren.',
-        riddenLabel: 'IM SATTEL', ridden: '46', ofLabel: 'von 52 Wochen',
-        streakLabel: 'LÄNGSTE SERIE', streak: '19 Wochen',
-        weeks: Array.from({ length: 52 }, (_, i) => (i % 4 === 0 ? 0 : 2)),
-      },
+      rhythm: RHYTHM,
     }} />)
     expect(screen.getByText('In 46 von 52 Wochen bist du gefahren.')).toBeTruthy()
     expect(screen.queryByText('DEIN GRÖSSTER TAG')).toBeNull()

@@ -175,6 +175,110 @@ def _week_start(d: date) -> date:
     return d - timedelta(days=d.weekday())
 
 
+def _month_start(d: date) -> date:
+    """The first of `d`'s month."""
+    return d.replace(day=1)
+
+
+def _add_months(d: date, n: int) -> date:
+    """`d` shifted by `n` months, clamped to the 1st — only ever used on
+    month starts, so there is no end-of-month arithmetic to get wrong."""
+    total = (d.year * 12 + d.month - 1) + n
+    return date(total // 12, total % 12 + 1, 1)
+
+
+def monthly_rhythm(
+    rides: Sequence[RideRow], now: datetime, months: int = 12
+) -> list[dict[str, Any]]:
+    """The last `months` calendar months, oldest first.
+
+    THE GRAIN ABOVE THE WEEK. The consistency grid answers "did you show up";
+    a month answers "how much", which is a different question and needs a
+    different unit — so this carries km and minutes rather than a lit/unlit
+    flag. Both are kept: distance is what a rider says out loud, time is what
+    actually trains them, and which one the screen draws is the screen's call.
+
+    Every month in the window is present even when empty. A gap is a fact
+    about the rider's year and a chart that silently omits it draws a
+    continuous season they did not have.
+    """
+    this_month = _month_start(now.date())
+    first_month = _add_months(this_month, -(months - 1))
+
+    buckets: dict[date, dict[str, float]] = {}
+    for r in rides:
+        if r.started_at is None:
+            continue
+        mo = _month_start(r.started_at.date())
+        if mo < first_month or mo > this_month:
+            continue
+        b = buckets.setdefault(mo, {"rides": 0, "metres": 0.0, "seconds": 0.0})
+        b["rides"] += 1
+        b["metres"] += float(r.distance_m or 0)
+        b["seconds"] += float(r.duration_s or 0)
+
+    out: list[dict[str, Any]] = []
+    for i in range(months):
+        mo = _add_months(first_month, i)
+        b = buckets.get(mo)
+        out.append({
+            "start": mo.isoformat(),
+            "rides": int(b["rides"]) if b else 0,
+            "km": round(b["metres"] / 1000, 1) if b else 0.0,
+            "minutes": round(b["seconds"] / 60) if b else 0,
+        })
+    return out
+
+
+def season_compare(rides: Sequence[RideRow], now: datetime) -> dict[str, Any] | None:
+    """This year so far against the same stretch of last year.
+
+    A SEASON IS ONLY A NUMBER IF THERE IS SOMETHING TO COMPARE IT TO, and the
+    comparison has to be fair: this is year-to-date against last year TO THE
+    SAME DAY, never against last year's full twelve months. A rider looking at
+    this in March would otherwise be told they had collapsed.
+
+    Returns None when the prior window holds no rides. A first-season rider
+    has nothing to compare against, and inventing a 0 to divide by would print
+    a made-up percentage over a year they were not riding — house rule 9, a
+    section that cannot be true is not rendered rather than polished.
+    """
+    today = now.date()
+    this_start = date(today.year, 1, 1)
+    prev_start = date(today.year - 1, 1, 1)
+    # The same day-of-year last year. Feb 29 has no counterpart in a common
+    # year, so step back a day rather than raising.
+    try:
+        prev_end = today.replace(year=today.year - 1)
+    except ValueError:
+        prev_end = today.replace(year=today.year - 1, day=today.day - 1)
+
+    def _tally(lo: date, hi: date) -> dict[str, Any]:
+        n = 0
+        metres = seconds = 0.0
+        for r in rides:
+            if r.started_at is None:
+                continue
+            d = r.started_at.date()
+            if lo <= d <= hi:
+                n += 1
+                metres += float(r.distance_m or 0)
+                seconds += float(r.duration_s or 0)
+        return {"rides": n, "km": round(metres / 1000, 1), "minutes": round(seconds / 60)}
+
+    prev = _tally(prev_start, prev_end)
+    if prev["rides"] == 0:
+        return None
+    cur = _tally(this_start, today)
+    return {
+        "year": today.year,
+        "prev_year": today.year - 1,
+        "through": today.isoformat(),
+        "current": cur,
+        "previous": prev,
+    }
+
+
 def weekly_consistency(
     rides: Sequence[RideRow], now: datetime, weeks: int = 52
 ) -> dict[str, Any]:
@@ -660,5 +764,12 @@ async def get_achievements(db: AsyncSession, user_id: int, lang: str = "en") -> 
         # same rides the totals above are made of rather than a second source
         # that can disagree with them.
         "consistency": weekly_consistency(rides, now),
+        # THREE GRAINS OF ONE FACT — when this rider actually rides. All three
+        # come off the same `rides` scan as the totals above, so the year on
+        # the season card and the lifetime km in the dock cannot disagree.
+        "rhythm": {
+            "months": monthly_rhythm(rides, now),
+            "season": season_compare(rides, now),
+        },
         "biggest_day": biggest_day(rides),
     }

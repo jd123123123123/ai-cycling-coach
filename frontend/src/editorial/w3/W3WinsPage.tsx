@@ -166,20 +166,35 @@ export default function W3WinsPage() {
         }
       : null
 
-    // ── 03 · the consistency grid ─────────────────────────────────────────
-    // A week's tile brightens in three steps by how much was ridden, but it is
-    // LIT by having been ridden at all — that is the chapter's claim.
+    // ── 01 · the rhythm ───────────────────────────────────────────────────
+    // Season, month and week off ONE payload block, all three computed from
+    // the same ride scan as the lifetime totals in the dock — so the year on
+    // this card and the km under the bike cannot disagree.
+    //
+    // The chapter needs the 52 weeks to exist; the month and season grains
+    // come with them or not at all. `season` is null for a rider with no
+    // prior year, and the switch then simply does not offer that tab.
     const con = ach?.consistency ?? null
-    const consistency = con && con.weeks.length
+    const rh = ach?.rhythm ?? null
+    const rhythm = con && con.weeks.length
       ? {
-          eyebrow: 'KONSTANZ · LETZTE 52 WOCHEN',
+          eyebrow: 'DEIN RHYTHMUS',
           statement: `In ${con.ridden} von ${con.of} Wochen bist du gefahren.`,
-          riddenLabel: 'IM SATTEL',
-          ridden: String(con.ridden),
-          ofLabel: `von ${con.of} Wochen`,
-          streakLabel: 'LÄNGSTE SERIE',
-          streak: con.longest_streak === 1 ? '1 Woche' : `${con.longest_streak} Wochen`,
-          weeks: con.weeks.map((w) => (w.rides <= 0 ? 0 : w.rides === 1 ? 1 : w.rides === 2 ? 2 : 3)),
+          rhythm: {
+            season: rh?.season
+              ? {
+                  year: rh.season.year,
+                  prevYear: rh.season.prev_year,
+                  current: rh.season.current,
+                  previous: rh.season.previous,
+                }
+              : null,
+            months: rh?.months ?? [],
+            weeks: con.weeks,
+            ridden: con.ridden,
+            of: con.of,
+            longestStreak: con.longest_streak,
+          },
         }
       : null
 
@@ -272,14 +287,14 @@ export default function W3WinsPage() {
         }
       : null
 
-    const nothing = !ftpChapter && !milestones && !consistency && !beams && !medals && !biggestDay
+    const nothing = !ftpChapter && !milestones && !rhythm && !beams && !medals && !biggestDay
 
     return {
       micro: 'ERFOLGE',
       ledger,
       ftp: ftpChapter,
       milestones,
-      consistency,
+      rhythm,
       beams,
       medals,
       biggestDay,

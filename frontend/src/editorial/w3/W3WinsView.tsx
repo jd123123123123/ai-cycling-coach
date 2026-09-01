@@ -4,6 +4,7 @@ import { Lock, Share2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { T, FONT, DASH, Reveal, band } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
+import W3WinsRhythm, { type W3RhythmVm } from './W3WinsRhythm'
 import './w3.css'
 
 /**
@@ -76,16 +77,12 @@ export interface W3MilestoneChapter {
   rows: W3Milestone[]
 }
 
-export interface W3ConsistencyChapter {
+/** Season, month and week are one chapter with a switch, not three chapters —
+ *  see `W3WinsRhythm` for why. The 52-week grid lives inside it. */
+export interface W3RhythmChapter {
   eyebrow: string
   statement: string
-  riddenLabel: string
-  ridden: string
-  ofLabel: string
-  streakLabel: string
-  streak: string
-  /** 0 = not ridden, then 1..3 by how much was ridden that week. */
-  weeks: number[]
+  rhythm: W3RhythmVm
 }
 
 export interface W3Beam {
@@ -142,7 +139,7 @@ export interface W3WinsVm {
   ledger: W3WinsLedgerItem[]
   ftp: W3FtpChapter | null
   milestones: W3MilestoneChapter | null
-  consistency: W3ConsistencyChapter | null
+  rhythm: W3RhythmChapter | null
   beams: W3BeamChapter | null
   medals: W3MedalChapter | null
   biggestDay: W3BiggestDayChapter | null
@@ -152,11 +149,31 @@ export interface W3WinsVm {
 
 // ── the parts ───────────────────────────────────────────────────────────────
 
-/** The acid eyebrow every chapter opens on, with an optional counter opposite. */
-function Eyebrow({ text, counter }: { text: string; counter?: string }) {
+/**
+ * ── THE PAGE HAS TIERS NOW, AND THEY ARE MADE BY RESTRAINT ────────────────
+ *
+ * Six chapters used to open identically: an acid eyebrow and a 19px/700
+ * statement, every one. Nineteen acid references and nineteen 700-weights on
+ * one screen, which is this app's documented recurring design bug — the page
+ * was loud rather than wrong, and a reader scanning it found no argument
+ * because every chapter insisted equally.
+ *
+ * The fix is NOT a louder hero. Tier 1 keeps exactly what all six used to
+ * have; tiers 2 and 3 give some of it back. The accent now marks the two
+ * chapters that carry the page — the rider's rhythm and their biggest day —
+ * and the supporting chapters are set in ink and the lists in mid. Contrast
+ * comes from the quiet ones being quiet.
+ */
+type Tier = 1 | 2 | 3
+
+const EYEBROW_TONE: Record<Tier, string> = { 1: T.acid, 2: T.mid, 3: T.quiet }
+const STATEMENT_SIZE: Record<Tier, number> = { 1: 22, 2: 19, 3: 15.5 }
+const STATEMENT_TONE: Record<Tier, string> = { 1: T.ink, 2: T.ink, 3: T.mid }
+
+function Eyebrow({ text, counter, tier = 2 }: { text: string; counter?: string; tier?: Tier }) {
   return (
     <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.acid }}>{text}</span>
+      <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: EYEBROW_TONE[tier] }}>{text}</span>
       {counter && (
         <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet, ...TNUM }}>{counter}</span>
       )}
@@ -165,9 +182,14 @@ function Eyebrow({ text, counter }: { text: string; counter?: string }) {
 }
 
 /** The chapter's one sentence. It says what the number is; it does not sell. */
-function Statement({ children }: { children: ReactNode }) {
+function Statement({ children, tier = 2 }: { children: ReactNode; tier?: Tier }) {
   return (
-    <span style={{ fontSize: 19, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.2, color: T.ink, textWrap: 'balance' }}>
+    <span style={{
+      fontSize: STATEMENT_SIZE[tier],
+      fontWeight: tier === 3 ? 600 : 700,
+      letterSpacing: tier === 3 ? -0.2 : -0.6,
+      lineHeight: 1.2, color: STATEMENT_TONE[tier], textWrap: 'balance',
+    }}>
       {children}
     </span>
   )
@@ -280,28 +302,10 @@ function MilestoneRow({ m }: { m: W3Milestone }) {
   )
 }
 
-// ── 03 · the consistency grid ───────────────────────────────────────────────
-
-/** 13 tiles a row, four rows — a year that fits the width without scrolling. */
-const GRID_COLS = 13
-
-function WeekGrid({ weeks }: { weeks: number[] }) {
-  const tone = (n: number) =>
-    n <= 0 ? T.d1 : n === 1 ? `${T.acid}38` : n === 2 ? `${T.acid}70` : T.acid
-  const rows: number[][] = []
-  for (let i = 0; i < weeks.length; i += GRID_COLS) rows.push(weeks.slice(i, i + GRID_COLS))
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 5 }}>
-      {rows.map((row, r) => (
-        <div key={r} style={{ display: 'flex', width: '100%', gap: 5 }}>
-          {row.map((n, i) => (
-            <div key={i} style={{ flex: 1, height: 20, borderRadius: 5, background: tone(n) }} />
-          ))}
-        </div>
-      ))}
-    </div>
-  )
-}
+// ── 03 · the rhythm ────────────────────────────────────────────────────────
+// Season, month and week now live in `W3WinsRhythm` as one switchable card.
+// The 52-week grid went with them: it is the WEEK grain of that instrument,
+// and leaving a copy here would have been two places to keep in step.
 
 // ── 04 · the power curve ────────────────────────────────────────────────────
 
@@ -447,49 +451,25 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
   }
   return (
     <>
+      {/* ── TIER 1 · the rhythm opens the page ────────────────────────────
+          It used to be chapter 03, behind the threshold. But "do you actually
+          ride" is the question every other chapter on this screen depends on:
+          a threshold, a power curve and a cabinet of badges are all downstream
+          of showing up. It is the page's first argument, so it goes first. */}
+      {vm.rhythm && (
+        <Chapter>
+          <Eyebrow text={vm.rhythm.eyebrow} tier={1} />
+          <Statement tier={1}>{vm.rhythm.statement}</Statement>
+          <W3WinsRhythm vm={vm.rhythm.rhythm} />
+        </Chapter>
+      )}
+
+      {/* ── TIER 2 · what the riding produced ─────────────────────────────── */}
       {vm.ftp && (
         <Chapter>
           <Eyebrow text={vm.ftp.eyebrow} />
           <Statement>{vm.ftp.statement}</Statement>
           <FtpCard c={vm.ftp} />
-        </Chapter>
-      )}
-
-      {vm.milestones && (
-        <Chapter>
-          <Eyebrow text={vm.milestones.eyebrow} />
-          <Statement>{vm.milestones.statement}</Statement>
-          <div style={{ ...lux(24), padding: '6px 18px 8px' }}>
-            {vm.milestones.rows.map((m, i) => (
-              <div key={m.key} style={{ width: '100%' }}>
-                {i > 0 && <div style={hairline(0)} />}
-                <MilestoneRow m={m} />
-              </div>
-            ))}
-          </div>
-        </Chapter>
-      )}
-
-      {vm.consistency && (
-        <Chapter>
-          <Eyebrow text={vm.consistency.eyebrow} />
-          <Statement>{vm.consistency.statement}</Statement>
-          <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 16 }}>
-            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                <Cap>{vm.consistency.riddenLabel}</Cap>
-                <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end' }}>
-                  <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: T.acid, ...TNUM }}>{vm.consistency.ridden}</span>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, paddingBottom: 2 }}>{vm.consistency.ofLabel}</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-end' }}>
-                <Cap>{vm.consistency.streakLabel}</Cap>
-                <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink, ...TNUM }}>{vm.consistency.streak}</span>
-              </div>
-            </div>
-            <WeekGrid weeks={vm.consistency.weeks} />
-          </div>
         </Chapter>
       )}
 
@@ -509,10 +489,29 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
         </Chapter>
       )}
 
+      {/* ── TIER 3 · the lists ─────────────────────────────────────────────
+          Both of these are inventories rather than arguments — a rider scans
+          them, they do not read them. They keep their instruments and give
+          back the accent and the type size. */}
+      {vm.milestones && (
+        <Chapter>
+          <Eyebrow text={vm.milestones.eyebrow} tier={3} />
+          <Statement tier={3}>{vm.milestones.statement}</Statement>
+          <div style={{ ...lux(24), padding: '6px 18px 8px' }}>
+            {vm.milestones.rows.map((m, i) => (
+              <div key={m.key} style={{ width: '100%' }}>
+                {i > 0 && <div style={hairline(0)} />}
+                <MilestoneRow m={m} />
+              </div>
+            ))}
+          </div>
+        </Chapter>
+      )}
+
       {vm.medals && (
         <Chapter>
-          <Eyebrow text={vm.medals.eyebrow} counter={vm.medals.counter} />
-          <Statement>{vm.medals.statement}</Statement>
+          <Eyebrow text={vm.medals.eyebrow} counter={vm.medals.counter} tier={3} />
+          <Statement tier={3}>{vm.medals.statement}</Statement>
           <div style={{ ...lux(24), padding: '24px 18px 22px', gap: 26 }}>
             <div style={{ display: 'flex', width: '100%', flexWrap: 'wrap', rowGap: 26, justifyContent: 'space-between' }}>
               {vm.medals.medals.map((m) => <Medal key={m.key} m={m} />)}
@@ -521,10 +520,11 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
         </Chapter>
       )}
 
+      {/* ── TIER 1 · the single best thing the rider has done ─────────────── */}
       {vm.biggestDay && (
         <Chapter pad={40}>
-          <Eyebrow text={vm.biggestDay.eyebrow} />
-          <Statement>{vm.biggestDay.statement}</Statement>
+          <Eyebrow text={vm.biggestDay.eyebrow} tier={1} />
+          <Statement tier={1}>{vm.biggestDay.statement}</Statement>
           <BiggestDayCard c={vm.biggestDay} />
         </Chapter>
       )}

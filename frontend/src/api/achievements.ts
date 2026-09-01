@@ -44,6 +44,32 @@ export interface Consistency {
   longest_streak: number
 }
 
+/** One month of the rhythm card, oldest first. Every month in the window is
+ *  present even when empty — a gap is a fact about the rider's year, and a
+ *  chart that omits it draws a continuous season they did not have. */
+export interface RhythmMonth {
+  start: string              // ISO date of the 1st
+  rides: number
+  km: number
+  minutes: number
+}
+
+/** This year so far against the same stretch of last year — never against last
+ *  year's FULL twelve months, which would tell a rider in March they had
+ *  collapsed. Null when the prior window holds no rides at all. */
+export interface SeasonCompare {
+  year: number
+  prev_year: number
+  through: string
+  current: { rides: number; km: number; minutes: number }
+  previous: { rides: number; km: number; minutes: number }
+}
+
+export interface Rhythm {
+  months: RhythmMonth[]
+  season: SeasonCompare | null
+}
+
 /** The rider's longest single ride, by distance. */
 export interface BiggestDay {
   activity_id: number
@@ -69,6 +95,7 @@ export interface AchievementsPayload {
     ascent_m: number | null
   }
   consistency: Consistency
+  rhythm: Rhythm
   biggest_day: BiggestDay | null
 }
 
