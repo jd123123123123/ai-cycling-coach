@@ -69,6 +69,12 @@ export interface W3GoalSetterVm {
 export interface W3GoalSetterActions {
   onCancel: () => void
   onSave: (draft: GoalDraft) => Promise<boolean>
+  /** ONBOARDING ONLY. Mid-signup a rider may genuinely not have a race yet, and
+   *  a required goal question there would either trap them or collect a
+   *  fabricated date. Absent everywhere else: a rider who opened this screen
+   *  deliberately came to answer it. */
+  onSkip?: () => void
+  skipLabel?: string
 }
 
 const KINDS: { kind: GoalKind; icon: typeof Flag; label: string; sub: string }[] = [
@@ -161,7 +167,7 @@ function Stepper({ value, unit, step, min, max, onChange, note }: {
   )
 }
 
-export default function W3GoalSetter({ vm, onCancel, onSave }: {
+export default function W3GoalSetter({ vm, onCancel, onSave, onSkip, skipLabel }: {
   vm: W3GoalSetterVm
 } & W3GoalSetterActions) {
   const reduce = useReducedMotion()
@@ -268,6 +274,12 @@ export default function W3GoalSetter({ vm, onCancel, onSave }: {
             <span style={{ ...TNUM, flex: 'none', fontSize: 11, fontWeight: 600, color: T.quiet }}>
               {Math.min(step + 1, steps.length)}/{steps.length}
             </span>
+          )}
+          {onSkip && !known && (
+            <button type="button" onClick={onSkip}
+              style={{ flex: 'none', minHeight: 44, padding: '0 4px', background: 'transparent', border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 11, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>
+              {skipLabel ?? 'SPÄTER'}
+            </button>
           )}
         </div>
 

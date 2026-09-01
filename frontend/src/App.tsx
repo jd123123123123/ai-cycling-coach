@@ -118,6 +118,7 @@ const W3CrewMemberPage = lazyWithRetry(() => import('./editorial/w3/W3CrewMember
 const W3CrewMemberPreview = lazyWithRetry(() => import('./editorial/w3/W3CrewMemberPreview'))
 const W3OnboardPlanPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardPlanPage'))
 const W3OnboardPlanPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardPlanPreview'))
+const W3OnboardGoalPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalPage'))
 const W3OnboardGoalsPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPage'))
 const W3OnboardGoalsPreview = lazyWithRetry(() => import('./editorial/w3/W3OnboardGoalsPreview'))
 const W3OnboardRiderPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPage'))
@@ -560,6 +561,9 @@ function AppRoutes() {
           {/* Onboarding: training-plan + yearly-goals + rider studio */}
           <Route path="/e/w3-onboard-plan" element={<ProtectedRoute><W3OnboardPlanPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-plan-preview" element={<W3OnboardPlanPreview />} />
+          {/* THE EVENT ASK — the fact the whole periodisation engine plans
+              backwards from, and the one thing onboarding never collected. */}
+          <Route path="/e/w3-onboard-goal" element={<ProtectedRoute><W3OnboardGoalPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-goals" element={<ProtectedRoute><W3OnboardGoalsPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-goals-preview" element={<W3OnboardGoalsPreview />} />
           <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />

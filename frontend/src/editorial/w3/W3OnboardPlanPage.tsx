@@ -63,7 +63,9 @@ export default function W3OnboardPlanPage() {
       file: mode === 'own' && file ? { name: file.name, type: file.type, size: file.size } : null,
       savedAt: new Date().toISOString(),
     })
-    navigate('/e/w3-onboard-goals')
+    // ASK WHAT FOR, right after asking whether to build a plan — the plan is
+    // periodised backwards from the event, so the event is the next question.
+    navigate('/e/w3-onboard-goal')
   }
 
   return (

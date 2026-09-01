@@ -25,7 +25,13 @@ describe('the sign-up journey has no missing link', () => {
     ['W3OnboardDevicesPage.tsx', '/e/w3-onboard-numbers', 'devices → numbers'],
     ['W3OnboardNumbersPage.tsx', '/e/w3-onboard-rider', 'numbers → rider'],
     ['W3OnboardRiderPage.tsx', '/e/w3-onboard-plan', 'rider → plan'],
-    ['W3OnboardPlanPage.tsx', '/e/w3-onboard-goals', 'plan → goals'],
+    // The plan step asks WHETHER to build a plan; the goal step asks WHAT FOR.
+    // That question used to be missing entirely — onboarding collected an
+    // annual distance target with no backend column and never once asked for
+    // the rider's event, which is the single fact the periodisation engine
+    // plans backwards from.
+    ['W3OnboardPlanPage.tsx', '/e/w3-onboard-goal', 'plan → goal (the event ask)'],
+    ['W3OnboardGoalPage.tsx', '/e/w3-onboard-goals', 'goal → goals (the year)'],
     ['W3OnboardGoalsPage.tsx', '/e/w3-onboard-rewards', 'goals → rewards'],
     ['W3OnboardRewardsPage.tsx', '/e/w3-bike-studio', 'rewards → the rider photographs their own bike'],
   ]
@@ -47,6 +53,25 @@ describe('the sign-up journey has no missing link', () => {
 
   it('is the ONLY place the device grant is fired, so that screen must be reachable', () => {
     expect(w3('W3ConnectCelebratePage.tsx')).toContain("grant.mutate('device')")
+  })
+
+  /**
+   * The event ask is SKIPPABLE and must stay so. Mid-signup a rider may simply
+   * not have a race yet, and a required question there would collect a
+   * fabricated date — which is worse than none, because the plan would then
+   * periodise towards a day that means nothing.
+   */
+  it('lets a rider without a race yet past the event question', () => {
+    const page = w3('W3OnboardGoalPage.tsx')
+    expect(page, 'no way past the goal step').toContain('onSkip')
+    expect(page, 'skipping must still advance the chain').toContain("navigate(NEXT)")
+  })
+
+  /** And it must actually persist, or it is a question asked for nothing. */
+  it('writes the event where the engine reads it', () => {
+    const page = w3('W3OnboardGoalPage.tsx')
+    expect(page).toContain('target_event_date')
+    expect(page).toContain('applyPlanChange')
   })
 
   /**
