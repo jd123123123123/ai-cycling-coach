@@ -139,6 +139,13 @@ CHARACTER_STYLE = (
     "gone, the groom is carrying the realism single-handed.\n\n"
 
     # ── THE OTHER CHANNEL ──────────────────────────────────────────────────
+    # THE BAR REPLACES THE BROW, it does not sit above one. It used to do both:
+    # the prompt said in as many words that the rider's own eyebrows "stay, real
+    # and lit, above those bars — they are not replaced by them", so every face
+    # came back wearing two brows, and the bar and the eye almost touching read
+    # as one fused object rather than two decals. One mark per eye, with a
+    # stated gap, because "separate" was asserted and never dimensioned.
+    #
     # These are drawn INTO the render today. They are on their way out — the
     # app is moving to compositing them as separate artwork, which is the only
     # way they can be swapped, bought, and made to land in the same place twice.
@@ -149,8 +156,12 @@ CHARACTER_STYLE = (
     "no cornea, no reflection. Each is a hard-edged flat white shape with a straight top edge and "
     "a rounded bottom, holding one solid dark shape biting into its upper edge toward the nose and "
     "nothing else. Above each sits a separate thick flat bar with rounded ends, angled down toward "
-    "the nose. The rider's OWN eyebrows stay, real and lit, above those bars — they are not "
-    "replaced by them. The mouth stays real geometry, closed and level.\n"
+    "the nose, and THAT BAR IS THE EYEBROW: it stands in place of the rider's own brow, which is "
+    "not drawn at all. No real eyebrow hair above it, beside it or through it — one mark per eye, "
+    "never a painted brow and a bar together.\n"
+    "THE BAR AND THE EYE DO NOT TOUCH. A clear band of bare lit skin separates them, about the "
+    "height of the bar itself, so they read as two separate decals rather than one fused shape. "
+    "The mouth stays real geometry, closed and level.\n"
     "THE COLLISION IS THE POINT: a photographic head wearing cartoon eyes. The sharper the contrast "
     "between the real skin and the flat marks, the better it works.\n\n"
 
@@ -176,7 +187,11 @@ CHARACTER_STYLE = (
     "in particular are theirs and must never be normalised toward a house look:\n"
     "· THE EYEBROWS above all — their thickness, their angle, whether they are straight or arched, "
     "how far apart they sit and how low they ride above the eye. This is the strongest single "
-    "identity signal on a face; a standard-issue brow is a standard-issue stranger.\n"
+    "identity signal on a face; a standard-issue brow is a standard-issue stranger. THOSE "
+    "MEASUREMENTS BELONG TO THE FLAT BAR, WHICH IS THE ONLY BROW IN THE PICTURE: give the bar "
+    "this rider's thickness, angle, spacing and height above the eye. Do not also draw a real "
+    "eyebrow — carrying the identity in the bar is what this section is asking for, not a second "
+    "brow underneath it.\n"
     "· THE EYE REGION — how far apart the eyes are relative to the width of the face, how large "
     "they are, their tilt, how hooded or open.\n"
     "· THE CONFIGURAL GEOMETRY — where the eye line sits on the head, the distance from eyes to "
@@ -186,8 +201,16 @@ CHARACTER_STYLE = (
     "skin tone.\n"
     "· Then the nose and mouth width, the jaw and hairline shape, and the hair's cut and curl.\n"
     "Render the curl pattern at full strength when the description asks for it — distinct, "
-    "separated clusters with real height off the scalp — and the facial hair literally at the "
-    "density described. Where this person departs from an average face, LEAN INTO the departure "
+    "separated clusters with real height off the scalp.\n"
+    "THE FACIAL HAIR IS COPIED FROM THE PHOTOGRAPH, NOT FROM THE WORDS. Density in prose is a "
+    "lossy channel for a beard: take the SHAPE from the reference image — where the beard line "
+    "sits on each cheek and how straight or ragged it is, whether the moustache meets the chin "
+    "hair or is separated from it, how far it runs under the jaw and down the neck, where it is "
+    "thin enough to show skin through, and how the grey is distributed through it. Match that "
+    "outline the way you would match a haircut, then render it at the density the photograph "
+    "shows. Where the description and the photograph disagree about the beard, THE PHOTOGRAPH "
+    "WINS.\n"
+    "Where this person departs from an average face, LEAN INTO the departure "
     "rather than softening it: the exaggeration is what makes them recognisable.\n\n"
 
     "THE BODY is an athletic adult build under the kit — shoulders with real deltoids, a neck that "
