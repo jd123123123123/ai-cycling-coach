@@ -178,7 +178,10 @@ export default function W3GoalPage() {
     <W3GoalView
       vm={vm}
       onBack={() => navigate(-1)}
-      onSwitch={() => navigate('/e/w3-plan')}
+      // A REAL DESTINATION AT LAST. This used to dump the rider on the plan
+      // page with no sheet open, while this file's own docblock claimed it
+      // "opens the plan's real goal switcher". `W3GoalSetter` is that switcher.
+      onSwitch={() => navigate('/e/w3-goal-set')}
       onRemove={onRemove}
       onSave={onSave}
       onRehearseRoute={() => rehearse('target_event')}

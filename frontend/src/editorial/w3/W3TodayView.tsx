@@ -451,13 +451,18 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
         {/* ── Navigation, not week content: the season goal + the whole plan ── */}
         {/* Navigation, not week content — but only when there is a plan to
             navigate INTO. Without one the slot asks for the goal instead of
-            linking to an empty one. */}
+            linking to an empty one.
+
+            THE KEY TRAVELS NOW, in the no-plan branch. `W3PickGoalCard` has
+            always passed which of the three the rider tapped, and this call
+            site threw it away and sent all three to the same dossier — a card
+            offering three choices with one outcome. */}
         {vm.hasPlan
           ? (
             <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
               onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
           )
-          : <W3PickGoalCard onPick={() => navigate('/e/w3-goal')} />}
+          : <W3PickGoalCard onPick={(key) => navigate(`/e/w3-goal-set?intent=${key}`)} />}
 
 
         {/* ── The lower half arrives as you reach it ─────────────────────────

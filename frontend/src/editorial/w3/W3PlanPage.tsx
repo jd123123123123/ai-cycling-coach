@@ -399,7 +399,7 @@ export default function W3PlanPage() {
         phases: vm.phases,
         blockName: vm.block?.phase ?? null,
       }}
-      onOpen={() => navigate('/e/w3-goal')} />
+      onOpen={() => navigate('/e/w3-goal-set')} />
   ))
 
   // "YOU HAVE NO PLAN" IS A CLAIM, and it needs the read to have landed.
@@ -429,7 +429,7 @@ export default function W3PlanPage() {
         vm={emptyVm}
         chromeless={inShell}
         onBack={() => navigate(-1)}
-        onStart={(key) => navigate(`/e/w3-goal?intent=${key}`)}
+        onStart={(key) => navigate(`/e/w3-goal-set?intent=${key}`)}
         onBuilder={() => navigate('/workouts/builder')}
         onImport={() => navigate('/plan/import')}
       />
