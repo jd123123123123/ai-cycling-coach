@@ -139,7 +139,12 @@ CHARACTER_STYLE = (
     "gone, the groom is carrying the realism single-handed.\n\n"
 
     # ── THE OTHER CHANNEL ──────────────────────────────────────────────────
-    # THE BAR REPLACES THE BROW, it does not sit above one. It used to do both:
+    # THE MARKS LEFT THE PROMPT. They are composited now — `face_marks` registers
+    # them off one vision call and paints them with the reference's own shading,
+    # so they land in the same place every time instead of three times in four.
+    # What follows is the record of why prompting them could not be made to work.
+    #
+    # THE BAR REPLACED THE BROW, it did not sit above one. It used to do both:
     # the prompt said in as many words that the rider's own eyebrows "stay, real
     # and lit, above those bars — they are not replaced by them", so every face
     # came back wearing two brows, and the bar and the eye almost touching read
@@ -151,19 +156,15 @@ CHARACTER_STYLE = (
     # way they can be swapped, bought, and made to land in the same place twice.
     # Until that lands they are described here, and the description is written
     # to be deleted.
-    "AND THEN THE EYES ARE FLAT GRAPHIC SHAPES LAID ON TOP OF THAT FACE, like vinyl decals stuck "
-    "onto a photograph, carrying NO geometry at all: no eyelid, no eye socket, no sclera shading, "
-    "no cornea, no reflection. Each is a hard-edged flat white shape with a straight top edge and "
-    "a rounded bottom, holding one solid dark shape biting into its upper edge toward the nose and "
-    "nothing else. Above each sits a separate thick flat bar with rounded ends, angled down toward "
-    "the nose, and THAT BAR IS THE EYEBROW: it stands in place of the rider's own brow, which is "
-    "not drawn at all. No real eyebrow hair above it, beside it or through it — one mark per eye, "
-    "never a painted brow and a bar together.\n"
-    "THE BAR AND THE EYE DO NOT TOUCH. A clear band of bare lit skin separates them, about the "
-    "height of the bar itself, so they read as two separate decals rather than one fused shape. "
-    "The mouth stays real geometry, closed and level.\n"
-    "THE COLLISION IS THE POINT: a photographic head wearing cartoon eyes. The sharper the contrast "
-    "between the real skin and the flat marks, the better it works.\n\n"
+    "THE FACE CARRIES NO MARKS AND NO EYEBROW HAIR. Everything else is the full digital double "
+    "described above — real pores-free skin with its own hue spread, real groom, real anatomy, the "
+    "eyes this rider actually has. Only the brow ridge is bare: the hair is simply absent there, "
+    "the skin over it rendered at exactly the same fidelity as the forehead around it. This is a "
+    "GROOM omission, not a simplification — do not smooth, flatten, round or cartoon the head to "
+    "achieve it, and do not paint flat shapes or decals anywhere on the face. The eye and brow "
+    "marks are composited on afterwards (`services/face_marks`); an eyebrow painted here is not "
+    "covered by the one that lands on top, and the face ends up wearing both.\n"
+    "The mouth stays real geometry, closed and level.\n\n"
 
     # ── THE PERSON, AND WHY THIS PARAGRAPH USED TO BE THE BUG ──────────────
     # This file used to say, in capitals, that the head proportions were ALWAYS
@@ -1201,12 +1202,38 @@ async def render_isolated(
             img = await _generate_with_refs(
                 prompt, refs, seed, person=person, model=RIDER_IMAGE_MODEL,
             )
+            img = await _mark(img, kind)
             return img, prompt, "ok" if img else "image_model_unavailable"
 
     if not _gemini_ready():
         return None, prompt, "image_model_unavailable"
     img = await _generate(prompt, seed)
+    img = await _mark(img, kind)
     return img, prompt, "ok" if img else "image_model_unavailable"
+
+
+
+async def _mark(img: str | None, kind: str) -> str | None:
+    """Composite the flat eye and brow marks onto a finished rider render.
+
+    THE MARKS ARE NO LONGER PROMPTED. The image model drew them about three
+    times in four — sometimes a real eyebrow AND the bar, sometimes the bar
+    touching the eye so the two fused, sometimes the angle drifting. They are
+    artwork now: `face_marks` registers them off one vision call and paints
+    them with the reference's own shading, so they land identically every time.
+
+    A bike gets nothing, obviously. A failed lookup returns the render
+    untouched rather than guessing where a face is — a mark in the wrong place
+    is the one defect a rider cannot read as anything but broken.
+    """
+    if not img or kind != "rider":
+        return img
+    from app.services import face_marks
+
+    out, marked = await face_marks.apply_marks(img)
+    if not marked:
+        log.info("face_marks: no confident face, shipping the render unmarked")
+    return out
 
 
 async def render_from_photo(photo_b64: str, kind: str) -> dict[str, Any]:
