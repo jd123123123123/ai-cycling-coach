@@ -100,15 +100,21 @@ class GarageAsset(Base):
     #: `AssetOut` in `api/garage.py`, and the test that pins its absence.
 
     __tablename__ = "garage_assets"
-    __table_args__ = (
-        UniqueConstraint("user_id", "kind", name="uq_garage_asset_user_kind"),
-    )
+    #: Uniqueness is (user_id, kind, bike_id) NULLS NOT DISTINCT now, so a rider
+    #: keeps exactly one portrait (bike_id NULL) while owning a bike asset per
+    #: bicycle. The index lives in the migration — see `bikes.py`.
+    __table_args__ = ()
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
     )
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    #: Set on 'bike' assets, NULL on the rider portrait — a face is not about a
+    #: bicycle, and giving it one would make two portraits look like two bikes'.
+    bike_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("bikes.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
     name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -36,6 +36,14 @@ class Activity(Base):
     )
 
     # Sport classification
+    #: WHICH BICYCLE RODE IT. Nullable and deliberately NOT backfilled: every
+    #: ride before this column existed was ridden on some bike, but the database
+    #: was never told which, so NULL means "not recorded" rather than a guess.
+    #: Consumers read NULL as the rider's default bike, which preserves the
+    #: pre-migration behaviour exactly while letting new rides carry the truth.
+    bike_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("bikes.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
     sport: Mapped[str] = mapped_column(
         String(30), nullable=False
     )  # "cycling" | "running" | "gym"

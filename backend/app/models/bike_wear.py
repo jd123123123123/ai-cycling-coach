@@ -46,13 +46,21 @@ class BikeComponent(Base):
     """
 
     __tablename__ = "bike_components"
-    __table_args__ = (
-        UniqueConstraint("user_id", "component_id", name="uq_bike_component_user_kind"),
-    )
+    #: Uniqueness is per rider PER BIKE now. The index lives in the migration
+    #: because it needs NULLS NOT DISTINCT — Postgres treats NULLs as distinct
+    #: by default, which would let a bike_id-less row duplicate without limit,
+    #: and that is precisely the invariant this table exists to hold.
+    __table_args__ = ()
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    #: Which bicycle this component is fitted to. Nullable only so the column
+    #: could be added without a rewrite; every migrated row was pointed at the
+    #: rider's default bike, and new rows should always name one.
+    bike_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("bikes.id", ondelete="CASCADE"), nullable=True, index=True,
     )
     #: Matches a key of `services.bike_wear.COMPONENTS`.
     component_id: Mapped[str] = mapped_column(String(32), nullable=False)
@@ -130,6 +138,12 @@ class ComponentMeasurement(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
+    )
+    #: WHICH CHAIN THIS READING WAS TAKEN ON. `calibrate_life` fits a wear rate
+    #: from these pairs, so measurements from four different drivetrains fitted
+    #: as one is not a rounding error — it is the wrong curve.
+    bike_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("bikes.id", ondelete="CASCADE"), nullable=True, index=True,
     )
     #: Matches a key of `services.bike_wear.COMPONENTS`.
     component_id: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
