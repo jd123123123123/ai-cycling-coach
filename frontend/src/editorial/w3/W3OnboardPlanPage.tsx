@@ -65,7 +65,14 @@ export default function W3OnboardPlanPage() {
     })
     // ASK WHAT FOR, right after asking whether to build a plan — the plan is
     // periodised backwards from the event, so the event is the next question.
-    navigate('/e/w3-onboard-goal')
+    //
+    // UNLESS THEY JUST SAID THERE IS NO PLAN. `insights` is "Kein Plan — nur
+    // Analyse": no schedule, no targets, we read the rides they choose to do.
+    // Asking that rider for a target event and a weekly-hours budget is asking
+    // them to re-answer the question they were given the option of declining,
+    // and every field it collects feeds a periodisation engine they opted out
+    // of. The goal steps are plan steps; skip both and go on to the economy.
+    navigate(mode === 'insights' ? '/e/w3-onboard-rewards' : '/e/w3-onboard-goal')
   }
 
   return (

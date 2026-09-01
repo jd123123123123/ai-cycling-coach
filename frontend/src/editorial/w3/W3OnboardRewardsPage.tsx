@@ -22,6 +22,22 @@ export default function W3OnboardRewardsPage() {
     navigate('/e/w3-today', { replace: true })
   }
 
+  // THE LAST STEP MARKS THE INTRO SEEN — including the one that CONTINUES.
+  // Only `skip` used to, so the rider who did the whole flow properly was the
+  // one who got punished: rewards handed off to the bike studio, the studio
+  // sent them to /e/w3-today, and `W3Guard` read a localStorage flag nobody
+  // had set and bounced them to /e/w3-onboard-welcome. Finishing onboarding
+  // started it over, forever, while skipping it worked.
+  //
+  // Marking it here is honest rather than merely convenient: the flag means
+  // "this browser has been shown the intro", and by this point it has. The
+  // bike is a separate gate and stays a server-side one — `W3Guard` still
+  // requires real ownership, so the studio cannot be skipped by this flag.
+  const next = () => {
+    markW3OnboardingSeen()
+    navigate('/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-today'))
+  }
+
   const tiles: [W3RewardTile, W3RewardTile, W3RewardTile] = [
     { value: wallet ? wallet.balance.toLocaleString('de-DE') : '—', label: 'Dein Guthaben · RC' },
     { value: String(ONBOARDING_TOTAL_RC), label: 'Startbonus' },
@@ -31,7 +47,7 @@ export default function W3OnboardRewardsPage() {
   return (
     <W3OnboardRewardsView
       tiles={tiles}
-      onNext={() => navigate('/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-today'))}
+      onNext={next}
       onSkip={skip}
     />
   )

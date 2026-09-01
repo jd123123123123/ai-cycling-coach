@@ -90,3 +90,64 @@ describe('the sign-up journey has no missing link', () => {
     expect(page).toContain("raw.startsWith('/e/')")
   })
 })
+
+/**
+ * The three ways the journey ate its own tail.
+ *
+ * None of these was a broken screen either, and none was visible to a type
+ * checker: every page rendered, every route resolved, and the flow still sent
+ * the rider back to the start. They are asserted here as three separate
+ * regressions because they had three separate causes.
+ */
+describe('the journey ends in the app, not at its own beginning', () => {
+  /**
+   * FINISHING ONBOARDING RESTARTED IT. `W3Guard` gates the whole app on a
+   * localStorage flag, and only the rewards step's SKIP set it — never the
+   * button that continues. So the rider who did the flow properly went
+   * rewards → bike studio → /e/w3-today → guard → welcome, forever, while the
+   * rider who skipped got in. The last step must mark the intro seen on BOTH
+   * of its exits.
+   */
+  it('marks the intro seen on the way out, not only when skipped', () => {
+    const rewards = w3('W3OnboardRewardsPage.tsx')
+    const marks = rewards.match(/markW3OnboardingSeen\(\)/g) ?? []
+    expect(marks.length, 'only one exit sets the flag — the other loops').toBeGreaterThanOrEqual(2)
+    // The continue path specifically, not two calls inside the skip.
+    const next = rewards.slice(rewards.indexOf('const next ='))
+    expect(next, 'the continue path hands off without marking').toContain('markW3OnboardingSeen()')
+  })
+
+  /**
+   * The guard is the thing that turns a missing flag into a loop, so it must
+   * keep reading the flag the steps actually write.
+   */
+  it('the guard still gates on the flag the steps set', () => {
+    expect(w3('W3Guard.tsx')).toContain('hasSeenW3Onboarding()')
+    expect(w3('w3Onboarding.ts')).toContain('markW3OnboardingSeen')
+  })
+
+  /**
+   * "Kein Plan — nur Analyse" is an offer to decline planning. Routing that
+   * rider into the target-event and weekly-hours questions withdraws the offer
+   * one screen after making it, and every field it collects feeds an engine
+   * they just opted out of.
+   */
+  it('does not interrogate the rider who chose "Kein Plan"', () => {
+    const plan = w3('W3OnboardPlanPage.tsx')
+    expect(plan, 'insights is routed like a plan').toContain("mode === 'insights'")
+    const nav = plan.slice(plan.indexOf('navigate(mode ==='))
+    expect(nav).toContain('/e/w3-onboard-rewards')
+  })
+
+  /**
+   * The hours branch of the goal step writes `days_available`; this screen then
+   * asked for the same days and opened on a hardcoded week, so the rider
+   * answered twice and the second answer overwrote the first.
+   */
+  it('opens the year step on the days already collected', () => {
+    const goals = w3('W3OnboardGoalsPage.tsx')
+    expect(goals, 'nothing reads the profile back').toContain('useAthleteProfile')
+    expect(goals).toContain('fromDaysAvailable')
+    expect(goals, 'a late seed would clobber a live edit').toContain('touched')
+  })
+})

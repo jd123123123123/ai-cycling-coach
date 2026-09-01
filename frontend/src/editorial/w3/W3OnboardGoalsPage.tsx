@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { updateGoals, updateProfile } from '../../api/athletes'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import type { DaysAvailableFlags } from '../../types/athlete'
 import { markW3OnboardingSeen } from './w3Onboarding'
 import W3OnboardGoalsView, { WEEKDAYS, type W3YearGoals, type Weekday } from './W3OnboardGoalsView'
@@ -18,6 +19,15 @@ import W3OnboardGoalsView, { WEEKDAYS, type W3YearGoals, type Weekday } from './
  *       – days-per-week → goals.days_per_week via updateGoals.
  *     These are fire-and-once awaits wrapped in try/catch; a failure never traps
  *     the rider — navigation always proceeds.
+ *
+ * IT OPENS ON THE ANSWER THE RIDER ALREADY GAVE. The step before this one
+ * (`/e/w3-onboard-goal`, hours branch) asks which days they ride and writes
+ * them to `days_available` — and this screen used to open on a hardcoded
+ * tue/thu/sat/sun regardless, so the rider was asked the same question twice
+ * and the second answer silently overwrote the first. Seeding from the profile
+ * makes the two screens agree: the days arrive already ticked, and what is
+ * genuinely new here (the yearly distance, the long-ride day) is what is left
+ * to answer.
  */
 
 const STORAGE_KEY = 'w3_year_goals'
@@ -58,6 +68,11 @@ function saveLocal(goals: W3YearGoals): void {
   }
 }
 
+/** The days the previous step wrote, as this screen's own shape. */
+function fromDaysAvailable(flags: DaysAvailableFlags): Weekday[] {
+  return WEEKDAYS.map((d) => d.key).filter((k) => flags[k as keyof DaysAvailableFlags] === true)
+}
+
 function toDaysAvailable(goals: W3YearGoals): DaysAvailableFlags {
   const has = (d: Weekday) => goals.trainingDays.includes(d)
   return {
@@ -73,8 +88,36 @@ export default function W3OnboardGoalsPage() {
   const navigate = useNavigate()
   const [goals, setGoals] = useState<W3YearGoals>(loadGoals)
   const [saving, setSaving] = useState(false)
+  const { data: profile } = useAthleteProfile()
 
-  const patch = (p: Partial<W3YearGoals>) => setGoals((g) => ({ ...g, ...p }))
+  // ONCE, AND ONLY OVER UNTOUCHED DEFAULTS. The profile arrives after first
+  // paint, so the seed has to be an effect — but it must not fight the rider:
+  // it runs a single time, and only if they have not already edited the days
+  // on this screen. A late server response overwriting a live selection would
+  // trade one lost answer for another.
+  const seeded = useRef(false)
+  const touched = useRef(false)
+  useEffect(() => {
+    if (seeded.current || touched.current) return
+    const flags = profile?.days_available
+    if (!flags) return
+    const days = fromDaysAvailable(flags)
+    if (days.length === 0) return
+    seeded.current = true
+    setGoals((g) => ({
+      ...g,
+      trainingDays: days,
+      daysPerWeek: days.length,
+      // The backend models one long day; honour it when it is set and is a day
+      // they actually ride, otherwise leave their local pick alone.
+      longRideDays: flags.long_day && days.includes(flags.long_day) ? [flags.long_day] : g.longRideDays,
+    }))
+  }, [profile])
+
+  const patch = (p: Partial<W3YearGoals>) => {
+    if (p.trainingDays || p.longRideDays || p.daysPerWeek !== undefined) touched.current = true
+    setGoals((g) => ({ ...g, ...p }))
+  }
 
   const persist = async (g: W3YearGoals) => {
     saveLocal(g)
