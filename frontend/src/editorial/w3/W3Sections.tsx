@@ -291,7 +291,23 @@ function WeatherDay({ w }: { w: W3Weather }) {
   )
 }
 
-function WeatherLine({ w, isToday, dateLabel }: { w: W3Weather; isToday: boolean; dateLabel: string }) {
+/**
+ * `compact` is the REST-DAY form. The full line answers "when should I go
+ * out" — a best 2-hour window, a ride-quality verdict, and the whole day as
+ * hourly bars. On a day the plan has set aside for recovery that is the app
+ * arguing with itself: the card above says Ruhetag and the frame below it
+ * picks the perfect hour to ride. Worse, "RAUS DAMIT" next to 0 TSS reads as
+ * permission the plan did not give.
+ *
+ * A rest day is still a day, though, and that is why this shortens rather than
+ * disappears: a rider deciding whether to walk, commute or just look out of the
+ * window still wants the conditions. So compact keeps the FACTS — temperature
+ * and the short conditions line — and drops the recommendation: no window, no
+ * verdict chip, no hourly chart.
+ */
+function WeatherLine({ w, isToday, dateLabel, compact = false }: {
+  w: W3Weather; isToday: boolean; dateLabel: string; compact?: boolean
+}) {
   if (!isToday) {
     return (
       <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
@@ -308,6 +324,17 @@ function WeatherLine({ w, isToday, dateLabel }: { w: W3Weather; isToday: boolean
       <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
         <CloudSun size={14} color={T.quiet} style={{ flex: 'none', marginTop: 1 }} />
         <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>{w.meta}</span>
+      </div>
+    )
+  }
+  if (compact) {
+    const facts = [w.temp, w.short].filter(Boolean).join(' · ')
+    return (
+      <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+        <CloudSun size={14} color={T.quiet} style={{ flex: 'none' }} />
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {facts || w.meta}
+        </span>
       </div>
     )
   }
@@ -683,12 +710,12 @@ function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; sessi
           </div>
         </div>
         {/* A rest day is still a DAY, and "what is the weather doing" is a
-            question about the day, not about the session. This branch used to
-            return before the weather line below ever ran, so the one screen
-            that answers it went blank on exactly the days a rider is deciding
-            whether to go out anyway. */}
+            question about the day, not about the session — so this stays.
+            COMPACT, though: the full frame recommends the best 2-hour window to
+            ride and stamps a verdict on it, which is the app overruling its own
+            Ruhetag two lines above. Conditions, not a recommendation. */}
         <Rule />
-        <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
+        <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} compact />
         {isToday && (
           <>
             <SessionLink label="Training ansehen" onOpen={() => navigate('/e/w3-session')} />

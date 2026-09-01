@@ -69,14 +69,19 @@ export default function W3PlanPage() {
   // would give every visitor a plan they never asked for and delete the empty
   // state by visiting it. Gated on the same rule the render branches on.
   const hasPlan = hasPlanFromWeek(week)
-  // A PLAN AND A GOAL ARE DIFFERENT THINGS. The engine keeps a mesocycle
-  // running for everybody, so `hasPlan` is true for a rider who has never named
-  // an event — and the full plan apparatus then draws a 12-week periodisation
-  // aimed at nothing, with GRUNDLAGE lit and a countdown to "Kein Ziel
-  // gesetzt". Seen on the real account. Until there is a dated event, this
-  // route is the one-page case: what a plan does for you, and how to pick a
-  // goal. `W3PlanEmptyView` is exactly that page.
-  const hasGoal = !!profile?.target_event_date
+  // A PLAN AND A GOAL ARE DIFFERENT THINGS, and only the PLAN decides which
+  // shape this route takes. `w3hasPlan` exists precisely so Today and this page
+  // cannot disagree about that — "two screens deciding the same thing from two
+  // different derivations is a bug waiting for the one athlete they disagree
+  // about". Swapping in the empty page on a missing GOAL made this that bug:
+  // a rider with real prescribed days saw a full week on Today and "NOCH KEIN
+  // PLAN" here, on the same morning.
+  //
+  // The goal is still missing, and it is still worth asking for — the DOCK does
+  // that (`W3PlanDock` drops the countdown and the periodisation when there is
+  // no dated event and asks for one instead, deriving it from `daysToStart` so
+  // there is no second source for that either). Asking is not the same as
+  // pretending the training does not exist.
   const { data: plan } = useQuery({
     queryKey: ['plan', 'build'],
     queryFn: () => buildPlan('onboarding'),
@@ -416,7 +421,7 @@ export default function W3PlanPage() {
     )
   }
 
-  if (!hasPlan || !hasGoal) {
+  if (!hasPlan) {
     return (
       <>
       {portal}
