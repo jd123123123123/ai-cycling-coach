@@ -1,0 +1,10 @@
+{
+ "current_ftp": 240,
+ "history": [
+  {
+   "ftp_watts": 240,
+   "measured_at": "2026-04-19T12:51:27.425852Z",
+   "source": "manual"
+  }
+ ]
+}

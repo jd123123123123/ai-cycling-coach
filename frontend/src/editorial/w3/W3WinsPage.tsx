@@ -369,6 +369,10 @@ export default function W3WinsPage() {
       beams,
       medals,
       biggestDay,
+      // Nothing resolved AND nothing still coming. While a read is in flight
+      // the body draws a skeleton instead — it used to draw literally nothing,
+      // which is a black page under a working dock.
+      loading: nothing && stillLoading,
       empty: nothing && !stillLoading
         ? 'Deine erste gewertete Fahrt füllt diese Seite. Bis dahin gibt es hier nichts zu zeigen.'
         : null,

@@ -123,6 +123,7 @@ const FIXTURE: W3WinsVm = {
       longestStreak: 19,
     },
   },
+  loading: false,
   consistency: {
     eyebrow: 'KONSTANZ · LETZTE 52 WOCHEN',
     statement: 'In 46 von 52 Wochen bist du gefahren.',
@@ -182,6 +183,7 @@ const EMPTY: W3WinsVm = {
   micro: 'ERFOLGE',
   dock: { unlocked: null, total: null, nextTitle: null, nextPct: null, stats: [] },
   consistency: null,
+  loading: false,
   ledger: [
     { key: 'badges', value: '—', unit: null, label: 'ABZEICHEN' },
     { key: 'km', value: '—', unit: 'km', label: 'GESAMT' },

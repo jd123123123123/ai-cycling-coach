@@ -177,6 +177,10 @@ export interface W3WinsVm {
   biggestDay: W3BiggestDayChapter | null
   /** Shown only when NOTHING resolved — a rider with no rides yet. */
   empty: string | null
+  /** Nothing has arrived yet. Distinct from `empty`, which is a FINDING; this
+   *  is the absence of one, and the two used to be conflated into a body that
+   *  rendered nothing at all. */
+  loading: boolean
 }
 
 // ── the parts ───────────────────────────────────────────────────────────────
@@ -643,7 +647,37 @@ function BiggestDayCard({ c }: { c: W3BiggestDayChapter }) {
 
 // ── the screen ──────────────────────────────────────────────────────────────
 
+/**
+ * THE BODY MUST NEVER BE ZERO PIXELS TALL.
+ *
+ * It could be, and that is what a rider saw as "black under the nudge": the
+ * dock is portalled into the room and renders on its own, while everything
+ * below it is this component — and with every chapter still null and
+ * `empty` suppressed because the reads were in flight, this returned an empty
+ * fragment. No skeleton, no message, no height. A perfectly black page under
+ * a working panel, on a screen that had simply not finished loading (or whose
+ * power-curve read had failed, which nothing here was watching for).
+ *
+ * Four bars is not a guess at the layout — it is a deliberate placeholder
+ * that occupies roughly a chapter each, so the page does not jump when the
+ * real ones arrive.
+ */
+function LoadingChapters() {
+  return (
+    <div style={{ ...band(30), gap: 22 }} aria-busy="true" aria-label="Erfolge werden geladen">
+      {[0, 1, 2, 3].map((i) => (
+        <div key={i} style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 10 }}>
+          <div style={{ width: 108, height: 9, borderRadius: 100, background: T.d1 }} />
+          <div style={{ width: '72%', height: 17, borderRadius: 6, background: T.d1 }} />
+          <div style={{ width: '100%', height: 128, borderRadius: 24, background: T.surface }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
+  if (vm.loading) return <LoadingChapters />
   if (vm.empty) {
     return (
       <div style={{ ...band(40), paddingTop: 24, gap: 12 }}>

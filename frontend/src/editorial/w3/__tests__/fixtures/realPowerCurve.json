@@ -1,0 +1,233 @@
+{
+ "available": true,
+ "lang": "de",
+ "rides_with_power": 87,
+ "weight_kg": 82.0,
+ "curve": [
+  {
+   "seconds": 5,
+   "label_en": "5 s",
+   "label_de": "5 s",
+   "watts": 505.0,
+   "wkg": 6.15,
+   "is_pr": false,
+   "recent_watts": 718.0
+  },
+  {
+   "seconds": 15,
+   "label_en": "15 s",
+   "label_de": "15 s",
+   "watts": 476.0,
+   "wkg": 5.81,
+   "is_pr": false,
+   "recent_watts": 476.0
+  },
+  {
+   "seconds": 60,
+   "label_en": "1 min",
+   "label_de": "1 Min",
+   "watts": 357.0,
+   "wkg": 4.36,
+   "is_pr": false,
+   "recent_watts": 364.0
+  },
+  {
+   "seconds": 300,
+   "label_en": "5 min",
+   "label_de": "5 Min",
+   "watts": 286.0,
+   "wkg": 3.49,
+   "is_pr": false,
+   "recent_watts": 276.0
+  },
+  {
+   "seconds": 1200,
+   "label_en": "20 min",
+   "label_de": "20 Min",
+   "watts": 244.0,
+   "wkg": 2.98,
+   "is_pr": false,
+   "recent_watts": 244.0
+  },
+  {
+   "seconds": 3600,
+   "label_en": "60 min",
+   "label_de": "60 Min",
+   "watts": 207.0,
+   "wkg": 2.53,
+   "is_pr": false,
+   "recent_watts": 229.0
+  }
+ ],
+ "pr_note": null,
+ "threshold_watts": 240,
+ "threshold_source": "manual",
+ "threshold_wkg": 2.9,
+ "model_valid": true,
+ "cp_watts": 242.8,
+ "w_prime_j": 10071.0,
+ "eftp_watts": 245.6,
+ "r_squared": 0.9555,
+ "cp_wkg": 2.96,
+ "confidence": 0.96,
+ "ftp_progression": [
+  {
+   "month_en": "Apr",
+   "month_de": "Apr",
+   "watts": 221,
+   "is_current": false
+  },
+  {
+   "month_en": "May",
+   "month_de": "Mai",
+   "watts": 228,
+   "is_current": false
+  },
+  {
+   "month_en": "Jun",
+   "month_de": "Jun",
+   "watts": 242,
+   "is_current": false
+  },
+  {
+   "month_en": "Jul",
+   "month_de": "Jul",
+   "watts": 246,
+   "is_current": false
+  },
+  {
+   "month_en": "Aug",
+   "month_de": "Aug",
+   "watts": 246,
+   "is_current": true
+  }
+ ],
+ "zones": [
+  {
+   "code": "Z1",
+   "color_idx": 1,
+   "name_en": "Active Recovery",
+   "name_de": "Aktive Erholung",
+   "low": null,
+   "high": 132
+  },
+  {
+   "code": "Z2",
+   "color_idx": 2,
+   "name_en": "Endurance",
+   "name_de": "Grundlage",
+   "low": 133,
+   "high": 180
+  },
+  {
+   "code": "Z3",
+   "color_idx": 3,
+   "name_en": "Tempo",
+   "name_de": "Tempo",
+   "low": 181,
+   "high": 216
+  },
+  {
+   "code": "Z4",
+   "color_idx": 4,
+   "name_en": "Threshold",
+   "name_de": "Schwelle",
+   "low": 217,
+   "high": 252
+  },
+  {
+   "code": "Z5",
+   "color_idx": 5,
+   "name_en": "VO₂ Max",
+   "name_de": "VO₂max",
+   "low": 253,
+   "high": 288
+  },
+  {
+   "code": "Z6",
+   "color_idx": 6,
+   "name_en": "Anaerobic",
+   "name_de": "Anaerob",
+   "low": 289,
+   "high": null
+  }
+ ],
+ "phenotype": {
+  "key": "time_trialist",
+  "type": "Zeitfahrer",
+  "note": "Aerob dominant mit moderater Spitze — ein Diesel, der stundenlang Druck hält.",
+  "traits": [
+   {
+    "key": "sprint",
+    "label_en": "Sprint",
+    "label_de": "Sprint",
+    "word_en": "Growing",
+    "word_de": "Wächst",
+    "pct": 54
+   },
+   {
+    "key": "short_climbs",
+    "label_en": "Short climbs",
+    "label_de": "Kurze Anstiege",
+    "word_en": "Growing",
+    "word_de": "Wächst",
+    "pct": 53
+   },
+   {
+    "key": "threshold",
+    "label_en": "Threshold",
+    "label_de": "Schwelle",
+    "word_en": "Solid",
+    "word_de": "Solide",
+    "pct": 66
+   },
+   {
+    "key": "endurance",
+    "label_en": "Long endurance",
+    "label_de": "Lange Ausdauer",
+    "word_en": "Elite",
+    "word_de": "Elite",
+    "pct": 100
+   }
+  ],
+  "consequence_en": "Your engine holds power for hours — this block builds threshold and durability so it holds even deeper.",
+  "consequence_de": "Dein Motor hält Druck über Stunden — dieser Block baut Schwelle und Ermüdungswiderstand, damit er noch länger hält."
+ },
+ "benchmark": {
+  "you_wkg": 2.9,
+  "category_key": "everyday",
+  "position_pct": 22.5,
+  "to_pro_wkg": 1.6,
+  "bands": [
+   {
+    "key": "everyday",
+    "label_en": "Everyday rider",
+    "label_de": "Alltagsfahrer",
+    "low_wkg": 2.0,
+    "high_wkg": 3.0
+   },
+   {
+    "key": "racer",
+    "label_en": "Racer",
+    "label_de": "Racer",
+    "low_wkg": 3.0,
+    "high_wkg": 4.5
+   },
+   {
+    "key": "pro",
+    "label_en": "Pro",
+    "label_de": "Profi",
+    "low_wkg": 4.5,
+    "high_wkg": 6.0
+   }
+  ]
+ },
+ "sprint_pedal": {
+  "stamina_pct": 100,
+  "durability_best_pct": -19.0,
+  "avg_decoupling_pct": 3.7,
+  "sprint_wkg": 6.15,
+  "balance_left_pct": 49.5,
+  "balance_right_pct": 50.5
+ }
+}

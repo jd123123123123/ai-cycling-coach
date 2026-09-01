@@ -1,0 +1,609 @@
+{
+ "unlocked": [
+  {
+   "key": "ctl_40",
+   "icon": "trending-up",
+   "title": "Fitness 40",
+   "detail": "CTL erstmals über 40 — eine solide aerobe Basis.",
+   "unlocked_at": "2026-07-08",
+   "value_label": "CTL 40,2",
+   "fresh": false
+  },
+  {
+   "key": "longest_ride",
+   "icon": "route",
+   "title": "Längste Fahrt",
+   "detail": "Deine längste Fahrt aller Zeiten — ein PB, der wandert.",
+   "unlocked_at": "2026-07-07",
+   "value_label": "133,1 km",
+   "fresh": false
+  },
+  {
+   "key": "rides_50",
+   "icon": "bike",
+   "title": "50 Fahrten",
+   "detail": "Fünfzig Fahrten im Logbuch.",
+   "unlocked_at": "2026-07-04",
+   "value_label": null,
+   "fresh": false
+  },
+  {
+   "key": "first_century",
+   "icon": "trophy",
+   "title": "Century",
+   "detail": "Erste Fahrt über 100 km. Eine echte.",
+   "unlocked_at": "2026-06-21",
+   "value_label": "103,4 km",
+   "fresh": false
+  },
+  {
+   "key": "power_pb_3600",
+   "icon": "zap",
+   "title": "60-Minuten-Durchbruch",
+   "detail": "Deine 60-Minuten-Bestleistung der letzten 90 Tage um 2%+ geschlagen.",
+   "unlocked_at": "2026-02-20",
+   "value_label": "229 W",
+   "fresh": false
+  },
+  {
+   "key": "first_1000kj",
+   "icon": "flame",
+   "title": "1.000-kJ-Fahrt",
+   "detail": "Erste Fahrt mit 1.000 kJ mechanischer Arbeit.",
+   "unlocked_at": "2026-02-15",
+   "value_label": "1.376 kJ",
+   "fresh": false
+  },
+  {
+   "key": "rides_10",
+   "icon": "bike",
+   "title": "10 Fahrten",
+   "detail": "Zehn erfasste Fahrten — die Gewohnheit steht.",
+   "unlocked_at": "2026-02-13",
+   "value_label": null,
+   "fresh": false
+  },
+  {
+   "key": "power_pb_60",
+   "icon": "zap",
+   "title": "1-Minuten-Durchbruch",
+   "detail": "Deine 1-Minuten-Bestleistung der letzten 90 Tage um 2%+ geschlagen.",
+   "unlocked_at": "2026-02-10",
+   "value_label": "364 W",
+   "fresh": false
+  },
+  {
+   "key": "power_pb_300",
+   "icon": "zap",
+   "title": "5-Minuten-Durchbruch",
+   "detail": "Deine 5-Minuten-Bestleistung der letzten 90 Tage um 2%+ geschlagen.",
+   "unlocked_at": "2026-02-10",
+   "value_label": "276 W",
+   "fresh": false
+  },
+  {
+   "key": "power_pb_1200",
+   "icon": "zap",
+   "title": "20-Minuten-Durchbruch",
+   "detail": "Deine 20-Minuten-Bestleistung der letzten 90 Tage um 2%+ geschlagen.",
+   "unlocked_at": "2026-02-10",
+   "value_label": "237 W",
+   "fresh": false
+  },
+  {
+   "key": "eftp_up",
+   "icon": "gauge",
+   "title": "Motor-Upgrade",
+   "detail": "Dein modelliertes eFTP stieg um 5 W+ — kein Testtag, echte Fahrten.",
+   "unlocked_at": "2026-02-10",
+   "value_label": "238 W",
+   "fresh": false
+  },
+  {
+   "key": "first_cat_climb",
+   "icon": "mountain",
+   "title": "Kategorisierter Anstieg",
+   "detail": "Erster Anstieg ab Kategorie 4 — aus deinen Höhendaten erkannt.",
+   "unlocked_at": "2026-01-19",
+   "value_label": "Kat. 4",
+   "fresh": false
+  }
+ ],
+ "in_progress": [
+  {
+   "key": "rides_100",
+   "icon": "bike",
+   "title": "100 Fahrten",
+   "detail": "Hundert Fahrten. Die Arbeit einer ganzen Saison.",
+   "progress": {
+    "current": 62,
+    "target": 100,
+    "label": "62 von 100 Fahrten"
+   },
+   "pct": 0.62
+  },
+  {
+   "key": "ctl_60",
+   "icon": "trending-up",
+   "title": "Fitness 60",
+   "detail": "CTL erstmals über 60 — ernsthaftes Trainingsvolumen.",
+   "progress": {
+    "current": 19.7,
+    "target": 60.0,
+    "label": "CTL 19,7 von 60"
+   },
+   "pct": 0.3283333333333333
+  },
+  {
+   "key": "ctl_80",
+   "icon": "trending-up",
+   "title": "Fitness 80",
+   "detail": "CTL erstmals über 80 — Rennform-Bereich.",
+   "progress": {
+    "current": 19.7,
+    "target": 80.0,
+    "label": "CTL 19,7 von 80"
+   },
+   "pct": 0.24625
+  }
+ ],
+ "counts": {
+  "unlocked": 12,
+  "total": 15
+ },
+ "latest": {
+  "key": "ctl_40",
+  "icon": "trending-up",
+  "title": "Fitness 40",
+  "detail": "CTL erstmals über 40 — eine solide aerobe Basis.",
+  "unlocked_at": "2026-07-08",
+  "value_label": "CTL 40,2",
+  "fresh": false
+ },
+ "all_time": {
+  "rides": 62,
+  "km": 2312.5,
+  "hours": 85.1,
+  "kj": 50463,
+  "ascent_m": 24860
+ },
+ "consistency": {
+  "weeks": [
+   {
+    "start": "2025-09-08",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-09-15",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-09-22",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-09-29",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-10-06",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-10-13",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-10-20",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-10-27",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-11-03",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-11-10",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-11-17",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-11-24",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-12-01",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-12-08",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-12-15",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-12-22",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-12-29",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-01-05",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-01-12",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-01-19",
+    "rides": 2,
+    "minutes": 102
+   },
+   {
+    "start": "2026-01-26",
+    "rides": 1,
+    "minutes": 75
+   },
+   {
+    "start": "2026-02-02",
+    "rides": 3,
+    "minutes": 179
+   },
+   {
+    "start": "2026-02-09",
+    "rides": 7,
+    "minutes": 381
+   },
+   {
+    "start": "2026-02-16",
+    "rides": 4,
+    "minutes": 310
+   },
+   {
+    "start": "2026-02-23",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-03-02",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-03-09",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-03-16",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-03-23",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-03-30",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-04-06",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-04-13",
+    "rides": 2,
+    "minutes": 92
+   },
+   {
+    "start": "2026-04-20",
+    "rides": 3,
+    "minutes": 229
+   },
+   {
+    "start": "2026-04-27",
+    "rides": 3,
+    "minutes": 179
+   },
+   {
+    "start": "2026-05-04",
+    "rides": 3,
+    "minutes": 254
+   },
+   {
+    "start": "2026-05-11",
+    "rides": 3,
+    "minutes": 142
+   },
+   {
+    "start": "2026-05-18",
+    "rides": 4,
+    "minutes": 281
+   },
+   {
+    "start": "2026-05-25",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-06-01",
+    "rides": 3,
+    "minutes": 372
+   },
+   {
+    "start": "2026-06-08",
+    "rides": 3,
+    "minutes": 325
+   },
+   {
+    "start": "2026-06-15",
+    "rides": 4,
+    "minutes": 364
+   },
+   {
+    "start": "2026-06-22",
+    "rides": 3,
+    "minutes": 175
+   },
+   {
+    "start": "2026-06-29",
+    "rides": 5,
+    "minutes": 542
+   },
+   {
+    "start": "2026-07-06",
+    "rides": 4,
+    "minutes": 693
+   },
+   {
+    "start": "2026-07-13",
+    "rides": 1,
+    "minutes": 88
+   },
+   {
+    "start": "2026-07-20",
+    "rides": 2,
+    "minutes": 103
+   },
+   {
+    "start": "2026-07-27",
+    "rides": 1,
+    "minutes": 106
+   },
+   {
+    "start": "2026-08-03",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-10",
+    "rides": 1,
+    "minutes": 114
+   },
+   {
+    "start": "2026-08-17",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-24",
+    "rides": 0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-31",
+    "rides": 0,
+    "minutes": 0
+   }
+  ],
+  "ridden": 21,
+  "of": 52,
+  "longest_streak": 9
+ },
+ "rhythm": {
+  "months": [
+   {
+    "start": "2025-10-01",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-11-01",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2025-12-01",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-01-01",
+    "rides": 3,
+    "km": 35.4,
+    "minutes": 177
+   },
+   {
+    "start": "2026-02-01",
+    "rides": 14,
+    "km": 441.3,
+    "minutes": 870
+   },
+   {
+    "start": "2026-03-01",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-04-01",
+    "rides": 6,
+    "km": 157.5,
+    "minutes": 349
+   },
+   {
+    "start": "2026-05-01",
+    "rides": 12,
+    "km": 427.9,
+    "minutes": 829
+   },
+   {
+    "start": "2026-06-01",
+    "rides": 13,
+    "km": 578.0,
+    "minutes": 1236
+   },
+   {
+    "start": "2026-07-01",
+    "rides": 12,
+    "km": 564.3,
+    "minutes": 1426
+   },
+   {
+    "start": "2026-08-01",
+    "rides": 2,
+    "km": 107.9,
+    "minutes": 220
+   },
+   {
+    "start": "2026-09-01",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   }
+  ],
+  "days": [
+   {
+    "start": "2026-08-19",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-20",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-21",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-22",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-23",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-24",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-25",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-26",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-27",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-28",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-29",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-30",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-08-31",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   },
+   {
+    "start": "2026-09-01",
+    "rides": 0,
+    "km": 0.0,
+    "minutes": 0
+   }
+  ],
+  "season": null
+ },
+ "biggest_day": {
+  "activity_id": 79,
+  "date": "2026-07-07",
+  "title": "Koppigen Radfahren",
+  "km": 133.1,
+  "duration_s": 20392,
+  "ascent_m": null,
+  "also_highest": false
+ }
+}

@@ -19,6 +19,7 @@ const BLANK: W3WinsVm = {
   micro: 'ERFOLGE',
   ledger: [],
   consistency: null,
+  loading: false,
   dock: { unlocked: 12, total: 30, nextTitle: null, nextPct: null, stats: [] },
   ftp: null, milestones: null, rhythm: null, beams: null, medals: null, biggestDay: null,
   empty: null,

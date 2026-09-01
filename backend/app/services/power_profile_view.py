@@ -250,7 +250,10 @@ def recent_pr_durations(
 
 
 def recent_envelope(
-    rides: list[tuple[date, dict]], today: date, window_days: int = 90
+    rides: list[tuple[date, dict]],
+    today: date,
+    envelope: dict[int, float],
+    window_days: int = 90,
 ) -> dict[int, float]:
     """The rider's best at each duration WITHIN the trailing window.
 
@@ -265,17 +268,23 @@ def recent_envelope(
     a taper, an illness or a fortnight of bad weather.
     """
     cutoff = today - timedelta(days=window_days)
-    best: dict[int, float] = {}
-    for d, curve in rides:
-        if not curve or d < cutoff:
-            continue
-        for dur, watts in curve.items():
-            if watts is None:
-                continue
-            dur_i, w = int(dur), float(watts)
-            if dur_i not in best or w > best[dur_i]:
-                best[dur_i] = w
-    return best
+    recent = [c for d, c in rides if c and d >= cutoff]
+    if not recent:
+        return {}
+
+    # THE SAME SANITISER AS THE ALL-TIME ENVELOPE, and this is not optional.
+    # Built from raw `mmp_curve` values this returned figures the record book
+    # itself rejects: on a real account it reported a 5-second best of 718 W
+    # against an all-time 505 W, because `build_sanitized_envelope` drops peaks
+    # that no second ride corroborates and a raw max keeps every spike.
+    best = build_sanitized_envelope(recent)
+
+    # And then clamped to the record anyway. The all-time envelope is built
+    # over a superset of these rides, so a recent value above it can only mean
+    # the two sanitisings disagreed on a population — never that the rider
+    # actually went harder than their own best. Clamping keeps the invariant
+    # the UI draws with: the fill can never overflow its track.
+    return {d: min(w, envelope[d]) for d, w in best.items() if d in envelope}
 
 
 def hero_curve(
@@ -416,7 +425,7 @@ async def compute_power_profile_view(
 
     today = date.today()
     pr_durations = recent_pr_durations(rides_dated, today=today)
-    curve = hero_curve(envelope, weight, pr_durations, recent_envelope(rides_dated, today))
+    curve = hero_curve(envelope, weight, pr_durations, recent_envelope(rides_dated, today, envelope))
 
     # PR callout: hero durations that are recent records.
     pr_hero = [c for c in curve if c["is_pr"] and c["watts"] is not None]
