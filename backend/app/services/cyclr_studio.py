@@ -1225,12 +1225,22 @@ async def _mark(img: str | None, kind: str) -> str | None:
     A bike gets nothing, obviously. A failed lookup returns the render
     untouched rather than guessing where a face is — a mark in the wrong place
     is the one defect a rider cannot read as anything but broken.
+
+    THE IMPORT IS GUARDED TOO, and not as a formality: it is the one line here
+    that could fail for every rider at once. `face_marks` pulls numpy and PIL
+    at module scope, so a dependency that goes missing in a future image would
+    turn a decoration into a total outage of the render pipeline. Marks are
+    the optional half of this function; the render is not.
     """
     if not img or kind != "rider":
         return img
-    from app.services import face_marks
+    try:
+        from app.services import face_marks
 
-    out, marked = await face_marks.apply_marks(img)
+        out, marked = await face_marks.apply_marks(img)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("face_marks unavailable, shipping the render unmarked: %s", exc)
+        return img
     if not marked:
         log.info("face_marks: no confident face, shipping the render unmarked")
     return out
