@@ -196,3 +196,51 @@ class TestCompleteText:
         with pytest.raises(RuntimeError, match="empty Claude response"):
             await complete_text(system="s", user="u", max_tokens=50)
         assert openai_create.await_count == 0
+
+
+# ── the SDK that moved under our feet ───────────────────────────────────────
+#
+# `anthropic` was required as `>=0.42.0` with no upper bound. The 1.x SDK
+# removed `temperature` from `messages.create()` — it is not in `output_config`
+# either, it is gone from the Messages surface — so a routine rebuild pulled
+# 1.2.0 and every call carrying a sampling hint raised TypeError. In production
+# that took out the coach brief, the period report and the wrapped flavour at
+# once, and the only trace was a stack in the logs.
+#
+# The requirement is pinned below 1.0 now, which is the real fix. These guard
+# the belt-and-braces: a sampling hint is an optimisation, and losing one must
+# cost a little output quality, never the whole feature.
+class TestSdkParamGuard:
+    def test_a_sampling_hint_is_dropped_when_the_sdk_will_not_take_it(self):
+        from app.services.llm_client import _accepts
+
+        class NewSdk:
+            class messages:
+                @staticmethod
+                def create(*, model, max_tokens, system, messages, output_config=None): ...
+
+        assert _accepts(NewSdk, "temperature") is False
+        assert _accepts(NewSdk, "output_config") is True
+
+    def test_a_sampling_hint_is_passed_when_the_sdk_takes_it(self):
+        from app.services.llm_client import _accepts
+
+        class OldSdk:
+            class messages:
+                @staticmethod
+                def create(*, model, max_tokens, system, messages,
+                           temperature=None, thinking=None): ...
+
+        assert _accepts(OldSdk, "temperature") is True
+        assert _accepts(OldSdk, "thinking") is True
+
+    def test_an_uninspectable_client_is_trusted_rather_than_stripped(self):
+        # A mock or a C shim must never be the reason a working call stops
+        # being made — the guard fails OPEN.
+        from app.services.llm_client import _accepts
+
+        class Opaque:
+            class messages:
+                create = object()
+
+        assert _accepts(Opaque, "temperature") is True

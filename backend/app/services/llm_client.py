@@ -24,6 +24,8 @@ Those degrade Claude → rule-based directly in their own except-handlers.
 from __future__ import annotations
 
 import logging
+import inspect
+from functools import lru_cache
 from dataclasses import dataclass
 
 from app.config import settings
@@ -74,6 +76,27 @@ def _is_credit_or_quota_failure(exc: Exception) -> bool:
     return False
 
 
+
+@lru_cache(maxsize=8)
+def _create_params(create) -> frozenset[str]:
+    """Which keyword arguments this SDK's `messages.create` actually accepts.
+
+    Cached because it is pure reflection over a bound method that never changes
+    within a process, and it sits on the hot path of every generated sentence.
+    """
+    try:
+        return frozenset(inspect.signature(create).parameters)
+    except (TypeError, ValueError):
+        # Un-introspectable (a mock, a C shim): assume it takes what we ask, so
+        # the guard can never be the reason a working call stops being made.
+        return frozenset()
+
+
+def _accepts(client, name: str) -> bool:
+    params = _create_params(client.messages.create)
+    return not params or name in params
+
+
 async def _anthropic_complete(
     *,
     system: str,
@@ -98,9 +121,21 @@ async def _anthropic_complete(
         "messages": [{"role": "user", "content": user}],
     }
     # NO sampling params unless the caller asked: the Opus tier 400s on them.
-    if temperature is not None:
+    #
+    # AND ONLY IF THIS SDK STILL TAKES THEM. `temperature` was removed from
+    # `messages.create()` in the 1.x SDK — it is not in `output_config` either,
+    # it is gone from the Messages surface. The requirement was unpinned, so a
+    # rebuild pulled 1.2.0 and every call carrying a sampling hint raised
+    # TypeError: the coach brief, the period report and the wrapped flavour all
+    # failed at once, in production, with nothing in the UI to say why.
+    #
+    # The version is pinned below 1.0 now, which is the actual fix. This guard
+    # is what stops the same shape of break recurring: a sampling hint is an
+    # optimisation, and losing it should cost a little output quality, never the
+    # whole feature.
+    if temperature is not None and _accepts(client, "temperature"):
         kwargs["temperature"] = temperature
-    if thinking is not None:
+    if thinking is not None and _accepts(client, "thinking"):
         kwargs["thinking"] = thinking
 
     response = await client.messages.create(**kwargs)

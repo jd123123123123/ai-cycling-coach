@@ -30,11 +30,17 @@ def _synthetic_power(n=1200):
     return [400.0 if (i % 200) < 30 else 180.0 for i in range(n)]
 
 
-def _activity(activity_id=1):
+def _activity(activity_id=1, elevation_gain_m=320.0):
+    # `elevation_gain_m` is on the real `Activity` model and `race_debrief`
+    # reads it directly, so a stand-in without it made the endpoint raise
+    # AttributeError in the test while production was fine — the stand-in had
+    # drifted from the thing it stands in for. Defaulted, and overridable so
+    # the None branch (fall back to the segment sum) stays reachable.
     return SimpleNamespace(
         id=activity_id, title="Sunday Race", sport="cycling",
         started_at=datetime(2026, 7, 1, 9, 0, tzinfo=timezone.utc),
         distance_meters=18000.0, duration_seconds=1200, tss=90.0,
+        elevation_gain_m=elevation_gain_m,
     )
 
 

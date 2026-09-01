@@ -132,6 +132,7 @@ export function W3GarageHome() {
       onOpenWorkshop={() => navigate('/e/w3-workshop')}
       onOpenGear={() => navigate('/e/w3-gear')}
       onOpenShop={() => navigate('/e/w3-gear')}
+      onOpenBikes={() => navigate('/e/w3-shop')}
       stage={stage}
       onOpenStages={() => navigate('/e/w3-gear#kulissen')} />
   )

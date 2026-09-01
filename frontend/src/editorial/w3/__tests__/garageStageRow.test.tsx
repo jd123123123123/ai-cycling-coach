@@ -24,7 +24,7 @@ const props = {
   workshop: null,
   onOpenWorkshop: () => {},
   onOpenGear: () => {},
-  onOpenShop: () => {},
+  onOpenShop: () => {}, onOpenBikes: () => {},
 }
 
 afterEach(cleanup)

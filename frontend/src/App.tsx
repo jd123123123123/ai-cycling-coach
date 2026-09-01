@@ -68,6 +68,7 @@ const W3SessionPage = lazyWithRetry(() => import('./editorial/w3/W3SessionPage')
 const W3SessionPreview = lazyWithRetry(() => import('./editorial/w3/W3SessionPreview'))
 const W3RidesPreview = lazyWithRetry(() => import('./editorial/w3/W3RidesPreview'))
 const W3GaragePage = lazyWithRetry(() => import('./editorial/w3/W3GaragePage'))
+const W3BikeShop = lazyWithRetry(() => import('./editorial/w3/W3BikeShop'))
 const W3GaragePreview = lazyWithRetry(() => import('./editorial/w3/W3GaragePreview'))
 const W3WorkshopPreview = lazyWithRetry(() => import('./editorial/w3/W3WorkshopPreview'))
 const W3GearPreview = lazyWithRetry(() => import('./editorial/w3/W3GearPreview'))
@@ -486,7 +487,11 @@ function AppRoutes() {
               read from `useGarageCollection` by the hero and the garage, but
               nobody buys one any more. Kept as a redirect rather than a 404 so
               a bookmark lands in the shop that exists. */}
-          <Route path="/e/w3-shop" element={<Navigate to="/e/w3-gear" replace />} />
+          {/* THE BIKE SHOP, which for a long time was a redirect to the parts
+              wall. Everything behind it already existed — 26 priced bikes, the
+              server's mirror, `shop.purchase`, `useBuyItem` — with no screen to
+              reach any of it, so RideCoin had nowhere to go. */}
+          <Route path="/e/w3-shop" element={<ProtectedRoute checkOnboarding><W3Guard><W3BikeShop /></W3Guard></ProtectedRoute>} />
           {/* The places are a section of the shop now — see `W3GearScreen`. */}
           <Route path="/e/w3-places" element={<Navigate to="/e/w3-gear" replace />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />

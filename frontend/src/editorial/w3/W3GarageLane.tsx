@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ChevronRight, MapPin, Package, Sparkles, Wrench } from 'lucide-react'
+import { Bike, ChevronRight, MapPin, Package, Sparkles, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Workshop, WorkshopComponent } from '../../api/workshop'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
@@ -129,6 +129,8 @@ export interface W3GarageLaneProps {
   onOpenWorkshop: () => void
   onOpenGear: () => void
   onOpenShop: () => void
+  /** The BIKE ladder — the economy's only large sink. */
+  onOpenBikes: () => void
   /** The room the bike is standing in right now, and its name. Null while the
    *  backdrops read is in flight — the row simply does not draw rather than
    *  naming a stage the rider has not chosen. */
@@ -208,6 +210,12 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
         <div style={{ paddingBottom: 10 }}><Kicker>Weiter</Kicker></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {p.stage && <StageRow id={p.stage.id} name={p.stage.name} onOpen={p.onOpenStages} />}
+          {/* RÄDER FIRST, and it is the row that was missing entirely. The
+              bike is the headline collectible and the ladder is where RideCoin
+              actually goes — 26 priced bikes that no screen could reach until
+              now, so a rider watched a balance climb with nothing to spend it
+              on. */}
+          <Row icon={Bike} title="Räder" note="Die Sammlung — 26 Räder" onClick={p.onOpenBikes} />
           <Row icon={Package} title="Ausrüstung" note="Teile kaufen und montieren" onClick={p.onOpenGear} />
           {/* ONE ROW, because there is now one screen behind it. "Shop" and
               "Orte" were two rows leading to two screens that both sold things

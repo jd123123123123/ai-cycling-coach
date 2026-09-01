@@ -123,7 +123,9 @@ export default function W3GaragePage() {
       render={data?.render ?? null}
       rendering={isRendering}
       onEquip={(item: ShopItem) => equip.mutate(item.id)}
-      onOpenShop={() => navigate('/e/w3-gear')}
+      // The BIKE shop, which is what this card has always said. It pointed
+      // at the parts wall because no bike shop existed to point at.
+      onOpenShop={() => navigate('/e/w3-shop')}
       slots={{
         // The REAL economy, not the fixture catalogue the bike list above still
         // reads from: `/garage/gear` knows what is owned, worn, priced and
