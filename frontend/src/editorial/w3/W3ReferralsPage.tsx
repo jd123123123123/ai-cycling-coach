@@ -1,8 +1,14 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { inviteUrl } from './w3invite'
 import { useNavigate } from 'react-router-dom'
 import { useMyReferrals } from '../../hooks/useReferrals'
+import { useAuth } from '../../contexts/AuthContext'
+import { useGarage } from '../../hooks/useGarage'
+import { useAchievements } from '../../hooks/useAchievements'
+import { useWallet } from '../../hooks/useWallet'
 import type { ReferralCard } from '../../api/referral'
+import { renderInviteCard, sharePoster, shareTextOrCopy } from './w3share'
+import { DASH } from './w3tokens'
 import W3ReferralsView, { type W3ReferralsVm, type W3ReferralRow } from './W3ReferralsView'
 
 /**
@@ -34,28 +40,61 @@ export default function W3ReferralsPage() {
     howItWorks: 'Dein gesamter Bonus steht dir am Ende der 30 Tage zum Einlösen bereit.',
   }), [data])
 
-  // ── A LINK, NOT A CODE ────────────────────────────────────────────────
-  // This shared the six characters and nothing else, which asks the person
-  // receiving it to find the app, find the sign-up screen, and remember a
-  // string on the way. The register screen has always read `?ref=` off the
-  // URL — nothing anywhere ever built that URL. Now it does, from the app's
-  // own origin, so the link works wherever the app is served from.
+  // ── A CARD, NOT A LINE OF TEXT ────────────────────────────────────────
   //
-  // The URL itself now comes from `w3invite`, which is also what every shared
-  // CARD prints. Two builders of the same link is one builder too many: the
-  // day the app gets a short domain, only that module should have to know.
-  const share = async () => {
+  // This shared six characters and a URL. That asks whoever receives it to
+  // take a stranger's word for the app — and the rider doing the inviting,
+  // who is the entire argument, was not in the message at all.
+  //
+  // It sends the pen's referral frame now (`Z2ryuL`): their own portrait, their
+  // handle, three of their own numbers, and the code set large enough to read
+  // off a screen and type into another one. `renderInviteCard` composes it on
+  // a canvas, so there is no screenshot and nothing to crop.
+  //
+  // THE LINK STILL GOES WITH IT. An image cannot be tapped, and a code that
+  // has to be typed is a code some people will not type — so the URL rides
+  // along as its own share field, where sheets make it a real link. The card
+  // is the persuasion; the link is the door.
+  const { user } = useAuth()
+  const { data: garage } = useGarage()
+  const { data: ach } = useAchievements('de')
+  const { data: wallet } = useWallet()
+
+  // Same derivation the Biker screen and the avatar reveal use, so a rider's
+  // handle is one thing across every card the app can produce.
+  const handle = user?.display_name
+    ? `@${user.display_name}`
+    : (user?.email ? `@${user.email.split('@')[0]}` : '@rider')
+
+  const share = useCallback(async () => {
     const code = data?.code
     if (!code) return
     const url = inviteUrl(code)
     const text = `Fahr mit mir — hier geht's los, mein Code ${code} ist schon drin.`
-    try {
-      // `url` as its own field, not glued into the text: share sheets render a
-      // real link preview for it and messengers make it tappable.
-      if (navigator.share) await navigator.share({ text, url })
-      else await navigator.clipboard.writeText(`${text} ${url}`)
-    } catch { /* user dismissed share sheet — no-op */ }
-  }
+
+    // The same three facts the pen frame carries, in this app's units.
+    const a = ach?.all_time
+    const card = await renderInviteCard({
+      avatarUrl: garage?.rider?.image_base64 ?? null,
+      avatarInitial: handle.replace('@', '').charAt(0).toUpperCase() || '?',
+      handle,
+      code,
+      offer: '30 TAGE · 10 % BONUS AUF JEDE FAHRT',
+      stats: [
+        { v: wallet ? compact(wallet.balance) : DASH, l: 'RIDECOINS' },
+        { v: a?.km != null ? `${Math.round(a.km).toLocaleString('de-DE')} km` : DASH, l: 'GESAMT' },
+        { v: a ? String(a.rides) : DASH, l: 'FAHRTEN' },
+      ],
+    }).catch(() => null)
+
+    // A failed render must not cost the rider the invite — the old text path
+    // is the fallback, not a worse version of the same thing.
+    if (card?.blob) {
+      const how = await sharePoster(card.blob, `${text} ${url}`, 'ridr-invite.png')
+      if (how !== 'failed') return
+    }
+    await shareTextOrCopy(text, url)
+  }, [data, garage, ach, wallet, handle])
 
   return (
     <W3ReferralsView

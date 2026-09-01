@@ -1008,6 +1008,140 @@ function paintAvatarCard(ctx: CanvasRenderingContext2D, d: AvatarCardData, avata
   inviteLine(ctx, px, fy + 30, 22, 'rgba(255,255,255,0.42)', T.acid, AW - px * 2)
 }
 
+export interface InviteCardData {
+  avatarUrl: string | null
+  avatarInitial: string
+  handle: string
+  /** The invite code itself. Without one there is no card worth sending. */
+  code: string
+  /** The line under the code — what the person receiving it gets. */
+  offer: string
+  stats: [PosterStat, PosterStat, PosterStat]
+}
+
+/**
+ * THE INVITE CARD — pen frame `Z2ryuL`.
+ *
+ * Sharing an invite used to post six characters and a link into a chat. That
+ * asks the person receiving it to take a stranger's word for it; the rider
+ * doing the inviting is the whole argument, and they were not in the message.
+ *
+ * So it is the referral-detail frame's composition, turned around: their
+ * portrait full-bleed, their handle on the seam, three of their own numbers
+ * under it. The pen's three are POWER CLAIMED / TOTAL DISTANCE / TOTAL RIDES,
+ * and these are the same three facts in the app's own language and units.
+ *
+ * ── THE CODE IS THE OBJECT, NOT A FOOTNOTE ──────────────────────────────
+ *
+ * `paintAvatarCard` prints the invite as `inviteLine` — 22px of muted grey
+ * along the bottom, correct there because that card is about an avatar and the
+ * invite is a postscript. Here it is the entire reason the image exists, so it
+ * takes the slot the pen gives its reward CTA: a full-width block, the code set
+ * large and letter-spaced, with what the receiver gets written under it.
+ *
+ * It is drawn in ACID rather than the pen's violet. The violet is the reward
+ * economy's colour and this is not a reward — and a second accent on a card
+ * that already spends its one on the handle star would make the object read as
+ * two competing offers.
+ */
+function paintInviteCard(ctx: CanvasRenderingContext2D, d: InviteCardData, avatar: HTMLImageElement | null) {
+  const px = 64
+  // MEASURED, NOT PICKED. The dock has to clear four stacked things — the
+  // handle chip riding the seam, 190px of tiles, the 148px code block and the
+  // mark under it. At 470 the mark landed ON the acid block (rendered, seen,
+  // fixed); 532 is chip + tiles + block + a 52px floor for the mark.
+  const DOCK = 532
+
+  ctx.fillStyle = T.bg; ctx.fillRect(0, 0, AW, AH)
+
+  // ── the portrait, full bleed ──
+  if (avatar && avatar.width > 0 && avatar.height > 0) {
+    const scale = Math.max(AW / avatar.width, (AH - DOCK + 220) / avatar.height)
+    const dw = avatar.width * scale, dh = avatar.height * scale
+    ctx.drawImage(avatar, (AW - dw) / 2, -(dh - (AH - DOCK + 220)) * 0.22, dw, dh)
+  } else {
+    // No portrait is not no card — the code still has to travel.
+    ctx.save()
+    ctx.beginPath(); ctx.arc(AW / 2, (AH - DOCK) / 2, 190, 0, Math.PI * 2); ctx.closePath()
+    ctx.fillStyle = T.surface2; ctx.fill()
+    ctx.restore()
+    text(ctx, d.avatarInitial, AW / 2, (AH - DOCK) / 2 + 60, 170, '700', T.quiet, 0, 'center')
+  }
+
+  // One long gradient into the ground, so there is no step across the portrait.
+  const floor = ctx.createLinearGradient(0, AH - DOCK - 300, 0, AH - DOCK + 60)
+  floor.addColorStop(0, 'rgba(11,11,11,0)')
+  floor.addColorStop(0.6, 'rgba(11,11,11,0.82)')
+  floor.addColorStop(1, T.bg)
+  ctx.fillStyle = floor; ctx.fillRect(0, AH - DOCK - 300, AW, 360)
+  ctx.fillStyle = T.bg; ctx.fillRect(0, AH - DOCK + 58, AW, DOCK)
+
+  // ── the handle, riding the seam ──
+  const chipY = AH - DOCK - 6
+  ctx.font = `800 40px ${FONT}`
+  const chipW = ctx.measureText(d.handle).width + 132
+  const chipH = 84, chipX = (AW - chipW) / 2
+  roundRect(ctx, chipX, chipY - chipH / 2, chipW, chipH, chipH / 2)
+  ctx.fillStyle = T.heroDock; ctx.fill()
+  star(ctx, chipX + 46, chipY, 15, ACID)
+  text(ctx, d.handle, chipX + 78, chipY + 14, 40, '800', T.ink)
+
+  // ── their three numbers ──
+  const gap = 20, tileW = (AW - px * 2 - gap * 2) / 3, tileH = 190
+  const tileY = chipY + 74
+  d.stats.forEach((s, i) => {
+    const x = px + i * (tileW + gap)
+    roundRect(ctx, x, tileY, tileW, tileH, 26)
+    ctx.fillStyle = T.heroDock; ctx.fill()
+    text(ctx, s.v, x + 28, tileY + 92, 46, '700', s.v === '—' ? T.quiet : T.ink)
+    text(ctx, s.l, x + 28, tileY + 142, 22, '700', 'rgba(255,255,255,0.45)', 1)
+  })
+
+  // ── the code, in the pen's CTA slot ──
+  const ctaY = tileY + tileH + 26
+  const ctaH = 148
+  roundRect(ctx, px, ctaY, AW - px * 2, ctaH, 34)
+  ctx.fillStyle = ACID; ctx.fill()
+  // Letter-spaced, because this is a string somebody has to READ OFF A SCREEN
+  // and type into another one. The spacing is the difference between a word
+  // and six characters.
+  text(ctx, d.code, AW / 2, ctaY + 76, 62, '800', T.bg, 10, 'center')
+  text(ctx, d.offer, AW / 2, ctaY + 118, 24, '700', 'rgba(11,11,11,0.62)', 1, 'center')
+
+  // ── the mark ──
+  const fy = AH - 58
+  ridrMark(ctx, px + 14, fy - 9, 15, RIDR_LIME)
+  text(ctx, 'Ridr', px + 36, fy, 28, '700', T.ink)
+}
+
+/** Render the invite card. Never throws: a missing or tainting portrait drops
+ *  to the initial disc so the code still gets out. */
+export async function renderInviteCard(d: InviteCardData): Promise<{ blob: Blob | null; dataUrl: string }> {
+  const canvas = document.createElement('canvas')
+  canvas.width = AW; canvas.height = AH
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return { blob: null, dataUrl: '' }
+
+  let avatar: HTMLImageElement | null = d.avatarUrl
+    ? await loadImage(d.avatarUrl, 'anonymous').catch(() => null) : null
+
+  const tryExport = async (): Promise<{ blob: Blob | null; dataUrl: string } | 'tainted'> => {
+    ctx.clearRect(0, 0, AW, AH)
+    paintInviteCard(ctx, d, avatar)
+    try {
+      const dataUrl = canvas.toDataURL('image/png')
+      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'))
+      return { blob, dataUrl }
+    } catch {
+      return 'tainted'
+    }
+  }
+
+  let out = await tryExport()
+  if (out === 'tainted') { avatar = null; out = await tryExport() }
+  return out === 'tainted' ? { blob: null, dataUrl: '' } : out
+}
+
 /** Render the "AVATAR UNLOCKED" card. Never throws: a missing or tainting
  *  avatar simply drops the portrait so the export still succeeds. */
 export async function renderAvatarCard(d: AvatarCardData): Promise<{ blob: Blob | null; dataUrl: string }> {
