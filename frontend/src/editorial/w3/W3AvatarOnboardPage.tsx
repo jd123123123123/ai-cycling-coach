@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useGrantOnboarding, useWallet } from '../../hooks/useWallet'
-import { GARAGE_KEY } from '../../hooks/useGarage'
+import { GARAGE_KEY, useGarage } from '../../hooks/useGarage'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateUser } from '../../api/auth'
 import { apiClient } from '../../api/client'
@@ -40,7 +40,20 @@ import W3AvatarOnboardView, { type AvatarStage, type AvatarReveal, type AvatarIn
 // owns: they photograph it, it is rendered, and they name it. A stand-in
 // handed out at the door is the opposite of that — and the garage already
 // refuses to present a stock bike as "yours" everywhere else.
-const NEXT = '/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-today')
+// ── WHERE THIS GOES WHEN IT IS NOT ONBOARDING ─────────────────────────────
+// The chain above is right exactly once: the first time through, when the
+// rider has no bicycle yet. But this route is also the ONLY way to re-shoot a
+// face, and four surfaces send riders here to do that — the nav menu's "Dein
+// Avatar · Foto neu aufnehmen", the bike hero's two "Rider erstellen" buttons,
+// and the Biker page. All four are riders who already own a bike, and all four
+// were handed the bike studio afterwards: "accept your new face" answered with
+// "now photograph your bicycle", about a bicycle already sitting in the garage.
+//
+// So the destination is derived rather than fixed. A rider with a bike is not
+// in a chain — they came to change one thing, and when it is changed they are
+// done.
+const ONBOARDING_NEXT = '/e/w3-bike-studio?next=' + encodeURIComponent('/e/w3-today')
+const DONE_NEXT = '/e/w3-today'
 
 interface AssetRenderResponse { description: string | null; prompt: string; image_base64: string | null; status: string }
 
@@ -50,7 +63,14 @@ interface AssetRenderResponse { description: string | null; prompt: string; imag
  *  routes as `ComponentType<unknown>`. The onboarding variant of this screen
  *  (same flow, different next step) uses the named export instead. */
 export default function W3AvatarOnboardPage() {
-  return <W3RiderOnboarding next={NEXT} />
+  // `useGarage` is the surface that answers "does this rider have a bike?" —
+  // the same read `W3Guard` gates on, so the two cannot disagree. While it is
+  // still loading we assume they DO: guessing "no bike" would flash the
+  // onboarding chain at an established rider, and the wrong guess is much
+  // cheaper in the other direction.
+  const { data: garage, isLoading } = useGarage()
+  const hasBike = isLoading || garage?.bike?.image_base64 != null
+  return <W3RiderOnboarding next={hasBike ? DONE_NEXT : ONBOARDING_NEXT} />
 }
 
 export function W3RiderOnboarding({ next }: { next: string }) {
