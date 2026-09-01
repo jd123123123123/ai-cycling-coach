@@ -19,7 +19,7 @@ import type { HeroPoint } from '../../hooks/usePowerProfileView'
 afterEach(cleanup)
 
 const pt = (seconds: number, watts: number | null, is_pr = false): HeroPoint => ({
-  seconds, watts, wkg: null, is_pr,
+  seconds, watts, wkg: null, recent_watts: null, is_pr,
   label_en: `${seconds}s`, label_de: `${seconds}s`,
 })
 

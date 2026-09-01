@@ -249,15 +249,55 @@ def recent_pr_durations(
     return {dur for dur, (_w, d) in best.items() if d >= cutoff}
 
 
+def recent_envelope(
+    rides: list[tuple[date, dict]], today: date, window_days: int = 90
+) -> dict[int, float]:
+    """The rider's best at each duration WITHIN the trailing window.
+
+    The main envelope is all-time and has no date filter, which makes it the
+    rider's record book — and a record book on its own cannot answer "how
+    close am I right now". This is the same computation over recent rides
+    only, so each duration can be drawn as current-against-record.
+
+    Ninety days, not fourteen: `recent_pr_durations` uses a fortnight because
+    it is answering "did you just set this", a question about an event. This
+    one answers "what shape are you in", which a fortnight cannot see through
+    a taper, an illness or a fortnight of bad weather.
+    """
+    cutoff = today - timedelta(days=window_days)
+    best: dict[int, float] = {}
+    for d, curve in rides:
+        if not curve or d < cutoff:
+            continue
+        for dur, watts in curve.items():
+            if watts is None:
+                continue
+            dur_i, w = int(dur), float(watts)
+            if dur_i not in best or w > best[dur_i]:
+                best[dur_i] = w
+    return best
+
+
 def hero_curve(
-    envelope: dict[int, float], weight_kg: float | None, pr_durations: set[int]
+    envelope: dict[int, float],
+    weight_kg: float | None,
+    pr_durations: set[int],
+    recent: dict[int, float] | None = None,
 ) -> list[dict]:
     """The hero mean-max bars. Every HERO_DURATION is emitted; watts/wkg are
-    None when the envelope has no point that long (honest dash)."""
+    None when the envelope has no point that long (honest dash).
+
+    `recent_watts` is the rider's best at that duration in the trailing 90
+    days, or None where they have not ridden that hard that recently. It is
+    always <= `watts` by construction — the all-time envelope contains the
+    recent one — which is what lets a screen draw the pair as a fill inside a
+    track without ever overflowing it.
+    """
     out: list[dict] = []
     for seconds, label_en, label_de in HERO_DURATIONS:
         watts = envelope.get(seconds)
         wkg = round(watts / weight_kg, 2) if (watts and weight_kg and weight_kg > 0) else None
+        rec = (recent or {}).get(seconds)
         out.append({
             "seconds": seconds,
             "label_en": label_en,
@@ -265,6 +305,7 @@ def hero_curve(
             "watts": round(watts, 0) if watts is not None else None,
             "wkg": wkg,
             "is_pr": seconds in pr_durations,
+            "recent_watts": round(rec, 0) if rec is not None else None,
         })
     return out
 
@@ -375,7 +416,7 @@ async def compute_power_profile_view(
 
     today = date.today()
     pr_durations = recent_pr_durations(rides_dated, today=today)
-    curve = hero_curve(envelope, weight, pr_durations)
+    curve = hero_curve(envelope, weight, pr_durations, recent_envelope(rides_dated, today))
 
     # PR callout: hero durations that are recent records.
     pr_hero = [c for c in curve if c["is_pr"] and c["watts"] is not None]

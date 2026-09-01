@@ -67,6 +67,9 @@ export interface SeasonCompare {
 
 export interface Rhythm {
   months: RhythmMonth[]
+  /** The last 14 days, rest days included — on this grain the gaps are the
+   *  information. Same shape as a month so one chart can draw either. */
+  days: RhythmMonth[]
   season: SeasonCompare | null
 }
 

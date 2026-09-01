@@ -230,6 +230,44 @@ def monthly_rhythm(
     return out
 
 
+def daily_rhythm(
+    rides: Sequence[RideRow], now: datetime, days: int = 14
+) -> list[dict[str, Any]]:
+    """The last `days` days, oldest first — the finest grain of the card.
+
+    Every day is present, rest days included. On this grain the gaps ARE the
+    information: a week is legible as three rides and four rests, and a chart
+    that drew only the days with rides would compress a fortnight of two rides
+    into the same picture as a fortnight of twelve.
+    """
+    today = now.date()
+    first = today - timedelta(days=days - 1)
+
+    buckets: dict[date, dict[str, float]] = {}
+    for r in rides:
+        if r.started_at is None:
+            continue
+        d = r.started_at.date()
+        if d < first or d > today:
+            continue
+        b = buckets.setdefault(d, {"rides": 0, "metres": 0.0, "seconds": 0.0})
+        b["rides"] += 1
+        b["metres"] += float(r.distance_m or 0)
+        b["seconds"] += float(r.duration_s or 0)
+
+    out: list[dict[str, Any]] = []
+    for i in range(days):
+        d = first + timedelta(days=i)
+        b = buckets.get(d)
+        out.append({
+            "start": d.isoformat(),
+            "rides": int(b["rides"]) if b else 0,
+            "km": round(b["metres"] / 1000, 1) if b else 0.0,
+            "minutes": round(b["seconds"] / 60) if b else 0,
+        })
+    return out
+
+
 def season_compare(rides: Sequence[RideRow], now: datetime) -> dict[str, Any] | None:
     """This year so far against the same stretch of last year.
 
@@ -767,8 +805,13 @@ async def get_achievements(db: AsyncSession, user_id: int, lang: str = "en") -> 
         # THREE GRAINS OF ONE FACT — when this rider actually rides. All three
         # come off the same `rides` scan as the totals above, so the year on
         # the season card and the lifetime km in the dock cannot disagree.
+        # THREE GRAINS THE CARD CAN ZOOM BETWEEN, each one the next unit
+        # finer: a season is drawn as months, a month as weeks, a week as
+        # days. `consistency.weeks` above is the same series the week grain
+        # slices, so the two cannot disagree.
         "rhythm": {
             "months": monthly_rhythm(rides, now),
+            "days": daily_rhythm(rides, now),
             "season": season_compare(rides, now),
         },
         "biggest_day": biggest_day(rides),

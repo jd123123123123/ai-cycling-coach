@@ -18,6 +18,8 @@ afterEach(cleanup)
 const BLANK: W3WinsVm = {
   micro: 'ERFOLGE',
   ledger: [],
+  consistency: null,
+  dock: { unlocked: 12, total: 30, nextTitle: null, nextPct: null, stats: [] },
   ftp: null, milestones: null, rhythm: null, beams: null, medals: null, biggestDay: null,
   empty: null,
 }
@@ -31,6 +33,10 @@ const RHYTHM = {
     months: Array.from({ length: 12 }, (_, i) => ({
       start: `2026-${String(i + 1).padStart(2, '0')}-01`,
       rides: 10, km: 300 + i * 10, minutes: 900,
+    })),
+    days: Array.from({ length: 14 }, (_, i) => ({
+      start: `2026-08-${String(19 + i).padStart(2, '0')}`,
+      rides: 1, km: 40, minutes: 95,
     })),
     weeks: Array.from({ length: 52 }, (_, i) => ({
       start: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
@@ -109,7 +115,7 @@ describe('the milestone rows', () => {
       milestones: {
         eyebrow: 'MEILENSTEINE',
         statement: '1 Meilenstein läuft gerade.',
-        rows: [{ key: 'a', icon: Bike, title: 'Wiederholungstäter', value: '284 / 300 Fahrten', pct: null }],
+        rows: [{ key: 'a', icon: Bike, title: 'Wiederholungstäter', value: '284 / 300 Fahrten', pct: null, detail: null, remaining: null }],
       },
     }} />)
     expect(screen.getByText('Wiederholungstäter')).toBeTruthy()

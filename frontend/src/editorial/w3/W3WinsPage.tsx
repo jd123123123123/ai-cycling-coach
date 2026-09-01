@@ -8,7 +8,8 @@ import W3LoadError from './W3LoadError'
 import { useFtpHistory } from '../../hooks/useFtpHistory'
 import { DASH } from './w3tokens'
 import { useHeroPanel } from './W3HeroShell'
-import { W3WinsContent, W3WinsDock, type W3WinsVm, type W3Beam, type W3Medal, type W3Milestone } from './W3WinsView'
+import { W3WinsContent, type W3WinsVm, type W3Beam, type W3Medal, type W3Milestone } from './W3WinsView'
+import W3WinsDockPanel from './W3WinsDockPanel'
 
 /**
  * W3 · ERFOLGE, wired. Route /e/w3-wins, inside the hero room.
@@ -34,13 +35,24 @@ import { W3WinsContent, W3WinsDock, type W3WinsVm, type W3Beam, type W3Medal, ty
 const nf = new Intl.NumberFormat('de-DE')
 const nf1 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 })
 
-/** The four durations a rider actually talks about, in curve order. */
-const RECORD_SECONDS: { key: string; seconds: number; label: string }[] = [
-  { key: '5s', seconds: 5, label: '5 Sek' },
-  { key: '1m', seconds: 60, label: '1 Min' },
-  { key: '12m', seconds: 720, label: '12 Min' },
-  { key: '20m', seconds: 1200, label: '20 Min' },
-]
+/**
+ * THE DURATIONS COME FROM THE SERVER NOW, NOT FROM THIS FILE.
+ *
+ * This list used to be hard-coded as 5 s / 1 min / 12 min / 20 min, and three
+ * separate things were wrong with it. The server's `HERO_DURATIONS` are 5, 15,
+ * 60, 300, 1200 and 3600 — so 15 s, 5 min and 60 min were never asked for and
+ * never drawn, and **720 s does not exist in the payload at all**, which meant
+ * the "12 Min" row silently vanished through a `flatMap` and a rider with a
+ * full power profile saw exactly three bars.
+ *
+ * The preview fixture invented a 12-minute row, so the screen looked complete
+ * in every harness and was missing half its content against the real account —
+ * this repository's documented failure shape, and the second time this exact
+ * pattern has bitten this page.
+ *
+ * The labels are the server's too (`label_de`), so a duration added on the
+ * backend appears here without a frontend change.
+ */
 
 /** The server's icon vocabulary → lucide. An unknown key becomes a medal
  *  rather than throwing: a milestone shipped on the backend must never blank a
@@ -92,10 +104,16 @@ export default function W3WinsPage() {
     const counts = ach?.counts ?? null
 
     // ── the panel over the floor ──────────────────────────────────────────
+    // ONE number, and the meter that IS that number — the idiom Today,
+    // Fahrten and Plan all share. The lifetime figures stay, but as the
+    // working underneath rather than as two-thirds of a flat table.
+    const closestLocked = (ach?.in_progress ?? [])
+      .filter((p) => p.pct != null)
+      .sort((x, y) => (y.pct ?? 0) - (x.pct ?? 0))[0] ?? null
     const ledger = [
-      { key: 'badges', value: counts ? String(counts.unlocked) : DASH, unit: counts ? `von ${counts.total}` : null, label: 'ABZEICHEN' },
       { key: 'km', value: a?.km != null ? nf.format(Math.round(a.km)) : DASH, unit: 'km', label: 'GESAMT' },
       { key: 'rides', value: a ? nf.format(a.rides) : DASH, label: 'FAHRTEN' },
+      { key: 'hours', value: a?.hours != null ? nf.format(Math.round(a.hours)) : DASH, unit: 'h', label: 'IM SATTEL' },
     ]
 
     // ── 01 · the threshold ────────────────────────────────────────────────
@@ -151,6 +169,12 @@ export default function W3WinsPage() {
       title: p.title,
       value: p.progress?.label ?? DASH,
       pct: p.pct,
+      // `detail` has been in this payload since the endpoint was written and
+      // the screen threw it away. It is what the badge actually asks for.
+      detail: p.detail || null,
+      remaining: p.progress
+        ? `Noch ${nf.format(Math.max(0, Math.round(p.progress.target - p.progress.current)))}`
+        : null,
     }))
     const closest = nearest[0]
     const remaining = closest?.progress
@@ -179,7 +203,17 @@ export default function W3WinsPage() {
     const rhythm = con && con.weeks.length
       ? {
           eyebrow: 'DEIN RHYTHMUS',
-          statement: `In ${con.ridden} von ${con.of} Wochen bist du gefahren.`,
+          // The statement has to describe THIS card. It used to say "in 46 of
+          // 52 weeks you rode", which is the consistency grid's sentence — and
+          // once that grid moved to its own chapter the line was captioning an
+          // instrument that had left the building.
+          statement: (() => {
+            const y12 = (rh?.months ?? []).reduce((n, m) => n + m.km, 0)
+            const d14 = (rh?.days ?? []).reduce((n, d) => n + d.km, 0)
+            if (y12 > 0) return `${nf.format(Math.round(y12))} Kilometer in den letzten zwölf Monaten.`
+            if (d14 > 0) return `${nf.format(Math.round(d14))} Kilometer in den letzten vierzehn Tagen.`
+            return 'Deine Fahrten der letzten zwölf Monate.'
+          })(),
           rhythm: {
             season: rh?.season
               ? {
@@ -190,6 +224,7 @@ export default function W3WinsPage() {
                 }
               : null,
             months: rh?.months ?? [],
+            days: rh?.days ?? [],
             weeks: con.weeks,
             ridden: con.ridden,
             of: con.of,
@@ -198,35 +233,56 @@ export default function W3WinsPage() {
         }
       : null
 
-    // ── 04 · the power curve ──────────────────────────────────────────────
-    // Each duration as a share of the rider's OWN peak — the shape of their
-    // curve, which is a real fact about them, and not a comparison against a
-    // month that does not exist here.
+    // ── the consistency grid, as its own chapter ──────────────────────────
+    const consistency = con && con.weeks.length
+      ? {
+          eyebrow: 'KONSTANZ · LETZTE 52 WOCHEN',
+          statement: `In ${con.ridden} von ${con.of} Wochen bist du gefahren.`,
+          streakLabel: 'LÄNGSTE SERIE',
+          streak: con.longest_streak === 1 ? '1 WOCHE' : `${con.longest_streak} WOCHEN`,
+          weeks: con.weeks,
+        }
+      : null
+
+
+    // ── the power curve ───────────────────────────────────────────────────
+    // Every duration the server sends, drawn against the rider's ALL-TIME
+    // best at that duration — which is what the envelope is, since it has no
+    // date filter. `recent_watts` is their best in the trailing 90 days, so
+    // each bar reads as "how close am I now to my own record here".
     const curve = curveData?.available ? curveData.curve ?? [] : []
-    const at = (seconds: number) => curve.find((c) => c.seconds === seconds) ?? null
-    const peakW = RECORD_SECONDS.reduce((m, s) => Math.max(m, at(s.seconds)?.watts ?? 0), 0)
-    const beamRows: W3Beam[] = RECORD_SECONDS.flatMap((s) => {
-      const p = at(s.seconds)
-      if (!p || p.watts == null) return []
+    const beamRows: W3Beam[] = curve.flatMap((p) => {
+      if (p.watts == null) return []
+      const recent = p.recent_watts
       return [{
-        key: s.key,
-        label: s.label,
+        key: String(p.seconds),
+        label: p.label_de,
         value: nf.format(Math.round(p.watts)),
         unit: 'W',
-        frac: peakW > 0 ? p.watts / peakW : 0,
+        // The track is the record; the fill is where the rider is now. When
+        // there is no recent effort at this duration the bar is empty rather
+        // than full — an untested duration is not a maintained one.
+        frac: recent != null && p.watts > 0 ? Math.max(0, Math.min(1, recent / p.watts)) : 0,
+        recent: recent != null ? nf.format(Math.round(recent)) : null,
+        pct: recent != null && p.watts > 0 ? Math.round((recent / p.watts) * 100) : null,
         date: shortDate((p as { achieved_on?: string }).achieved_on),
         fresh: !!p.is_pr,
+        // At the record: recent IS the all-time best, to the watt.
+        atBest: recent != null && p.watts != null && Math.round(recent) >= Math.round(p.watts),
       }]
     })
+    const atBestCount = beamRows.filter((b) => b.atBest).length
     const freshCount = beamRows.filter((b) => b.fresh).length
     const beams = beamRows.length
       ? {
           eyebrow: 'BESTWERTE · LEISTUNGSKURVE',
           statement: freshCount > 0
             ? `${freshCount === 1 ? 'Ein Bestwert ist' : `${freshCount} Bestwerte sind`} zuletzt neu gesetzt worden.`
-            : `Deine Spitzenleistung über ${beamRows[0].label} liegt bei ${beamRows[0].value} W.`,
+            : atBestCount > 0
+              ? `Bei ${atBestCount === 1 ? 'einer Dauer' : `${atBestCount} Dauern`} bist du aktuell auf deinem Bestwert.`
+              : `Deine Spitzenleistung über ${beamRows[0].label} liegt bei ${beamRows[0].value} W.`,
           colLeft: 'DAUER',
-          colRight: 'SPITZENLEISTUNG',
+          colRight: 'BESTWERT · LETZTE 90 TAGE',
           beams: beamRows,
         }
       : null
@@ -241,6 +297,10 @@ export default function W3WinsPage() {
       title: u.title.toUpperCase(),
       note: monthYear(u.unlocked_at) ?? DASH,
       earned: true,
+      detail: u.detail || null,
+      // The full date and the value that earned it — both already sent.
+      sub: [shortDate(u.unlocked_at), u.value_label].filter(Boolean).join(' · ') || null,
+      pct: null,
     }))
     const locked: W3Medal[] = [...(ach?.in_progress ?? [])]
       .sort((x, y) => (y.pct ?? -1) - (x.pct ?? -1))
@@ -251,6 +311,9 @@ export default function W3WinsPage() {
         // `pct` arrives 0–1. A locked badge shows how close it is, or nothing.
         note: p.pct != null ? `${Math.round(p.pct * 100)} %` : DASH,
         earned: false,
+        detail: p.detail || null,
+        sub: p.progress?.label ?? null,
+        pct: p.pct,
       }))
     const shelf = [...earned, ...locked].slice(0, 6)
     const medals = shelf.length && counts
@@ -287,14 +350,22 @@ export default function W3WinsPage() {
         }
       : null
 
-    const nothing = !ftpChapter && !milestones && !rhythm && !beams && !medals && !biggestDay
+    const nothing = !ftpChapter && !milestones && !rhythm && !consistency && !beams && !medals && !biggestDay
 
     return {
       micro: 'ERFOLGE',
       ledger,
+      dock: {
+        unlocked: counts?.unlocked ?? null,
+        total: counts?.total ?? null,
+        nextTitle: closestLocked?.title ?? null,
+        nextPct: closestLocked?.pct ?? null,
+        stats: ledger,
+      },
       ftp: ftpChapter,
       milestones,
       rhythm,
+      consistency,
       beams,
       medals,
       biggestDay,
@@ -304,7 +375,7 @@ export default function W3WinsPage() {
     }
   }, [curveData, ach, ftp, nav, stillLoading])
 
-  const { portal } = useHeroPanel(<W3WinsDock items={vm.ledger} />)
+  const { portal } = useHeroPanel(<W3WinsDockPanel vm={vm.dock} />)
 
   // A failed achievements read must say so and offer a retry, never fall
   // through to the "you have never ridden" sentence.

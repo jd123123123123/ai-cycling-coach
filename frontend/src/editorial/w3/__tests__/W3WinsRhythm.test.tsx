@@ -30,6 +30,12 @@ const BASE: W3RhythmVm = {
     previous: { rides: 141, km: 5180, minutes: 16_040 },
   },
   months,
+  days: Array.from({ length: 14 }, (_, i) => ({
+    start: `2026-08-${String(19 + i).padStart(2, '0')}`,
+    rides: i % 3 === 0 ? 0 : 1,
+    km: i % 3 === 0 ? 0 : 40 + i * 3,
+    minutes: i % 3 === 0 ? 0 : 95,
+  })),
   weeks,
   ridden: 46,
   of: 52,
@@ -59,8 +65,10 @@ describe('the grain switch', () => {
     render(<W3WinsRhythm vm={BASE} />)
     fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
     expect(screen.getByRole('tab', { name: 'WOCHE' }).getAttribute('aria-selected')).toBe('true')
-    expect(screen.getByText(/Wochen mit mindestens einer Fahrt/)).toBeTruthy()
-    expect(screen.getByText('von 52')).toBeTruthy()
+    // The week grain is now the last fourteen days, not the 52-week tally —
+    // that moved to its own chapter, because "did you show up" and "how much"
+    // are different questions and one card cannot answer both.
+    expect(screen.getByText(/In 14 Tagen/)).toBeTruthy()
   })
 })
 
@@ -101,31 +109,80 @@ describe('the season grain', () => {
   })
 })
 
-describe('the month grain', () => {
-  it('names the strongest month rather than leaving it to be counted', () => {
-    render(<W3WinsRhythm vm={BASE} />)
-    expect(screen.getByText(/Stärkster Monat: DEZ/)).toBeTruthy()
-  })
-
+describe('empty data', () => {
   it('survives a year with no riding in it at all', () => {
     const empty = months.map((m) => ({ ...m, rides: 0, km: 0, minutes: 0 }))
-    render(<W3WinsRhythm vm={{ ...BASE, months: empty, season: null }} />)
-    // No peak to name, and no division by zero.
-    expect(screen.getByText('In den letzten zwölf Monaten.')).toBeTruthy()
-    expect(screen.getByText('0')).toBeTruthy()
+    const noDays = BASE.days.map((d) => ({ ...d, rides: 0, km: 0, minutes: 0 }))
+    render(<W3WinsRhythm vm={{ ...BASE, months: empty, days: noDays, season: null }} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
+    // No peak to scale against, and no division by zero.
+    expect(screen.getByText(/an 0 davon gefahren/)).toBeTruthy()
   })
 })
 
-describe('the week grain', () => {
-  it('carries the streak the grid beside it is evidence for', () => {
+describe('the chart re-grains with the tab', () => {
+  /**
+   * Each tab is one unit finer than the last: a season is drawn as its months,
+   * a month as its weeks, a week as its days. Three fixed charts would have
+   * been three instruments; this is one at three zooms.
+   */
+  it('draws months under SAISON', () => {
     render(<W3WinsRhythm vm={BASE} />)
-    fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
-    expect(screen.getByText(/Längste Serie: 19 Wochen/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('tab', { name: 'SAISON' }))
+    // 12 months + the two season rails carry no bars of their own.
+    expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(12)
   })
 
-  it('says "1 Woche" rather than "1 Wochen"', () => {
-    render(<W3WinsRhythm vm={{ ...BASE, longestStreak: 1 }} />)
+  it('draws twelve weeks under MONAT', () => {
+    render(<W3WinsRhythm vm={BASE} />)
+    expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(12)
+    expect(screen.getByText(/letzten zwölf Wochen/)).toBeTruthy()
+  })
+
+  it('draws fourteen days under WOCHE', () => {
+    render(<W3WinsRhythm vm={BASE} />)
     fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
-    expect(screen.getByText(/Längste Serie: 1 Woche\./)).toBeTruthy()
+    expect(screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null)).toHaveLength(14)
+    expect(screen.getByText(/In 14 Tagen/)).toBeTruthy()
+  })
+})
+
+describe('tapping a bar', () => {
+  const bars = () => screen.getAllByRole('button').filter((b) => b.getAttribute('aria-pressed') !== null)
+
+  it('GIVES THE BAR THE READOUT — that is the whole point of tapping it', () => {
+    render(<W3WinsRhythm vm={BASE} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
+    fireEvent.click(bars()[1])          // 2026-08-20 → 43 km, 1 ride
+    expect(screen.getByText(/Donnerstag/)).toBeTruthy()
+    expect(screen.getByText(/1 Fahrt /)).toBeTruthy()
+  })
+
+  it('lets go when the same bar is tapped again', () => {
+    render(<W3WinsRhythm vm={BASE} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
+    fireEvent.click(bars()[1])
+    expect(bars()[1].getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(bars()[1])
+    expect(bars()[1].getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByText(/In 14 Tagen/)).toBeTruthy()
+  })
+
+  it('says so when the tapped day was a rest day', () => {
+    render(<W3WinsRhythm vm={BASE} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
+    fireEvent.click(bars()[0])          // i % 3 === 0 → no ride
+    expect(screen.getByText('Kein Training an diesem Tag.')).toBeTruthy()
+  })
+
+  it('DROPS THE SELECTION WHEN THE GRAIN CHANGES', () => {
+    // Index 3 means a different period in each grain; carrying it across
+    // would silently re-point the readout at something else.
+    render(<W3WinsRhythm vm={BASE} />)
+    fireEvent.click(screen.getByRole('tab', { name: 'WOCHE' }))
+    fireEvent.click(bars()[1])
+    fireEvent.click(screen.getByRole('tab', { name: 'MONAT' }))
+    expect(bars().every((b) => b.getAttribute('aria-pressed') === 'false')).toBe(true)
+    expect(screen.getByText(/letzten zwölf Wochen/)).toBeTruthy()
   })
 })

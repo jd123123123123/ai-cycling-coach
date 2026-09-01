@@ -20,6 +20,11 @@ export interface HeroPoint {
   watts: number | null
   wkg: number | null
   is_pr: boolean
+  /** Best at this duration in the trailing 90 days. Null where the rider has
+   *  not ridden that hard that recently. Always <= `watts` by construction —
+   *  the all-time envelope contains the recent one — so a screen can draw the
+   *  pair as a fill inside a track and never overflow it. */
+  recent_watts: number | null
 }
 
 export interface PowerZone {

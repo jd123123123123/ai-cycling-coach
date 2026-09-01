@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { T, FONT, DASH, EASE } from './w3tokens'
+import { T, FONT, EASE } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
 
 /**
@@ -69,6 +69,9 @@ export interface W3RhythmWeek {
 export interface W3RhythmVm {
   season: W3RhythmSeason | null
   months: W3RhythmMonth[]
+  /** Last 14 days, rest days included. Same shape as a month, so the one
+   *  chart below draws any grain without a second component. */
+  days: W3RhythmMonth[]
   weeks: W3RhythmWeek[]
   /** Straight from the consistency chapter — the grid is its evidence. */
   ridden: number
@@ -88,13 +91,6 @@ function monthInitial(iso: string): string {
   const d = new Date(`${iso}T00:00:00`)
   if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleDateString('de-DE', { month: 'narrow' })
-}
-
-/** "2026-03-01" → "MÄR". For the one month that gets named. */
-function monthShort(iso: string): string | null {
-  const d = new Date(`${iso}T00:00:00`)
-  if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleDateString('de-DE', { month: 'short' }).toUpperCase()
 }
 
 /** 1234 minutes → "20 h". Hours are the unit a rider thinks in above a week. */
@@ -232,92 +228,102 @@ function SeasonGrain({ s }: { s: W3RhythmSeason }) {
   )
 }
 
-// ── grain · month ───────────────────────────────────────────────────────────
+// ── the chart, at whichever grain is selected ───────────────────────────────
 
-const MONTH_TRACK = 92
+const TRACK = 96
+
+/** One bar of the chart, whatever unit it is measuring. */
+export interface Bucket {
+  start: string
+  rides: number
+  km: number
+  minutes: number
+}
 
 /**
- * Twelve months as columns, scaled to the rider's own best.
+ * THE CHART RE-GRAINS WITH THE TAB. A season is drawn as its months, a month
+ * as its weeks, a week as its days — each tab one unit finer than the last.
+ * Three fixed charts would have been three instruments to read; this is one
+ * instrument at three zooms, which is what the tabs were always promising.
  *
- * TWO THINGS ARE ENCODED BEYOND HEIGHT, and both earn their ink:
- *
- * The AVERAGE is drawn as a line across the track, because twelve bars on
- * their own only say "these months differed" — against a mean they say which
- * months the rider actually showed up for, which is the question the card is
- * asking. It is the rider's own mean over the window, so it moves with them.
- *
- * The CURRENT MONTH IS MARKED AS UNFINISHED. Lighting it acid was not enough:
- * on the 3rd of September a 118 km stub sat at a tenth of the track and read
- * as a collapse rather than as a month three days old. It now carries a ghost
- * cap to the average and says so in words. The bar itself stays honest — the
- * solid part is only what has actually been ridden, and the ghost is
- * explicitly not a projection of where the month will end.
+ * AND IT IS TAPPABLE, because a chart you cannot interrogate is a decoration
+ * and this one is holding a dozen real numbers. Tapping a bar puts that
+ * period's own figures in the readout above; tapping it again lets go. The
+ * same rule `W3RidesDock` already follows for its twelve months.
  */
-function MonthGrain({ months }: { months: W3RhythmMonth[] }) {
+function Chart({ buckets, label, selected, onSelect }: {
+  buckets: Bucket[]
+  label: (iso: string) => string
+  selected: number | null
+  onSelect: (i: number | null) => void
+}) {
   const reduce = useReducedMotion()
-  const peak = Math.max(...months.map((m) => m.km), 1)
-  const lastIdx = months.length - 1
-  const ridden = months.filter((m) => m.km > 0)
-  const avg = ridden.length ? ridden.reduce((n, m) => n + m.km, 0) / ridden.length : 0
-  const avgY = Math.round((avg / peak) * MONTH_TRACK)
-  const peakIdx = months.reduce((b, m, i) => (m.km > months[b].km ? i : b), 0)
+  const peak = Math.max(...buckets.map((b) => b.km), 1)
+  const lastIdx = buckets.length - 1
+  const ridden = buckets.filter((b) => b.km > 0)
+  const avg = ridden.length ? ridden.reduce((n, b) => n + b.km, 0) / ridden.length : 0
+  const avgY = Math.round((avg / peak) * TRACK)
+  const peakIdx = buckets.reduce((best, b, i) => (b.km > buckets[best].km ? i : best), 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%', gap: 9 }}>
-      <div style={{ position: 'relative', display: 'flex', width: '100%', height: MONTH_TRACK, alignItems: 'flex-end', gap: 4 }}>
-        {/* The mean, behind the bars. A dotted rule rather than a drawn line:
-            it is a reference, not a series, and must not read as data. */}
+      <div style={{ position: 'relative', display: 'flex', width: '100%', height: TRACK, alignItems: 'flex-end', gap: 4 }}>
         {avg > 0 && (
           <div aria-hidden style={{
             position: 'absolute', left: 0, right: 0, bottom: avgY, height: 0,
             borderTop: `1px dashed ${T.d3}`, pointerEvents: 'none',
           }}>
-            {/* LEFT, not right. On the right it collided with the running
-                month's hatch and clipped against the card's padding; the
-                window opens on the rider's winter, whose bars sit under the
-                mean, so the space above them is free. */}
+            {/* LEFT, not right: the window opens on the quiet end of the
+                series, so the space above those bars is free. */}
             <span style={{
               position: 'absolute', left: 0, top: -12, fontSize: 8, fontWeight: 700,
               letterSpacing: 0.6, color: T.quiet, ...TNUM,
-            }}>Ø {nf.format(Math.round(avg))} km</span>
+            }}>Ø {nf1.format(avg)} km</span>
           </div>
         )}
-        {months.map((m, i) => {
+        {buckets.map((b, i) => {
           const now = i === lastIdx
-          const h = Math.max(2, Math.round((m.km / peak) * MONTH_TRACK))
+          const on = selected === i
+          const h = Math.max(2, Math.round((b.km / peak) * TRACK))
+          // Only the peak and the period still being written are lit. A chart
+          // of twelve acid bars is the accent inflation this page was rebuilt
+          // to remove; a SELECTED bar goes white instead, so the selection
+          // never competes with the accent for meaning.
+          const bg = on ? T.ink : b.km <= 0 ? T.d1 : (now || i === peakIdx) ? T.acid : T.d2
           return (
-            <div key={m.start} style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', height: '100%' }}>
-              {/* The unfinished cap — only ever on the month still being
-                  written, and only up to the rider's own average. */}
+            <button
+              key={b.start}
+              onClick={() => onSelect(on ? null : i)}
+              aria-label={`${label(b.start)}: ${nf1.format(b.km)} km`}
+              aria-pressed={on}
+              style={{
+                position: 'relative', flex: 1, height: '100%', padding: 0, border: 0,
+                background: 'transparent', cursor: 'pointer', fontFamily: FONT,
+                display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+              }}
+            >
               {now && avgY > h && (
                 <div aria-hidden style={{
                   position: 'absolute', left: 0, right: 0, bottom: h, height: avgY - h,
-                  borderRadius: 4, background: `repeating-linear-gradient(
-                    135deg, ${T.acid}1F 0 3px, transparent 3px 6px)`,
+                  borderRadius: 4,
+                  background: `repeating-linear-gradient(135deg, ${T.acid}1F 0 3px, transparent 3px 6px)`,
                 }} />
               )}
               <motion.div
                 initial={reduce ? false : { height: 2 }}
                 animate={{ height: h }}
-                transition={{ duration: 0.5, ease: EASE, delay: reduce ? 0 : i * 0.035 }}
-                style={{
-                  width: '100%', borderRadius: 4,
-                  // An empty month is a visible stub in the track's own tone,
-                  // never nothing — the gap is the fact. Only the peak and the
-                  // running month are lit; a twelve-bar acid chart is the
-                  // accent inflation this page was rebuilt to get rid of.
-                  background: m.km <= 0 ? T.d1 : (now || i === peakIdx) ? T.acid : T.d2,
-                }} />
-            </div>
+                transition={{ duration: 0.45, ease: EASE, delay: reduce ? 0 : i * 0.03 }}
+                style={{ width: '100%', borderRadius: 4, background: bg }} />
+            </button>
           )
         })}
       </div>
       <div style={{ display: 'flex', width: '100%', gap: 4 }}>
-        {months.map((m, i) => (
-          <span key={m.start} style={{
+        {buckets.map((b, i) => (
+          <span key={b.start} style={{
             flex: 1, textAlign: 'center', fontSize: 8.5, fontWeight: 700,
-            color: i === lastIdx || i === peakIdx ? T.acid : T.quiet,
-          }}>{monthInitial(m.start)}</span>
+            color: selected === i ? T.ink : (i === lastIdx || i === peakIdx) ? T.acid : T.quiet,
+          }}>{label(b.start)}</span>
         ))}
       </div>
     </div>
@@ -392,6 +398,30 @@ function WeekGrain({ weeks }: { weeks: W3RhythmWeek[] }) {
 
 // ── the card ────────────────────────────────────────────────────────────────
 
+/** Buckets the chart draws, and how each grain labels its own axis. */
+function weeksAsBuckets(weeks: W3RhythmWeek[], km: (w: W3RhythmWeek) => number): Bucket[] {
+  return weeks.map((w) => ({ start: w.start, rides: w.rides, km: km(w), minutes: w.minutes }))
+}
+
+/** "2026-08-31" → "31.8." for a day, "KW34" for a week, "A" for a month. */
+const dayLabel = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? '' : `${d.getDate()}.`
+}
+const weekLabel = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? '' : `${d.getDate()}.${d.getMonth() + 1}.`
+}
+
+/** The long form of a bucket's date, for the readout when one is selected. */
+function longLabel(iso: string, grain: Grain): string {
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  if (grain === 'season') return d.toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
+  if (grain === 'month') return `Woche ab ${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}`
+  return d.toLocaleDateString('de-DE', { weekday: 'long', day: '2-digit', month: '2-digit' })
+}
+
 export default function W3WinsRhythm({ vm }: { vm: W3RhythmVm }) {
   // The season grain is only offered when the server had something real to
   // compare against, so the control never shows a tab that resolves to
@@ -402,8 +432,44 @@ export default function W3WinsRhythm({ vm }: { vm: W3RhythmVm }) {
     { key: 'week' as const, label: 'WOCHE' },
   ]), [vm.season])
   const [grain, setGrain] = useState<Grain>('month')
+  const [picked, setPicked] = useState<number | null>(null)
+
+  // Each tab is one unit finer than the last: a season is its months, a month
+  // its weeks, a week its days.
+  const { buckets, label } = useMemo(() => {
+    if (grain === 'season') return { buckets: vm.months, label: monthInitial }
+    if (grain === 'month') {
+      // The last twelve weeks — a quarter, which is the span a month sits in.
+      const w = vm.weeks.slice(-12)
+      // A week carries minutes, not km. Distance would need a second series
+      // the consistency payload does not send, and inventing one from minutes
+      // would be a made-up number on a page whose whole rule is not to.
+      return { buckets: weeksAsBuckets(w, (x) => x.minutes / 60), label: weekLabel }
+    }
+    return { buckets: vm.days, label: dayLabel }
+  }, [grain, vm])
+
+  // Switching grain drops the selection: index 3 means a different thing in
+  // each, and carrying it across would silently re-point at another period.
+  const choose = (g: Grain) => { setGrain(g); setPicked(null) }
+
+  // A week's bars are hours; a month's and a season's are kilometres.
+  const unit = grain === 'month' ? 'h' : 'km'
+  const fmt = (b: Bucket) => grain === 'month' ? nf1.format(b.km) : nf.format(Math.round(b.km))
 
   const readout = useMemo(() => {
+    // A SELECTED BAR OWNS THE READOUT. That is the whole point of tapping one:
+    // the big number becomes that period's, not the window's.
+    const sel = picked != null ? buckets[picked] : null
+    if (sel) {
+      return {
+        value: fmt(sel),
+        unit,
+        sub: `${longLabel(sel.start, grain)} · ${nf.format(sel.rides)} ${sel.rides === 1 ? 'Fahrt' : 'Fahrten'} · ${hours(sel.minutes)}`,
+        delta: null,
+        foot: sel.rides === 0 ? 'Kein Training an diesem Tag.' : null,
+      }
+    }
     if (grain === 'season' && vm.season) {
       const { current, previous, year, prevYear } = vm.season
       const diff = previous.km > 0 ? (current.km - previous.km) / previous.km : null
@@ -419,40 +485,33 @@ export default function W3WinsRhythm({ vm }: { vm: W3RhythmVm }) {
       }
     }
     if (grain === 'month') {
-      const best = vm.months.reduce<W3RhythmMonth | null>((m, x) => (m && m.km >= x.km ? m : x), null)
-      const total = vm.months.reduce((n, m) => n + m.km, 0)
-      const named = best && best.km > 0 ? monthShort(best.start) : null
-      const last = vm.months[vm.months.length - 1]
-      const running = last ? monthShort(last.start) : null
+      const total = buckets.reduce((n, b) => n + b.km, 0)
       return {
-        value: nf.format(Math.round(total)),
-        unit: 'km',
-        sub: named
-          ? `In zwölf Monaten. Stärkster Monat: ${named} mit ${nf.format(Math.round(best!.km))} km.`
-          : 'In den letzten zwölf Monaten.',
-        // The last column is a month in progress, and a stub that is short
-        // because the month is three days old must not read as a collapse.
-        foot: running ? `${running} läuft noch.` : null,
+        value: nf1.format(total),
+        unit: 'h',
+        sub: 'Zeit im Sattel über die letzten zwölf Wochen.',
         delta: null,
+        foot: 'Tippe auf eine Woche für ihre Zahlen.',
       }
     }
+    const total = buckets.reduce((n, b) => n + b.km, 0)
+    const rode = buckets.filter((b) => b.rides > 0).length
     return {
-      value: String(vm.ridden),
-      unit: `von ${vm.of}`,
-      sub: `Wochen mit mindestens einer Fahrt. Längste Serie: ${vm.longestStreak === 1 ? '1 Woche' : `${vm.longestStreak} Wochen`}.`,
+      value: nf.format(Math.round(total)),
+      unit: 'km',
+      sub: `In 14 Tagen, an ${rode} davon gefahren.`,
       delta: null,
-      foot: null,
+      foot: 'Tippe auf einen Tag für seine Zahlen.',
     }
-  }, [grain, vm])
+  }, [grain, vm, buckets, picked, unit])
 
   return (
     <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 16 }}>
-      <GrainSwitch value={grain} options={options} onChange={setGrain} />
+      <GrainSwitch value={grain} options={options} onChange={choose} />
       <Readout {...readout} />
       <div style={hairline(0)} />
       {grain === 'season' && vm.season && <SeasonGrain s={vm.season} />}
-      {grain === 'month' && <MonthGrain months={vm.months} />}
-      {grain === 'week' && <WeekGrain weeks={vm.weeks} />}
+      <Chart buckets={buckets} label={label} selected={picked} onSelect={setPicked} />
       {readout.foot && (
         <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{readout.foot}</span>
       )}
@@ -460,4 +519,9 @@ export default function W3WinsRhythm({ vm }: { vm: W3RhythmVm }) {
   )
 }
 
-export { Cap as W3RhythmCap, nf1 as w3RhythmNf1, DASH as W3_RHYTHM_DASH }
+/** The 52-week heat grid, kept as its own block: it answers "did you show up",
+ *  which is a different question from "how much", and one instrument should
+ *  not try to be both. */
+export function W3ConsistencyGrid({ weeks }: { weeks: W3RhythmWeek[] }) {
+  return <WeekGrain weeks={weeks} />
+}

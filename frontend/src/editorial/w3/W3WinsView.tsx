@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
-import { Lock, Share2 } from 'lucide-react'
+import { useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { ChevronDown, Lock, Share2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { T, FONT, DASH, Reveal, band } from './w3tokens'
+import { T, FONT, DASH, EASE, Reveal, band } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
-import W3WinsRhythm, { type W3RhythmVm } from './W3WinsRhythm'
+import W3WinsRhythm, { W3ConsistencyGrid, type W3RhythmVm } from './W3WinsRhythm'
+import type { W3WinsDockVm } from './W3WinsDockPanel'
 import './w3.css'
 
 /**
@@ -69,6 +71,11 @@ export interface W3Milestone {
   title: string
   value: string
   pct: number | null
+  /** What the badge actually asks of the rider — the server's own `detail`.
+   *  It was always in the payload and this screen never drew it. */
+  detail: string | null
+  /** How much is left, already worded ("noch 16 Fahrten"). */
+  remaining: string | null
 }
 
 export interface W3MilestoneChapter {
@@ -85,15 +92,33 @@ export interface W3RhythmChapter {
   rhythm: W3RhythmVm
 }
 
+/** The 52-week heat grid. Its own chapter because it answers a different
+ *  question from the rhythm card — "did you show up", not "how much" — and one
+ *  instrument trying to be both is what made the card unreadable. */
+export interface W3ConsistencyChapter {
+  eyebrow: string
+  statement: string
+  streakLabel: string
+  streak: string
+  weeks: { start: string; rides: number; minutes: number }[]
+}
+
 export interface W3Beam {
   key: string
   label: string
+  /** The rider's ALL-TIME best at this duration — the track's full length. */
   value: string
   unit: string
-  /** Width of the bar as a share of the rider's own peak. */
+  /** The fill: their best in the trailing 90 days, as a share of the record.
+   *  0 when they have not ridden that duration hard recently at all. */
   frac: number
+  /** That recent best in watts, and as a percentage of the record. */
+  recent: string | null
+  pct: number | null
   date: string | null
   fresh: boolean
+  /** Recent equals the record — they are on their best right now. */
+  atBest: boolean
 }
 
 export interface W3BeamChapter {
@@ -111,6 +136,11 @@ export interface W3Medal {
   /** Earned: the month it landed. Locked: how far along, as a percentage. */
   note: string
   earned: boolean
+  /** The server's `detail` — what it took, or what it will take. */
+  detail: string | null
+  /** Earned badges: the full date. Locked: the progress line. */
+  sub: string | null
+  pct: number | null
 }
 
 export interface W3MedalChapter {
@@ -137,9 +167,11 @@ export interface W3BiggestDayChapter {
 export interface W3WinsVm {
   micro: string
   ledger: W3WinsLedgerItem[]
+  dock: W3WinsDockVm
   ftp: W3FtpChapter | null
   milestones: W3MilestoneChapter | null
   rhythm: W3RhythmChapter | null
+  consistency: W3ConsistencyChapter | null
   beams: W3BeamChapter | null
   medals: W3MedalChapter | null
   biggestDay: W3BiggestDayChapter | null
@@ -275,30 +307,87 @@ function FtpCard({ c }: { c: W3FtpChapter }) {
 
 // ── 02 · the milestones ─────────────────────────────────────────────────────
 
+/**
+ * A milestone row that OPENS. Apple's Fitness badges work this way and it is
+ * the right instinct: the grid is for scanning, the detail is for the one you
+ * cared enough to touch.
+ *
+ * What it opens onto was never invented for this — `detail` has been in the
+ * `/achievements/mine` payload since the endpoint was written, carrying the
+ * badge's actual condition in the rider's own language, and this screen threw
+ * it away and drew a bar. Finished machinery with no door, which is this
+ * repository's most expensive recurring shape.
+ */
 function MilestoneRow({ m }: { m: W3Milestone }) {
   const Ic = m.icon
   const reduce = useReducedMotion()
+  const [open, setOpen] = useState(false)
+  const pct = m.pct != null ? Math.round(Math.max(0, Math.min(1, m.pct)) * 100) : null
+  const openable = !!(m.detail || m.remaining)
+
   return (
-    <div style={{ display: 'flex', width: '100%', gap: 14, alignItems: 'center', padding: '14px 0' }}>
+    <button
+      onClick={() => openable && setOpen((o) => !o)}
+      aria-expanded={openable ? open : undefined}
+      style={{
+        display: 'flex', width: '100%', gap: 14, alignItems: 'flex-start', padding: '14px 0',
+        border: 0, background: 'transparent', textAlign: 'left', fontFamily: FONT,
+        cursor: openable ? 'pointer' : 'default',
+      }}
+    >
       <div style={{ width: 40, height: 40, borderRadius: 100, flex: 'none', background: T.tile, display: 'grid', placeItems: 'center' }}>
         <Ic size={19} strokeWidth={1.8} color={T.acid} />
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, gap: 9, minWidth: 0 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 14, fontWeight: 600, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.title}</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, flex: 'none', ...TNUM }}>{m.value}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 'none' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, ...TNUM }}>{m.value}</span>
+            {openable && (
+              <motion.span
+                animate={{ rotate: open ? 180 : 0 }}
+                transition={{ duration: reduce ? 0 : 0.22, ease: EASE }}
+                style={{ display: 'grid', placeItems: 'center' }}
+              >
+                <ChevronDown size={13} color={T.quiet} />
+              </motion.span>
+            )}
+          </span>
         </div>
         <div style={{ width: '100%', height: 3, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
           {m.pct != null && (
             <motion.div
               initial={reduce ? false : { width: 0 }}
-              animate={{ width: `${Math.round(Math.max(0, Math.min(1, m.pct)) * 100)}%` }}
+              animate={{ width: `${pct}%` }}
               transition={{ duration: 0.6, ease: 'easeOut' }}
               style={{ height: 3, borderRadius: 100, background: T.acid }} />
           )}
         </div>
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              initial={reduce ? false : { height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={reduce ? undefined : { height: 0, opacity: 0 }}
+              transition={{ duration: 0.26, ease: EASE }}
+              style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 5 }}
+            >
+              {m.detail && (
+                <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.mid, paddingTop: 2 }}>{m.detail}</span>
+              )}
+              <div style={{ display: 'flex', gap: 14, alignItems: 'baseline' }}>
+                {pct != null && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: T.acid, ...TNUM }}>{pct} %</span>
+                )}
+                {m.remaining && (
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{m.remaining}</span>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-    </div>
+    </button>
   )
 }
 
@@ -317,62 +406,176 @@ function MilestoneRow({ m }: { m: W3Milestone }) {
  * failure mode, and at 254px the 5-second peak fills nearly everything while
  * the 20-minute one fills a third.
  */
-const BEAM_INSIDE_FRAC = 0.55
-
+/**
+ * ── THE BAR IS NOT A SHARE OF THE BIGGEST NUMBER ANY MORE ─────────────────
+ *
+ * It used to be each duration as a fraction of the rider's 5-second peak,
+ * which drew a true but useless picture: a sprint is always bigger than an
+ * hour, so the chart said "you are a human" and nothing about this rider.
+ *
+ * Now the TRACK IS THE RECORD and the FILL IS TODAY. Every duration's track
+ * is the same length because every one is that duration's all-time best — the
+ * envelope has no date filter, so it IS the record book — and the fill is
+ * their best over the trailing 90 days. So a full bar means "on my best right
+ * now" and a half-empty one means "my record here is old", which is the
+ * comparison a rider actually wants and the one the page never offered.
+ *
+ * An untested duration draws EMPTY, not full. No recent effort is not the
+ * same as a maintained one, and a full bar would have claimed the opposite.
+ */
 function Beam({ b }: { b: W3Beam }) {
   const reduce = useReducedMotion()
-  const inside = b.frac >= BEAM_INSIDE_FRAC
-  const readout = (
-    <>
-      <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.5, color: inside ? T.bg : (b.fresh ? T.acid : T.ink), ...TNUM }}>{b.value}</span>
-      <span style={{ fontSize: 10, fontWeight: 600, color: inside ? `${T.bg}99` : T.quiet }}>{b.unit}</span>
-      {b.fresh && (
-        <span style={{
-          fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, borderRadius: 100, padding: '3px 7px',
-          background: inside ? `${T.bg}1F` : T.acidDim, color: inside ? T.bg : T.acid,
-        }}>NEU</span>
-      )}
-      {b.date && (
-        <span style={{ fontSize: 9.5, fontWeight: 600, color: inside ? `${T.bg}99` : T.quiet, ...TNUM }}>{b.date}</span>
-      )}
-    </>
-  )
+  const pctW = Math.round(Math.max(0, Math.min(1, b.frac)) * 100)
+  const lit = b.fresh || b.atBest
+  // Only the LEFT readout sits inside the bar, so only it has to ask what it
+  // is standing on. The comparison moved out to its own column (below), which
+  // is what stopped it straddling the fill edge at 88 % and being half dark
+  // text on acid and half on the track.
+  const onFill = lit && pctW > 34
   return (
-    <div style={{ display: 'flex', width: '100%', gap: 10, alignItems: 'center' }}>
-      <span style={{ width: 50, flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{b.label}</span>
+    <div style={{ display: 'flex', width: '100%', gap: 9, alignItems: 'center' }}>
+      <span style={{ width: 46, flex: 'none', fontSize: 12, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{b.label}</span>
       <div style={{ position: 'relative', flex: 1, height: 34 }}>
+        {/* The record: the full track, always. */}
         <div style={{ position: 'absolute', inset: 0, borderRadius: 9, background: T.d1 }} />
         <motion.div
           initial={reduce ? false : { width: 0 }}
-          animate={{ width: `${Math.round(Math.max(0, Math.min(1, b.frac)) * 100)}%` }}
-          transition={{ duration: 0.6, ease: 'easeOut' }}
-          style={{ position: 'absolute', left: 0, top: 0, height: 34, borderRadius: 9, background: b.fresh ? T.acid : T.d2 }} />
+          animate={{ width: `${pctW}%` }}
+          transition={{ duration: 0.6, ease: EASE }}
+          style={{
+            position: 'absolute', left: 0, top: 0, height: 34, borderRadius: 9,
+            background: lit ? T.acid : T.d2,
+          }} />
         <div style={{
-          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', gap: 7,
-          justifyContent: inside ? 'flex-end' : 'flex-start',
-          paddingRight: inside ? 13 : 0,
-          paddingLeft: inside ? 0 : `calc(${Math.round(Math.max(0, Math.min(1, b.frac)) * 100)}% + 12px)`,
-        }}>{readout}</div>
+          position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', gap: 6,
+          justifyContent: 'space-between', padding: '0 12px',
+        }}>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+            <span style={{
+              fontSize: 15.5, fontWeight: 700, letterSpacing: -0.4, ...TNUM,
+              color: onFill ? T.bg : T.ink,
+            }}>{b.value}</span>
+            <span style={{ fontSize: 9.5, fontWeight: 600, color: onFill ? `${T.bg}A6` : T.quiet }}>{b.unit}</span>
+          </span>
+          {b.fresh && (
+            <span style={{
+              fontSize: 8.5, fontWeight: 700, letterSpacing: 0.8, borderRadius: 100, padding: '3px 7px',
+              flex: 'none', background: onFill ? `${T.bg}1F` : T.acidDim, color: onFill ? T.bg : T.acid,
+            }}>NEU</span>
+          )}
+        </div>
       </div>
+      {/* HOW CLOSE TODAY IS TO THE RECORD, in its own column on the card's own
+          ground. Outside the bar it never fights the fill for contrast, and
+          six of them line up as a column a rider can read down. */}
+      <span style={{
+        width: 40, flex: 'none', textAlign: 'right', fontSize: 10, fontWeight: 700, ...TNUM,
+        color: b.atBest ? T.acid : b.pct == null ? T.quiet : T.mid,
+      }}>{b.atBest ? 'BEST' : b.pct == null ? DASH : `${b.pct} %`}</span>
     </div>
   )
 }
 
-// ── 05 · the cabinet ────────────────────────────────────────────────────────
-
-function Medal({ m }: { m: W3Medal }) {
+/**
+ * A badge that OPENS, the way Apple's Fitness awards do.
+ *
+ * The disc alone can only say earned-or-not. Everything that makes a badge
+ * mean anything — what it took, when it landed, how close the locked one is —
+ * was already in the payload and had nowhere to go: the grid printed a title
+ * and a month and threw `detail` away.
+ *
+ * The panel opens BELOW THE WHOLE SHELF rather than inside the tile, because a
+ * tile is 90px wide and a sentence is not. One open at a time, so the shelf
+ * never reflows into a column of essays.
+ */
+function Medal({ m, open, onToggle }: { m: W3Medal; open: boolean; onToggle: () => void }) {
   const Ic = m.earned ? m.icon : Lock
+  const reduce = useReducedMotion()
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, width: 90 }}>
-      <div style={{
-        width: 62, height: 62, borderRadius: 100, display: 'grid', placeItems: 'center',
-        background: m.earned ? T.acid : T.tile,
-        boxShadow: m.earned ? `0 0 22px ${T.acid}3D` : 'none',
-      }}>
+    <button
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={m.title}
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 9, width: 90,
+        border: 0, background: 'transparent', cursor: 'pointer', fontFamily: FONT, padding: 0,
+      }}
+    >
+      <motion.div
+        animate={reduce ? undefined : { scale: open ? 1.08 : 1 }}
+        transition={{ type: 'spring', stiffness: 420, damping: 26 }}
+        style={{
+          width: 62, height: 62, borderRadius: 100, display: 'grid', placeItems: 'center',
+          background: m.earned ? T.acid : T.tile,
+          // The open badge is ringed rather than recoloured: the acid already
+          // means "earned" here and must not also come to mean "selected".
+          boxShadow: open
+            ? `0 0 0 2px ${T.ink}, 0 0 22px ${m.earned ? `${T.acid}3D` : 'transparent'}`
+            : m.earned ? `0 0 22px ${T.acid}3D` : 'none',
+        }}>
         <Ic size={25} strokeWidth={m.earned ? 1.9 : 2.2} color={m.earned ? T.bg : T.quiet} />
-      </div>
+      </motion.div>
       <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 0.8, color: m.earned ? T.ink : T.quiet, textAlign: 'center', lineHeight: 1.25 }}>{m.title}</span>
       <span style={{ fontSize: 9, fontWeight: 600, color: T.quiet, ...TNUM }}>{m.note}</span>
+    </button>
+  )
+}
+
+/** The panel the open badge drops into, under the shelf. */
+function MedalDetail({ m }: { m: W3Medal }) {
+  const reduce = useReducedMotion()
+  const Ic = m.earned ? m.icon : Lock
+  return (
+    <motion.div
+      initial={reduce ? false : { height: 0, opacity: 0 }}
+      animate={{ height: 'auto', opacity: 1 }}
+      exit={reduce ? undefined : { height: 0, opacity: 0 }}
+      transition={{ duration: 0.26, ease: EASE }}
+      style={{ overflow: 'hidden', width: '100%' }}
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 18 }}>
+        <div style={hairline(0)} />
+        <div style={{ display: 'flex', gap: 11, alignItems: 'flex-start', paddingTop: 14 }}>
+          <Ic size={16} strokeWidth={1.9} color={m.earned ? T.acid : T.quiet} style={{ flex: 'none', marginTop: 1 }} />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
+            <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>{m.title}</span>
+            {m.detail && (
+              <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{m.detail}</span>
+            )}
+            {m.sub && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: m.earned ? T.acid : T.quiet, ...TNUM }}>{m.sub}</span>
+            )}
+            {!m.earned && m.pct != null && (
+              <div style={{ width: '100%', height: 3, borderRadius: 100, background: T.d1, overflow: 'hidden', marginTop: 3 }}>
+                <motion.div
+                  initial={reduce ? false : { width: 0 }}
+                  animate={{ width: `${Math.round(Math.max(0, Math.min(1, m.pct)) * 100)}%` }}
+                  transition={{ duration: 0.5, ease: EASE }}
+                  style={{ height: 3, borderRadius: 100, background: T.acid }} />
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  )
+}
+
+/** The shelf, holding which badge is open. */
+function MedalShelf({ medals }: { medals: W3Medal[] }) {
+  const [openKey, setOpenKey] = useState<string | null>(null)
+  const open = medals.find((m) => m.key === openKey) ?? null
+  return (
+    <div style={{ ...lux(24), padding: '24px 18px 22px', gap: 0 }}>
+      <div style={{ display: 'flex', width: '100%', flexWrap: 'wrap', rowGap: 26, justifyContent: 'space-between' }}>
+        {medals.map((m) => (
+          <Medal key={m.key} m={m} open={m.key === openKey}
+                 onToggle={() => setOpenKey((k) => (k === m.key ? null : m.key))} />
+        ))}
+      </div>
+      <AnimatePresence initial={false}>
+        {open && <MedalDetail key={open.key} m={open} />}
+      </AnimatePresence>
     </div>
   )
 }
@@ -489,6 +692,17 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
         </Chapter>
       )}
 
+      {/* ── TIER 3 · showing up, a year at a time ────────────────────────── */}
+      {vm.consistency && (
+        <Chapter>
+          <Eyebrow text={vm.consistency.eyebrow} counter={vm.consistency.streak} tier={3} />
+          <Statement tier={3}>{vm.consistency.statement}</Statement>
+          <div style={{ ...lux(24), padding: '18px 18px 16px', gap: 14 }}>
+            <W3ConsistencyGrid weeks={vm.consistency.weeks} />
+          </div>
+        </Chapter>
+      )}
+
       {/* ── TIER 3 · the lists ─────────────────────────────────────────────
           Both of these are inventories rather than arguments — a rider scans
           them, they do not read them. They keep their instruments and give
@@ -512,11 +726,7 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
         <Chapter>
           <Eyebrow text={vm.medals.eyebrow} counter={vm.medals.counter} tier={3} />
           <Statement tier={3}>{vm.medals.statement}</Statement>
-          <div style={{ ...lux(24), padding: '24px 18px 22px', gap: 26 }}>
-            <div style={{ display: 'flex', width: '100%', flexWrap: 'wrap', rowGap: 26, justifyContent: 'space-between' }}>
-              {vm.medals.medals.map((m) => <Medal key={m.key} m={m} />)}
-            </div>
-          </div>
+          <MedalShelf medals={vm.medals.medals} />
         </Chapter>
       )}
 
@@ -532,19 +742,8 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
   )
 }
 
-/** The three numbers that summarise the page, for the panel over the floor. */
-export function W3WinsDock({ items }: { items: W3WinsLedgerItem[] }) {
-  return (
-    <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', gap: 10, padding: '0 4px' }}>
-      {items.map((it) => (
-        <div key={it.key} style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-          <div style={{ display: 'flex', gap: 4, alignItems: 'flex-end' }}>
-            <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -1, lineHeight: 1, color: it.value === DASH ? T.quiet : T.ink, ...TNUM }}>{it.value}</span>
-            {it.unit && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet, paddingBottom: 2 }}>{it.unit}</span>}
-          </div>
-          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet, whiteSpace: 'nowrap' }}>{it.label}</span>
-        </div>
-      ))}
-    </div>
-  )
-}
+/* The three-stat dock that used to live here is gone. Erfolge opens on ONE
+ * number and the meter that IS that number now (`W3WinsDockPanel`), which is
+ * the idiom Today, Fahrten and Plan already shared and this screen did not.
+ * Deleted rather than left exported: a second dock nothing mounts is how this
+ * repository grows the finished-machinery-with-no-door bug. */

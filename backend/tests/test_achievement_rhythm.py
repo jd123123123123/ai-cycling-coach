@@ -124,3 +124,32 @@ def test_totals_agree_with_a_plain_sum():
     assert out["current"]["km"] == pytest.approx(150.0)
     assert out["current"]["minutes"] == 300
     assert out["current"]["rides"] == 6
+
+
+# ── days ────────────────────────────────────────────────────────────────────
+
+def test_fourteen_days_oldest_first_ending_today():
+    from app.services.achievement_service import daily_rhythm
+    out = daily_rhythm([], NOW)
+    assert len(out) == 14
+    assert out[0]["start"] == "2026-08-19"
+    assert out[-1]["start"] == "2026-09-01"
+
+
+def test_rest_days_are_days():
+    """On this grain the gaps ARE the information — a fortnight with two rides
+    must not draw like a fortnight with twelve."""
+    from app.services.achievement_service import daily_rhythm
+    out = daily_rhythm([ride(datetime(2026, 8, 30, tzinfo=timezone.utc))], NOW)
+    assert sum(1 for d in out if d["rides"] == 0) == 13
+    assert next(d for d in out if d["start"] == "2026-08-30")["rides"] == 1
+
+
+def test_two_rides_on_one_day_are_one_day():
+    from app.services.achievement_service import daily_rhythm
+    rides = [
+        ride(datetime(2026, 8, 30, 7, 0, tzinfo=timezone.utc), km=30, minutes=60),
+        ride(datetime(2026, 8, 30, 18, 0, tzinfo=timezone.utc), km=20, minutes=40),
+    ]
+    day = next(d for d in daily_rhythm(rides, NOW) if d["start"] == "2026-08-30")
+    assert day == {"start": "2026-08-30", "rides": 2, "km": 50.0, "minutes": 100}
