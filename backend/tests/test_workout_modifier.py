@@ -424,3 +424,52 @@ class TestSoftEase:
             {"intensity_ceiling": "push", "injury_flag": False}, ftp_w=250,
         )
         assert res.template_id == "z2_endurance_60"
+
+# ── the rest day, which the UI offered before the server could do it ────────
+#
+# The plan screen had a "Ruhetag · frei" button whose handler returned a
+# hand-written success object BEFORE any network call: the rider was told
+# "Voller Ruhetag – die Last verteilt sich neu." and nothing was written. The
+# button was removed rather than left lying, and this is the capability it was
+# pretending to have.
+class TestRestModification:
+    def _pw(self):
+        from types import SimpleNamespace
+        return SimpleNamespace(
+            template_id="tempo_2x20", indoor=False, duration_seconds_target=4500,
+            target_tss=90.0, interval_structure={"intervals": []}, title="Tempo",
+        )
+
+    def test_rest_clears_the_prescription(self):
+        from app.services.workout_modifier import apply_modification
+        r = apply_modification(
+            planned_workout=self._pw(), modification_type="rest", params={},
+            user_snapshot={"intensity_ceiling": "moderate"}, ftp_w=250,
+        )
+        assert r.template_id == "rest_day"
+        assert r.duration_min == 0
+        assert r.predicted_tss == 0.0
+        assert r.blocks == []
+
+    def test_rest_is_a_destination_not_a_notch_down(self):
+        # `easier` walks the cascade one step at a time and only bottoms out at
+        # rest — right for "too hard", wrong for "not riding today". Rest must
+        # land in one press from anywhere.
+        from app.services.workout_modifier import apply_modification
+        hard = self._pw()
+        hard.template_id = "vo2max_5x3"
+        r = apply_modification(
+            planned_workout=hard, modification_type="rest", params={},
+            user_snapshot={"intensity_ceiling": "moderate"}, ftp_w=250,
+        )
+        assert r.template_id == "rest_day"
+        assert r.duration_min == 0
+
+    def test_rest_keeps_the_before_snapshot_so_undo_still_works(self):
+        from app.services.workout_modifier import apply_modification
+        r = apply_modification(
+            planned_workout=self._pw(), modification_type="rest", params={},
+            user_snapshot={"intensity_ceiling": "moderate"}, ftp_w=250,
+        )
+        assert r.before is not None
+        assert r.before.get("template_id") == "tempo_2x20"

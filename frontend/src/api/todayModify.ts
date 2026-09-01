@@ -4,7 +4,11 @@ import { apiClient } from './client'
 // the PERSISTING adapt — unlike the `/coach/plan/preview` dry-run, POST
 // /workouts/today/modify writes the new session server-side, so the refreshed
 // /weeks/current + coach-brief reflect it. Undo restores the original.
-export type TodayModificationType = 'shorten' | 'lengthen' | 'easier' | 'harder' | 'indoor'
+// `rest` joined the set once the SERVER could persist it. It used to be faked
+// on the plan screen — a hand-written success object returned before any
+// request — so the type deliberately did not carry it. See
+// `workout_modifier._apply_rest`.
+export type TodayModificationType = 'shorten' | 'lengthen' | 'easier' | 'harder' | 'indoor' | 'rest'
 
 export interface TodayModifyResult {
   success: boolean

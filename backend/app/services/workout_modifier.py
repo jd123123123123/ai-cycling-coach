@@ -290,7 +290,7 @@ def apply_modification(
             a ``SimpleNamespace`` for tests. We deliberately avoid importing
             the ORM class here to keep this module pure (no DB coupling).
         modification_type: one of ``shorten``, ``lengthen``, ``harder``,
-            ``easier``, ``indoor``.
+            ``easier``, ``indoor``, ``rest``.
         params: type-specific parameters. ``shorten``/``lengthen`` require
             ``{"duration_min": int}``. Other types accept ``{}``.
         user_snapshot: dict with (at minimum) ``intensity_ceiling`` and
@@ -345,6 +345,8 @@ def apply_modification(
         return _apply_soft_ease(current_template_id, planned_workout, ftp_w, before)
     if modification_type == "indoor":
         return _apply_indoor(current_template_id, planned_workout, ftp_w, before)
+    if modification_type == "rest":
+        return _apply_rest(before)
 
     raise ValueError(
         f"Unknown modification_type: {modification_type!r}. "
@@ -649,6 +651,42 @@ def _apply_harder(
         before=before,
         predicted_tss=predicted_tss,
         metadata=metadata,
+    )
+
+
+
+def _apply_rest(before: dict) -> ModificationResult:
+    """Today becomes a rest day.
+
+    THIS EXISTED IN THE UI BEFORE IT EXISTED HERE. The plan screen offered
+    "Ruhetag · frei" and its handler returned a hand-written success object
+    before making any network call — so the rider was told "Voller Ruhetag –
+    die Last verteilt sich neu." and nothing was written. The button was
+    removed rather than left lying; this is the capability it was pretending
+    to have.
+
+    IT IS NOT `easier` REPEATED. The easier cascade bottoms out at rest by
+    walking down one notch at a time, which is the right behaviour for "this
+    feels too hard" and the wrong one for "I am not riding today" — a rider two
+    notches up would have to press it three times and watch the session change
+    twice on the way. Rest is a destination, not a step.
+
+    NOTHING IS DELETED. The row keeps its date and its place in the week; only
+    its prescription changes, so the plan's own re-planning (`plan_absorption`,
+    and R3 in `plan_adaptation_engine`) sees a rest day rather than a hole and
+    rebalances the week the way it does for any other rest.
+    """
+    tmpl = TEMPLATES.get("rest_day")
+    return ModificationResult(
+        template_id="rest_day",
+        duration_min=0,
+        blocks=[],
+        indoor=False,
+        rails_downgraded=False,
+        reason="rider asked for a rest day",
+        before=before,
+        predicted_tss=0.0,
+        metadata={"name": getattr(tmpl, "name", "Rest day"), "category": "rest"},
     )
 
 

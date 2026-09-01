@@ -34,7 +34,7 @@ router = APIRouter(prefix="/workouts", tags=["workouts"])
 # copy-pasted here.
 
 class TodayModifyRequest(BaseModel):
-    modification_type: Literal["shorten", "lengthen", "easier", "harder", "indoor"]
+    modification_type: Literal["shorten", "lengthen", "easier", "harder", "indoor", "rest"]
     # shorten/lengthen require a duration; the schema mirrors the tool's
     # advertised [10, 360] clamp.
     duration_min: int | None = Field(default=None, ge=10, le=360)

@@ -130,15 +130,13 @@ export interface GoalOption {
   real: boolean            // whether picking it maps to a real /plan/change/apply
 }
 
-// NO 'rest' HERE. A rest day is not one of the five modifications the API can
-// persist (`POST /workouts/today/modify` takes shorten|lengthen|easier|harder|
-// indoor), and the page used to fake it: `onAdapt('rest')` returned a
-// hand-written success object before any network call, so the rider was told
-// "Voller Ruhetag – die Last verteilt sich neu." and nothing was written.
-// Making it real needs an endpoint plus decisions about the streak, the week's
-// rebalance and RideCoin — so the option is gone until it exists, rather than
-// shipping a button that lies.
-export type AdaptKind = 'easier' | 'harder' | 'shorter' | 'indoor'
+// 'rest' IS BACK, and this time it persists. It was removed because the page
+// faked it — `onAdapt('rest')` returned a hand-written success object before
+// any network call, so the rider was told "Voller Ruhetag – die Last verteilt
+// sich neu." and nothing was written. `workout_modifier._apply_rest` is the
+// capability that button was pretending to have, and the week's own
+// re-planning treats the result like any other rest day.
+export type AdaptKind = 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
 export interface AdaptResult { title: string | null; tss: number | null; note: string; railsDowngraded: boolean }
 export type OnAdapt = (kind: AdaptKind) => Promise<AdaptResult | null>
 
@@ -734,12 +732,13 @@ export default function W3PlanView({
               <div style={{ display: 'flex', gap: 8 }}>
                 <AdaptBtn label="Leichter" sub={vm.easierTss} icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'easier'} onClick={() => doAdapt('easier')} />
                 <AdaptBtn label="Härter" sub={vm.harderTss} icon={<ChevronUp size={13} color={T.mid} />} busy={adaptBusy === 'harder'} onClick={() => doAdapt('harder')} />
-                <AdaptBtn label="Tauschen" sub="2 Optionen" icon={<Repeat size={13} color={T.mid} />} busy={false} onClick={() => setSwapOpen((v) => !v)} active={swapOpen} />
+                <AdaptBtn label="Tauschen" sub="3 Optionen" icon={<Repeat size={13} color={T.mid} />} busy={false} onClick={() => setSwapOpen((v) => !v)} active={swapOpen} />
               </div>
               {swapOpen && (
                 <div style={{ display: 'flex', gap: 8 }}>
                   <AdaptBtn label="Kürzer" sub="45 min" icon={<Minus size={13} color={T.mid} />} busy={adaptBusy === 'shorter'} onClick={() => doAdapt('shorter')} />
                   <AdaptBtn label="Indoor" sub="Rolle" icon={<Repeat size={13} color={T.mid} />} busy={adaptBusy === 'indoor'} onClick={() => doAdapt('indoor')} />
+                  <AdaptBtn label="Ruhetag" sub="frei" icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'rest'} onClick={() => doAdapt('rest')} />
                 </div>
               )}
               {adaptMsg && <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{adaptMsg}</span>}
