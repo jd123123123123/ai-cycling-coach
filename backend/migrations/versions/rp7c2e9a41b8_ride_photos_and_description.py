@@ -40,7 +40,18 @@ def upgrade() -> None:
             "created_at", sa.DateTime(timezone=True),
             server_default=sa.text("now()"), nullable=False,
         ),
-        sa.ForeignKeyConstraint(["activity_id"], ["activities.id"], ondelete="CASCADE"),
+        # NO FOREIGN KEY TO `activities`, and that is not an oversight — it is
+        # written down in `bd9f2a4c7e13`'s docblock and I put one here anyway,
+        # which took production down on boot. `activities` is a TimescaleDB
+        # hypertable, so its primary key must include the partition column and
+        # is composite `(id, started_at)`; `activities.id` alone has no unique
+        # constraint for Postgres to reference. `ride_scenes` and
+        # `ride_feedback` carry bare BigInteger activity ids for exactly this
+        # reason, and so does this.
+        #
+        # The cost is that a deleted activity leaves orphan photo rows. That is
+        # handled where the app deletes an activity, not by a constraint the
+        # database cannot express.
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

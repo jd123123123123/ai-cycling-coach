@@ -27,9 +27,11 @@ class RidePhoto(Base):
     __tablename__ = "ride_photos"
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
-    activity_id: Mapped[int] = mapped_column(
-        BigInteger, ForeignKey("activities.id", ondelete="CASCADE"), nullable=False
-    )
+    #: BARE, NO FOREIGN KEY. `activities` is a Timescale hypertable whose
+    #: primary key is composite `(id, started_at)`, so `activities.id` has no
+    #: unique constraint to reference — the same reason `ride_scenes` and
+    #: `ride_feedback` hold bare ids.
+    activity_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
     #: Denormalised so ownership can be checked without joining activities —
     #: every read of a photo is an authorisation check first.
     user_id: Mapped[int] = mapped_column(
