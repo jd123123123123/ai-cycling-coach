@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
 import { useToggleReaction } from '../../hooks/useCrewReactions'
+import { useCrewRides } from '../../hooks/useCrewRides'
 import { useCrewChallenges, useCreateChallenge } from '../../hooks/useChallenges'
 import type { StandingRow } from '../../api/crew'
 import { DASH } from './w3tokens'
 import W3CrewView, { type W3CrewVm, type W3CrewMember, type W3ShowedUpRow, type W3Highlight } from './W3CrewView'
 import W3CrewGoalEditor from './W3CrewGoalEditor'
+import { W3CrewFeedView } from './W3CrewFeed'
 import W3Loading from './W3Loading'
 import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
 
@@ -64,6 +66,16 @@ export default function W3CrewPage() {
   const { data: mine, isError: mineError } = useMyCrew()
   const { data: standings, isError: standingsError } = useCrewStandings(period)
   const { data: crewChallenges } = useCrewChallenges()
+  const { data: rides, refetch: refetchRides } = useCrewRides()
+  // user_id → portrait, off the standings this page already has. The feed's
+  // own contract asks for exactly this rather than fetching a second time.
+  const avatars = useMemo(() => {
+    const out: Record<number, string | null> = {}
+    for (const r of standings?.standings ?? []) {
+      out[r.user_id] = r.avatar ?? null
+    }
+    return out
+  }, [standings])
   const toggleProps = useToggleReaction()
   const createChallenge = useCreateChallenge()
   const [editingGoal, setEditingGoal] = useState(false)
@@ -283,6 +295,19 @@ export default function W3CrewPage() {
         onProps={giveProps}
         onInvite={invite}
         onEditGoal={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
+        // THE FEED WAS BUILT AND NEVER MOUNTED. `W3CrewView` has taken a
+        // `feed` slot all along and only the preview ever filled it, so the
+        // "+N weitere in der Crew" line on Today pointed at a screen that
+        // rendered no rides — and the post shapes, the prompt and the whole
+        // add-a-photo flow were reachable from nowhere in the running app.
+        feed={
+          <W3CrewFeedView
+            rides={rides ?? []}
+            avatars={avatars}
+            variant="page"
+            onRefresh={() => void refetchRides()}
+          />
+        }
       />
       {editingGoal && (
         <W3CrewGoalEditor

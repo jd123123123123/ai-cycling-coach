@@ -12,6 +12,7 @@ import { S, lux, luxTile, hairline, TNUM } from './w3surfaces'
 import { km, hm, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
 import W3FeedPost, { type W3FeedPostVm } from './W3FeedPost'
+import W3AddDetailsNudge from './W3AddDetailsNudge'
 
 /**
  * W3 · Today "Deine Crew fährt" — the crew's real rides, and a place to say
@@ -443,7 +444,7 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
 
 // ── the section ─────────────────────────────────────────────────────────────
 
-export function W3CrewFeedView({ rides, avatars, variant = 'today' }: {
+export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh }: {
   rides: CrewRide[]
   /** user_id → their rendered rider portrait, from the standings the rank card
    *  already fetched. A member without one gets their initial. */
@@ -459,6 +460,9 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today' }: {
    *   its own numbered chapter head, so this variant draws only the card.
    */
   variant?: 'today' | 'page'
+  /** Called once a rider has actually added a photo or a sentence, so the
+   *  caller can refetch — the post beneath the prompt has to change shape. */
+  onRefresh?: () => void
 }) {
   // One open at a time. Two expanded threads in a column push the second one's
   // composer off the bottom of a 390×844 screen, and a rider who opens a ride
@@ -510,16 +514,32 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today' }: {
   // morning") is about Today; here the crew IS the subject, so each ride gets
   // its own full-bleed post.
   if (page) {
+    // THE ASK RIDES WITH THE RIDE IT IS ABOUT. Above the rider's own newest
+    // unfilled post, not pinned to the top of the feed: a prompt floating over
+    // somebody else's ride is a banner, and this is a caption waiting to be
+    // written on the ride directly beneath it.
+    const askFor = shown.find(
+      (r) => r.is_mine && r.photo_urls.length === 0 && !r.description,
+    )
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
         {shown.map((r) => (
-          <RidePost
-            key={r.id}
-            ride={r}
-            avatar={avatars?.[r.user_id] ?? null}
-            open={openId === r.id}
-            onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
-            accent={accent} />
+          <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+            {askFor?.id === r.id && (
+              <W3AddDetailsNudge
+                activityId={r.id}
+                rideLabel={`Deine Fahrt von ${ago(r.started_at)}`}
+                needsDetails
+                onSaved={onRefresh}
+              />
+            )}
+            <RidePost
+              ride={r}
+              avatar={avatars?.[r.user_id] ?? null}
+              open={openId === r.id}
+              onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
+              accent={accent} />
+          </div>
         ))}
       </div>
     )
