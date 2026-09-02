@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, MessageCircle, Send, Plus } from 'lucide-react'
 import { useCrewStandings } from '../../hooks/useCrew'
@@ -12,7 +12,7 @@ import { T, FONT, DASH, Kicker } from './w3tokens'
 import { S, lux, luxTile, hairline, TNUM } from './w3surfaces'
 import { km, hm, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
-import { projectRouteShape } from './w3routeShape'
+import { RouteScene, EffortScene } from './W3RideScene'
 
 /**
  * W3 · Today "Deine Crew fährt" — the crew's real rides, and a place to say
@@ -316,7 +316,9 @@ const POST_W = 350
 /** 4:3, not 1:1. A ride's outline is usually wider than it is tall — roads run
  *  along valleys and coasts — so a square plate spends its height on empty
  *  ground. Instagram's own landscape aspect, for the same reason. */
-const POST_H = Math.round((POST_W * 3) / 4)
+// 4:5, the portrait ratio a feed post has wanted since Instagram taught
+// everyone to expect it. At 4:3 the route had nowhere to be big.
+const POST_H = Math.round((POST_W * 5) / 4)
 
 /**
  * THE RIDE, AS A POST.
@@ -350,19 +352,41 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
   onToggle: () => void
   accent: string
 }) {
-  const reduce = useReducedMotion()
   const mine = ride.is_mine
   const tint = mine ? YOU_TINT : accent
   const name = mine ? 'Du' : `@${ride.handle}`
   const initial = (ride.handle || '?').trim().charAt(0).toUpperCase() || '?'
-  const shape = projectRouteShape(ride.route as [number, number][] | null, POST_W, POST_H, 26)
-  const allStats = [km(ride.distance_m), hm(ride.elevation_gain_m), dur(ride.duration_seconds)]
-    .filter((v) => v !== DASH)
-  // With no map the plate prints ONE number big — and the scrim must then not
-  // print it again four millimetres below. A distance shown twice in two sizes
-  // is the same restatement this file already deleted its highlights strip for.
-  const heroStat = shape ? null : (allStats[0] ?? null)
-  const stats = heroStat ? allStats.filter((v) => v !== heroStat) : allStats
+  const hasRoute = !!(ride.route && ride.route.length >= 2)
+  const [scrubbing, setScrubbing] = useState(false)
+
+  // ── THE CARD LEADS WITH ONE NUMBER ──────────────────────────────────────
+  //
+  // It used to print three at the same size in a row along the bottom, so a
+  // 140 km epic and a 12 km commute arrived on screen looking identical and a
+  // reader had to actually read to tell them apart. A feed is scanned, not
+  // read: the distance is the headline, the rest is the working, and the route
+  // is the texture the headline sits on.
+  // EVERY CARD LEADS, INCLUDING THE TRAINER ONES. Distance where there is
+  // distance, minutes where there is not — a session with no odometer still
+  // has a size, and leaving those cards headless was what made them read as
+  // the lesser posts in the feed.
+  const hasKm = ride.distance_m > 0
+  const heroValue = hasKm
+    ? km(ride.distance_m).replace(' km', '')
+    : nf.format(Math.round(ride.duration_seconds / 60))
+  const heroUnit = hasKm ? 'km' : 'min'
+  const durText = dur(ride.duration_seconds)
+  const secondary: { l: string; v: string }[] = [
+    { l: 'HÖHE', v: hm(ride.elevation_gain_m) },
+    // Not when the headline already IS the duration.
+    ...(hasKm ? [{ l: 'ZEIT', v: durText }] : []),
+    // The fourth fact is whichever this ride actually carries. A ride with a
+    // power meter says watts; one without says its calories; one with neither
+    // simply has three columns instead of four.
+    ...(ride.avg_power_w != null
+      ? [{ l: 'Ø WATT', v: `${nf.format(ride.avg_power_w)} W` }]
+      : ride.calories != null ? [{ l: 'KCAL', v: nf.format(ride.calories) }] : []),
+  ].filter((x) => x.v && !x.v.startsWith(DASH))
 
   return (
     <div style={{ ...lux(26), padding: 0, overflow: 'hidden', minWidth: 0 }}>
@@ -373,47 +397,70 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
           <span style={{ ...ellipsis, fontSize: 13, fontWeight: 600, color: mine ? YOU_TINT : T.ink }}>{name}</span>
           <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{ago(ride.started_at)}</span>
         </div>
+        {ride.tss != null && (
+          <span style={{
+            flex: 'none', ...TNUM, fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
+            padding: '4px 9px', borderRadius: 100, background: `${tint}1F`, color: tint,
+          }}>{nf.format(ride.tss)} TSS</span>
+        )}
       </div>
 
-      {/* ── the picture ── */}
-      <div style={{
-        position: 'relative', width: '100%', height: POST_H, overflow: 'hidden',
-        background: `radial-gradient(120% 120% at 30% 15%, ${tint}1A, transparent 70%), ${T.heroDock}`,
-      }}>
-        {shape ? (
-          <svg width="100%" height={POST_H} viewBox={`0 0 ${POST_W} ${POST_H}`} preserveAspectRatio="xMidYMid meet" aria-hidden>
-            {/* The soft under-stroke is what stops a 2px line reading as a
-                scratch on a dark plate — the two-pass draw the route tile and
-                the wrapped card already use. */}
-            <path d={shape.d} fill="none" stroke={`${tint}30`} strokeWidth={9}
-              strokeLinecap="round" strokeLinejoin="round" />
-            <motion.path d={shape.d} fill="none" stroke={tint} strokeWidth={2.6}
-              strokeLinecap="round" strokeLinejoin="round"
-              initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }}
-              transition={{ duration: 1.1, ease: 'easeOut' }} />
-            <circle cx={shape.pts[0][0]} cy={shape.pts[0][1]} r={4} fill={T.ink} />
-          </svg>
-        ) : (
-          <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>
-            <span style={{ ...TNUM, fontSize: 44, fontWeight: 600, letterSpacing: -1.6, color: T.ink }}>
-              {heroStat ?? dur(ride.duration_seconds)}
-            </span>
-          </div>
-        )}
+      {/* ── the picture ──
+          THE WHOLE PLATE OPENS THE RIDE. It was inert, and the only way into
+          the detail was a comment button in the corner — so the biggest object
+          on the card was the one thing that did not respond to being touched.
+          On a route the drag is the scrub and the tap is the open; `scrubbing`
+          is what keeps the two from fighting. */}
+      <div
+        onClick={() => { if (!scrubbing) onToggle() }}
+        style={{
+          position: 'relative', width: '100%', height: POST_H, overflow: 'hidden', cursor: 'pointer',
+          background: `radial-gradient(90% 70% at 70% 20%, ${tint}24, transparent 72%), ${T.heroDock}`,
+        }}>
+        {hasRoute
+          ? <RouteScene ride={ride} w={POST_W} h={POST_H} tint={tint} onScrub={setScrubbing} />
+          : <EffortScene ride={ride} w={POST_W} h={POST_H} tint={tint} />}
 
-        {/* Stats sit ON the picture under a scrim — read without leaving the
-            image, which is why the plate needs no second row of tiles below. */}
-        {stats.length > 0 && (
-          <div style={{
-            position: 'absolute', left: 0, right: 0, bottom: 0,
-            padding: `26px ${S.lg}px ${S.md}px`,
-            background: `linear-gradient(180deg, transparent, ${T.bg}D9)`,
-            display: 'flex', gap: S.md, alignItems: 'baseline',
-          }}>
-            {stats.map((v) => (
-              <span key={v} style={{ ...TNUM, fontSize: 13, fontWeight: 600, color: T.ink }}>{v}</span>
+        {/* THE HEADLINE, over the shape. Top-left, where a reader's eye lands
+            first, and large enough that the card's size on screen tells you
+            the ride's size before a single word is read. */}
+        <motion.div
+            animate={{ opacity: scrubbing ? 0.12 : 1 }}
+            transition={{ duration: 0.16 }}
+            style={{
+              position: 'absolute', top: S.md, left: S.lg, display: 'flex',
+              alignItems: 'baseline', gap: 5, pointerEvents: 'none',
+              textShadow: `0 2px 24px ${T.bg}`,
+            }}>
+            <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2, lineHeight: 0.9, color: T.ink }}>{heroValue}</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: T.mid }}>{heroUnit}</span>
+        </motion.div>
+
+        {/* The working, under a scrim. Label above value, so the row reads as
+            a table rather than as three numbers that happen to be adjacent —
+            and so it can never be mistaken for the headline. */}
+        {secondary.length > 0 && (
+          <motion.div
+            animate={{ opacity: scrubbing ? 0 : 1 }}
+            transition={{ duration: 0.16 }}
+            style={{
+              position: 'absolute', left: 0, right: 0, bottom: 0,
+              padding: `30px ${S.lg}px ${S.md}px`,
+              background: `linear-gradient(180deg, transparent, ${T.bg}E6 62%)`,
+              display: 'flex', gap: S.lg, alignItems: 'flex-end', pointerEvents: 'none',
+            }}>
+            {secondary.map((x) => (
+              <span key={x.l} style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>{x.l}</span>
+                <span style={{ ...TNUM, fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{x.v}</span>
+              </span>
             ))}
-          </div>
+            {hasRoute && (
+              <span style={{ marginLeft: 'auto', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>
+                ZIEHEN
+              </span>
+            )}
+          </motion.div>
         )}
       </div>
 
