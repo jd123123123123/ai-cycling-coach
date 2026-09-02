@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     # Container default was /data/garmin_tokens (volume-mounted) but that path is
     # read-only on bare-metal macOS dev — override via env var when running natively.
     GARMIN_TOKEN_STORE_ROOT: str = "/data/garmin_tokens"
+    # Ride photos live on the volume beside the tokens and the tours — never in
+    # the database. A phone photo is two to five megabytes and a rider attaches
+    # several; on the row they would be dragged into every feed query that
+    # selects the activity. Override in dev, where /data does not exist.
+    RIDE_PHOTO_ROOT: str = "/data/ride_photos"
 
     # Root directory for uploaded crew-event GPX tours (one {event_id}.gpx per
     # event). Container default is /data/crew_tours (Railway volume-mounted);

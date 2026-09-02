@@ -1,6 +1,7 @@
 from app.models.user import User
 from app.models.athlete_profile import AthleteProfile
 from app.models.consent import ConsentRecord
+from app.models.ride_photo import RidePhoto  # noqa: F401
 from app.models.activity import Activity
 from app.models.garmin_credential import GarminCredential
 from app.models.wahoo_credential import WahooCredential

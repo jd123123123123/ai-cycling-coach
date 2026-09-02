@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
+from app.models.ride_photo import RidePhoto
 from app.models.activity_stream import ActivityStream
 from app.services.crew_notify import notify_ride_comment
 from app.models.crew import CrewMembership
@@ -117,6 +118,12 @@ class RideRead(BaseModel):
     is_mine: bool = False
     reactions: ReactionSummary
     comment_count: int = 0
+    #: What the rider wrote about the ride, and the pictures they attached.
+    #: Both are null/empty for every ride nobody has filled in — which is most
+    #: of them, and is exactly why the feed has two post shapes rather than one
+    #: shape with a hole in it.
+    description: str | None = None
+    photo_urls: list[str] = []
     #: The ride's shape, as `[[lat, lng], ...]` downsampled for a feed
     #: thumbnail — the client projects it (`W3RouteCard.project`). None when the
     #: ride carries no usable GPS track (indoor, trainer, a watch with GPS off),
@@ -366,6 +373,7 @@ async def list_crew_rides(
         target_ids=ride_ids,
     )
     counts = await _comment_counts(db, crew_id=mem.crew_id, activity_ids=ride_ids)
+    photos = await _ride_photo_urls(db, ride_ids)
     routes = await _route_thumbs(db, activity_ids=ride_ids)
 
     out: list[RideRead] = []
@@ -395,6 +403,8 @@ async def list_crew_rides(
                 is_mine=act.user_id == current_user.id,
                 reactions=ReactionSummary(counts=summ["counts"], mine=summ["mine"]),
                 comment_count=counts.get(act.id, 0),
+                description=act.description,
+                photo_urls=photos.get(act.id, []),
                 route=routes.get(act.id),
             )
         )
@@ -404,6 +414,28 @@ async def list_crew_rides(
 # ──────────────────────────────────────────────────────────────────────
 # Comments under a crew ride
 # ──────────────────────────────────────────────────────────────────────
+
+
+async def _ride_photo_urls(
+    db: AsyncSession, activity_ids: list[int]
+) -> dict[int, list[str]]:
+    """Photo URLs per ride, in the rider's own order.
+
+    ONE QUERY FOR THE WHOLE PAGE, like the comment counts above it. A feed that
+    fetched each ride's photos as it built the row would issue a query per post
+    — the shape that makes a feed feel slow and never shows up in a unit test.
+    """
+    if not activity_ids:
+        return {}
+    res = await db.execute(
+        select(RidePhoto.activity_id, RidePhoto.id)
+        .where(RidePhoto.activity_id.in_(activity_ids))
+        .order_by(RidePhoto.activity_id, RidePhoto.sort, RidePhoto.id)
+    )
+    out: dict[int, list[str]] = {}
+    for act_id, photo_id in res.all():
+        out.setdefault(act_id, []).append(f"/activities/{act_id}/photos/{photo_id}")
+    return out
 
 
 async def _comment_counts(

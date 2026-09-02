@@ -64,6 +64,9 @@ def _activity(aid, uid, *, sport="cycling", started=None, title="Ride",
     return SimpleNamespace(
         id=aid, user_id=uid, sport=sport,
         started_at=started or NOW, title=title,
+        # The model carries this; a fixture that omits it describes an
+        # Activity the app cannot actually load.
+        description=None,
         distance_meters=distance, elevation_gain_m=elev, duration_seconds=dur,
         tss=tss, average_power=avg_power, average_hr=avg_hr, calories=calories,
     )

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, JSON, String, func
+from sqlalchemy import BigInteger, DateTime, Float, ForeignKey, Integer, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -82,6 +82,10 @@ class Activity(Base):
 
     # General metrics
     calories: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: What the rider wrote about the ride. Strava calls it the description;
+    #: it is the sentence under the headline on a feed post, and it is the
+    #: reason the "add details" prompt exists at all.
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
 
     # Data source

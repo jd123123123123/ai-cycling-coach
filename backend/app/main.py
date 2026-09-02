@@ -212,7 +212,8 @@ from app.api.athletes import router as athletes_router  # noqa: E402
 from app.api.goals import router as goals_router  # noqa: E402
 from app.api.consent import router as consent_router  # noqa: E402
 from app.api.users import router as users_router  # noqa: E402
-from app.api.activities import router as activities_router  # noqa: E402
+from app.api.activities import router as activities_router
+from app.api.ride_details import router as ride_details_router  # noqa: E402
 from app.api.training_load import router as training_load_router  # noqa: E402
 from app.api.ftp import router as ftp_router  # noqa: E402
 from app.api.garmin import router as garmin_router  # noqa: E402
@@ -237,6 +238,9 @@ app.include_router(goals_router)
 app.include_router(consent_router)
 app.include_router(users_router)
 app.include_router(activities_router)
+# AFTER activities: both mount /activities, and this one's paths are all
+# concrete under an id, so ordering only matters for readability here.
+app.include_router(ride_details_router)
 app.include_router(training_load_router)
 app.include_router(ftp_router)
 app.include_router(garmin_router)
