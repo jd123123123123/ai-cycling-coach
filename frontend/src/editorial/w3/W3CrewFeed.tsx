@@ -12,7 +12,7 @@ import { T, FONT, DASH, Kicker } from './w3tokens'
 import { S, lux, luxTile, hairline, TNUM } from './w3surfaces'
 import { km, hm, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
-import { RouteScene, EffortScene } from './W3RideScene'
+import RideMapScene from './W3RideMap'
 
 /**
  * W3 · Today "Deine Crew fährt" — the crew's real rides, and a place to say
@@ -376,17 +376,18 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
     : nf.format(Math.round(ride.duration_seconds / 60))
   const heroUnit = hasKm ? 'km' : 'min'
   const durText = dur(ride.duration_seconds)
+  // ── THE WORKING, IN THE ORDER A RIDER READS IT ──────────────────────────
+  // Watts first after the headline, because it is the number cyclists talk
+  // about and it was buried behind the expand. Every column is dropped rather
+  // than padded when the ride does not carry it, so a card never prints a dash
+  // where a fact should be — a ride imported without a power meter simply has
+  // fewer columns.
   const secondary: { l: string; v: string }[] = [
+    ...(ride.avg_power_w != null ? [{ l: 'Ø WATT', v: `${nf.format(ride.avg_power_w)} W` }] : []),
     { l: 'HÖHE', v: hm(ride.elevation_gain_m) },
-    // Not when the headline already IS the duration.
     ...(hasKm ? [{ l: 'ZEIT', v: durText }] : []),
-    // The fourth fact is whichever this ride actually carries. A ride with a
-    // power meter says watts; one without says its calories; one with neither
-    // simply has three columns instead of four.
-    ...(ride.avg_power_w != null
-      ? [{ l: 'Ø WATT', v: `${nf.format(ride.avg_power_w)} W` }]
-      : ride.calories != null ? [{ l: 'KCAL', v: nf.format(ride.calories) }] : []),
-  ].filter((x) => x.v && !x.v.startsWith(DASH))
+    ...(ride.avg_hr != null ? [{ l: 'Ø PULS', v: `${nf.format(ride.avg_hr)}` }] : []),
+  ].filter((x) => x.v && !x.v.startsWith(DASH)).slice(0, 4)
 
   return (
     <div style={{ ...lux(26), padding: 0, overflow: 'hidden', minWidth: 0 }}>
@@ -414,12 +415,24 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
       <div
         onClick={() => { if (!scrubbing) onToggle() }}
         style={{
-          position: 'relative', width: '100%', height: POST_H, overflow: 'hidden', cursor: 'pointer',
+          // NO TRACK, NO PICTURE, NO HEIGHT. A trainer session has nothing to
+          // draw — the gauge that stood in for one was an invented object
+          // filling a plate that should not have been tall in the first place.
+          // It gets a compact band with the same headline and the same
+          // columns, which is the honest shape for a ride with no map.
+          position: 'relative', width: '100%',
+          height: hasRoute ? POST_H : 132,
+          overflow: 'hidden', cursor: 'pointer',
           background: `radial-gradient(90% 70% at 70% 20%, ${tint}24, transparent 72%), ${T.heroDock}`,
         }}>
-        {hasRoute
-          ? <RouteScene ride={ride} w={POST_W} h={POST_H} tint={tint} onScrub={setScrubbing} />
-          : <EffortScene ride={ride} w={POST_W} h={POST_H} tint={tint} />}
+        {hasRoute && (
+          <RideMapScene
+            polyline={ride.route as [number, number][]}
+            w={POST_W} h={POST_H} tint={tint}
+            distanceM={ride.distance_m}
+            onScrub={setScrubbing}
+          />
+        )}
 
         {/* THE HEADLINE, over the shape. Top-left, where a reader's eye lands
             first, and large enough that the card's size on screen tells you
