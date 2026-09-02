@@ -34,6 +34,17 @@ export interface CrewRide {
   is_mine: boolean
   reactions: ReactionState
   comment_count: number
+  /** What the rider wrote after the ride, and the pictures they attached.
+   *  Empty for every ride nobody filled in — which is most of them, and is why
+   *  the feed has two post shapes rather than one shape with a hole in it. */
+  description: string | null
+  photo_urls: string[]
+  /** The ride's own shape over time, downsampled: altitude for a ride that
+   *  climbed, power for one on a trainer. Raw units — a card scales them
+   *  against their own series, never a fixed axis. Null where the ride carries
+   *  no such stream, and the card then draws no chart. */
+  elevation_profile: number[] | null
+  power_profile: number[] | null
   /** The ride's own shape as `[[lat, lng], ...]`, downsampled for a feed
    *  thumbnail — the crew post projects it with `projectRouteShape`. Null when
    *  the ride carries no usable GPS track (indoor, trainer, satellite off), and

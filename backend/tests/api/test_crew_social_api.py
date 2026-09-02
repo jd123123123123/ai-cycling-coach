@@ -573,3 +573,35 @@ def test_ride_comments_never_surface_in_the_crew_wall(client_for):
                   messages=[wall, _comment(2, 1, 5, 407, "Unter dem Ride")])
     body = client_for(db).get("/crews/me/chat").json()
     assert [m["text"] for m in body] == ["Wer fährt Sonntag?"]
+
+
+# ── the profiles the feed cards draw ────────────────────────────────────────
+
+def test_downsample_keeps_the_peak_and_the_end():
+    """Sampled, never averaged: a mean smooths the col flat, and the top of the
+    climb is the whole reason the profile is on the card."""
+    from app.api.crew_chat import _downsample
+    series = [100.0] * 40 + [900.0] + [100.0] * 40
+    out = _downsample(series, 48)
+    assert out is not None and len(out) == 48
+    assert max(out) == 900.0
+    assert out[-1] == series[-1]
+
+
+def test_downsample_refuses_a_series_too_short_to_be_a_shape():
+    from app.api.crew_chat import _downsample
+    assert _downsample([1.0, 2.0, 3.0], 48) is None
+    assert _downsample([], 48) is None
+
+
+def test_downsample_drops_nulls_and_nans():
+    from app.api.crew_chat import _downsample
+    out = _downsample([1.0, None, float("nan"), 2.0, "x", 3.0] * 4, 48)
+    assert out is not None
+    assert all(isinstance(v, float) and v == v for v in out)
+
+
+def test_a_short_series_is_returned_whole_not_padded():
+    from app.api.crew_chat import _downsample
+    out = _downsample([float(i) for i in range(12)], 48)
+    assert out == [float(i) for i in range(12)]

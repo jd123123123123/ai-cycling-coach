@@ -34,6 +34,9 @@ const ride = (over: Partial<CrewRide> = {}): CrewRide => ({
   title: 'Alpenrand', started_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
   distance_m: 82_400, elevation_gain_m: 1210, duration_seconds: 3 * 3600 + 14 * 60,
   sport: 'cycling', tss: 188, avg_power_w: 214, avg_hr: 141, calories: 2100,
+  // The wire shape, not a convenient one: an unfilled ride is the COMMON case
+  // and the factory has to default to it.
+  description: null, photo_urls: [], elevation_profile: null, power_profile: null,
   is_mine: false, reactions: { counts: {}, mine: [] }, comment_count: 0,
   ...over,
 })

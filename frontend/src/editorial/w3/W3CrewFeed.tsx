@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { motion } from 'motion/react'
 import { useNavigate } from 'react-router-dom'
 import { ChevronDown, ChevronRight, MessageCircle, Send, Plus } from 'lucide-react'
 import { useCrewStandings } from '../../hooks/useCrew'
@@ -12,7 +11,7 @@ import { T, FONT, DASH, Kicker } from './w3tokens'
 import { S, lux, luxTile, hairline, TNUM } from './w3surfaces'
 import { km, hm, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
-import RideMapScene from './W3RideMap'
+import W3FeedPost, { type W3FeedPostVm } from './W3FeedPost'
 
 /**
  * W3 · Today "Deine Crew fährt" — the crew's real rides, and a place to say
@@ -312,13 +311,9 @@ export function RideRow({ ride, avatar, open, onToggle, accent }: {
 // ── the crew screen's feed: one ride, one post ──────────────────────────────
 
 /** Media width inside a full-bleed post card at 390. */
-const POST_W = 350
 /** 4:3, not 1:1. A ride's outline is usually wider than it is tall — roads run
  *  along valleys and coasts — so a square plate spends its height on empty
  *  ground. Instagram's own landscape aspect, for the same reason. */
-// 4:5, the portrait ratio a feed post has wanted since Instagram taught
-// everyone to expect it. At 4:3 the route had nowhere to be big.
-const POST_H = Math.round((POST_W * 5) / 4)
 
 /**
  * THE RIDE, AS A POST.
@@ -345,6 +340,15 @@ const POST_H = Math.round((POST_W * 5) / 4)
  * else's afternoon the loudest thing on the rider's own morning. The crew
  * screen is where the feed IS the subject, so that is where it gets the room.
  */
+/**
+ * One ride in the feed, in whichever of the two shapes it has earned.
+ *
+ * THE SHAPE COMES FROM `W3FeedPost`; the plumbing stays here. Reactions and the
+ * comment thread are working, tested behaviour with optimistic state and a real
+ * POST behind them — rebuilding them inside the card to make the pen frames
+ * exact would have replaced that with a redraw of it. They are passed in as
+ * slots.
+ */
 function RidePost({ ride, avatar, open, onToggle, accent }: {
   ride: CrewRide
   avatar: string | null
@@ -356,155 +360,65 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
   const tint = mine ? YOU_TINT : accent
   const name = mine ? 'Du' : `@${ride.handle}`
   const initial = (ride.handle || '?').trim().charAt(0).toUpperCase() || '?'
-  const hasRoute = !!(ride.route && ride.route.length >= 2)
-  const [scrubbing, setScrubbing] = useState(false)
 
-  // ── THE CARD LEADS WITH ONE NUMBER ──────────────────────────────────────
-  //
-  // It used to print three at the same size in a row along the bottom, so a
-  // 140 km epic and a 12 km commute arrived on screen looking identical and a
-  // reader had to actually read to tell them apart. A feed is scanned, not
-  // read: the distance is the headline, the rest is the working, and the route
-  // is the texture the headline sits on.
-  // EVERY CARD LEADS, INCLUDING THE TRAINER ONES. Distance where there is
-  // distance, minutes where there is not — a session with no odometer still
-  // has a size, and leaving those cards headless was what made them read as
-  // the lesser posts in the feed.
   const hasKm = ride.distance_m > 0
-  const heroValue = hasKm
-    ? km(ride.distance_m).replace(' km', '')
-    : nf.format(Math.round(ride.duration_seconds / 60))
-  const heroUnit = hasKm ? 'km' : 'min'
-  const durText = dur(ride.duration_seconds)
-  // ── THE WORKING, IN THE ORDER A RIDER READS IT ──────────────────────────
-  // Watts first after the headline, because it is the number cyclists talk
-  // about and it was buried behind the expand. Every column is dropped rather
-  // than padded when the ride does not carry it, so a card never prints a dash
-  // where a fact should be — a ride imported without a power meter simply has
-  // fewer columns.
-  const secondary: { l: string; v: string }[] = [
-    ...(ride.avg_power_w != null ? [{ l: 'Ø WATT', v: `${nf.format(ride.avg_power_w)} W` }] : []),
-    { l: 'HÖHE', v: hm(ride.elevation_gain_m) },
-    ...(hasKm ? [{ l: 'ZEIT', v: durText }] : []),
-    ...(ride.avg_hr != null ? [{ l: 'Ø PULS', v: `${nf.format(ride.avg_hr)}` }] : []),
-  ].filter((x) => x.v && !x.v.startsWith(DASH)).slice(0, 4)
+  const indoor = !ride.route || ride.route.length < 2
+
+  // ── WHAT THE RIDE WAS, IN ITS OWN WORDS ──────────────────────────────────
+  // The eyebrow is the rider's title and the headline is the measurement,
+  // which is the pen's arrangement and the right way round: the title says
+  // what they were doing, the figure says how much of it there was.
+  const vm: W3FeedPostVm = {
+    id: ride.id,
+    handle: name,
+    meta: [ago(ride.started_at), indoor ? 'Indoor' : null].filter(Boolean).join(' · '),
+    avatarUrl: avatar,
+    avatarInitial: initial,
+    mine,
+    eyebrow: (ride.title || '').trim().toUpperCase() || null,
+    headline: hasKm
+      ? km(ride.distance_m).replace(' km', '')
+      : nf.format(Math.round(ride.duration_seconds / 60)),
+    headlineUnit: hasKm ? 'km' : 'min',
+    description: ride.description,
+    // The first photo is the card. The rest belong to the ride's own page.
+    photoUrl: ride.photo_urls[0] ?? null,
+    badge: null,
+    // Watts first — the number cyclists talk about, and it was behind the
+    // expand. Every column is dropped rather than padded when the ride does
+    // not carry it, so a card never prints a dash where a fact should be.
+    stats: [
+      ...(ride.avg_power_w != null ? [{ l: 'Ø WATT', v: nf.format(ride.avg_power_w), u: 'W' }] : []),
+      ...(ride.elevation_gain_m > 0 ? [{ l: 'HÖHE', v: nf.format(Math.round(ride.elevation_gain_m)), u: 'hm' }] : []),
+      { l: 'ZEIT', v: dur(ride.duration_seconds) },
+      ...(ride.tss != null ? [{ l: 'TSS', v: nf.format(ride.tss) }] : []),
+    ],
+    elevationProfile: ride.elevation_profile,
+    powerProfile: ride.power_profile,
+    reactionCount: Object.values(ride.reactions?.counts ?? {}).reduce((a, b) => a + b, 0),
+    commentCount: ride.comment_count,
+    alsoLine: null,
+    onOpen: onToggle,
+  }
 
   return (
-    <div style={{ ...lux(26), padding: 0, overflow: 'hidden', minWidth: 0 }}>
-      {/* ── header: who, and when ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: `${S.md}px ${S.lg}px` }}>
-        <Face url={avatar} initial={initial} mine={mine} />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
-          <span style={{ ...ellipsis, fontSize: 13, fontWeight: 600, color: mine ? YOU_TINT : T.ink }}>{name}</span>
-          <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{ago(ride.started_at)}</span>
-        </div>
-        {ride.tss != null && (
-          <span style={{
-            flex: 'none', ...TNUM, fontSize: 10, fontWeight: 700, letterSpacing: 0.6,
-            padding: '4px 9px', borderRadius: 100, background: `${tint}1F`, color: tint,
-          }}>{nf.format(ride.tss)} TSS</span>
-        )}
-      </div>
-
-      {/* ── the picture ──
-          THE WHOLE PLATE OPENS THE RIDE. It was inert, and the only way into
-          the detail was a comment button in the corner — so the biggest object
-          on the card was the one thing that did not respond to being touched.
-          On a route the drag is the scrub and the tap is the open; `scrubbing`
-          is what keeps the two from fighting. */}
-      <div
-        onClick={() => { if (!scrubbing) onToggle() }}
-        style={{
-          // NO TRACK, NO PICTURE, NO HEIGHT. A trainer session has nothing to
-          // draw — the gauge that stood in for one was an invented object
-          // filling a plate that should not have been tall in the first place.
-          // It gets a compact band with the same headline and the same
-          // columns, which is the honest shape for a ride with no map.
-          position: 'relative', width: '100%',
-          height: hasRoute ? POST_H : 132,
-          overflow: 'hidden', cursor: 'pointer',
-          background: `radial-gradient(90% 70% at 70% 20%, ${tint}24, transparent 72%), ${T.heroDock}`,
-        }}>
-        {hasRoute && (
-          <RideMapScene
-            polyline={ride.route as [number, number][]}
-            w={POST_W} h={POST_H} tint={tint}
-            distanceM={ride.distance_m}
-            onScrub={setScrubbing}
-          />
-        )}
-
-        {/* THE HEADLINE, over the shape. Top-left, where a reader's eye lands
-            first, and large enough that the card's size on screen tells you
-            the ride's size before a single word is read. */}
-        <motion.div
-            animate={{ opacity: scrubbing ? 0.12 : 1 }}
-            transition={{ duration: 0.16 }}
-            style={{
-              position: 'absolute', top: S.md, left: S.lg, display: 'flex',
-              alignItems: 'baseline', gap: 5, pointerEvents: 'none',
-              textShadow: `0 2px 24px ${T.bg}`,
-            }}>
-            <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2, lineHeight: 0.9, color: T.ink }}>{heroValue}</span>
-            <span style={{ fontSize: 14, fontWeight: 600, color: T.mid }}>{heroUnit}</span>
-        </motion.div>
-
-        {/* The working, under a scrim. Label above value, so the row reads as
-            a table rather than as three numbers that happen to be adjacent —
-            and so it can never be mistaken for the headline. */}
-        {secondary.length > 0 && (
-          <motion.div
-            animate={{ opacity: scrubbing ? 0 : 1 }}
-            transition={{ duration: 0.16 }}
-            style={{
-              position: 'absolute', left: 0, right: 0, bottom: 0,
-              padding: `30px ${S.lg}px ${S.md}px`,
-              background: `linear-gradient(180deg, transparent, ${T.bg}E6 62%)`,
-              display: 'flex', gap: S.lg, alignItems: 'flex-end', pointerEvents: 'none',
-            }}>
-            {secondary.map((x) => (
-              <span key={x.l} style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>{x.l}</span>
-                <span style={{ ...TNUM, fontSize: 14, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{x.v}</span>
-              </span>
-            ))}
-            {hasRoute && (
-              <span style={{ marginLeft: 'auto', fontSize: 8.5, fontWeight: 700, letterSpacing: 0.9, color: T.quiet }}>
-                ZIEHEN
-              </span>
-            )}
-          </motion.div>
-        )}
-      </div>
-
-      {/* ── what people did about it ── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: `${S.md}px ${S.lg}px 0`, minWidth: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Reactions rideId={ride.id} seed={ride.reactions} accent={tint} />
-        </div>
-        <button type="button" onClick={onToggle} aria-label={`Kommentare öffnen (${ride.comment_count})`}
-          style={{ ...bare, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 100, background: T.surface2 }}>
-          <MessageCircle size={13} color={ride.comment_count > 0 ? tint : T.quiet} />
-          <span style={{ ...TNUM, fontSize: 11, fontWeight: 600, color: ride.comment_count > 0 ? tint : T.quiet }}>{ride.comment_count}</span>
-        </button>
-      </div>
-
-      {/* ── the caption: name, then what they rode ── */}
-      <div style={{ padding: `${S.sm}px ${S.lg}px ${S.lg}px`, display: 'flex', flexDirection: 'column', gap: S.sm, minWidth: 0 }}>
-        <span style={{ fontSize: 13.5, color: T.ink, lineHeight: 1.4 }}>
-          <span style={{ fontWeight: 600, color: mine ? YOU_TINT : T.mid }}>{name}</span>
-          {'  '}
-          <span style={{ fontWeight: 600 }}>{ride.title || 'Fahrt'}</span>
-        </span>
-
-        {ride.comment_count > 0 && !open && (
-          <button type="button" onClick={onToggle}
-            style={{ ...bare, alignSelf: 'flex-start', fontSize: 12, fontWeight: 600, color: T.quiet }}>
-            {ride.comment_count === 1 ? '1 Kommentar ansehen' : `Alle ${ride.comment_count} Kommentare ansehen`}
-          </button>
-        )}
-
-        {open && (
+    <W3FeedPost
+      vm={vm}
+      tint={tint}
+      slots={{
+        actions: (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', minWidth: 0 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Reactions rideId={ride.id} seed={ride.reactions} accent={tint} />
+            </div>
+            <button type="button" onClick={onToggle} aria-label={`Kommentare öffnen (${ride.comment_count})`}
+              style={{ ...bare, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 100, background: T.surface2 }}>
+              <MessageCircle size={13} color={ride.comment_count > 0 ? tint : T.quiet} />
+              <span style={{ ...TNUM, fontSize: 11, fontWeight: 600, color: ride.comment_count > 0 ? tint : T.quiet }}>{ride.comment_count}</span>
+            </button>
+          </div>
+        ),
+        thread: open ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: S.md, minWidth: 0 }}>
             <div style={{ ...luxTile(16), padding: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
               <Cell label="TSS" value={ride.tss != null ? nf.format(ride.tss) : DASH} />
@@ -514,9 +428,16 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
             </div>
             <Thread rideId={ride.id} accent={tint} />
           </div>
-        )}
-      </div>
-    </div>
+        ) : (
+          ride.comment_count > 0 ? (
+            <button type="button" onClick={onToggle}
+              style={{ ...bare, alignSelf: 'flex-start', fontSize: 12, fontWeight: 600, color: T.quiet }}>
+              {ride.comment_count === 1 ? '1 Kommentar ansehen' : `Alle ${ride.comment_count} Kommentare ansehen`}
+            </button>
+          ) : null
+        ),
+      }}
+    />
   )
 }
 

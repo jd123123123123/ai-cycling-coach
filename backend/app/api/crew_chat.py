@@ -124,6 +124,14 @@ class RideRead(BaseModel):
     #: shape with a hole in it.
     description: str | None = None
     photo_urls: list[str] = []
+    #: The ride's own shape over time, downsampled for a card: altitude for a
+    #: ride that climbed, power for one on a trainer. Raw units — the card
+    #: scales them against their own series, never against a fixed axis, so a
+    #: flat commute and an alpine day are each legible on their own terms.
+    #: None where the ride carries no such stream, and the card then draws no
+    #: chart rather than a straight line pretending to be terrain.
+    elevation_profile: list[float] | None = None
+    power_profile: list[float] | None = None
     #: The ride's shape, as `[[lat, lng], ...]` downsampled for a feed
     #: thumbnail — the client projects it (`W3RouteCard.project`). None when the
     #: ride carries no usable GPS track (indoor, trainer, a watch with GPS off),
@@ -374,6 +382,7 @@ async def list_crew_rides(
     )
     counts = await _comment_counts(db, crew_id=mem.crew_id, activity_ids=ride_ids)
     photos = await _ride_photo_urls(db, ride_ids)
+    profiles = await _ride_profiles(db, activity_ids=ride_ids)
     routes = await _route_thumbs(db, activity_ids=ride_ids)
 
     out: list[RideRead] = []
@@ -405,6 +414,8 @@ async def list_crew_rides(
                 comment_count=counts.get(act.id, 0),
                 description=act.description,
                 photo_urls=photos.get(act.id, []),
+                elevation_profile=profiles.get(act.id, {}).get("altitude"),
+                power_profile=profiles.get(act.id, {}).get("power"),
                 route=routes.get(act.id),
             )
         )
@@ -414,6 +425,56 @@ async def list_crew_rides(
 # ──────────────────────────────────────────────────────────────────────
 # Comments under a crew ride
 # ──────────────────────────────────────────────────────────────────────
+
+
+#: Enough to read a col or an interval block, few enough that a page of them is
+#: not a payload. The route thumb uses the same reasoning at its own count.
+FEED_PROFILE_POINTS = 48
+
+
+def _downsample(values: list, n: int) -> list[float] | None:
+    """`n` evenly spaced points, or None if there is nothing worth drawing.
+
+    Sampled rather than averaged, deliberately: a mean smooths the col flat,
+    and the peak of a climb is the whole reason the profile is on the card.
+    """
+    clean = [float(v) for v in values if isinstance(v, (int, float)) and v == v]
+    if len(clean) < 8:
+        return None
+    if len(clean) <= n:
+        return [round(v, 1) for v in clean]
+    step = len(clean) / n
+    out = [clean[int(i * step)] for i in range(n)]
+    out[-1] = clean[-1]          # never lose the real end
+    return [round(v, 1) for v in out]
+
+
+async def _ride_profiles(
+    db: AsyncSession, *, activity_ids: list[int]
+) -> dict[int, dict[str, list[float] | None]]:
+    """{activity_id → {altitude, power}} for a page, in one query.
+
+    Batched for the same reason as the comment counts and the photos: a feed
+    that read a stream per row would issue a query per post.
+    """
+    if not activity_ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(ActivityStream.activity_id, ActivityStream.streams).where(
+                ActivityStream.activity_id.in_(activity_ids)
+            )
+        )
+    ).all()
+    out: dict[int, dict[str, list[float] | None]] = {}
+    for act_id, streams in rows:
+        if not isinstance(streams, dict):
+            continue
+        out[act_id] = {
+            "altitude": _downsample(streams.get("altitude") or [], FEED_PROFILE_POINTS),
+            "power": _downsample(streams.get("power") or [], FEED_PROFILE_POINTS),
+        }
+    return out
 
 
 async def _ride_photo_urls(
