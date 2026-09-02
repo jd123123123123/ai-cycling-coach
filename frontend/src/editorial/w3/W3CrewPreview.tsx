@@ -1,6 +1,10 @@
 import { useState } from 'react'
+import { T } from './w3tokens'
 import W3CrewView, { type W3CrewVm } from './W3CrewView'
 import { W3CrewFeedView } from './W3CrewFeed'
+import W3StoryRail from './W3StoryRail'
+import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
+import { cutRides, feedHeadEyebrow, storiesFromRides, type W3FeedCut } from './w3feedCuts'
 import type { CrewRide } from '../../api/crewRides'
 import { periodWord, thisPeriod, type W3Period } from './w3crew'
 
@@ -109,6 +113,52 @@ const BASE = {
   seatsCopy: 'Crews of six to eight hold each other best. Fewer, and a quiet week goes unnoticed.',
 }
 
+/**
+ * THE PREVIEW RENDERS WHAT THE PAGE RENDERS.
+ *
+ * It used to mount `W3CrewFeedView` alone, so the head, the rail, the cuts and
+ * the collective card — everything the crew screen actually shows — were
+ * invisible to every review that used this route. A harness that draws less
+ * than production is the same defect as one that draws a shape production
+ * cannot: it makes the screen look finished when it is not.
+ */
+function PreviewFeed() {
+  const [cut, setCut] = useState<W3FeedCut>('all')
+  const shown = cutRides(FEED_RIDES, cut)
+  const stories = storiesFromRides(FEED_RIDES, new Date(), (r) => ({
+    id: r.id,
+    name: r.is_mine ? 'Du' : `@${r.handle}`,
+    avatarUrl: null,
+    initial: (r.handle || '?').charAt(0).toUpperCase(),
+    mine: r.is_mine,
+    card: <W3CrewFeedView rides={[r]} variant="page" />,
+  }))
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
+      <span style={{ padding: '0 20px', fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>
+        {feedHeadEyebrow()}
+      </span>
+      <W3StoryRail stories={stories} onStart={() => { /* preview */ }} />
+      <W3FeedFilters
+        value={cut}
+        onChange={setCut}
+        options={[
+          { key: 'all', label: 'Alle', count: FEED_RIDES.length },
+          { key: 'crew', label: 'Crew', count: FEED_RIDES.filter((r) => !r.is_mine).length },
+          { key: 'mine', label: 'Meine', count: FEED_RIDES.filter((r) => r.is_mine).length },
+        ]}
+      />
+      <div style={{ padding: '0 20px' }}>
+        <W3CollectiveGoal km={782} goalKm={1000} pct={0.78} riders={9} daysLeft={2} onContribute={() => {}} />
+      </div>
+      <div style={{ padding: '0 20px' }}>
+        <W3CrewFeedView rides={shown} variant="page" />
+      </div>
+      {shown.length > 0 && <W3FeedFoot text="Das war die Crew von heute" />}
+    </div>
+  )
+}
+
 export default function W3CrewPreview() {
   const [period, setPeriod] = useState<W3Period>('week')
   const vm: W3CrewVm = {
@@ -121,5 +171,5 @@ export default function W3CrewPreview() {
     highlightsTitle: `This ${periodWord(period)} in the crew`,
   }
   return <W3CrewView vm={vm} onPeriod={setPeriod}
-    feed={<W3CrewFeedView rides={FEED_RIDES} variant="page" />} />
+    feed={<PreviewFeed />} />
 }

@@ -5,10 +5,13 @@ import { useToggleReaction } from '../../hooks/useCrewReactions'
 import { useCrewRides } from '../../hooks/useCrewRides'
 import { useCrewChallenges, useCreateChallenge } from '../../hooks/useChallenges'
 import type { StandingRow } from '../../api/crew'
-import { DASH } from './w3tokens'
+import { DASH, T } from './w3tokens'
 import W3CrewView, { type W3CrewVm, type W3CrewMember, type W3ShowedUpRow, type W3Highlight } from './W3CrewView'
 import W3CrewGoalEditor from './W3CrewGoalEditor'
 import { W3CrewFeedView } from './W3CrewFeed'
+import W3StoryRail from './W3StoryRail'
+import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
+import { cutRides as applyCut, feedHeadEyebrow, storiesFromRides, type W3FeedCut } from './w3feedCuts'
 import W3Loading from './W3Loading'
 import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
 
@@ -76,6 +79,21 @@ export default function W3CrewPage() {
     }
     return out
   }, [standings])
+  const [cut, setCut] = useState<W3FeedCut>('all')
+  const shown = useMemo(() => applyCut(rides ?? [], cut), [rides, cut])
+  // The rail is people, and the card it opens is the ride's own post — the
+  // same component the feed below draws, so a story and a post can never
+  // disagree about the same ride.
+  const stories = useMemo(() => storiesFromRides(rides ?? [], new Date(), (r) => ({
+    id: r.id,
+    name: r.is_mine ? 'Du' : `@${r.handle}`,
+    avatarUrl: avatars[r.user_id] ?? null,
+    initial: (r.handle || '?').trim().charAt(0).toUpperCase() || '?',
+    mine: r.is_mine,
+    card: (
+      <W3CrewFeedView rides={[r]} avatars={avatars} variant="page" />
+    ),
+  })), [rides, avatars])
   const toggleProps = useToggleReaction()
   const createChallenge = useCreateChallenge()
   const [editingGoal, setEditingGoal] = useState(false)
@@ -301,12 +319,61 @@ export default function W3CrewPage() {
         // rendered no rides — and the post shapes, the prompt and the whole
         // add-a-photo flow were reachable from nowhere in the running app.
         feed={
-          <W3CrewFeedView
-            rides={rides ?? []}
-            avatars={avatars}
-            variant="page"
-            onRefresh={() => void refetchRides()}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
+            {/* ── pen `dly9G`, in its own order ──────────────────────────────
+                Head, the people who were out today, the cuts, the crew's
+                shared goal, then the rides. Everything above the posts is
+                context for them; nothing above the posts is a post. */}
+            {/* NO SECOND TITLE. The pen's `dly9G` is a standalone Feed
+                screen and its head is the page's; inside the crew screen the
+                numbered chapter above already says "Zuletzt gefahren", and
+                printing "Feed" under it is the same restating this view
+                deleted its highlights strip for. The dated eyebrow survives
+                on its own, because when the list was built is a fact the
+                chapter head does not carry. */}
+            <span style={{ padding: '0 20px', fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>
+              {feedHeadEyebrow()}
+            </span>
+
+            <W3StoryRail
+              stories={stories}
+              onStart={() => navigate('/e/w3-today')}
+            />
+
+            <W3FeedFilters
+              value={cut}
+              onChange={setCut}
+              options={[
+                { key: 'all', label: 'Alle', count: (rides ?? []).length },
+                { key: 'crew', label: 'Crew', count: (rides ?? []).filter((r) => !r.is_mine).length },
+                { key: 'mine', label: 'Meine', count: (rides ?? []).filter((r) => r.is_mine).length },
+              ]}
+            />
+
+            {vm.showDistanceGoal && vm.distanceGoalKm > 0 && (
+              <div style={{ padding: '0 20px' }}>
+                <W3CollectiveGoal
+                  km={vm.distanceKm}
+                  goalKm={vm.distanceGoalKm}
+                  pct={vm.distancePct / 100}
+                  riders={vm.members.length}
+                  daysLeft={null}
+                  onContribute={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
+                />
+              </div>
+            )}
+
+            <div style={{ padding: '0 20px' }}>
+              <W3CrewFeedView
+                rides={shown}
+                avatars={avatars}
+                variant="page"
+                onRefresh={() => void refetchRides()}
+              />
+            </div>
+
+            {shown.length > 0 && <W3FeedFoot text="Das war die Crew von heute" />}
+          </div>
         }
       />
       {editingGoal && (
