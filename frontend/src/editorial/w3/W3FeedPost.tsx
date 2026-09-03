@@ -48,6 +48,10 @@ export interface W3FeedPostVm {
   avatarUrl: string | null
   avatarInitial: string
   mine: boolean
+  /** The full editorial card (`SpFxs` / `UQhtr`) versus the compact trainer
+   *  tile (`kFeEt`). Decided by the caller from the ride itself, because it
+   *  has the payload and this component does not. */
+  full: boolean
   /** The acid line over the headline: what kind of ride this was. */
   eyebrow: string | null
   headline: string
@@ -405,12 +409,9 @@ function PlainPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots:
 export default function W3FeedPost({ vm, tint = T.acid, slots = {} }: {
   vm: W3FeedPostVm; tint?: string; slots?: W3FeedPostSlots
 }): ReactNode {
-  // THE RIDE DECIDES, NOT THE PICTURE. A ride with a route earns the full card
-  // whether or not anyone photographed it — that is what `UQhtr` is. A trainer
-  // session has no route, no landscape and no profile, and gets the compact
-  // one.
-  const outdoors = !!vm.elevationProfile || !!vm.description || !!vm.photoUrl
-  return outdoors
+  // THE RIDE DECIDES, NOT THE PICTURE — and the caller decides which ride
+  // this is, because it has the payload and this component does not.
+  return vm.full
     ? <PhotoPost vm={vm} tint={tint} slots={slots} />
     : <PlainPost vm={vm} tint={tint} slots={slots} />
 }

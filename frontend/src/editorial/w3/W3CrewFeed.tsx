@@ -371,7 +371,20 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
   const initial = (ride.handle || '?').trim().charAt(0).toUpperCase() || '?'
 
   const hasKm = ride.distance_m > 0
-  const indoor = !ride.route || ride.route.length < 2
+  // ── A MISSING POLYLINE IS NOT AN INDOOR RIDE ──────────────────────────
+  //
+  // This said `indoor = !ride.route`, and it was wrong twice over. A ride can
+  // cover seventeen kilometres with fifty-seven metres of climbing and an
+  // average of 21 km/h and still have no STORED track: the stream may never
+  // have been ingested, `has_gps` may be false, the head unit may have had
+  // GPS off. Calling that "Indoor" told a rider their real outing happened in
+  // their living room — and because the same signal chose the card, nearly
+  // every ride in this account got the compact trainer tile. Which is exactly
+  // why the feed looked unchanged after all the work on it.
+  //
+  // What the payload can honestly say is whether the ride COVERED GROUND. It
+  // says nothing reliable about where, so the card no longer claims to know.
+  const covered = ride.distance_m > 0
 
   // ── WHAT THE RIDE WAS, IN ITS OWN WORDS ──────────────────────────────────
   // The eyebrow is the rider's title and the headline is the measurement,
@@ -380,10 +393,11 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
   const vm: W3FeedPostVm = {
     id: ride.id,
     handle: name,
-    meta: [ago(ride.started_at), indoor ? 'Indoor' : null].filter(Boolean).join(' · '),
+    meta: ago(ride.started_at),
     avatarUrl: avatar,
     avatarInitial: initial,
     mine,
+    full: covered,
     // THEIR WORDS, THEIR CASE. Uppercasing a ride title destroys information
     // — compound nouns lose their shape and a title somebody capitalised on
     // purpose reads like one typed in a hurry.
