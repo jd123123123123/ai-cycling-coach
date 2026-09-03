@@ -145,10 +145,11 @@ function PreviewFeed() {
       <W3FeedFilters
         value={cut}
         onChange={setCut}
+        layoutId="w3-crew-cut"
         options={[
           { key: 'all', label: 'Alle', count: FEED_RIDES.length },
-          { key: 'crew', label: 'Crew', count: FEED_RIDES.filter((r) => !r.is_mine).length },
-          { key: 'mine', label: 'Meine', count: FEED_RIDES.filter((r) => r.is_mine).length },
+          { key: 'mine', label: 'Nur meine', count: FEED_RIDES.filter((r) => r.is_mine).length },
+          { key: 'crew', label: 'Ohne mich', count: FEED_RIDES.filter((r) => !r.is_mine).length },
         ]}
       />
       <div style={{ padding: '0 20px' }}>
@@ -181,6 +182,7 @@ function PreviewFeed() {
 }
 
 export default function W3CrewPreview() {
+  const [tab, setTab] = useState<'feed' | 'crew'>('feed')
   const [period, setPeriod] = useState<W3Period>('week')
   const vm: W3CrewVm = {
     ...BASE,
@@ -192,5 +194,14 @@ export default function W3CrewPreview() {
     highlightsTitle: `This ${periodWord(period)} in the crew`,
   }
   return <W3CrewView vm={vm} onPeriod={setPeriod}
-    feed={<PreviewFeed />} />
+    feed={<PreviewFeed />}
+    tab={tab}
+    chips={
+      <W3FeedFilters
+        value={tab}
+        onChange={setTab}
+        layoutId="w3-crew-tab"
+        options={[{ key: 'feed', label: 'Feed' }, { key: 'crew', label: 'Crew' }]}
+      />
+    } />
 }

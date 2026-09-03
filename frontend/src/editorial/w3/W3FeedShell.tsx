@@ -61,10 +61,24 @@ export interface W3FeedFilter<K extends string> { key: K; label: string; count?:
  * A cut with no rides is rendered DISABLED rather than hidden: a row that
  * changes length as rides arrive is a row a rider cannot aim at.
  */
-export function W3FeedFilters<K extends string>({ value, options, onChange }: {
+export function W3FeedFilters<K extends string>({ value, options, onChange, layoutId }: {
   value: K
   options: W3FeedFilter<K>[]
   onChange: (k: K) => void
+  /**
+   * UNIQUE PER MOUNTED ROW, and this is not optional when two rows exist.
+   *
+   * The lit pill is a shared-layout element. Two rows carrying the same id
+   * make Framer treat them as ONE pill and fly it from the first row to the
+   * second — so the first row's selected chip is left with no pill under it,
+   * and since its label is dark-on-acid it becomes dark-on-nothing. The chip
+   * does not look wrong; it disappears.
+   *
+   * `W3GrainSwitch` documents this hazard and takes the id as a prop. This
+   * component hardcoded one, and the moment the crew screen grew a second row
+   * the tab row's "Feed" vanished.
+   */
+  layoutId: string
 }) {
   const reduce = useReducedMotion()
   return (
@@ -87,7 +101,7 @@ export function W3FeedFilters<K extends string>({ value, options, onChange }: {
             }}>
             {on && (
               <motion.span
-                layoutId="w3-feed-filter"
+                layoutId={layoutId}
                 transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34 }}
                 style={{ position: 'absolute', inset: 0, borderRadius: 100, background: T.acid }}
               />

@@ -1,6 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, Sparkles, UserPlus, Pencil, ChevronRight } from 'lucide-react'
-import { W3CrewFeedPage } from './W3CrewFeed'
 import { T, FONT, EASE, grow, band, card, DASH } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
 import { YOU_TINT, type W3Period } from './w3crew'
@@ -183,7 +182,7 @@ const SectionHead = ({ n, title, chip }: { n: number; title: string; chip?: stri
   </div>
 )
 
-export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, onPeriod, onOpenMember, feed }: {
+export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, onPeriod, onOpenMember, feed, tab = 'feed', chips }: {
   vm: W3CrewVm
   onBack?: () => void
   onProps?: () => void
@@ -194,6 +193,25 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
   /** Chapter 03's contents. Omitted on the wired screen, where the section
    *  fetches the crew's real rides itself. */
   feed?: React.ReactNode
+  /**
+   * WHICH HALF OF THE SCREEN THIS IS.
+   *
+   * The pen's `dly9G` is a FEED. Its chip row is the page's navigation, and
+   * there is no standings table on it anywhere — the crew's rides are the
+   * subject and everything else is somewhere else.
+   *
+   * This screen had the feed as chapter THREE, under the rank card, the member
+   * grid, a props button and the distance goal. Appending a redesigned feed to
+   * the bottom of that changed nothing a rider could see, because they never
+   * scrolled that far.
+   *
+   * So the chips are real now: `feed` is the pen's screen and the default;
+   * `crew` is the board and the members, which is a genuine question a rider
+   * asks and a poor thing to open on. Nothing is deleted — it moved.
+   */
+  tab?: 'feed' | 'crew'
+  /** The chip row itself, owned by the page so it can carry live counts. */
+  chips?: React.ReactNode
 }) {
   const reduce = useReducedMotion()
 
@@ -228,6 +246,12 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
 
         {vm.inCrew ? (
           <>
+            {chips && <div style={{ paddingBottom: 18 }}>{chips}</div>}
+
+            {tab === 'feed' && feed}
+
+            {tab === 'crew' && (
+            <>
             {/* Period — one control, every number below follows it */}
             <div style={{ ...band(20) }}>
               <W3PeriodTabs value={vm.period} onChange={(p) => onPeriod?.(p)} />
@@ -378,13 +402,8 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
                 "where do I stand" and this answers "what did they actually
                 do" — the standings are the summary, the feed is the evidence,
                 and a summary reads better before its evidence. */}
-            <div style={{ ...band(28), gap: 14 }}>
-              <SectionHead n={3} title="Zuletzt gefahren" />
-              {/* The wired screen lets the section fetch its own rides; the
-                  preview hands it fixtures so the chapter is reviewable
-                  without a crew, a session or a backend. */}
-              {feed ?? <W3CrewFeedPage />}
-            </div>
+            </>
+            )}
 
             {/* HIGHLIGHTS IS GONE — it restated the board in sentences.
                 "@mara leads the crew board this week", "You · 412 TSS · 84 km",

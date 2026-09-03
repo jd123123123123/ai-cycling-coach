@@ -82,6 +82,9 @@ export default function W3CrewPage() {
     return out
   }, [standings])
   const [cut, setCut] = useState<W3FeedCut>('all')
+  // FEED FIRST. The pen's screen is the rides; the board is a question a
+  // rider asks second and a poor thing to open on.
+  const [tab, setTab] = useState<'feed' | 'crew'>('feed')
   const [dressing, setDressing] = useState<number | null>(null)
   // Hoisted so the headline card and the feed agree on WHICH ride it is —
   // computing it twice is how the two would drift into showing a card for one
@@ -325,6 +328,18 @@ export default function W3CrewPage() {
         onProps={giveProps}
         onInvite={invite}
         onEditGoal={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
+        tab={tab}
+        chips={
+          <W3FeedFilters
+            value={tab}
+            onChange={setTab}
+            layoutId="w3-crew-tab"
+            options={[
+              { key: 'feed', label: 'Feed' },
+              { key: 'crew', label: 'Crew' },
+            ]}
+          />
+        }
         // THE FEED WAS BUILT AND NEVER MOUNTED. `W3CrewView` has taken a
         // `feed` slot all along and only the preview ever filled it, so the
         // "+N weitere in der Crew" line on Today pointed at a screen that
@@ -353,13 +368,18 @@ export default function W3CrewPage() {
               onStart={myUnfilled ? () => setDressing(myUnfilled.id) : undefined}
             />
 
+            {/* The CUT, not the tab: whose rides, within the feed. Named
+                differently from the tabs above on purpose — two chip rows
+                meaning two different things is only confusing if they use the
+                same words. */}
             <W3FeedFilters
               value={cut}
               onChange={setCut}
+              layoutId="w3-crew-cut"
               options={[
                 { key: 'all', label: 'Alle', count: (rides ?? []).length },
-                { key: 'crew', label: 'Crew', count: (rides ?? []).filter((r) => !r.is_mine).length },
-                { key: 'mine', label: 'Meine', count: (rides ?? []).filter((r) => r.is_mine).length },
+                { key: 'mine', label: 'Nur meine', count: (rides ?? []).filter((r) => r.is_mine).length },
+                { key: 'crew', label: 'Ohne mich', count: (rides ?? []).filter((r) => !r.is_mine).length },
               ]}
             />
 
