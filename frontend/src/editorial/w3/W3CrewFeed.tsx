@@ -14,6 +14,7 @@ import { THEM_TINT, YOU_TINT } from './w3crew'
 import W3FeedPost, { type W3FeedPostVm } from './W3FeedPost'
 import W3AddDetailsNudge from './W3AddDetailsNudge'
 import W3StoryRail from './W3StoryRail'
+import W3RideDetailsSheet from './W3RideDetailsSheet'
 import { storiesFromRides } from './w3feedCuts'
 
 /**
@@ -590,6 +591,9 @@ export default function W3CrewFeed() {
   const { data: standings } = useCrewStandings('week')
   const navigate = useNavigate()
 
+  const [dressing, setDressing] = useState<number | null>(null)
+  const myUnfilled = (rides ?? []).find((r) => r.is_mine && r.photo_urls.length === 0)
+
   const avatars: Record<number, string | null> = {}
   for (const row of standings?.standings ?? []) avatars[row.user_id] = row.avatar ?? null
 
@@ -617,8 +621,23 @@ export default function W3CrewFeed() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%', minWidth: 0 }}>
-      {stories.length > 0 && <W3StoryRail stories={stories} />}
+      {stories.length > 0 && (
+        <W3StoryRail
+          stories={stories}
+          // Same rule as the crew screen: the tile exists only when the rider
+          // has a ride with no picture on it.
+          onStart={myUnfilled ? () => setDressing(myUnfilled.id) : undefined}
+        />
+      )}
       <W3CrewFeedView rides={rides ?? []} avatars={avatars} />
+      {dressing != null && (
+        <W3RideDetailsSheet
+          activityId={dressing}
+          open
+          onClose={() => setDressing(null)}
+          onSaved={() => setDressing(null)}
+        />
+      )}
     </div>
   )
 }

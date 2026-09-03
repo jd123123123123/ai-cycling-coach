@@ -70,10 +70,21 @@ export interface W3Story {
 
 // ── the rail ────────────────────────────────────────────────────────────────
 
-export default function W3StoryRail({ stories, onStart, tint = T.acid }: {
+export default function W3StoryRail({ stories, onStart, startLabel = 'Foto', tint = T.acid }: {
   stories: W3Story[]
-  /** The "+ Start" tile. Omitted when there is nothing for it to do. */
+  /**
+   * The leading tile.
+   *
+   * OMITTED WHEN THERE IS NOTHING FOR IT TO DO, and that is the whole rule.
+   * Instagram's "+" makes a story; this app cannot — a ride arrives from a
+   * head unit, it is not begun in here. The nearest true thing is "make your
+   * ride worth looking at", so the tile opens the photo sheet for the rider's
+   * own newest ride that has none, and simply does not render when they have
+   * no such ride. A tile that navigated somewhere vaguely related would be a
+   * dead control, which is the defect this codebase grows fastest.
+   */
   onStart?: () => void
+  startLabel?: string
   tint?: string
 }) {
   const [seen, setSeen] = useState<Set<number>>(() => seenSet())
@@ -118,7 +129,7 @@ export default function W3StoryRail({ stories, onStart, tint = T.acid }: {
               }}>
                 <Plus size={22} color={tint} strokeWidth={2.2} />
               </span>
-              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Start</span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{startLabel}</span>
             </button>
           )}
 

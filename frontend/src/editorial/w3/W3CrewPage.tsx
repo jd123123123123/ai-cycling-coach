@@ -12,6 +12,7 @@ import { W3CrewFeedView } from './W3CrewFeed'
 import W3StoryRail from './W3StoryRail'
 import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
 import W3RecordCard from './W3RecordCard'
+import W3RideDetailsSheet from './W3RideDetailsSheet'
 import { cutRides as applyCut, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedCut } from './w3feedCuts'
 import W3Loading from './W3Loading'
 import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
@@ -81,6 +82,12 @@ export default function W3CrewPage() {
     return out
   }, [standings])
   const [cut, setCut] = useState<W3FeedCut>('all')
+  const [dressing, setDressing] = useState<number | null>(null)
+  // My newest ride with no picture on it — what the rail's leading tile is for.
+  const myUnfilled = useMemo(
+    () => (rides ?? []).find((r) => r.is_mine && r.photo_urls.length === 0),
+    [rides],
+  )
   const shown = useMemo(() => applyCut(rides ?? [], cut), [rides, cut])
   // The rail is people, and the card it opens is the ride's own post — the
   // same component the feed below draws, so a story and a post can never
@@ -338,7 +345,8 @@ export default function W3CrewPage() {
 
             <W3StoryRail
               stories={stories}
-              onStart={() => navigate('/e/w3-today')}
+              // Only when the rider actually has a ride to dress up.
+              onStart={myUnfilled ? () => setDressing(myUnfilled.id) : undefined}
             />
 
             <W3FeedFilters
@@ -395,6 +403,14 @@ export default function W3CrewPage() {
           </div>
         }
       />
+      {dressing != null && (
+        <W3RideDetailsSheet
+          activityId={dressing}
+          open
+          onClose={() => setDressing(null)}
+          onSaved={() => void refetchRides()}
+        />
+      )}
       {editingGoal && (
         <W3CrewGoalEditor
           currentKm={vm.distanceGoalKm}
