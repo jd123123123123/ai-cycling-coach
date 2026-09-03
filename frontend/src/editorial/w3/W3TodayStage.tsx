@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Asterisk, ChevronsUp, Flame, Settings, Star, UserRound } from 'lucide-react'
+import { Asterisk, ChevronsUp, Flame, Star, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
@@ -294,7 +294,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         {/* The pen's gear. It opens the SAME nav sheet the old header burger
             did — plan, goal, crew, challenges and referrals are reachable from
             nowhere else, and a lookalike button here would have stranded them. */}
-        <W3NavMenu size={44} iconSize={20} background={T.heroChip} Icon={Settings} />
+        <W3NavMenu />
         {/* The coach, moved off the floating FAB that was landing on the dock. */}
         <W3CoachFab variant="chip" background={T.heroChip} iconColor={T.acid} />
         {/* Force a Garmin pull. It lives HERE, on Today, because this is the

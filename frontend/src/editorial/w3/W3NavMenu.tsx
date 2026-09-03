@@ -13,6 +13,21 @@ import { T, FONT } from './w3tokens'
  * daily surfaces; this sheet reaches the rest (plan, goal, crew, challenges,
  * referrals, settings) so no screen is stranded. Self-contained (owns its open
  * state + navigation); drop <W3NavMenu/> into any screen header.
+ *
+ * ── ONE BUTTON, NOT TWO ──────────────────────────────────────────────────
+ *
+ * This shipped as two different buttons for one sheet: Today's stage passed a
+ * gear on a hero chip at 20px, and W3TopBar — Biker, Fahrten, Plan and six
+ * others — took the bare defaults and drew a hamburger on `surface` at 18px.
+ * A gear and a hamburger are two different promises, so the rider had no way
+ * to know the profile's menu and Today's menu opened the same thing.
+ *
+ * The gear is the truthful one (the sheet is settings AND navigation) and it
+ * is what the most-seen screen already showed, so it became the default —
+ * as did `heroChip`, which the palette defines, in both themes, as the ground
+ * for "floating corner chips + the round icon button". That is this button.
+ * Every override is now gone from every call site; the defaults ARE the
+ * design, which is the only arrangement a new screen cannot get wrong.
  */
 const ITEMS: { label: string; sub: string; icon: typeof Activity; route: string }[] = [
   { label: 'Heute', sub: 'Dein Tag', icon: Activity, route: '/e/w3-today' },
@@ -52,7 +67,7 @@ export function W3NavIcon({ to, children, label }: { to: string; children: React
  * the moment the two drifted apart.
  */
 export default function W3NavMenu({
-  color = T.ink, size = 44, iconSize = 18, background = T.surface, Icon = Menu,
+  color = T.ink, size = 44, iconSize = 20, background = T.heroChip, Icon = Settings,
 }: {
   color?: string
   size?: number

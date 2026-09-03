@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WeekTrainingCard, WeekNavCards, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
-import { T, FONT, DASH, Reveal } from './w3tokens'
+import { T, FONT, DASH, Reveal, band } from './w3tokens'
 import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
@@ -17,7 +17,6 @@ import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
-import W3CoachCard from './W3CoachCard'
 import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayRank from './W3TodayRank'
@@ -114,9 +113,6 @@ export interface W3Vm {
   earnRate: string
   /** What earns that multiplier — "14-day streak", or the next tier to reach. */
   earnRateWhy: string | null
-  coachDate: string
-  coachLead: string | null
-  coachWhy: string | null
 
   hrv: W3Signal | null
   rhr: W3Signal | null
@@ -349,25 +345,32 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
              Both are true — readiness measures the BODY, the plan decides the
              DAY — so it is said out loud here instead of leaving the rider to
              reconcile it. ── */}
-        {/* The coach's sentence is the PLAN's voice — `brief.verdict` is written
-            about the session the plan set for today. With no plan it is either
-            silent or it prescribes, and a prescription is exactly what this
-            screen no longer offers an unplanned rider. The body's own reading
-            is not lost with it: the hero panel above answers "how am I today",
-            which is the question this card was reading aloud. */}
-        {vm.hasPlan && (
-          <W3CoachCard
-            headline={vm.coachLead}
-            // NOT ON TODAY. `coachWhy` is prose about HRV, resting pulse and
-            // sleep — the same three numbers this screen already draws as
-            // tiles with sparklines further down. The argument is one tap away
-            // behind the card's own "warum?"; the screen does not need it
-            // twice in two forms.
-            body={null}
-            date={vm.coachDate}
-            restNote={todayIsRest && vm.readiness != null
-              ? `Ruhetag — die ${vm.readiness} beschreibt deinen Körper, nicht den Plan. Heute wird die Erholung angelegt, nicht ausgegeben.`
-              : null} />
+        {/* ── THE KI-COACH IS GONE FROM TODAY ───────────────────────────
+             It said what this screen already says. The hero panel answers
+             "how am I today" with the readiness figure and its verdict word;
+             the coach card restated that figure in a sentence, and its
+             reasoning restated the HRV, resting-pulse and sleep tiles that sit
+             further down with their own deltas and sparklines. Three tellings
+             of the same numbers on one screen.
+
+             The reasoning is not lost: `W3WhyButton` on the session header
+             opens the same explanation, which is where a rider goes when they
+             want the argument rather than the answer.
+
+             THE REST-DAY LINE SURVIVES, and it is not coach output. A high
+             readiness beside "Ruhetag" reads as the app arguing with itself —
+             both are true, readiness measures the BODY and the plan decides
+             the DAY — so the screen reconciles its own two numbers rather than
+             leaving a rider to do it. That was kept once already when the rest
+             of the card was trimmed; removing it now would drop a fix that had
+             nothing to do with the coach. ── */}
+        {vm.hasPlan && todayIsRest && vm.readiness != null && (
+          <div style={{ ...band(26) }}>
+            <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
+              Ruhetag — die {vm.readiness} beschreibt deinen Körper, nicht den Plan.
+              Heute wird die Erholung angelegt, nicht ausgegeben.
+            </span>
+          </div>
         )}
 
         {/* ── "Deine Schwelle hat sich bewegt" ───────────────────────────

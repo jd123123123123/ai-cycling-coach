@@ -250,7 +250,6 @@ export default function W3TodayPage() {
     // empty hero. Keeps the big number honest AND populated.
     const modelReadiness = isPresent(model.readiness) ? model.readiness.value.score : null
     const readiness = modelReadiness ?? adaptive?.daily_decision?.readiness?.score ?? null
-    const verdict = isPresent(model.verdict) ? model.verdict.value : null
 
     // ── Readiness vs yesterday ─────────────────────────────────────────────
     // REAL, from `model.readinessVsPrevious` — the two most recent DATED
@@ -673,9 +672,6 @@ export default function W3TodayPage() {
       readinessDelta,
       earnRate,
       earnRateWhy,
-      coachDate: isPresent(model.dateLabel) ? model.dateLabel.value : '',
-      coachLead: verdict ? verdict.headline : null,
-      coachWhy: verdict ? verdict.body : null,
 
       hrv, rhr, sleep,
 

@@ -101,7 +101,11 @@ export default function W3BikerView({
             nothing lands on the pills — it is simply the shared bar now
             rather than a second design of the same thing. */}
         <W3StatusBar />
-        <W3TopBar title="Biker" />
+        {/* NO TITLE, like Fahrten. Both are bottom-tab roots and the tab bar
+            already says which one you are on — printing "BIKER" above a lit
+            BIKER tab is the same word twice, and it made this screen's header
+            the only one of the two that had a centred label. */}
+        <W3TopBar />
 
         <W3RiderHighlights
           {...vm.rider}
