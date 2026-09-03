@@ -45,5 +45,18 @@ export default function W3BikerPreview() {
   // The handlers are passed (as no-ops) rather than omitted: without
   // `onCreateRider` the empty portrait renders without its one affordance, and
   // a preview that hides the action is previewing a dead end.
-  return <W3BikerView vm={vm} onCreateRider={() => {}} onBadges={() => {}} onReferral={() => {}} onRecord={() => {}} />
+  return <W3BikerView
+      season={[
+        { label: 'Kilometer', value: '4.182', unit: 'km', note: '+18 % zum Vorjahr' },
+        { label: 'Höhenmeter', value: '61.400', unit: 'hm', note: 'Ø 620 hm / Fahrt' },
+        { label: 'FTP', value: '292', unit: 'W', note: '+11 W seit der ersten Messung' },
+        { label: 'Fahrten', value: '134', note: 'Ø 4,1 pro Woche' },
+      ]}
+      curve={{
+        value: 84, delta: 12,
+        series: Array.from({ length: 84 }, (_, i) => 58 + i * 0.32 + Math.sin(i / 3) * 3.2),
+        months: ['MRZ', 'APR', 'MAI', 'JUN', 'JUL'],
+      }}
+      onGarage={() => { /* preview: the button must be visible to be reviewed */ }}
+      bike={{ name: 'Canyon Ultimate CF SLX', imageUrl: '/w3/example-bike.webp', weightKg: 7.1, km: 4182, count: 3 }} vm={vm} onCreateRider={() => {}} onBadges={() => {}} onReferral={() => {}} onRecord={() => {}} />
 }

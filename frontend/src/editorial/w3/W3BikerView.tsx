@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react'
 import { Watch, Activity as ActivityIcon, Zap, HeartPulse, ChevronRight, Ticket } from 'lucide-react'
 import W3RiderHighlights, { type W3RiderHighlightsProps } from './W3RiderHighlights'
+import { W3SeasonGrid, W3FormCurve, W3ActiveBike, type W3SeasonStat } from './W3ProfileBlocks'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
@@ -43,6 +44,22 @@ export interface W3BikerVm {
   devices: W3Device[]
 }
 
+/**
+ * The three blocks pen frame `pMYpt` adds between the portrait and the
+ * account. Each is null-or-empty when its source has not answered, and the
+ * section then does not render — a profile is the page a rider SHOWS someone,
+ * and a placeholder on it is a number they would repeat out loud.
+ */
+export interface W3ProfileExtras {
+  season: W3SeasonStat[]
+  curve: { value: number; delta: number | null; series: number[]; months: string[] } | null
+  bike: {
+    name: string; imageUrl: string | null
+    weightKg: number | null; km: number | null; count: number | null
+  } | null
+  onGarage?: () => void
+}
+
 const DEV_ICONS: Record<W3Device['icon'], ComponentType<{ size?: number; color?: string }>> = {
   watch: Watch, activity: ActivityIcon, zap: Zap, heart: HeartPulse,
 }
@@ -56,13 +73,16 @@ function TailRow({ children, first }: { children: React.ReactNode; first: boolea
   )
 }
 
-export default function W3BikerView({ vm, onReferral, onBadges, onRecord, onCreateRider }: {
+export default function W3BikerView({
+  vm, onReferral, onBadges, onRecord, onCreateRider,
+  season = [], curve = null, bike = null, onGarage,
+}: {
   vm: W3BikerVm
   onReferral?: () => void
   onBadges?: () => void
   onRecord?: (key: string) => void
   onCreateRider?: () => void
-}) {
+} & Partial<W3ProfileExtras>) {
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
@@ -88,6 +108,28 @@ export default function W3BikerView({ vm, onReferral, onBadges, onRecord, onCrea
           onAllBadges={onBadges}
           onRecord={onRecord}
           onCreateRider={onCreateRider} />
+
+        {/* ── pen `pMYpt`: the season, the form, the machine ─────────────
+             In the frame's own order, and between the portrait and the
+             account — a rider reads who they are, then how the year has gone,
+             then what they ride, and only then the settings. */}
+        {season.length > 0 && (
+          <div style={{ ...band(26) }}>
+            <W3SeasonGrid title={`Saison ${new Date().getFullYear()}`} stats={season} />
+          </div>
+        )}
+
+        {curve && (
+          <div style={{ ...band(26) }}>
+            <W3FormCurve {...curve} />
+          </div>
+        )}
+
+        {bike && (
+          <div style={{ ...band(28) }}>
+            <W3ActiveBike {...bike} onCustomise={onGarage} />
+          </div>
+        )}
 
         {/* ── THE TAIL: the account, deliberately quiet ─────────────────── */}
         <div style={{ ...band(28), gap: 10 }}>
