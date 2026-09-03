@@ -55,6 +55,7 @@ const band = (padBottom: number) => ({ display: 'flex', flexDirection: 'column' 
 const ellipsis = { minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
 const bare = { border: 0, background: 'transparent', fontFamily: FONT, padding: 0, cursor: 'pointer', textAlign: 'left' as const }
 
+const nf1 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 })
 const nf = new Intl.NumberFormat('de-DE')
 
 /** How many rides the section shows before it stops being a glance. */
@@ -353,12 +354,13 @@ export function RideRow({ ride, avatar, open, onToggle, accent }: {
  * exact would have replaced that with a redraw of it. They are passed in as
  * slots.
  */
-function RidePost({ ride, avatar, open, onToggle, accent, headlined = false }: {
+function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onAddPhoto }: {
   ride: CrewRide
   avatar: string | null
   open: boolean
   onToggle: () => void
   accent: string
+  onAddPhoto?: (activityId: number) => void
   /** This ride's record is already the feed's headline card, so the chip on
    *  its own post would state the same thing twice, ten pixels apart. */
   headlined?: boolean
@@ -407,11 +409,24 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false }: {
     // Watts first — the number cyclists talk about, and it was behind the
     // expand. Every column is dropped rather than padded when the ride does
     // not carry it, so a card never prints a dash where a fact should be.
+    // THE PEN'S FOUR, IN THE PEN'S ORDER: Höhe, Ø Watt, Zeit, Schnitt.
+    // Average speed is derived rather than stored — distance over moving time,
+    // which is what a cyclist means by "Schnitt" — and it is dropped rather
+    // than shown as 0 when either half is missing. Every column is dropped
+    // rather than padded, so a card never prints a dash where a fact belongs;
+    // a trainer ride with no climbing simply has three.
     stats: [
-      ...(ride.avg_power_w != null ? [{ l: 'Ø WATT', v: nf.format(ride.avg_power_w), u: 'W' }] : []),
-      ...(ride.elevation_gain_m > 0 ? [{ l: 'HÖHE', v: nf.format(Math.round(ride.elevation_gain_m)), u: 'hm' }] : []),
+      ...(ride.elevation_gain_m > 0
+        ? [{ l: 'HÖHE', v: nf.format(Math.round(ride.elevation_gain_m)), u: 'hm' }] : []),
+      ...(ride.avg_power_w != null
+        ? [{ l: 'Ø WATT', v: nf.format(ride.avg_power_w), u: 'W' }] : []),
       { l: 'ZEIT', v: dur(ride.duration_seconds) },
-      ...(ride.tss != null ? [{ l: 'TSS', v: nf.format(ride.tss) }] : []),
+      ...(ride.distance_m > 0 && ride.duration_seconds > 0
+        ? [{
+            l: 'SCHNITT',
+            v: nf1.format((ride.distance_m / 1000) / (ride.duration_seconds / 3600)),
+            u: 'km/h',
+          }] : []),
     ],
     elevationProfile: ride.elevation_profile,
     powerProfile: ride.power_profile,
@@ -419,6 +434,11 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false }: {
     commentCount: ride.comment_count,
     alsoLine: null,
     onOpen: onToggle,
+    // Only your own ride, only while it has no picture. The feed owns the
+    // sheet so the plus works from any card without each one carrying a modal.
+    onAddPhoto: mine && ride.photo_urls.length === 0 && onAddPhoto
+      ? () => onAddPhoto(ride.id)
+      : undefined,
   }
 
   return (
@@ -490,6 +510,9 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, h
   // composer off the bottom of a 390×844 screen, and a rider who opens a ride
   // is reading that ride.
   const [openId, setOpenId] = useState<number | null>(null)
+  // ONE SHEET FOR THE WHOLE COLUMN. Every card's plus opens this; giving each
+  // post its own modal would mount one per ride in the list.
+  const [addTo, setAddTo] = useState<number | null>(null)
   const navigate = useNavigate()
 
   if (rides.length === 0) return null
@@ -561,9 +584,18 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, h
               open={openId === r.id}
               onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
               accent={accent}
-              headlined={r.id === headlinedId} />
+              headlined={r.id === headlinedId}
+              onAddPhoto={setAddTo} />
           </div>
         ))}
+        {addTo != null && (
+          <W3RideDetailsSheet
+            activityId={addTo}
+            open
+            onClose={() => setAddTo(null)}
+            onSaved={() => { setAddTo(null); onRefresh?.() }}
+          />
+        )}
       </div>
     )
   }

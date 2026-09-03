@@ -41,7 +41,10 @@ const FEED_RIDES: CrewRide[] = [
     calories: 1180, is_mine: false, comment_count: 2, reactions: { counts: { '🔥': 3, '💪': 1 }, mine: ['💪'] }, route: ROUTE_MARA },
   { id: 902, user_id: 1, handle: 'du', display_name: 'Du', title: 'Intervalle, 4×8', started_at: new Date(now - 26 * H * 1000).toISOString(),
     distance_m: 62400, elevation_gain_m: 680, duration_seconds: 7980, sport: 'cycling', tss: 121, avg_power_w: 241, avg_hr: 156,
-    record: null, description: null, photo_urls: [],
+    record: null,
+    // MY ride, no picture: the `UQhtr` card, and the one that shows the plus.
+    description: 'Vier mal acht am Kanal, Wind von vorne auf dem Rückweg',
+    photo_urls: [],
     elevation_profile: [599.5, 606.0, 606.8, 602.0, 591.8, 541.8, 522.7, 500.0, 474.7, 447.6, 384.7, 357.0, 330.3, 305.7, 284.0, 231.1, 217.5, 208.9, 205.7, 208.2, 181.5, 195.6, 215.3, 240.2, 269.8, 268.6, 305.7, 345.3, 386.6, 428.5, 435.2, 475.6, 513.8, 549.0, 580.3, 572.2, 594.0, 610.3, 621.0, 625.8, 589.8, 583.3, 571.7, 555.4, 535.1, 476.5, 450.6, 423.2], power_profile: null,
     calories: 1640, is_mine: true, comment_count: 1, reactions: { counts: { '🚀': 2 }, mine: [] }, route: ROUTE_DU },
   { id: 903, user_id: 3, handle: 'timo', display_name: 'Timo', title: 'Lange Ausfahrt in die Berge', started_at: new Date(now - 50 * H * 1000).toISOString(),

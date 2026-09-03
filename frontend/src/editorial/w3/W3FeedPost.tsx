@@ -1,31 +1,41 @@
 import type { ReactNode } from 'react'
-import { MessageCircle, Share2, Zap } from 'lucide-react'
+import { MessageCircle, Plus, Share2, Zap } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
 import { lux, TNUM } from './w3surfaces'
 import { W3ElevationProfile, W3IntervalBars } from './W3FeedCharts'
 import W3Eyebrow from './W3Eyebrow'
 
 /**
- * W3 · THE FEED POST, in its two shapes — pen frames `SpFxs` and `kFeEt`.
+ * W3 · THE FEED POST — pen frames `SpFxs`, `UQhtr` and `kFeEt`.
  *
- * ── WHY TWO SHAPES AND NOT ONE WITH A HOLE ───────────────────────────────
+ * ── I HAD THE RULE WRONG, AND `UQhtr` IS THE CORRECTION ──────────────────
  *
- * A ride the rider filled in is a different object from one they did not. With
- * a photo the card is a picture with the numbers written on it, tall and
- * full-bleed, and it is the thing you stop scrolling for. Without one it is a
- * compact tile: name, the one thing the session WAS, the numbers as chips.
+ * I built two structurally different cards and let the PHOTO choose between
+ * them: with a picture you got the tall editorial card, without one a compact
+ * tile of chips. `UQhtr` shows that is not the design. It is `SpFxs` with the
+ * photograph simply absent — same eyebrow, same 52px headline, same sentence,
+ * the same four stat columns, the same elevation chart. One structure; the
+ * photo is a top on it, not a fork in it.
  *
- * The alternative — one card with a grey placeholder where the photo goes —
- * makes every unfilled ride look broken, and there are far more unfilled rides
- * than filled ones. The empty state has to be a good object in its own right,
- * not a gap.
+ * So the fork is the RIDE, not the picture:
  *
- * ── THE HEADLINE IS WHAT THE RIDE WAS ────────────────────────────────────
+ *   FULL (`SpFxs` / `UQhtr`) — a ride out in the world. It has a route, so it
+ *     has an elevation profile, a distance worth setting at 52px and room for
+ *     the rider's own sentence. The photo sits on top when there is one.
  *
- * Both shapes lead with an acid eyebrow and one large figure, and on the
- * trainer card that figure is the session's own name for itself ("4×8 min")
- * rather than a distance nobody rode anywhere. What the rider called it, in
- * the size that says it mattered.
+ *   COMPACT (`kFeEt`) — a session on a trainer. No route means no profile and
+ *     no landscape; what it has is the shape of the intervals, which is a
+ *     picture of a different kind. Header, the session's own name for itself,
+ *     bars, chips.
+ *
+ * ── AND THE NAME MOVES WHEN THE PHOTO GOES ───────────────────────────────
+ *
+ * On `SpFxs` the author rides in a pill ON the photograph. `UQhtr` has no
+ * photograph and the frame shows no author at all — but that frame is a
+ * component demo sitting directly under the same ride, not a feed state: in a
+ * real column of other people's rides a card with no author is unreadable. So
+ * the full card grows a header row exactly when it loses its photo, which is
+ * the one deviation here from what the pen literally draws.
  */
 
 export interface W3FeedStat { l: string; v: string; u?: string }
@@ -59,6 +69,16 @@ export interface W3FeedPostVm {
   onComment?: () => void
   onShare?: () => void
   reacted?: boolean
+  /**
+   * ADD A PICTURE, IN THE PLACE THE PICTURE WOULD GO.
+   *
+   * Only on your own ride, and only while it has none. The prompt further up
+   * the feed asks once and can be dismissed; this is the affordance that is
+   * simply always there — a rider who thinks of a photo three days later has
+   * somewhere obvious to put it, in the frame where they can already see the
+   * shape of what it would become.
+   */
+  onAddPhoto?: () => void
 }
 
 /**
@@ -169,58 +189,120 @@ function StatChip({ s }: { s: W3FeedStat }) {
 // ── the filled-in ride ──────────────────────────────────────────────────────
 
 function PhotoPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots: W3FeedPostSlots }) {
+  const canAdd = vm.mine && !vm.photoUrl && !!vm.onAddPhoto
+
   return (
     <div style={{ ...lux(26), padding: 0, overflow: 'hidden', minWidth: 0 }}>
+      {/* THE AUTHOR RIDES ON THE PHOTO, OR ABOVE IT.
+          With a picture the name sits in a pill over it, which is `SpFxs`.
+          Without one there is nowhere to put a pill, so it becomes a header
+          row — a card in a column of other people's rides has to say whose it
+          is. */}
+      {!vm.photoUrl && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 18px 0' }}>
+          <Face url={vm.avatarUrl} initial={vm.avatarInitial} tint={tint} />
+          <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0, flex: 1 }}>
+            <span style={{
+              fontSize: 14, fontWeight: 700, color: vm.mine ? tint : T.ink,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{vm.handle}</span>
+            <span style={{
+              fontSize: 11, fontWeight: 500, color: T.quiet,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{vm.meta}</span>
+          </span>
+          {vm.badge && (
+            <span style={{
+              flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5,
+              padding: '6px 11px', borderRadius: 100, background: T.acid,
+              fontSize: 10, fontWeight: 700, letterSpacing: 0.7, color: T.bg,
+            }}>
+              <Zap size={11} color={T.bg} strokeWidth={2.6} />{vm.badge}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* ── ADD A PICTURE, WHERE THE PICTURE GOES ──────────────────────────
+          Your own ride, no photo yet: the space the photograph would occupy
+          becomes the way to put one there. Not a menu item and not a second
+          screen — a plus in the frame, so it takes a tap and a moment. It is
+          160px rather than the photo's full height because an empty invitation
+          should not cost as much of the feed as a real picture. */}
+      {canAdd && (
+        <button type="button" onClick={vm.onAddPhoto}
+          aria-label="Foto zu dieser Fahrt hinzufügen"
+          style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 9, width: '100%', height: 160, margin: '14px 0 0', border: 0,
+            background: `linear-gradient(180deg, ${T.acid}0F, transparent)`,
+            cursor: 'pointer', fontFamily: FONT,
+            boxShadow: `inset 0 0 0 1px ${T.acid}2E`,
+          }}>
+          <span style={{
+            width: 44, height: 44, borderRadius: 100, background: T.acidDim,
+            display: 'grid', placeItems: 'center',
+          }}>
+            <Plus size={22} color={T.acid} strokeWidth={2.4} />
+          </span>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: T.acid }}>Foto hinzufügen</span>
+        </button>
+      )}
+
       <button type="button" onClick={vm.onOpen}
         style={{
           position: 'relative', width: '100%', border: 0, padding: 0, background: 'transparent',
           cursor: vm.onOpen ? 'pointer' : 'default', display: 'block', textAlign: 'left',
         }}>
-        {/* THE PHOTO IS THE CARD. Full bleed, tall, and everything else is
-            written on it — which is why the scrim below is a gradient into the
-            card's own ground rather than a panel laid over the picture. */}
-        <img src={vm.photoUrl ?? ''} alt="" style={{
-          display: 'block', width: '100%', height: CARD_W * 1.24,
-          objectFit: 'cover', background: T.surface2,
-        }} />
+        {vm.photoUrl && (
+          <>
+            <img src={vm.photoUrl} alt="" style={{
+              display: 'block', width: '100%', height: CARD_W * 1.24,
+              objectFit: 'cover', background: T.surface2,
+            }} />
 
-        {/* who — in a pill, because it sits on a photograph whose brightness
-            nobody controls */}
-        <div style={{
-          position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 9,
-          padding: '6px 14px 6px 6px', borderRadius: 100, background: `${T.bg}A6`,
-          backdropFilter: 'blur(12px)', maxWidth: 'calc(100% - 130px)',
-        }}>
-          <Face url={vm.avatarUrl} initial={vm.avatarInitial} tint={tint} size={30} />
-          <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
-            <span style={{
-              fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap',
-              overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{vm.handle}</span>
-            <span style={{
-              fontSize: 10.5, fontWeight: 500, color: T.mid, whiteSpace: 'nowrap',
-              overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>{vm.meta}</span>
-          </span>
-        </div>
+            <div style={{
+              position: 'absolute', top: 12, left: 12, display: 'flex', alignItems: 'center', gap: 9,
+              padding: '6px 14px 6px 6px', borderRadius: 100, background: `${T.bg}A6`,
+              backdropFilter: 'blur(12px)', maxWidth: 'calc(100% - 130px)',
+            }}>
+              <Face url={vm.avatarUrl} initial={vm.avatarInitial} tint={tint} size={30} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                <span style={{
+                  fontSize: 13, fontWeight: 700, color: T.ink, whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{vm.handle}</span>
+                <span style={{
+                  fontSize: 10.5, fontWeight: 500, color: T.mid, whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                }}>{vm.meta}</span>
+              </span>
+            </div>
 
-        {vm.badge && (
-          <span style={{
-            position: 'absolute', top: 14, right: 12, display: 'inline-flex', alignItems: 'center', gap: 5,
-            padding: '7px 13px', borderRadius: 100, background: T.acid,
-            fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.bg,
-          }}>
-            <Zap size={12} color={T.bg} strokeWidth={2.6} />{vm.badge}
-          </span>
+            {vm.badge && (
+              <span style={{
+                position: 'absolute', top: 14, right: 12, display: 'inline-flex', alignItems: 'center', gap: 5,
+                padding: '7px 13px', borderRadius: 100, background: T.acid,
+                fontSize: 10.5, fontWeight: 700, letterSpacing: 0.8, color: T.bg,
+              }}>
+                <Zap size={12} color={T.bg} strokeWidth={2.6} />{vm.badge}
+              </span>
+            )}
+          </>
         )}
 
-        {/* the headline, standing on the photo's own floor */}
-        <div style={{
-          position: 'absolute', left: 0, right: 0, bottom: 0,
-          padding: '76px 18px 16px',
-          background: `linear-gradient(180deg, transparent, ${T.bg}D9 58%, ${T.bg} 100%)`,
-          display: 'flex', flexDirection: 'column', gap: 4,
-        }}>
+        {/* The headline. Over the photo's own floor when there is one, on the
+            card's ground when there is not — same type, same order either way,
+            which is what `UQhtr` is showing. */}
+        <div style={vm.photoUrl
+          ? {
+              position: 'absolute', left: 0, right: 0, bottom: 0,
+              padding: '76px 18px 16px',
+              background: `linear-gradient(180deg, transparent, ${T.bg}D9 58%, ${T.bg} 100%)`,
+              display: 'flex', flexDirection: 'column', gap: 4,
+            }
+          : { padding: '14px 18px 0', display: 'flex', flexDirection: 'column', gap: 4 }
+        }>
           {vm.eyebrow && <W3Eyebrow kind="title">{vm.eyebrow}</W3Eyebrow>}
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
             <span style={{ ...TNUM, fontSize: 52, fontWeight: 700, letterSpacing: -2.4, lineHeight: 0.92, color: T.ink }}>
@@ -323,10 +405,12 @@ function PlainPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots:
 export default function W3FeedPost({ vm, tint = T.acid, slots = {} }: {
   vm: W3FeedPostVm; tint?: string; slots?: W3FeedPostSlots
 }): ReactNode {
-  // The photo decides the shape, and nothing else does. A ride with a
-  // description but no picture is still a plain card — the tall format exists
-  // to carry a photograph, not a sentence.
-  return vm.photoUrl
+  // THE RIDE DECIDES, NOT THE PICTURE. A ride with a route earns the full card
+  // whether or not anyone photographed it — that is what `UQhtr` is. A trainer
+  // session has no route, no landscape and no profile, and gets the compact
+  // one.
+  const outdoors = !!vm.elevationProfile || !!vm.description || !!vm.photoUrl
+  return outdoors
     ? <PhotoPost vm={vm} tint={tint} slots={slots} />
     : <PlainPost vm={vm} tint={tint} slots={slots} />
 }
