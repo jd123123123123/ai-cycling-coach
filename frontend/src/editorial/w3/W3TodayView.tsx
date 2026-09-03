@@ -358,7 +358,12 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
         {vm.hasPlan && (
           <W3CoachCard
             headline={vm.coachLead}
-            body={vm.coachWhy}
+            // NOT ON TODAY. `coachWhy` is prose about HRV, resting pulse and
+            // sleep — the same three numbers this screen already draws as
+            // tiles with sparklines further down. The argument is one tap away
+            // behind the card's own "warum?"; the screen does not need it
+            // twice in two forms.
+            body={null}
             date={vm.coachDate}
             restNote={todayIsRest && vm.readiness != null
               ? `Ruhetag — die ${vm.readiness} beschreibt deinen Körper, nicht den Plan. Heute wird die Erholung angelegt, nicht ausgegeben.`

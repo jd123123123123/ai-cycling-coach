@@ -48,6 +48,20 @@ export function splitLeadFigure(text: string): [string | null, string] {
 
 export interface W3CoachCardProps {
   headline: string | null
+  /**
+   * THE REASONING, AND ON TODAY IT IS NOT DRAWN.
+   *
+   * The brief's `why` is prose about the overnight numbers — "HRV 71 ms (+9
+   * auf den Basiswert), Ruhepuls 42 (−3), Schlaf 7:42 bei 91 Qualität". Those
+   * three numbers are ALREADY on this screen, as three tiles with their own
+   * deltas and their own sparklines, four hundred pixels below. Printing them
+   * again as a sentence is the same fact three times: once as a chart, once as
+   * a number, once as a paragraph.
+   *
+   * So Today passes `body={null}` and the card is a verdict. The reasoning is
+   * not lost — `W3WhyButton` in this very header opens it, which is where a
+   * rider goes when they want the argument rather than the answer.
+   */
   body: string | null
   date: string
   /** Shown above the verdict on a day the plan prescribes rest, because a high
@@ -55,11 +69,57 @@ export interface W3CoachCardProps {
   restNote?: string | null
 }
 
+/**
+ * THE COACH SAYS WHAT THE HERO CANNOT.
+ *
+ * The brief opens by restating the readiness figure — "88 ist grünes Licht.
+ * Dein Körper verarbeitet alles, was die heutige Einheit verlangt." The hero
+ * panel four hundred pixels above already shows 88 AND the words grünes Licht,
+ * on its own meter. So the first sentence is the third telling of a number the
+ * rider has already read, and the SECOND is the only part that says anything
+ * new: what it means for the session they are about to do.
+ *
+ * When the verdict opens on that figure, this drops that sentence and leads
+ * with the consequence. When it does not — a brief phrased some other way —
+ * the first sentence is the verdict and it stands.
+ *
+ * Split on the full stop rather than a word count, and the pattern requires
+ * whitespace after it, so a decimal inside a number ("7.5 h") cannot cut a
+ * line in half.
+ */
+/** Sentences, split only where a terminator is followed by space or the end.
+ *
+ *  A plain `[^.!?]+` split cuts "Schlaf 7.5 h" into "Schlaf 7." — the decimal
+ *  point is a full stop to a regex and not to a reader. Lookahead only, no
+ *  lookbehind, because Safari carried that gap longer than this app can
+ *  assume. */
+function sentences(text: string): string[] {
+  return text
+    .split(/([.!?])(?=\s|$)/)
+    .reduce<string[]>((acc, part, i, all) => {
+      if (i % 2 === 0) {
+        const joined = (part + (all[i + 1] ?? '')).trim()
+        if (joined) acc.push(joined)
+      }
+      return acc
+    }, [])
+}
+
+function coachVerdict(text: string): string {
+  const parts = sentences(text)
+  if (parts.length === 0) return text.trim()
+
+  const [lead] = splitLeadFigure(parts[0])
+  if (lead && parts.length > 1) return parts.slice(1).join(' ').trim()
+  return parts[0]
+}
+
 export default function W3CoachCard({ headline, body, date, restNote }: W3CoachCardProps) {
   const reduce = useReducedMotion()
   if (!headline && !body && !restNote) return null
 
-  const [figure, rest] = headline ? splitLeadFigure(headline) : [null, '']
+  const verdict = headline ? coachVerdict(headline) : null
+  const [figure, rest] = verdict ? splitLeadFigure(verdict) : [null, '']
 
   return (
     <div style={band(26)}>
@@ -99,7 +159,7 @@ export default function W3CoachCard({ headline, body, date, restNote }: W3CoachC
             transition={{ duration: 0.45, ease: EASE }}
             style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.8, lineHeight: 1.18, color: T.ink, minWidth: 0 }}>
             {figure && <span style={{ color: T.acid }}>{figure}</span>}
-            {figure ? rest : headline}
+            {figure ? rest : verdict}
           </motion.span>
         )}
 
