@@ -8,7 +8,7 @@ const ride = (over: Partial<CrewRide>): CrewRide => ({
   distance_m: 30_000, elevation_gain_m: 200, duration_seconds: 3600,
   sport: 'cycling', tss: 60, avg_power_w: 200, avg_hr: 140, calories: 700,
   is_mine: false, reactions: { counts: {}, mine: [] }, comment_count: 0,
-  description: null, photo_urls: [], elevation_profile: null, power_profile: null,
+  description: null, photo_urls: [], elevation_profile: null, power_profile: null, record: null,
   route: null, ...over,
 })
 

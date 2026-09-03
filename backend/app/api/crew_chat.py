@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
 from app.models.ride_photo import RidePhoto
+from app.services.crew_records import records_for_rides
 from app.models.activity_stream import ActivityStream
 from app.services.crew_notify import notify_ride_comment
 from app.models.crew import CrewMembership
@@ -97,6 +98,22 @@ class MessageRead(BaseModel):
     reactions: ReactionSummary
 
 
+class RideRecord(BaseModel):
+    """A personal best this ride set, against the rider's own 90-day history.
+
+    Typed rather than a bare dict: the card prints `prior_best_w` beside
+    `value_w`, and a shape the frontend has to guess at is a shape it will
+    eventually guess wrong.
+    """
+    duration_s: int
+    value_w: int
+    prior_best_w: int
+    gain_pct: float
+    #: "20-Minuten" — the server's word, so a duration added on the backend
+    #: needs no frontend change.
+    label: str
+
+
 class RideRead(BaseModel):
     id: int  # activity id
     user_id: int
@@ -132,6 +149,10 @@ class RideRead(BaseModel):
     #: chart rather than a straight line pretending to be terrain.
     elevation_profile: list[float] | None = None
     power_profile: list[float] | None = None
+    #: Set when this ride beat the rider's own 90-day best at one of the key
+    #: durations — the ⚡ REKORD chip on the card. Null for the overwhelming
+    #: majority of rides, which is the point: a badge everyone has is not one.
+    record: RideRecord | None = None
     #: The ride's shape, as `[[lat, lng], ...]` downsampled for a feed
     #: thumbnail — the client projects it (`W3RouteCard.project`). None when the
     #: ride carries no usable GPS track (indoor, trainer, a watch with GPS off),
@@ -344,6 +365,9 @@ async def list_crew_rides(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
     limit: int = 20,
+    # German-only UI, so the record label is German by default rather than by
+    # a parameter every caller would have to remember to pass.
+    lang: str = "de",
 ) -> list[RideRead]:
     """Recent cycling activities across ALL of the caller's crew (newest first),
     each with author handle + a 'ride' reaction summary. Empty when not in a
@@ -383,6 +407,14 @@ async def list_crew_rides(
     counts = await _comment_counts(db, crew_id=mem.crew_id, activity_ids=ride_ids)
     photos = await _ride_photo_urls(db, ride_ids)
     profiles = await _ride_profiles(db, activity_ids=ride_ids)
+    # One query for the whole page, over every member — see `crew_records`
+    # for why this is not a loop over `detect_breakthroughs`.
+    records = await records_for_rides(
+        db,
+        user_ids=sorted({act.user_id for act, _ in rows}),
+        activity_ids=ride_ids,
+        lang=lang,
+    )
     routes = await _route_thumbs(db, activity_ids=ride_ids)
 
     out: list[RideRead] = []
@@ -416,6 +448,7 @@ async def list_crew_rides(
                 photo_urls=photos.get(act.id, []),
                 elevation_profile=profiles.get(act.id, {}).get("altitude"),
                 power_profile=profiles.get(act.id, {}).get("power"),
+                record=records.get(act.id),
                 route=routes.get(act.id),
             )
         )

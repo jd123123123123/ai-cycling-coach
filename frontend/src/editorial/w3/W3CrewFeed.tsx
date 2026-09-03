@@ -384,7 +384,11 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
     description: ride.description,
     // The first photo is the card. The rest belong to the ride's own page.
     photoUrl: ride.photo_urls[0] ?? null,
-    badge: null,
+    // THE CHIP THE PEN DRAWS, filled at last. It was wired to `null` when
+    // the card was built, which made it exactly the dead machinery this
+    // repository keeps growing — a slot that renders nothing because nothing
+    // was ever computed for it.
+    badge: ride.record ? `${nf.format(ride.record.value_w)} W · ${ride.record.label}` : null,
     // Watts first — the number cyclists talk about, and it was behind the
     // expand. Every column is dropped rather than padded when the ride does
     // not carry it, so a card never prints a dash where a fact should be.

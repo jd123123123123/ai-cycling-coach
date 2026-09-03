@@ -13,6 +13,17 @@ import type { ReactionState } from './crewReactions'
 // handing them the track that starts at your front door is not.
 // ──────────────────────────────────────────────────────────────────────
 
+/** A personal best a ride set, against that rider's own 90-day history. */
+export interface CrewRideRecord {
+  duration_s: number
+  value_w: number
+  prior_best_w: number
+  gain_pct: number
+  /** "20-Minuten" — the server's word, so a duration added on the backend
+   *  needs no change here. */
+  label: string
+}
+
 export interface CrewRide {
   id: number
   user_id: number
@@ -45,6 +56,10 @@ export interface CrewRide {
    *  no such stream, and the card then draws no chart. */
   elevation_profile: number[] | null
   power_profile: number[] | null
+  /** Set when this ride beat the rider's own 90-day best at one of the key
+   *  durations. Null for the overwhelming majority of rides, which is the
+   *  point — a badge everybody has is not a badge. */
+  record: CrewRideRecord | null
   /** The ride's own shape as `[[lat, lng], ...]`, downsampled for a feed
    *  thumbnail — the crew post projects it with `projectRouteShape`. Null when
    *  the ride carries no usable GPS track (indoor, trainer, satellite off), and

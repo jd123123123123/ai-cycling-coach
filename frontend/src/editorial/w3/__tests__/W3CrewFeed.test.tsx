@@ -36,7 +36,7 @@ const ride = (over: Partial<CrewRide> = {}): CrewRide => ({
   sport: 'cycling', tss: 188, avg_power_w: 214, avg_hr: 141, calories: 2100,
   // The wire shape, not a convenient one: an unfilled ride is the COMMON case
   // and the factory has to default to it.
-  description: null, photo_urls: [], elevation_profile: null, power_profile: null,
+  description: null, photo_urls: [], elevation_profile: null, power_profile: null, record: null,
   is_mine: false, reactions: { counts: {}, mine: [] }, comment_count: 0,
   ...over,
 })
