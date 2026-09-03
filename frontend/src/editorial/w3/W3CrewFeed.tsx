@@ -13,6 +13,8 @@ import { km, hm, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
 import W3FeedPost, { type W3FeedPostVm } from './W3FeedPost'
 import W3AddDetailsNudge from './W3AddDetailsNudge'
+import W3StoryRail from './W3StoryRail'
+import { storiesFromRides } from './w3feedCuts'
 
 /**
  * W3 · Today "Deine Crew fährt" — the crew's real rides, and a place to say
@@ -586,9 +588,37 @@ export default function W3CrewFeed() {
   // Faces only — the same week the rank card above already asked for, so this
   // resolves out of the react-query cache instead of hitting the network.
   const { data: standings } = useCrewStandings('week')
+  const navigate = useNavigate()
 
   const avatars: Record<number, string | null> = {}
   for (const row of standings?.standings ?? []) avatars[row.user_id] = row.avatar ?? null
 
-  return <W3CrewFeedView rides={rides ?? []} avatars={avatars} />
+  // ── THE RAIL BELONGS ON TODAY MOST OF ALL ─────────────────────────────
+  //
+  // Today is the screen a rider opens in the morning, and "who has been out
+  // already" is a morning question. The crew screen has it too, but there it
+  // is one section among many; here it is the reason to look.
+  //
+  // The rail draws nothing when nobody in the crew has ridden today, which is
+  // most mornings — an empty rail with a lone "+ Start" tile would be a
+  // permanent fixture advertising that the crew is asleep.
+  const stories = storiesFromRides(rides ?? [], new Date(), (r) => ({
+    id: r.id,
+    name: r.is_mine ? 'Du' : `@${r.handle}`,
+    avatarUrl: avatars[r.user_id] ?? null,
+    initial: (r.handle || '?').trim().charAt(0).toUpperCase() || '?',
+    mine: r.is_mine,
+    card: <W3CrewFeedView rides={[r]} avatars={avatars} variant="page" />,
+    // THE WAY OUT TO THE WHOLE RIDE. A story is a glance; the recap is the
+    // page. Without this the viewer was a dead end, which is the one thing a
+    // story viewer must not be.
+    onOpenRide: () => navigate(`/activities/${r.id}/recap`),
+  }))
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%', minWidth: 0 }}>
+      {stories.length > 0 && <W3StoryRail stories={stories} />}
+      <W3CrewFeedView rides={rides ?? []} avatars={avatars} />
+    </div>
+  )
 }

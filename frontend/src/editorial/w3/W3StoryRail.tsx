@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { Plus, X } from 'lucide-react'
+import { ChevronRight, Plus, X } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import { TNUM } from './w3surfaces'
 
@@ -62,6 +62,10 @@ export interface W3Story {
   mine: boolean
   /** What the viewer shows for this rider. */
   card: React.ReactNode
+  /** Out to the whole ride. A story is a glance and the recap is the page;
+   *  without this the viewer is a dead end, which is the one thing a story
+   *  viewer must not be. */
+  onOpenRide?: () => void
 }
 
 // ── the rail ────────────────────────────────────────────────────────────────
@@ -296,6 +300,25 @@ function W3StoryViewer({ stories, at, onClose, onSeen }: {
                 style={{ flex: 1, border: 0, background: 'transparent', cursor: 'pointer' }} />
             </div>
           </div>
+
+          {/* OUT TO THE RIDE. Below the tap zones and outside them, so the
+              gesture that advances a story can never be the gesture that
+              navigates away from it. */}
+          {story.onOpenRide && (
+            <div style={{ flex: 'none', padding: '0 16px 22px' }}>
+              <button
+                type="button"
+                onClick={() => { onClose(); story.onOpenRide?.() }}
+                style={{
+                  width: '100%', height: 46, borderRadius: 100, border: 0,
+                  background: T.acid, color: T.bg, fontFamily: FONT,
+                  fontSize: 14.5, fontWeight: 700, cursor: 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                }}>
+                Ganze Fahrt ansehen <ChevronRight size={16} color={T.bg} />
+              </button>
+            </div>
+          )}
         </motion.div>
       )}
     </AnimatePresence>
