@@ -407,8 +407,11 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
       : nf.format(Math.round(ride.duration_seconds / 60)),
     headlineUnit: hasKm ? 'km' : 'min',
     description: ride.description,
-    // The first photo is the card. The rest belong to the ride's own page.
-    photoUrl: ride.photo_urls[0] ?? null,
+    // EVERY picture, plus the track. The slot shows the photos first and the
+    // route last, and with no photo the route simply IS the slot.
+    photoUrls: ride.photo_urls,
+    route: (ride.route as [number, number][] | null) ?? null,
+    distanceM: ride.distance_m,
     // THE CHIP THE PEN DRAWS, filled at last. It was wired to `null` when
     // the card was built, which made it exactly the dead machinery this
     // repository keeps growing — a slot that renders nothing because nothing
