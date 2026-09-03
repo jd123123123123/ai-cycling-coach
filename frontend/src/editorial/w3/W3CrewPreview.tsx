@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { T } from './w3tokens'
+import { Search, Bell } from 'lucide-react'
 import W3CrewView, { type W3CrewVm } from './W3CrewView'
 import { W3CrewFeedView } from './W3CrewFeed'
 import W3StoryRail from './W3StoryRail'
-import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
+import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot, W3FeedHead, W3HeadAction, W3FeedSearch } from './W3FeedShell'
 import W3RecordCard from './W3RecordCard'
-import { cutRides, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedCut } from './w3feedCuts'
+import W3FeedChallenges from './W3FeedChallenges'
+import { tabRides, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedTab } from './w3feedCuts'
 import type { CrewRide } from '../../api/crewRides'
 import { periodWord, thisPeriod, type W3Period } from './w3crew'
 
@@ -127,9 +128,8 @@ const BASE = {
  * than production is the same defect as one that draws a shape production
  * cannot: it makes the screen look finished when it is not.
  */
-function PreviewFeed() {
-  const [cut, setCut] = useState<W3FeedCut>('all')
-  const shown = cutRides(FEED_RIDES, cut)
+function PreviewFeed({ tab }: { tab: W3FeedTab }) {
+  const shown = tabRides(FEED_RIDES, tab)
   const topRecord = headlineRecord(FEED_RIDES)
   const stories = storiesFromRides(FEED_RIDES, new Date(), (r) => ({
     id: r.id,
@@ -141,51 +141,65 @@ function PreviewFeed() {
   }))
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
-      <span style={{ padding: '0 20px', fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>
-        {feedHeadEyebrow()}
-      </span>
       <W3StoryRail stories={stories} onStart={() => { /* preview */ }} />
-      <W3FeedFilters
-        value={cut}
-        onChange={setCut}
-        layoutId="w3-crew-cut"
-        options={[
-          { key: 'all', label: 'Alle', count: FEED_RIDES.length },
-          { key: 'mine', label: 'Nur meine', count: FEED_RIDES.filter((r) => r.is_mine).length },
-          { key: 'crew', label: 'Ohne mich', count: FEED_RIDES.filter((r) => !r.is_mine).length },
-        ]}
-      />
-      <div style={{ padding: '0 20px' }}>
-        <W3CollectiveGoal km={782} goalKm={1000} pct={0.78} riders={9} daysLeft={2} onContribute={() => {}} />
-      </div>
-      {/* THE ONE RECORD RAISED TO A HEADLINE. Every ride that set one
-          already wears a chip on its own post; this is the biggest of
-          them, and there is exactly one or none. */}
-      {(() => {
-        const top = topRecord
-        return top?.record ? (
-          <div style={{ padding: '0 20px' }}>
-            <W3RecordCard vm={{
-              handle: top.is_mine ? 'Du' : `@${top.handle}`,
-              label: top.record.label,
-              valueW: top.record.value_w,
-              priorW: top.record.prior_best_w,
-              priorWhen: recordMonth(top.record.prior_best_at),
-            }} />
-          </div>
-        ) : null
-      })()}
-
-      <div style={{ padding: '0 20px' }}>
-        <W3CrewFeedView rides={shown} variant="page" headlinedId={topRecord?.id ?? null} />
-      </div>
-      {shown.length > 0 && <W3FeedFoot text="Das war die Crew von heute" />}
+      {/* THE PREVIEW MUST DRAW WHAT PRODUCTION DRAWS. This route existed to
+          review the crew screen and quietly showed a different one — the cut
+          branch below is the wired page's, line for line, because a fixture
+          that renders less than the real screen makes it look finished. */}
+      {tab === 'challenges' ? (
+        <div style={{ padding: '0 20px' }}>
+          <W3FeedChallenges />
+        </div>
+      ) : (
+        <>
+          {(tab === 'crew' || tab === 'all') && (
+            <div style={{ padding: '0 20px' }}>
+              <W3CollectiveGoal km={782} goalKm={1000} pct={0.78} riders={9} daysLeft={2} onContribute={() => {}} />
+            </div>
+          )}
+          {tab === 'records' ? (
+            <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {shown.map((r) => r.record ? (
+                <W3RecordCard key={r.id} vm={{
+                  handle: r.is_mine ? 'Du' : `@${r.handle}`,
+                  label: r.record.label,
+                  valueW: r.record.value_w,
+                  priorW: r.record.prior_best_w,
+                  priorWhen: recordMonth(r.record.prior_best_at),
+                }} />
+              ) : null)}
+            </div>
+          ) : (
+            <>
+              {topRecord?.record ? (
+                <div style={{ padding: '0 20px' }}>
+                  <W3RecordCard vm={{
+                    handle: topRecord.is_mine ? 'Du' : `@${topRecord.handle}`,
+                    label: topRecord.record.label,
+                    valueW: topRecord.record.value_w,
+                    priorW: topRecord.record.prior_best_w,
+                    priorWhen: recordMonth(topRecord.record.prior_best_at),
+                  }} />
+                </div>
+              ) : null}
+              <div style={{ padding: '0 20px' }}>
+                <W3CrewFeedView rides={shown} variant="page" headlinedId={topRecord?.id ?? null} />
+              </div>
+            </>
+          )}
+        </>
+      )}
+      {tab !== 'challenges' && shown.length > 0 && (
+        <W3FeedFoot text={tab === 'records' ? 'Das waren die Rekorde' : 'Das war die Crew von heute'} />
+      )}
     </div>
   )
 }
 
 export default function W3CrewPreview() {
-  const [tab, setTab] = useState<'feed' | 'crew'>('feed')
+  const [tab, setTab] = useState<W3FeedTab>('crew')
+  const [board, setBoard] = useState(false)
+  const [query, setQuery] = useState<string | null>(null)
   const [period, setPeriod] = useState<W3Period>('week')
   const vm: W3CrewVm = {
     ...BASE,
@@ -197,14 +211,37 @@ export default function W3CrewPreview() {
     highlightsTitle: `This ${periodWord(period)} in the crew`,
   }
   return <W3CrewView vm={vm} onPeriod={setPeriod}
-    feed={<PreviewFeed />}
-    tab={tab}
+    feed={<PreviewFeed tab={tab} />}
+    board={board}
+    onBoard={() => setBoard(true)}
+    onBack={board ? () => setBoard(false) : undefined}
+    head={
+      query != null ? (
+        <W3FeedSearch value={query} onChange={setQuery} onClose={() => setQuery(null)} />
+      ) : (
+        <W3FeedHead
+          eyebrow={feedHeadEyebrow()}
+          title={board ? vm.crewName : 'Feed'}
+          actions={board ? undefined : (
+            <>
+              <W3HeadAction icon={<Search size={17} />} label="Fahrten durchsuchen" onClick={() => setQuery('')} />
+              <W3HeadAction icon={<Bell size={17} />} label="Mitteilungen" dot onClick={() => { /* preview */ }} />
+            </>
+          )}
+        />
+      )
+    }
     chips={
       <W3FeedFilters
         value={tab}
         onChange={setTab}
         layoutId="w3-crew-tab"
-        options={[{ key: 'feed', label: 'Feed' }, { key: 'crew', label: 'Crew' }]}
+        options={[
+          { key: 'crew', label: 'Crew', count: FEED_RIDES.filter((r) => !r.is_mine).length },
+          { key: 'all', label: 'Alle', count: FEED_RIDES.length },
+          { key: 'challenges', label: 'Challenges' },
+          { key: 'records', label: 'Rekorde', count: FEED_RIDES.filter((r) => r.record != null).length },
+        ]}
       />
     } />
 }

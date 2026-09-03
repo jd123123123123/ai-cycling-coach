@@ -1,10 +1,11 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Sparkles, UserPlus, Pencil, ChevronRight } from 'lucide-react'
+import { Sparkles, UserPlus, Pencil, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE, grow, band, card, DASH } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
 import { YOU_TINT, type W3Period } from './w3crew'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -182,7 +183,7 @@ const SectionHead = ({ n, title, chip }: { n: number; title: string; chip?: stri
   </div>
 )
 
-export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, onPeriod, onOpenMember, feed, tab = 'feed', chips }: {
+export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, onPeriod, onOpenMember, feed, board = false, head, chips, onBoard }: {
   vm: W3CrewVm
   onBack?: () => void
   onProps?: () => void
@@ -196,20 +197,33 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
   /**
    * WHICH HALF OF THE SCREEN THIS IS.
    *
-   * The pen's `dly9G` is a FEED. Its chip row is the page's navigation, and
-   * there is no standings table on it anywhere — the crew's rides are the
-   * subject and everything else is somewhere else.
+   * The pen's `dly9G` is a FEED. Its chip row is Crew / Alle / Challenges /
+   * Rekorde — four cuts of the feed, none of them a standings table — and the
+   * screen has no back button because its navigation is the app's shared bar.
    *
    * This screen had the feed as chapter THREE, under the rank card, the member
    * grid, a props button and the distance goal. Appending a redesigned feed to
    * the bottom of that changed nothing a rider could see, because they never
    * scrolled that far.
    *
-   * So the chips are real now: `feed` is the pen's screen and the default;
-   * `crew` is the board and the members, which is a genuine question a rider
-   * asks and a poor thing to open on. Nothing is deleted — it moved.
+   * So the feed IS the screen, and the board is a push off it: `board` false is
+   * the pen, `board` true is the standings a rider reaches from the collective
+   * card. Nothing is deleted — it moved one tap away, and the top bar's back
+   * comes back here rather than leaving the crew entirely.
    */
-  tab?: 'feed' | 'crew'
+  board?: boolean
+  /** The pen's header — kicker, title and the two actions. Owned by the page
+   *  because the actions carry live state the view knows nothing about. */
+  head?: React.ReactNode
+  /**
+   * THE WAY TO THE BOARD, now that no chip leads there.
+   *
+   * It rides in the shared top bar rather than becoming a fifth chip: the
+   * pen's row is four cuts OF THE FEED, and a standings table is not a cut of
+   * a feed. Putting it in the bar keeps the row honest and the board one tap
+   * away instead of gone.
+   */
+  onBoard?: () => void
   /** The chip row itself, owned by the page so it can carry live counts. */
   chips?: React.ReactNode
 }) {
@@ -235,22 +249,36 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
         <W3StatusBar />
 
-        {/* Nav + title + blurb */}
-        <div style={{ ...band(18), gap: 16, paddingTop: 6 }}>
-          <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: T.ink, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color={T.bg} /></button>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ fontSize: 38, fontWeight: 600, letterSpacing: -1.4, lineHeight: 1.02, color: T.ink }}>{vm.crewName}</span>
-            <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.blurb}</span>
-          </div>
-        </div>
+        {/* THE APP'S OWN BAR, NOT THIS SCREEN'S. Every W3 screen that is not
+            the hero room carries `W3TopBar`; the crew screen was the last one
+            still drawing a private 44px circle and a 38px title, so moving
+            between tabs made the furniture jump. The pen has no back button at
+            all here — it shows the tab bar instead — but this screen IS pushed
+            in the running app, so the shared bar is the honest reading of it. */}
+        <W3TopBar
+          onBack={onBack}
+          extra={!board && onBoard ? (
+            <button type="button" onClick={onBoard} style={{
+              border: 0, background: 'transparent', cursor: 'pointer', fontFamily: FONT,
+              fontSize: 12.5, fontWeight: 600, color: T.mid, padding: '6px 2px',
+            }}>Tabelle</button>
+          ) : undefined}
+        />
+
+        {/* The pen's own head sits under the bar: a dated kicker, one word, and
+            the two controls. On the board it names the crew instead, because
+            there "Feed" would be a title for something the screen is not. */}
+        {head}
 
         {vm.inCrew ? (
           <>
-            {chips && <div style={{ paddingBottom: 18 }}>{chips}</div>}
+            {/* The pen breathes 22 above and below the row (header ends 51,
+                filter 73, rail 126). It was reading as part of the title. */}
+            {!board && chips && <div style={{ paddingTop: 22, paddingBottom: 22 }}>{chips}</div>}
 
-            {tab === 'feed' && feed}
+            {!board && feed}
 
-            {tab === 'crew' && (
+            {board && (
             <>
             {/* Period — one control, every number below follows it */}
             <div style={{ ...band(20) }}>

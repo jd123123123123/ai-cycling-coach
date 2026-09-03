@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cutRides, feedHeadEyebrow, storiesFromRides } from '../w3feedCuts'
+import { tabRides, feedHeadEyebrow, storiesFromRides } from '../w3feedCuts'
 import type { CrewRide } from '../../../api/crewRides'
 
 const ride = (over: Partial<CrewRide>): CrewRide => ({
@@ -12,23 +12,30 @@ const ride = (over: Partial<CrewRide>): CrewRide => ({
   route: null, ...over,
 })
 
-describe('the cuts', () => {
+describe('the four chips of the pen', () => {
+  const pb = { label: '20-Minuten', value_w: 312, prior_best_w: 303, gain_pct: 3.0, prior_best_at: '2026-03-14' }
   const rides = [
     ride({ id: 1, is_mine: false }),
     ride({ id: 2, is_mine: true }),
-    ride({ id: 3, is_mine: false }),
+    ride({ id: 3, is_mine: false, record: pb as CrewRide['record'] }),
   ]
 
   it('ALLE is everything the endpoint returned', () => {
-    expect(cutRides(rides, 'all').map((r) => r.id)).toEqual([1, 2, 3])
+    expect(tabRides(rides, 'all').map((r) => r.id)).toEqual([1, 2, 3])
   })
 
   it('CREW is everyone but you', () => {
-    expect(cutRides(rides, 'crew').map((r) => r.id)).toEqual([1, 3])
+    expect(tabRides(rides, 'crew').map((r) => r.id)).toEqual([1, 3])
   })
 
-  it('MEINE is only yours', () => {
-    expect(cutRides(rides, 'mine').map((r) => r.id)).toEqual([2])
+  it('REKORDE keeps only the rides that beat something', () => {
+    expect(tabRides(rides, 'records').map((r) => r.id)).toEqual([3])
+  })
+
+  it('CHALLENGES is not a cut of rides, so it returns none', () => {
+    // The chip swaps the list for the crew's challenges. Returning `rides`
+    // here would draw the whole feed UNDER the challenges.
+    expect(tabRides(rides, 'challenges')).toEqual([])
   })
 })
 

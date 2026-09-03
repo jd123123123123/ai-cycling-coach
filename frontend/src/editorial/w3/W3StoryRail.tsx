@@ -97,7 +97,12 @@ export default function W3StoryRail({ stories, onStart, startLabel = 'Foto', tin
     if (id != null) { markSeen(id); setSeen((s) => new Set(s).add(id)) }
   }, [stories])
 
-  if (stories.length === 0 && !onStart) return null
+  // NOBODY OUT MEANS NO RAIL. The earlier guard kept the strip alive whenever
+  // the rider had a ride to dress up, which drew "JETZT UNTERWEGS 0" over a
+  // row holding nothing but the plus — a heading that counts people, counting
+  // none. The plus is not lost: every one of your own photoless posts carries
+  // its own Foto button over the media.
+  if (stories.length === 0) return null
 
   return (
     <>

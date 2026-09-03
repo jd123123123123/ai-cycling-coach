@@ -1,19 +1,22 @@
 import { useMemo, useState } from 'react'
+import { Search, Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
 import { useToggleReaction } from '../../hooks/useCrewReactions'
 import { useCrewRides } from '../../hooks/useCrewRides'
 import { useCrewChallenges, useCreateChallenge } from '../../hooks/useChallenges'
 import type { StandingRow } from '../../api/crew'
-import { DASH, T } from './w3tokens'
+import { DASH } from './w3tokens'
 import W3CrewView, { type W3CrewVm, type W3CrewMember, type W3ShowedUpRow, type W3Highlight } from './W3CrewView'
 import W3CrewGoalEditor from './W3CrewGoalEditor'
 import { W3CrewFeedView } from './W3CrewFeed'
 import W3StoryRail from './W3StoryRail'
-import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
+import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot, W3FeedHead, W3HeadAction, W3FeedSearch } from './W3FeedShell'
+import W3FeedNotifications, { useFeedNotifications } from './W3FeedNotifications'
+import W3FeedChallenges from './W3FeedChallenges'
 import W3RecordCard from './W3RecordCard'
 import W3RideDetailsSheet from './W3RideDetailsSheet'
-import { cutRides as applyCut, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedCut } from './w3feedCuts'
+import { tabRides, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedTab } from './w3feedCuts'
 import W3Loading from './W3Loading'
 import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
 
@@ -81,10 +84,20 @@ export default function W3CrewPage() {
     }
     return out
   }, [standings])
-  const [cut, setCut] = useState<W3FeedCut>('all')
-  // FEED FIRST. The pen's screen is the rides; the board is a question a
-  // rider asks second and a poor thing to open on.
-  const [tab, setTab] = useState<'feed' | 'crew'>('feed')
+  // THE PEN SELECTS "CREW" FIRST, and that is the right default for a screen
+  // about other people: opening on ALLE puts your own ride at the top of a
+  // feed you came to read about everyone else.
+  const [tab, setTab] = useState<W3FeedTab>('crew')
+  // The board is a push off the feed now, not a chip — see `W3CrewView`.
+  const [board, setBoard] = useState(false)
+  // `null` is closed. An empty string is open-and-empty, which is a different
+  // state: it must show every ride, not none.
+  const [query, setQuery] = useState<string | null>(null)
+  const [bellOpen, setBellOpen] = useState(false)
+  // Real, both halves of it: unread nudges and pending invites. The hook is
+  // built to return 0 rather than throw when there is no crew, so the bell
+  // simply has no dot instead of taking the screen down with it.
+  const notifications = useFeedNotifications()
   const [dressing, setDressing] = useState<number | null>(null)
   // Hoisted so the headline card and the feed agree on WHICH ride it is —
   // computing it twice is how the two would drift into showing a card for one
@@ -95,7 +108,15 @@ export default function W3CrewPage() {
     () => (rides ?? []).find((r) => r.is_mine && r.photo_urls.length === 0),
     [rides],
   )
-  const shown = useMemo(() => applyCut(rides ?? [], cut), [rides, cut])
+  // The cut first, then the search inside it — searching within CREW must not
+  // silently widen back to everyone.
+  const shown = useMemo(() => {
+    const cut = tabRides(rides ?? [], tab)
+    const q = (query ?? '').trim().toLowerCase()
+    if (!q) return cut
+    return cut.filter((r) =>
+      [r.handle, r.display_name, r.title].some((f) => (f ?? '').toLowerCase().includes(q)))
+  }, [rides, tab, query])
   // The rail is people, and the card it opens is the ride's own post — the
   // same component the feed below draws, so a story and a post can never
   // disagree about the same ride.
@@ -322,68 +343,63 @@ export default function W3CrewPage() {
     <>
       <W3CrewView
         vm={{ ...vm, propsGiven }}
-        onBack={() => navigate('/e/w3-wins')}
         onPeriod={setPeriod}
         onOpenMember={(id) => navigate(`/e/w3-crew-member/${id}?period=${period}`)}
         onProps={giveProps}
         onInvite={invite}
         onEditGoal={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
-        tab={tab}
+        board={board}
+        onBoard={() => setBoard(true)}
+        onBack={board ? () => setBoard(false) : () => navigate('/e/w3-wins')}
+        head={
+          query != null ? (
+            <W3FeedSearch value={query} onChange={setQuery} onClose={() => setQuery(null)} />
+          ) : (
+            <W3FeedHead
+              eyebrow={feedHeadEyebrow()}
+              title={board ? vm.crewName : 'Feed'}
+              actions={board ? undefined : (
+                <>
+                  <W3HeadAction icon={<Search size={17} />} label="Fahrten durchsuchen"
+                    onClick={() => setQuery('')} />
+                  <W3HeadAction icon={<Bell size={17} />} label="Mitteilungen"
+                    dot={notifications.count > 0} onClick={() => setBellOpen(true)} />
+                </>
+              )}
+            />
+          )
+        }
         chips={
           <W3FeedFilters
             value={tab}
             onChange={setTab}
             layoutId="w3-crew-tab"
             options={[
-              { key: 'feed', label: 'Feed' },
-              { key: 'crew', label: 'Crew' },
+              { key: 'crew', label: 'Crew', count: (rides ?? []).filter((r) => !r.is_mine).length },
+              { key: 'all', label: 'Alle', count: (rides ?? []).length },
+              { key: 'challenges', label: 'Challenges' },
+              { key: 'records', label: 'Rekorde', count: (rides ?? []).filter((r) => r.record != null).length },
             ]}
           />
         }
-        // THE FEED WAS BUILT AND NEVER MOUNTED. `W3CrewView` has taken a
-        // `feed` slot all along and only the preview ever filled it, so the
-        // "+N weitere in der Crew" line on Today pointed at a screen that
-        // rendered no rides — and the post shapes, the prompt and the whole
-        // add-a-photo flow were reachable from nowhere in the running app.
         feed={
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: '100%' }}>
             {/* ── pen `dly9G`, in its own order ──────────────────────────────
-                Head, the people who were out today, the cuts, the crew's
-                shared goal, then the rides. Everything above the posts is
-                context for them; nothing above the posts is a post. */}
-            {/* NO SECOND TITLE. The pen's `dly9G` is a standalone Feed
-                screen and its head is the page's; inside the crew screen the
-                numbered chapter above already says "Zuletzt gefahren", and
-                printing "Feed" under it is the same restating this view
-                deleted its highlights strip for. The dated eyebrow survives
-                on its own, because when the list was built is a fact the
-                chapter head does not carry. */}
-            <span style={{ padding: '0 20px', fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>
-              {feedHeadEyebrow()}
-            </span>
-
+                The head and the chip row are above, owned by the screen. Here:
+                the people who were out today, the crew's shared goal, then the
+                rides. Everything above the posts is context for them; nothing
+                above the posts is a post. */}
             <W3StoryRail
               stories={stories}
               // Only when the rider actually has a ride to dress up.
               onStart={myUnfilled ? () => setDressing(myUnfilled.id) : undefined}
             />
 
-            {/* The CUT, not the tab: whose rides, within the feed. Named
-                differently from the tabs above on purpose — two chip rows
-                meaning two different things is only confusing if they use the
-                same words. */}
-            <W3FeedFilters
-              value={cut}
-              onChange={setCut}
-              layoutId="w3-crew-cut"
-              options={[
-                { key: 'all', label: 'Alle', count: (rides ?? []).length },
-                { key: 'mine', label: 'Nur meine', count: (rides ?? []).filter((r) => r.is_mine).length },
-                { key: 'crew', label: 'Ohne mich', count: (rides ?? []).filter((r) => !r.is_mine).length },
-              ]}
-            />
-
-            {vm.showDistanceGoal && vm.distanceGoalKm > 0 && (
+            {/* THE GOAL CARD IS ITSELF A CHALLENGE — the page finds it as the
+                crew's `distance_km` challenge a few lines up. Leaving it above
+                the Challenges cut prints the same object twice, once as a card
+                and once as a row inside the list under it. */}
+            {(tab === 'crew' || tab === 'all') && vm.showDistanceGoal && vm.distanceGoalKm > 0 && (
               <div style={{ padding: '0 20px' }}>
                 <W3CollectiveGoal
                   km={vm.distanceKm}
@@ -396,38 +412,74 @@ export default function W3CrewPage() {
               </div>
             )}
 
-            {/* THE ONE RECORD RAISED TO A HEADLINE. Every ride that set one
-                already wears a chip on its own post; this is the biggest of
-                them, and there is exactly one or none. */}
-            {(() => {
-              const top = topRecord
-              return top?.record ? (
-                <div style={{ padding: '0 20px' }}>
-                  <W3RecordCard vm={{
-                    handle: top.is_mine ? 'Du' : `@${top.handle}`,
-                    label: top.record.label,
-                    valueW: top.record.value_w,
-                    priorW: top.record.prior_best_w,
-                    priorWhen: recordMonth(top.record.prior_best_at),
-                  }} />
-                </div>
-              ) : null
-            })()}
+            {/* CHALLENGES IS NOT A CUT OF RIDES. The chip swaps the list for
+                the crew's live challenges; `tabRides` returns none for it, so
+                rendering both would draw an empty feed underneath. */}
+            {tab === 'challenges' ? (
+              <div style={{ padding: '0 20px' }}>
+                <W3FeedChallenges onCreate={vm.inCrew ? () => setEditingGoal(true) : undefined} />
+              </div>
+            ) : (
+              <>
+                {/* REKORDE IS A LIST OF RECORDS, NOT OF RIDES. Filtering the
+                    feed to the rides that set one and then drawing them as
+                    ordinary posts hid the very thing the cut is named after:
+                    the ride showed its photo and its watts, and the record was
+                    a chip somewhere below the fold. The pen has a post shape
+                    for this — `qH0dz` — and it is this card. */}
+                {tab === 'records' ? (
+                  <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+                    {shown.map((r) => r.record ? (
+                      <W3RecordCard key={r.id} vm={{
+                        handle: r.is_mine ? 'Du' : `@${r.handle}`,
+                        label: r.record.label,
+                        valueW: r.record.value_w,
+                        priorW: r.record.prior_best_w,
+                        priorWhen: recordMonth(r.record.prior_best_at),
+                      }} />
+                    ) : null)}
+                  </div>
+                ) : (
+                  <>
+                    {/* THE ONE RECORD RAISED TO A HEADLINE. Every ride that set
+                        one already wears a chip on its own post; this is the
+                        biggest of them, and there is exactly one or none. */}
+                    {topRecord?.record ? (
+                      <div style={{ padding: '0 20px' }}>
+                        <W3RecordCard vm={{
+                          handle: topRecord.is_mine ? 'Du' : `@${topRecord.handle}`,
+                          label: topRecord.record.label,
+                          valueW: topRecord.record.value_w,
+                          priorW: topRecord.record.prior_best_w,
+                          priorWhen: recordMonth(topRecord.record.prior_best_at),
+                        }} />
+                      </div>
+                    ) : null}
 
-            <div style={{ padding: '0 20px' }}>
-              <W3CrewFeedView
-                rides={shown}
-                avatars={avatars}
-                variant="page"
-                onRefresh={() => void refetchRides()}
-                headlinedId={topRecord?.id ?? null}
-              />
-            </div>
+                    <div style={{ padding: '0 20px' }}>
+                      <W3CrewFeedView
+                        rides={shown}
+                        avatars={avatars}
+                        variant="page"
+                        onRefresh={() => void refetchRides()}
+                        headlinedId={topRecord?.id ?? null}
+                      />
+                    </div>
+                  </>
+                )}
+              </>
+            )}
 
-            {shown.length > 0 && <W3FeedFoot text="Das war die Crew von heute" />}
+            {/* The foot names the list it closes. "Das war die Crew von heute"
+                under a page of personal bests is a sentence about the wrong
+                thing. */}
+            {tab !== 'challenges' && shown.length > 0 && (
+              <W3FeedFoot text={tab === 'records' ? 'Das waren die Rekorde' : 'Das war die Crew von heute'} />
+            )}
           </div>
         }
       />
+      <W3FeedNotifications open={bellOpen} onClose={() => setBellOpen(false)} />
       {dressing != null && (
         <W3RideDetailsSheet
           activityId={dressing}

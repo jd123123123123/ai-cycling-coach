@@ -8,23 +8,29 @@ import type { CrewRide } from '../../api/crewRides'
  * and a rule with a test on it is worth more than a rule inside a JSX tree.
  */
 
-export type W3FeedCut = 'all' | 'crew' | 'mine'
+export type W3FeedTab = 'crew' | 'all' | 'challenges' | 'records'
 
 /**
- * THE CUTS ARE THE ONES THE DATA CAN MAKE.
+ * THE FOUR CHIPS OF THE PEN, ALL OF THEM NOW REAL.
  *
- * The pen shows Crew / Alle / Challenges / Rekorde. There is no non-crew feed
- * in this app to widen "Alle" beyond the crew, and no per-member record flag
- * to filter "Rekorde" on — so those two would be chips that filter nothing,
- * which is the dead control this repository grows faster than it removes.
+ * `dly9G` shows Crew / Alle / Challenges / Rekorde. An earlier version of this
+ * file cut that down to three and said in a comment that "Rekorde" would be a
+ * chip filtering nothing, because no per-ride record flag existed. That is no
+ * longer true and the comment was outliving its fact: `crew_records` now
+ * batches personal-best detection over the whole feed page and every ride
+ * carries `record`, and `/crews/challenges` returns the crew's live
+ * challenges. Both chips have something to show, so the pen's row stands.
  *
- * ALLE is every ride the crew endpoint returned, CREW is everyone but you, and
- * MEINE is only yours. Three cuts, each one a question a rider actually asks
- * of a feed, each one answerable from the payload that is already here.
+ * CREW is everyone but you — the pen selects it first, and it is the right
+ * default for a screen about other people. ALLE widens it to include your own
+ * rides. REKORDE keeps only the rides that beat something. CHALLENGES is not a
+ * cut of rides at all: it swaps the list for the crew's challenges, which is
+ * why this function returns an empty array for it rather than pretending.
  */
-export function cutRides(rides: CrewRide[], cut: W3FeedCut): CrewRide[] {
-  if (cut === 'crew') return rides.filter((r) => !r.is_mine)
-  if (cut === 'mine') return rides.filter((r) => r.is_mine)
+export function tabRides(rides: CrewRide[], tab: W3FeedTab): CrewRide[] {
+  if (tab === 'crew') return rides.filter((r) => !r.is_mine)
+  if (tab === 'records') return rides.filter((r) => r.record != null)
+  if (tab === 'challenges') return []
   return rides
 }
 
