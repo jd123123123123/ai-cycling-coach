@@ -127,6 +127,7 @@ const BASE = {
 function PreviewFeed() {
   const [cut, setCut] = useState<W3FeedCut>('all')
   const shown = cutRides(FEED_RIDES, cut)
+  const topRecord = headlineRecord(FEED_RIDES)
   const stories = storiesFromRides(FEED_RIDES, new Date(), (r) => ({
     id: r.id,
     name: r.is_mine ? 'Du' : `@${r.handle}`,
@@ -157,7 +158,7 @@ function PreviewFeed() {
           already wears a chip on its own post; this is the biggest of
           them, and there is exactly one or none. */}
       {(() => {
-        const top = headlineRecord(FEED_RIDES)
+        const top = topRecord
         return top?.record ? (
           <div style={{ padding: '0 20px' }}>
             <W3RecordCard vm={{
@@ -172,7 +173,7 @@ function PreviewFeed() {
       })()}
 
       <div style={{ padding: '0 20px' }}>
-        <W3CrewFeedView rides={shown} variant="page" />
+        <W3CrewFeedView rides={shown} variant="page" headlinedId={topRecord?.id ?? null} />
       </div>
       {shown.length > 0 && <W3FeedFoot text="Das war die Crew von heute" />}
     </div>

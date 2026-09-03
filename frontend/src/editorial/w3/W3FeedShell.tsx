@@ -5,6 +5,7 @@ import { T, FONT, EASE } from './w3tokens'
 // crew-mate's post is tinted with, and the collective card is the same crew.
 import { THEM_TINT } from './w3crew'
 import { lux, TNUM } from './w3surfaces'
+import W3Eyebrow from './W3Eyebrow'
 
 /**
  * W3 · THE FEED'S OWN FURNITURE — pen frame `dly9G`.
@@ -34,9 +35,7 @@ export function W3FeedHead({ eyebrow, title, actions }: {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, width: '100%', padding: '0 20px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.4, color: T.quiet }}>
-          {eyebrow}
-        </span>
+        <W3Eyebrow>{eyebrow}</W3Eyebrow>
         <span style={{ fontSize: 34, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1, color: T.ink }}>
           {title}
         </span>
@@ -143,9 +142,7 @@ export function W3CollectiveGoal({
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
         <Users size={13} color={THEM_TINT} strokeWidth={2.2} />
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: THEM_TINT }}>
-          KOLLEKTIV · WOCHENZIEL
-        </span>
+        <W3Eyebrow tone={THEM_TINT}>Kollektiv · Wochenziel</W3Eyebrow>
         <span style={{ marginLeft: 'auto', ...TNUM, fontSize: 19, fontWeight: 700, letterSpacing: -0.6, color: THEM_TINT }}>
           {Math.round(pct * 100)} %
         </span>

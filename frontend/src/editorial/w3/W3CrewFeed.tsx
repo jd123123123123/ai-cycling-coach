@@ -353,12 +353,15 @@ export function RideRow({ ride, avatar, open, onToggle, accent }: {
  * exact would have replaced that with a redraw of it. They are passed in as
  * slots.
  */
-function RidePost({ ride, avatar, open, onToggle, accent }: {
+function RidePost({ ride, avatar, open, onToggle, accent, headlined = false }: {
   ride: CrewRide
   avatar: string | null
   open: boolean
   onToggle: () => void
   accent: string
+  /** This ride's record is already the feed's headline card, so the chip on
+   *  its own post would state the same thing twice, ten pixels apart. */
+  headlined?: boolean
 }) {
   const mine = ride.is_mine
   const tint = mine ? YOU_TINT : accent
@@ -379,7 +382,10 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
     avatarUrl: avatar,
     avatarInitial: initial,
     mine,
-    eyebrow: (ride.title || '').trim().toUpperCase() || null,
+    // THEIR WORDS, THEIR CASE. Uppercasing a ride title destroys information
+    // — compound nouns lose their shape and a title somebody capitalised on
+    // purpose reads like one typed in a hurry.
+    eyebrow: (ride.title || '').trim() || null,
     headline: hasKm
       ? km(ride.distance_m).replace(' km', '')
       : nf.format(Math.round(ride.duration_seconds / 60)),
@@ -391,7 +397,13 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
     // the card was built, which made it exactly the dead machinery this
     // repository keeps growing — a slot that renders nothing because nothing
     // was ever computed for it.
-    badge: ride.record ? `${nf.format(ride.record.value_w)} W · ${ride.record.label}` : null,
+    // THE CHIP IS FOR RECORDS THAT DID NOT GET THE HEADLINE CARD. I wrote
+    // that two cards making the same claim at two weights is the restatement
+    // this feed keeps deleting, and then shipped the card and the chip for the
+    // same ride, adjacent. The card wins; the chip stands down.
+    badge: ride.record && !headlined
+      ? `${nf.format(ride.record.value_w)} W · ${ride.record.label}`
+      : null,
     // Watts first — the number cyclists talk about, and it was behind the
     // expand. Every column is dropped rather than padded when the ride does
     // not carry it, so a card never prints a dash where a fact should be.
@@ -451,7 +463,7 @@ function RidePost({ ride, avatar, open, onToggle, accent }: {
 
 // ── the section ─────────────────────────────────────────────────────────────
 
-export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh }: {
+export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, headlinedId = null }: {
   rides: CrewRide[]
   /** user_id → their rendered rider portrait, from the standings the rank card
    *  already fetched. A member without one gets their initial. */
@@ -470,6 +482,9 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh }:
   /** Called once a rider has actually added a photo or a sentence, so the
    *  caller can refetch — the post beneath the prompt has to change shape. */
   onRefresh?: () => void
+  /** The ride whose record is already the feed's headline card. Its post
+   *  drops the chip rather than repeating the claim. */
+  headlinedId?: number | null
 }) {
   // One open at a time. Two expanded threads in a column push the second one's
   // composer off the bottom of a 390×844 screen, and a rider who opens a ride
@@ -545,7 +560,8 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh }:
               avatar={avatars?.[r.user_id] ?? null}
               open={openId === r.id}
               onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
-              accent={accent} />
+              accent={accent}
+              headlined={r.id === headlinedId} />
           </div>
         ))}
       </div>

@@ -3,6 +3,7 @@ import { MessageCircle, Share2, Zap } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
 import { lux, TNUM } from './w3surfaces'
 import { W3ElevationProfile, W3IntervalBars } from './W3FeedCharts'
+import W3Eyebrow from './W3Eyebrow'
 
 /**
  * W3 · THE FEED POST, in its two shapes — pen frames `SpFxs` and `kFeEt`.
@@ -140,7 +141,7 @@ function Actions({ vm, tint, compact }: { vm: W3FeedPostVm; tint: string; compac
 function StatColumn({ s }: { s: W3FeedStat }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
-      <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>{s.l}</span>
+      <W3Eyebrow>{s.l}</W3Eyebrow>
       <span style={{ display: 'flex', alignItems: 'baseline', gap: 3 }}>
         <span style={{ ...TNUM, fontSize: 17, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{s.v}</span>
         {s.u && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{s.u}</span>}
@@ -220,11 +221,7 @@ function PhotoPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots:
           background: `linear-gradient(180deg, transparent, ${T.bg}D9 58%, ${T.bg} 100%)`,
           display: 'flex', flexDirection: 'column', gap: 4,
         }}>
-          {vm.eyebrow && (
-            <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.3, color: T.acid }}>
-              {vm.eyebrow}
-            </span>
-          )}
+          {vm.eyebrow && <W3Eyebrow kind="title">{vm.eyebrow}</W3Eyebrow>}
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
             <span style={{ ...TNUM, fontSize: 52, fontWeight: 700, letterSpacing: -2.4, lineHeight: 0.92, color: T.ink }}>
               {vm.headline}
@@ -289,11 +286,7 @@ function PlainPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots:
             explain each other, and the card stays one screenful of scroll. */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, width: '100%' }}>
           <span style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 'none', minWidth: 0 }}>
-            {vm.eyebrow && (
-              <span style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: 1.2, color: T.acid }}>
-                {vm.eyebrow}
-              </span>
-            )}
+            {vm.eyebrow && <W3Eyebrow kind="title" tone={tint}>{vm.eyebrow}</W3Eyebrow>}
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
               <span style={{ ...TNUM, fontSize: 34, fontWeight: 700, letterSpacing: -1.4, lineHeight: 0.95, color: T.ink }}>
                 {vm.headline}

@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Trophy } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
 import { lux, TNUM } from './w3surfaces'
+import W3Eyebrow from './W3Eyebrow'
 
 /**
  * W3 · NEUE BESTLEISTUNG — the crew's headline record, pen frame `dly9G`.
@@ -71,12 +72,9 @@ export default function W3RecordCard({ vm }: { vm: W3RecordCardVm }) {
           <Trophy size={20} color={T.gold} strokeWidth={1.9} />
         </span>
         <span style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
-          <span style={{
-            fontSize: 9.5, fontWeight: 700, letterSpacing: 1.3, color: T.gold,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>
-            NEUE BESTLEISTUNG · {vm.handle.replace('@', '').toUpperCase()}
-          </span>
+          <W3Eyebrow tone={T.gold}>
+            Neue Bestleistung · {vm.handle.replace('@', '')}
+          </W3Eyebrow>
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
             <span style={{ ...TNUM, fontSize: 32, fontWeight: 700, letterSpacing: -1.3, lineHeight: 1, color: T.ink }}>
               {nf.format(vm.valueW)}

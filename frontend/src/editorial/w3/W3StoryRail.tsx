@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ChevronRight, Plus, X } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import { TNUM } from './w3surfaces'
+import W3Eyebrow from './W3Eyebrow'
 
 /**
  * W3 · JETZT UNTERWEGS — the story rail, pen frame `Y5ewIu`, and the viewer
@@ -103,9 +104,7 @@ export default function W3StoryRail({ stories, onStart, startLabel = 'Foto', tin
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 20px' }}>
           <span aria-hidden style={{ width: 7, height: 7, borderRadius: 100, background: tint }} />
-          <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.4, color: T.mid }}>
-            JETZT UNTERWEGS
-          </span>
+          <W3Eyebrow tone={T.mid}>Jetzt unterwegs</W3Eyebrow>
           <span style={{ ...TNUM, fontSize: 11, fontWeight: 700, color: T.ink }}>{stories.length}</span>
         </div>
 

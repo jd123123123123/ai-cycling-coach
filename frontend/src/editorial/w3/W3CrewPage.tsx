@@ -83,6 +83,10 @@ export default function W3CrewPage() {
   }, [standings])
   const [cut, setCut] = useState<W3FeedCut>('all')
   const [dressing, setDressing] = useState<number | null>(null)
+  // Hoisted so the headline card and the feed agree on WHICH ride it is —
+  // computing it twice is how the two would drift into showing a card for one
+  // ride and suppressing the chip on another.
+  const topRecord = useMemo(() => headlineRecord(rides ?? []), [rides])
   // My newest ride with no picture on it — what the rail's leading tile is for.
   const myUnfilled = useMemo(
     () => (rides ?? []).find((r) => r.is_mine && r.photo_urls.length === 0),
@@ -376,7 +380,7 @@ export default function W3CrewPage() {
                 already wears a chip on its own post; this is the biggest of
                 them, and there is exactly one or none. */}
             {(() => {
-              const top = headlineRecord(rides ?? [])
+              const top = topRecord
               return top?.record ? (
                 <div style={{ padding: '0 20px' }}>
                   <W3RecordCard vm={{
@@ -396,6 +400,7 @@ export default function W3CrewPage() {
                 avatars={avatars}
                 variant="page"
                 onRefresh={() => void refetchRides()}
+                headlinedId={topRecord?.id ?? null}
               />
             </div>
 

@@ -24,7 +24,9 @@ describe('the rail', () => {
 
   it('counts the riders it is showing', () => {
     draw([story({ id: 1 }), story({ id: 2, name: '@tom' })])
-    expect(screen.getByText('JETZT UNTERWEGS')).toBeTruthy()
+    // Natural case in the DOM, uppercase on screen via `textTransform` — so
+    // a screen reader says "Jetzt unterwegs" rather than spelling out caps.
+    expect(screen.getByText('Jetzt unterwegs')).toBeTruthy()
     expect(screen.getByText('2')).toBeTruthy()
   })
 })
