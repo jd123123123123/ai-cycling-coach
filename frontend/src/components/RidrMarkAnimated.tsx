@@ -45,6 +45,26 @@ function compile(gl: WebGLRenderingContext, type: number, src: string) {
   return sh
 }
 
+/**
+ * THE APP INTRODUCES ITSELF ONCE, NOT ONCE PER GATE.
+ *
+ * A cold open passes through three loaders in a row — App's <Suspense>
+ * fallback while the route chunk arrives, <ProtectedRoute> while auth
+ * resolves, then <W3Guard> while the garage read lands. Each is a fresh mount
+ * of this component, so the mark drew itself, vanished, drew itself again, and
+ * drew itself a third time before the first screen appeared. Reported exactly
+ * as it looks: "the logo tries 3 times to render."
+ *
+ * Module scope, deliberately, not React state: the whole point is to survive
+ * being unmounted. The first mark in a page session draws; every one after it
+ * renders the finished R with the same bloom behind it, so the loaders look
+ * like one continuous wait instead of three false starts.
+ *
+ * It resets on a full page load, which is right — a genuinely new session
+ * deserves the introduction again.
+ */
+let INTRODUCED = false
+
 export default function RidrMarkAnimated({ size = 210 }: { size?: number }) {
   const ref = useRef<HTMLCanvasElement | null>(null)
   // Starts false and is only ever set on a real failure, so the shader gets
@@ -56,6 +76,10 @@ export default function RidrMarkAnimated({ size = 210 }: { size?: number }) {
     if (!canvas) return
 
     const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
+    // Freeze for the same reason reduced motion freezes: the draw-on has
+    // already happened and repeating it is the bug, not the feature.
+    const frozen = reduce || INTRODUCED
+    INTRODUCED = true
     const dpr = Math.min(window.devicePixelRatio || 1, 2)
     canvas.width = Math.round(size * dpr)
     canvas.height = Math.round(size * dpr)
@@ -90,7 +114,7 @@ export default function RidrMarkAnimated({ size = 210 }: { size?: number }) {
     gl.uniform1f(u('u_zoom'), 0.72)
     gl.uniform1f(u('u_loop'), 4.2)
     // 1.0 renders the END of the loop: the finished R, no motion.
-    gl.uniform1f(u('u_freeze'), reduce ? 1 : 0)
+    gl.uniform1f(u('u_freeze'), frozen ? 1 : 0)
     const uTime = u('u_time')
 
     gl.viewport(0, 0, canvas.width, canvas.height)
@@ -100,7 +124,10 @@ export default function RidrMarkAnimated({ size = 210 }: { size?: number }) {
       gl.drawArrays(gl.TRIANGLES, 0, 3)
     }
 
-    if (reduce) { draw(0); return }
+    // One frame and stop — no rAF loop for a mark that is not animating.
+    // A frozen mark spinning a render loop would burn battery to draw the
+    // same pixels, and this component exists precisely when things are slow.
+    if (frozen) { draw(0); return }
 
     let raf = 0
     let start = performance.now()
