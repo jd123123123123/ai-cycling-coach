@@ -22,6 +22,10 @@ export interface CrewRideRecord {
   /** "20-Minuten" — the server's word, so a duration added on the backend
    *  needs no change here. */
   label: string
+  /** The day the old best was set. Null when the ride that held it has aged
+   *  out of the 90-day window — the card prints the number without a date
+   *  rather than inventing one. */
+  prior_best_at: string | null
 }
 
 export interface CrewRide {

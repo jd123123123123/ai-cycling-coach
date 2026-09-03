@@ -11,7 +11,8 @@ import W3CrewGoalEditor from './W3CrewGoalEditor'
 import { W3CrewFeedView } from './W3CrewFeed'
 import W3StoryRail from './W3StoryRail'
 import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
-import { cutRides as applyCut, feedHeadEyebrow, storiesFromRides, type W3FeedCut } from './w3feedCuts'
+import W3RecordCard from './W3RecordCard'
+import { cutRides as applyCut, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedCut } from './w3feedCuts'
 import W3Loading from './W3Loading'
 import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Period } from './w3crew'
 
@@ -362,6 +363,24 @@ export default function W3CrewPage() {
                 />
               </div>
             )}
+
+            {/* THE ONE RECORD RAISED TO A HEADLINE. Every ride that set one
+                already wears a chip on its own post; this is the biggest of
+                them, and there is exactly one or none. */}
+            {(() => {
+              const top = headlineRecord(rides ?? [])
+              return top?.record ? (
+                <div style={{ padding: '0 20px' }}>
+                  <W3RecordCard vm={{
+                    handle: top.is_mine ? 'Du' : `@${top.handle}`,
+                    label: top.record.label,
+                    valueW: top.record.value_w,
+                    priorW: top.record.prior_best_w,
+                    priorWhen: recordMonth(top.record.prior_best_at),
+                  }} />
+                </div>
+              ) : null
+            })()}
 
             <div style={{ padding: '0 20px' }}>
               <W3CrewFeedView

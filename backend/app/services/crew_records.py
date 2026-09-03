@@ -102,7 +102,15 @@ async def records_for_rides(
                 now_w = _mmp_at(ride["mmp"], seconds)
                 if now_w is None or now_w <= 0:
                     continue
-                prior_vals = [v for v in (_mmp_at(p["mmp"], seconds) for p in prior) if v]
+                # Kept WITH their rides, so the card can say when the old best
+                # was set — "ALT · MÄRZ" is the half of the comparison that
+                # makes it a story rather than two numbers.
+                prior_pairs = [
+                    (v, p["started_at"])
+                    for v, p in ((_mmp_at(p["mmp"], seconds), p) for p in prior)
+                    if v
+                ]
+                prior_vals = [v for v, _ in prior_pairs]
                 if len(prior_vals) < MIN_PRIOR_RIDES:
                     continue
                 # Sanitised baseline: a corrupt prior spike must not set an
@@ -111,6 +119,13 @@ async def records_for_rides(
                 if not sanitized:
                     continue
                 best = max(sanitized)
+                # The ride that actually held it. Newest wins a tie: if the
+                # rider hit the same number twice, the recent one is the bar
+                # they were riding against.
+                held_at = max(
+                    (d for v, d in prior_pairs if abs(v - best) < 1e-9),
+                    default=None,
+                )
                 gain = (now_w - best) / best * 100 if best > 0 else 0.0
                 if gain > SUSPECT_GAIN_PCT and not _corroborated(now_w, prior_vals):
                     continue
@@ -127,6 +142,7 @@ async def records_for_rides(
                         "prior_best_w": round(best),
                         "gain_pct": round(gain, 1),
                         "label": label,
+                        "prior_best_at": held_at.date().isoformat() if held_at else None,
                     }
 
     return out

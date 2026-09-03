@@ -116,3 +116,25 @@ async def test_riders_are_scored_against_their_own_history_only():
 async def test_nothing_asked_nothing_read():
     assert await records_for_rides(FakeDb([]), user_ids=[], activity_ids=[1]) == {}
     assert await records_for_rides(FakeDb([]), user_ids=[1], activity_ids=[]) == {}
+
+
+@pytest.mark.asyncio
+async def test_it_says_WHEN_the_old_best_was_set():
+    """"ALT · MÄRZ" is the half of the comparison that makes it a story."""
+    history = [row(i, 1, 40 - i, 250) for i in range(MIN_PRIOR_RIDES)]
+    peak_day = row(90, 1, 30, 260)          # the ride that actually held it
+    today = row(99, 1, 0, 270)
+    out = await run([*history, peak_day, today], [99])
+    assert out[99]["prior_best_w"] == 260
+    expected = (NOW - timedelta(days=30)).date().isoformat()
+    assert out[99]["prior_best_at"] == expected
+
+
+@pytest.mark.asyncio
+async def test_a_tie_on_the_old_best_credits_the_more_recent_ride():
+    """The bar they were actually riding against."""
+    history = [row(i, 1, 40 - i, 250) for i in range(MIN_PRIOR_RIDES)]
+    early = row(90, 1, 60, 260)
+    late = row(91, 1, 10, 260)
+    out = await run([*history, early, late, row(99, 1, 0, 270)], [99])
+    assert out[99]["prior_best_at"] == (NOW - timedelta(days=10)).date().isoformat()

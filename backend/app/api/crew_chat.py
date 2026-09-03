@@ -112,6 +112,10 @@ class RideRecord(BaseModel):
     #: "20-Minuten" — the server's word, so a duration added on the backend
     #: needs no frontend change.
     label: str
+    #: The day the old best was set. Null when the ride that held it has aged
+    #: out of the window — the card then prints the number without the date
+    #: rather than inventing one.
+    prior_best_at: str | None = None
 
 
 class RideRead(BaseModel):

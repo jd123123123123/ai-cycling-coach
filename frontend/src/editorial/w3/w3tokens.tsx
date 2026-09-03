@@ -135,6 +135,11 @@ const DARK = {
   // punched in it. `shadowSoft` (35%) is a shadow, not a surface, and a pill
   // built from it goes unreadable the moment the art behind it brightens.
   glass: '#0B0B0BB8',
+  // ── THE MEDAL ────────────────────────────────────────────────────────
+  // A third accent, and it earns its place by meaning a third thing: acid is
+  // the rider's own, violet is the crew as a body, and gold is the one card
+  // about what somebody has NEVER done before. Used once per feed.
+  gold: '#E8C15A', goldDim: '#E8C15A26', goldEdge: '#E8C15A4D',
   acidTop: '#1B1C19',
   lift: '#1B1B1B',           // a neutral card top — `acidTop` without the acid
   acidHi: '#DBFF5A',         // the highlight stop above `acid` in a medal
@@ -171,6 +176,9 @@ const LIGHT: typeof DARK = {
   sheet: '#FFFFFF', tile: '#FFFFFF', card: '#FFFFFF', lift: '#FFFFFF',
   chip: '#E8E8E2',
   glass: '#FFFFFFC4',
+  // Darkened for the light ground: the dark palette's gold is a light on
+  // near-black and would be unreadable as type on white.
+  gold: '#8A6A12', goldDim: '#8A6A1218', goldEdge: '#8A6A1240',
   acidTop: '#F4FBE4',          // the warm-lit top of a card that has EARNED it
 
   // ── Ink ────────────────────────────────────────────────────────────────

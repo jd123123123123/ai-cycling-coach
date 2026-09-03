@@ -4,7 +4,8 @@ import W3CrewView, { type W3CrewVm } from './W3CrewView'
 import { W3CrewFeedView } from './W3CrewFeed'
 import W3StoryRail from './W3StoryRail'
 import { W3FeedFilters, W3CollectiveGoal, W3FeedFoot } from './W3FeedShell'
-import { cutRides, feedHeadEyebrow, storiesFromRides, type W3FeedCut } from './w3feedCuts'
+import W3RecordCard from './W3RecordCard'
+import { cutRides, feedHeadEyebrow, headlineRecord, recordMonth, storiesFromRides, type W3FeedCut } from './w3feedCuts'
 import type { CrewRide } from '../../api/crewRides'
 import { periodWord, thisPeriod, type W3Period } from './w3crew'
 
@@ -35,7 +36,7 @@ const FEED_RIDES: CrewRide[] = [
   { id: 901, user_id: 2, handle: 'mara', display_name: 'Mara', title: 'Feierabendrunde am Kanal', started_at: new Date(now - 5 * H * 1000).toISOString(),
     distance_m: 48200, elevation_gain_m: 310, duration_seconds: 5820, sport: 'cycling', tss: 78, avg_power_w: 212, avg_hr: 148,
     description: 'Über den Kesselberg, zurück am Starnberger See', photo_urls: ['/w3/onboard-hero.webp'],
-    record: { duration_s: 1200, value_w: 312, prior_best_w: 303, gain_pct: 3.0, label: '20-Minuten' },
+    record: { duration_s: 1200, value_w: 312, prior_best_w: 303, gain_pct: 3.0, label: '20-Minuten', prior_best_at: '2026-03-14' },
     elevation_profile: [390.0, 431.8, 472.7, 511.7, 547.9, 545.4, 573.7, 597.1, 615.1, 627.5, 599.0, 599.8, 595.0, 584.8, 569.8, 515.7, 493.0, 467.7, 440.6, 412.7, 350.0, 323.3, 298.7, 277.0, 259.1, 210.5, 201.9, 198.7, 201.2, 209.5, 188.6, 208.3, 233.2, 262.8, 296.6, 298.7, 338.3, 379.6, 421.5, 463.2, 468.6, 506.8, 542.0, 573.3, 600.2, 587.0, 603.3, 614.0], power_profile: null,
     calories: 1180, is_mine: false, comment_count: 2, reactions: { counts: { '🔥': 3, '💪': 1 }, mine: ['💪'] }, route: ROUTE_MARA },
   { id: 902, user_id: 1, handle: 'du', display_name: 'Du', title: 'Intervalle, 4×8', started_at: new Date(now - 26 * H * 1000).toISOString(),
@@ -152,6 +153,24 @@ function PreviewFeed() {
       <div style={{ padding: '0 20px' }}>
         <W3CollectiveGoal km={782} goalKm={1000} pct={0.78} riders={9} daysLeft={2} onContribute={() => {}} />
       </div>
+      {/* THE ONE RECORD RAISED TO A HEADLINE. Every ride that set one
+          already wears a chip on its own post; this is the biggest of
+          them, and there is exactly one or none. */}
+      {(() => {
+        const top = headlineRecord(FEED_RIDES)
+        return top?.record ? (
+          <div style={{ padding: '0 20px' }}>
+            <W3RecordCard vm={{
+              handle: top.is_mine ? 'Du' : `@${top.handle}`,
+              label: top.record.label,
+              valueW: top.record.value_w,
+              priorW: top.record.prior_best_w,
+              priorWhen: recordMonth(top.record.prior_best_at),
+            }} />
+          </div>
+        ) : null
+      })()}
+
       <div style={{ padding: '0 20px' }}>
         <W3CrewFeedView rides={shown} variant="page" />
       </div>

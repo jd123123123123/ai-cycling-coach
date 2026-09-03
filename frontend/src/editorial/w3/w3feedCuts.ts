@@ -80,3 +80,31 @@ export function feedHeadEyebrow(now: Date = new Date()): string {
   const mm = String(now.getMinutes()).padStart(2, '0')
   return `${DAYS[now.getDay()]} · ${hh}:${mm}`
 }
+
+
+/** "2026-03-14" → "MÄRZ", for the record card's old rail. Null in, null out. */
+const MONTHS = [
+  'JANUAR', 'FEBRUAR', 'MÄRZ', 'APRIL', 'MAI', 'JUNI',
+  'JULI', 'AUGUST', 'SEPTEMBER', 'OKTOBER', 'NOVEMBER', 'DEZEMBER',
+]
+
+export function recordMonth(iso: string | null): string | null {
+  if (!iso) return null
+  const d = new Date(`${iso}T00:00:00`)
+  return Number.isNaN(d.getTime()) ? null : MONTHS[d.getMonth()]
+}
+
+/**
+ * The single record worth raising to a headline.
+ *
+ * Any ride that set one already wears a chip on its own post; this picks the
+ * ONE that becomes a card, by the size of the gain. Two cards making the same
+ * claim at two weights is the restatement this feed keeps deleting, so there
+ * is exactly one, or none.
+ */
+export function headlineRecord(rides: CrewRide[]): CrewRide | null {
+  const withRecord = rides.filter((r) => r.record != null)
+  if (withRecord.length === 0) return null
+  return withRecord.reduce((best, r) =>
+    (r.record!.gain_pct > best.record!.gain_pct ? r : best))
+}
