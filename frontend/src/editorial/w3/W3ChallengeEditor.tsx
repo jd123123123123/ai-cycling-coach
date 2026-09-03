@@ -4,6 +4,7 @@ import { X, Trash2, Check } from 'lucide-react'
 import { useCreateChallenge, useEditChallenge, useDeleteChallenge } from '../../hooks/useRewardChallenges'
 import { CHALLENGE_METRICS, type ChallengeMetric, type RewardChallenge } from '../../api/rewardChallenges'
 import { T, FONT } from './w3tokens'
+import { sheetPanel } from './w3surfaces'
 
 /**
  * W3 · Challenge editor — create or edit a rider-defined monthly challenge.
@@ -51,7 +52,7 @@ export default function W3ChallengeEditor({ existing, onClose }: {
       <motion.div
         initial={reduce ? false : { y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 34 }}
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 390, maxWidth: '100%', background: T.bg, borderRadius: '28px 28px 0 0', border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, display: 'flex', flexDirection: 'column', padding: '18px 20px calc(24px + env(safe-area-inset-bottom))', gap: 18 }}>
+        style={{ ...sheetPanel(28), background: T.bg, border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, padding: '18px 20px calc(24px + env(safe-area-inset-bottom))', gap: 18 }}>
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>{editing ? 'Challenge bearbeiten' : 'Neue Challenge'}</span>

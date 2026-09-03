@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Asterisk, Check, Lock } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
+import { sheetPanel } from './w3surfaces'
 import { gearArt, type Gear, type GearItem, type GearRarity } from '../../api/gear'
 
 /**
@@ -196,10 +197,9 @@ function Sheet({ item, busy, onBuy, onEquip, onUnequip, onClose }: {
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.36, ease: EASE }}
         style={{
-          width: '100%', maxWidth: 390, background: T.heroBg,
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          ...sheetPanel(28), width: '100%', maxWidth: 390, background: T.heroBg,
           padding: `14px 20px calc(24px + env(safe-area-inset-bottom))`,
-          display: 'flex', flexDirection: 'column', gap: 16,
+          gap: 16,
         }}>
         <span style={{ width: 40, height: 4, borderRadius: 100, background: T.heroOff, alignSelf: 'center' }} />
 

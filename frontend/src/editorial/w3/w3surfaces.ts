@@ -76,3 +76,37 @@ export const hairline = (inset = 0) => ({
 
 /** Numerals that change in place must not reflow their neighbours. */
 export const TNUM = { fontVariantNumeric: 'tabular-nums' as const }
+
+
+/**
+ * THE BOTTOM SHEET, BOUNDED BY THE SCREEN IT IS ON.
+ *
+ * Several sheets were a fixed overlay with `align-items: flex-end` and a panel
+ * carrying neither a height cap nor an overflow rule. That is not "it scrolls
+ * a bit on a small phone" — bottom alignment pushes the overflow off the TOP,
+ * so on a 667pt device the sheet's own title and close button leave the screen
+ * and there is no scroll to bring them back. The content is simply gone.
+ *
+ * Three properties, and each is load-bearing:
+ *
+ *   maxHeight  — the screen minus a strip, so the sheet always reads as a
+ *                sheet over something rather than a full-page takeover, and
+ *                the rider can always see what they would return to.
+ *   overflowY  — the escape hatch. It should rarely engage: a sheet that
+ *                habitually scrolls is a sheet with too much in it, and the
+ *                fix for that is fewer fields, not a taller box.
+ *   overscroll — `contain`, so reaching the end of the sheet does not hand the
+ *                scroll to the page behind it. Without this a rider who
+ *                over-swipes inside a sheet watches the feed move underneath,
+ *                which is the single most common bottom-sheet defect on iOS.
+ */
+export const sheetPanel = (radius = 28) => ({
+  width: 390,
+  maxWidth: '100%' as const,
+  maxHeight: 'calc(100dvh - 28px)',
+  overflowY: 'auto' as const,
+  overscrollBehavior: 'contain' as const,
+  borderRadius: `${radius}px ${radius}px 0 0`,
+  display: 'flex',
+  flexDirection: 'column' as const,
+})

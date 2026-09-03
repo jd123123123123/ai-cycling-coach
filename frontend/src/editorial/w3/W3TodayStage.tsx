@@ -322,7 +322,17 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         transition={{ duration: 0.5, ease: EASE }}
         style={{
           position: 'relative', display: 'flex', flexDirection: 'column',
-          alignItems: 'center', paddingTop: 8, zIndex: 1, flex: 'none',
+          alignItems: 'center', paddingTop: 8, flex: 'none',
+          // ABOVE THE MACHINE, at the same level as the corner chips. This and
+          // the bike were both zIndex 1, so DOM order decided and the bike —
+          // rendered later — painted over the name. It never showed at 844,
+          // where the machine sits low enough to miss; at 667 the stage
+          // compresses, the saddle rises into the tier chip, and half of
+          // "Umfangsblock · Woche 2 von 4" disappeared behind a top tube.
+          //
+          // The identity is a LABEL. A label may not be occluded by the art it
+          // labels, at any screen height.
+          zIndex: 2,
         }}>
 
         <div style={{ position: 'relative', width: AVATAR, height: AVATAR, display: 'grid', placeItems: 'center' }}>

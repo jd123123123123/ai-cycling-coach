@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { X, Minus, Plus, Check, Loader2 } from 'lucide-react'
 import { T, FONT } from './w3tokens'
+import { sheetPanel } from './w3surfaces'
 
 /**
  * W3 · Crew goal editor — set the crew's "Around the world" distance target.
@@ -28,7 +29,7 @@ export default function W3CrewGoalEditor({ currentKm, onSave, onClose, saving }:
       <motion.div
         initial={reduce ? false : { y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }} transition={{ type: 'spring', stiffness: 320, damping: 34 }}
         onClick={(e) => e.stopPropagation()}
-        style={{ width: 390, maxWidth: '100%', background: T.bg, borderRadius: '28px 28px 0 0', border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, display: 'flex', flexDirection: 'column', padding: '18px 20px calc(24px + env(safe-area-inset-bottom))', gap: 20 }}>
+        style={{ ...sheetPanel(28), background: T.bg, border: `1px solid ${T.rule}`, borderBottom: 0, fontFamily: FONT, padding: '18px 20px calc(24px + env(safe-area-inset-bottom))', gap: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span style={{ fontSize: 20, fontWeight: 700, color: T.ink }}>Crew distance goal</span>
           <button onClick={onClose} aria-label="Close" style={{ width: 38, height: 38, borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={18} color={T.mid} /></button>
