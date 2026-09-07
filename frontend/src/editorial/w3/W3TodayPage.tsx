@@ -669,6 +669,10 @@ export default function W3TodayPage() {
           : readiness >= 65 ? 'Bereit'
             : readiness >= 45 ? 'Solide'
               : readiness >= 30 ? 'Locker' : 'Ruhe',
+      // The gate's own dated headline, not a re-derivation: `useTodayModel`
+      // already distinguishes a stale wearable from one that simply has not
+      // reported yet, and those are different facts for the rider.
+      readinessNote: model.readinessGateHeadline,
       readinessDelta,
       earnRate,
       earnRateWhy,

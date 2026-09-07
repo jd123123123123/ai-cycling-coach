@@ -143,6 +143,22 @@ export default function W3CrewPage() {
   // The crew's distance goal is a REAL crew challenge (metric distance_km) when
   // one exists — editable below. Falls back to an honest auto-ring otherwise.
   const distanceChallenge = (crewChallenges ?? []).find((c) => c.metric === 'distance_km') ?? null
+  // HOW LONG THE CREW STILL HAS. `W3CollectiveGoal` has always drawn this line
+  // and the page passed `null`, so the card showed a target with no deadline —
+  // the pen's "2 Tage übrig" simply never rendered. The challenge carries
+  // `ends_on`; parsing it at LOCAL midnight matters, because `new Date('…')` on
+  // a bare date string is UTC and would shift the count by a day west of
+  // Greenwich. Counted inclusive of today, and null once it is over.
+  const goalDaysLeft = useMemo(() => {
+    const iso = distanceChallenge?.ends_on
+    if (!iso) return null
+    const end = new Date(`${iso}T00:00:00`)
+    if (Number.isNaN(end.getTime())) return null
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const days = Math.round((end.getTime() - today.getTime()) / 86_400_000) + 1
+    return days > 0 ? days : null
+  }, [distanceChallenge])
 
   const vm = useMemo<W3CrewVm>(() => {
     const rows = standings?.standings ?? []
@@ -473,7 +489,7 @@ export default function W3CrewPage() {
                           goalKm={vm.distanceGoalKm}
                           pct={vm.distancePct / 100}
                           riders={vm.members.length}
-                          daysLeft={null}
+                          daysLeft={goalDaysLeft}
                           onContribute={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
                         />
                       </div>

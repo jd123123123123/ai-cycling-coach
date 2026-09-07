@@ -35,6 +35,9 @@ export const FIXTURE: W3Vm = {
   streak: 17,
   readiness: 88,
   readinessWord: 'Grünes Licht',
+  // A fixture with a readiness figure has nothing to explain; the note is the
+  // withheld case. Null here keeps the harness honest about which state it draws.
+  readinessNote: null,
   readinessDelta: { text: '+6 ggü. gestern', favourable: true },
   // ×1.4 is what a real 17-day streak buys under rewards.py's tier table —
   // the old "1.75×" here was above the server's hard ×1.5 ceiling.

@@ -103,6 +103,9 @@ export interface W3Vm {
   chest: Chest | null
   readiness: number | null
   readinessWord: string | null
+  /** WHY there is no readiness figure, dated — "Seit 3 Tagen keine
+   *  Nacht-Werte". Only meaningful while `readiness` is null. */
+  readinessNote: string | null
   /** Readiness against the previous day that has a real reading — a small
    *  signed kicker, never a second big number competing with the score.
    *  `null` whenever there aren't two dated readings to subtract. */
@@ -252,8 +255,13 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
                 state: vm.readinessWord,
                 // `vm.readiness` is already withheld upstream when the wearable
                 // is stale (utils/readinessGate). The dock states that absence
-                // rather than drawing a zero into a meter.
-                scoreNote: null,
+                // rather than drawing a zero into a meter — and now it can say
+                // WHICH absence. This was hardcoded null, so the one field the
+                // dock's own docblock calls "the whole reason the dock still
+                // renders" fell back to a generic "Noch keine Messung", while
+                // the dated sentence sat computed two files away and was used
+                // by the morning briefing alone.
+                scoreNote: vm.readinessNote,
                 // `earnRate` already carries its × (api/rewards formatMultiplier),
                 // so appending one here printed "1,4××".
                 bonus: vm.earnRate === DASH ? null : vm.earnRate,
