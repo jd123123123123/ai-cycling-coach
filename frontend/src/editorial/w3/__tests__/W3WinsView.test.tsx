@@ -17,6 +17,7 @@ afterEach(cleanup)
 
 const BLANK: W3WinsVm = {
   micro: 'ERFOLGE',
+  challenges: null,
   ledger: [],
   consistency: null,
   loading: false,

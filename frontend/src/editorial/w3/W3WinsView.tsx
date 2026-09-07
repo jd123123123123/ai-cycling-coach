@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ChevronDown, Lock, Share2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, Lock, Share2 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { T, FONT, DASH, EASE, Reveal, band } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
@@ -175,6 +175,10 @@ export interface W3WinsVm {
   beams: W3BeamChapter | null
   medals: W3MedalChapter | null
   biggestDay: W3BiggestDayChapter | null
+  /** The door to the challenges surface — live counts, no fixture. Null while
+   *  the feed is unresolved. The nav menu used to promise "Challenges" under
+   *  Erfolge while the tab held none; now the tab holds the door. */
+  challenges: { line: string; sub: string; onOpen: () => void } | null
   /** Shown only when NOTHING resolved — a rider with no rides yet. */
   empty: string | null
   /** Nothing has arrived yet. Distinct from `empty`, which is a FINDING; this
@@ -568,11 +572,16 @@ function MedalDetail({ m }: { m: W3Medal }) {
 /** The shelf, holding which badge is open. */
 function MedalShelf({ medals }: { medals: W3Medal[] }) {
   const [openKey, setOpenKey] = useState<string | null>(null)
-  const open = medals.find((m) => m.key === openKey) ?? null
+  const [all, setAll] = useState(false)
+  // Six on the shelf, the whole cabinet behind one press. The open detail
+  // panel keeps working across the fold because `open` is looked up in the
+  // full list, not the visible slice.
+  const visible = all ? medals : medals.slice(0, 6)
+  const open = visible.find((m) => m.key === openKey) ?? null
   return (
     <div style={{ ...lux(24), padding: '24px 18px 22px', gap: 0 }}>
       <div style={{ display: 'flex', width: '100%', flexWrap: 'wrap', rowGap: 26, justifyContent: 'space-between' }}>
-        {medals.map((m) => (
+        {visible.map((m) => (
           <Medal key={m.key} m={m} open={m.key === openKey}
                  onToggle={() => setOpenKey((k) => (k === m.key ? null : m.key))} />
         ))}
@@ -580,6 +589,16 @@ function MedalShelf({ medals }: { medals: W3Medal[] }) {
       <AnimatePresence initial={false}>
         {open && <MedalDetail key={open.key} m={open} />}
       </AnimatePresence>
+      {medals.length > 6 && (
+        <button type="button" onClick={() => setAll((v) => !v)}
+          style={{
+            marginTop: 18, height: 42, borderRadius: 100, border: 0, width: '100%',
+            background: T.tile, color: T.mid, fontSize: 12, fontWeight: 700,
+            cursor: 'pointer', fontFamily: FONT,
+          }}>
+          {all ? 'Weniger anzeigen' : `Alle ${medals.length} anzeigen`}
+        </button>
+      )}
     </div>
   )
 }
@@ -757,10 +776,32 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
       )}
 
       {vm.medals && (
+        <div id="w3-wins-medals" style={{ width: '100%' }}>
+          <Chapter>
+            <Eyebrow text={vm.medals.eyebrow} counter={vm.medals.counter} tier={3} />
+            <Statement tier={3}>{vm.medals.statement}</Statement>
+            <MedalShelf medals={vm.medals.medals} />
+          </Chapter>
+        </div>
+      )}
+
+      {/* ── the door to the challenges board ─────────────────────────────
+          A link card, not a chapter of its own instruments: the board lives at
+          /e/w3-challenges and this is its one honest entry from the tab that
+          claims it. */}
+      {vm.challenges && (
         <Chapter>
-          <Eyebrow text={vm.medals.eyebrow} counter={vm.medals.counter} tier={3} />
-          <Statement tier={3}>{vm.medals.statement}</Statement>
-          <MedalShelf medals={vm.medals.medals} />
+          <button type="button" onClick={vm.challenges.onOpen}
+            style={{
+              ...lux(24), width: '100%', border: 0, cursor: 'pointer', textAlign: 'left',
+              padding: '16px 18px', display: 'flex', alignItems: 'center', gap: 12, fontFamily: FONT,
+            }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 15.5, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{vm.challenges.line}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>{vm.challenges.sub}</span>
+            </div>
+            <ChevronRight size={18} color={T.quiet} />
+          </button>
         </Chapter>
       )}
 

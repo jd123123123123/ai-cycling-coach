@@ -22,11 +22,10 @@ import './w3.css'
  * REAL: the logged-rides count, the season distance total, the monthly-distance
  * bar chart, the AVG SPEED / AVG POWER / SADDLE TIME footer, and every ride card
  * (title, date, distance, speed, power, duration, route shape) come from the
- * athlete's own activities — honest "—" where a field is missing. FIXTURE: the
- * GOAL / OF-GOAL / KM-TO-GO / AHEAD-OF-PACE goal-tracking block — the app has no
- * season-goal model, so those are derived against a placeholder 12,000 km goal
- * and are marked `fixture:` in the Page. The ALL/OUTDOOR/INDOOR/RACE filter is a
- * real mechanic (outdoor = has a GPS track; race = title keyword).
+ * athlete's own activities — honest "—" where a field is missing. The goal
+ * block renders only against the rider's own `goals.season_km_goal`; without
+ * one the dock invites instead of measuring. The ALL/OUTDOOR/INDOOR/RACE
+ * filter is a real mechanic (outdoor = has a GPS track; race = title keyword).
  */
 
 export type W3RideFilter = 'all' | 'outdoor' | 'indoor' | 'race'
@@ -62,6 +61,9 @@ export interface W3RidesVm {
   avgPower: string                  // real | "—"
   saddleTime: string                // real | "—"
   rides: W3RideCard[]               // real; the View filters + groups
+  /** A record that fell within the last 7 days — announced at the top of the
+   *  archive instead of silently changing a row. Null on most days. */
+  prAnnounce?: { title: string; sub: string; id: number } | null
   /** The rider's own season goal, or null → the dock renders the set-a-goal
    *  invitation instead. Never a placeholder target. */
   goal: {
@@ -294,6 +296,33 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
           <span style={{ fontSize: 18, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{vm.count}</span>
         </div>
       </div>
+
+      {/* ── A record that just fell ──────────────────────────────────────
+          One glow, at the top, only in the week it happened — the archive's
+          job is to say "you got better" out loud when it is true. */}
+      {vm.prAnnounce && (
+        <div style={{ ...band(20) }}>
+          <motion.button type="button"
+            initial={reduce ? false : { opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, ease: EASE }}
+            onClick={() => vm.prAnnounce && nav(`/e/w3-ride/${vm.prAnnounce.id}`)}
+            style={{
+              width: '100%', border: 0, textAlign: 'left', cursor: 'pointer', fontFamily: FONT,
+              borderRadius: 20, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 13,
+              background: T.surface, boxShadow: `0 0 26px ${T.acid}1F`,
+            }}>
+            <div style={{ flex: 'none', width: 38, height: 38, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}>
+              <Trophy size={17} color={T.acid} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+              <span style={{ fontSize: 13.5, fontWeight: 700, letterSpacing: -0.2, color: T.acid }}>{vm.prAnnounce.title}</span>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, lineHeight: 1.4 }}>{vm.prAnnounce.sub}</span>
+            </div>
+            <ChevronRight size={16} color={T.quiet} />
+          </motion.button>
+        </div>
+      )}
 
       {/* Filter chips (real) */}
       <div style={{ ...band(24), flexDirection: 'row', gap: 8 }}>

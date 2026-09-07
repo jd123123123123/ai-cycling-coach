@@ -52,6 +52,7 @@ export default function W3HeroRoute() {
           meso: week?.meso_block ?? null,
           streak: streak?.streak ?? null,
           balance: wallet?.balance ?? null,
+          ledger: wallet?.ledger ?? null,
           displayName: user?.display_name ?? null,
         }),
         onSelectStage: selectStage.mutate,

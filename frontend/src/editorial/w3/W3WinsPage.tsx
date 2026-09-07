@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Bike, Flag, Gauge, Medal, Mountain, Route, Sunrise, Timer, Trophy, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { usePowerProfileView } from '../../hooks/usePowerProfileView'
+import { useRewardChallenges } from '../../hooks/useRewardChallenges'
 import { useAchievements } from '../../hooks/useAchievements'
 import W3LoadError from './W3LoadError'
 import { useFtpHistory } from '../../hooks/useFtpHistory'
@@ -90,6 +91,7 @@ function hms(total: number): string {
 
 export default function W3WinsPage() {
   const nav = useNavigate()
+  const { data: challengeFeed } = useRewardChallenges()
   const { data: curveData, isLoading: curveLoading } = usePowerProfileView()
   const { data: ach, isLoading: achLoading, isError: achError, refetch: refetchAch, isFetching: achFetching } = useAchievements('de')
   const { data: ftp, isLoading: ftpLoading } = useFtpHistory()
@@ -315,7 +317,11 @@ export default function W3WinsPage() {
         sub: p.progress?.label ?? null,
         pct: p.pct,
       }))
-    const shelf = [...earned, ...locked].slice(0, 6)
+    // The FULL cabinet. The old `.slice(0, 6)` earned-first meant a rider with
+    // six badges never saw a single locked one — the near-misses vanished
+    // exactly when they motivate most. The shelf shows six; the view holds the
+    // rest behind its own "alle anzeigen".
+    const shelf = [...earned, ...locked]
     const medals = shelf.length && counts
       ? {
           eyebrow: 'AUSZEICHNUNGEN',
@@ -361,6 +367,9 @@ export default function W3WinsPage() {
         nextTitle: closestLocked?.title ?? null,
         nextPct: closestLocked?.pct ?? null,
         stats: ledger,
+        // The dock is a labelled button promising "Auszeichnungen im Detail" —
+        // it now keeps that promise by scrolling to the cabinet.
+        onOpen: () => document.getElementById('w3-wins-medals')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
       },
       ftp: ftpChapter,
       milestones,
@@ -369,6 +378,20 @@ export default function W3WinsPage() {
       beams,
       medals,
       biggestDay,
+      // The door to /e/w3-challenges, with live counts — the tab that claims
+      // challenges finally holds them. Null until the feed resolves; never a
+      // made-up count.
+      challenges: challengeFeed
+        ? {
+            line: challengeFeed.active.length > 0
+              ? `${challengeFeed.active.length} Challenge${challengeFeed.active.length === 1 ? '' : 's'} am Laufen`
+              : 'Challenges',
+            sub: challengeFeed.available.length > 0
+              ? `${challengeFeed.available.length} zum Mitmachen · Monatsziele mit RideCoin`
+              : 'Monatsziele mit RideCoin',
+            onOpen: () => nav('/e/w3-challenges'),
+          }
+        : null,
       // Nothing resolved AND nothing still coming. While a read is in flight
       // the body draws a skeleton instead — it used to draw literally nothing,
       // which is a black page under a working dock.
@@ -377,7 +400,7 @@ export default function W3WinsPage() {
         ? 'Deine erste gewertete Fahrt füllt diese Seite. Bis dahin gibt es hier nichts zu zeigen.'
         : null,
     }
-  }, [curveData, ach, ftp, nav, stillLoading])
+  }, [curveData, ach, ftp, nav, stillLoading, challengeFeed])
 
   const { portal } = useHeroPanel(<W3WinsDockPanel vm={vm.dock} />)
 

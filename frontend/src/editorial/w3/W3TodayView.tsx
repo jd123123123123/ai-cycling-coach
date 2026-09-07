@@ -333,6 +333,16 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
           background: `linear-gradient(180deg, ${ground ?? T.heroBg} 0%, ${T.bg} 100%)`,
         }} />
 
+        {/* THE WEEK'S BOLT. This lived only in the non-shell branch below,
+            which no live route renders — so the once-a-week wrapped invitation
+            never appeared for anybody. Same rule as there: never beside the
+            sealed chest; one glowing offer per screen. */}
+        {!vm.chest?.sealed && onOpenWrapped && (
+          <div style={{ ...band(0), paddingTop: 6 }}>
+            <W3WrappedBolt onOpen={onOpenWrapped} />
+          </div>
+        )}
+
         {/* ── Hero: readiness + charge meter ──
              The card is `W3ScoreCard` now — the same element grades a finished
              ride's execution score. Everything it prints is passed in from real

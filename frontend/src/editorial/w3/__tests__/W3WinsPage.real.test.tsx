@@ -34,6 +34,11 @@ vi.mock('../../../hooks/useFtpHistory', () => ({
 // The room is not under test; the page renders standalone when there is no
 // shell to portal into, which `useHeroPanel` already supports.
 vi.mock('../W3HeroShell', () => ({ useHeroPanel: () => ({ inShell: false, portal: null }) }))
+// The challenges door fetches its live counts; this suite renders without a
+// QueryClientProvider, so the hook is stubbed to "not yet resolved".
+vi.mock('../../../hooks/useRewardChallenges', () => ({
+  useRewardChallenges: () => ({ data: undefined }),
+}))
 
 const { default: W3WinsPage } = await import('../W3WinsPage')
 

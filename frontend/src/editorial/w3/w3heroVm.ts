@@ -24,7 +24,21 @@ export interface HeroSources {
   meso: { block_position: string; block_index_in_meso: number } | null | undefined
   streak: number | null | undefined
   balance: number | null | undefined
+  /** The wallet's recent ledger lines — used ONLY to say what landed today. */
+  ledger?: { amount: number; at: string | null }[] | null
   displayName: string | null | undefined
+}
+
+/** RideCoin credited today, from the real ledger. Null when nothing landed —
+ *  a "+0" would be noise; silence is the honest zero here. */
+export function earnedToday(ledger: { amount: number; at: string | null }[] | null | undefined, now = new Date()): number | null {
+  if (!ledger?.length) return null
+  const day = now.toISOString().slice(0, 10)
+  const sum = ledger.reduce((s, l) => {
+    if (l.amount <= 0 || !l.at) return s
+    return l.at.slice(0, 10) === day ? s + l.amount : s
+  }, 0)
+  return sum > 0 ? sum : null
 }
 
 export function heroVm(s: HeroSources): W3StageVm {
@@ -51,6 +65,12 @@ export function heroVm(s: HeroSources): W3StageVm {
     bikeInScene: Boolean(s.stage?.bike_image && s.stage.bike_image !== s.garage?.bike?.image_base64),
     bikeName: s.stage?.bike_name ?? s.garage?.bike?.name ?? 'Dein Bike',
     coins: s.balance != null ? s.balance.toLocaleString('de-DE') : null,
+    // What landed TODAY, beside the stock figure — the moment of attribution
+    // the silent chip was missing. Real ledger lines only.
+    coinsDelta: (() => {
+      const rc = earnedToday(s.ledger)
+      return rc != null ? `+${rc.toLocaleString('de-DE')} heute` : null
+    })(),
     streak: s.streak ?? null,
     bonus: s.streak == null ? null : formatMultiplier(streakMultiplier(s.streak)),
     stages: s.stage?.stages,

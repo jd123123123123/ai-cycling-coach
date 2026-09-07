@@ -65,6 +65,49 @@ export default function W3RidesPage() {
     const avgPower = pSec > 0 ? `${Math.round(pWeighted / pSec)}` : '—'
     const saddleTime = totalSec > 0 ? hm(totalSec) : '—'
 
+    // ── A record that just fell gets ANNOUNCED ────────────────────────────────
+    // The archive is where a rider goes to be told they got better, and it
+    // used to change a static row silently. Window-honest: computed over the
+    // same trailing 12 months the page shows, announced only within 7 days of
+    // the ride, and only once there are enough rides for "record" to mean
+    // something (a third ride is always somebody's best).
+    const prAnnounce = (() => {
+      if (acts.length < 10) return null
+      const week = 7 * 864e5
+      const fresh = (a: (typeof acts)[number]) => now.getTime() - new Date(a.started_at).getTime() <= week
+      let best: { title: string; sub: string; id: number } | null = null
+      const longest = acts.reduce((m, a) => ((a.distance_meters ?? 0) > (m?.distance_meters ?? 0) ? a : m), acts[0])
+      if (longest?.distance_meters && fresh(longest)) {
+        best = {
+          title: 'Neuer Bestwert · Längste Fahrt',
+          sub: `${(longest.distance_meters / 1000).toFixed(1)} km — weiter als je in den letzten 12 Monaten.`,
+          id: longest.id,
+        }
+      }
+      const climb = acts.reduce((m, a) => ((a.elevation_gain_m ?? 0) > (m?.elevation_gain_m ?? 0) ? a : m), acts[0])
+      if (!best && climb?.elevation_gain_m && fresh(climb)) {
+        best = {
+          title: 'Neuer Bestwert · Meiste Höhenmeter',
+          sub: `${Math.round(climb.elevation_gain_m).toLocaleString('de-DE')} hm an einem Tag — Jahresbestwert.`,
+          id: climb.id,
+        }
+      }
+      const fastest = acts.reduce((m, a) => {
+        const v = a.distance_meters && a.duration_seconds ? a.distance_meters / a.duration_seconds : 0
+        const mv = m && m.distance_meters && m.duration_seconds ? m.distance_meters / m.duration_seconds : 0
+        return v > mv ? a : m
+      }, acts[0])
+      if (!best && fastest?.distance_meters && fastest.duration_seconds
+          && (fastest.distance_meters / 1000) >= 20 && fresh(fastest)) {
+        best = {
+          title: 'Neuer Bestwert · Schnellste Fahrt',
+          sub: `${((fastest.distance_meters / fastest.duration_seconds) * 3.6).toFixed(1)} km/h über ${(fastest.distance_meters / 1000).toFixed(0)} km — Jahresbestwert.`,
+          id: fastest.id,
+        }
+      }
+      return best
+    })()
+
     // ── Monthly distance bars (real) — trailing 12 months, oldest → newest ────
     const buckets = new Array(12).fill(0) as number[]
     for (const a of acts) {
@@ -151,6 +194,7 @@ export default function W3RidesPage() {
       // Real season goal, or null → the dock invites the rider to set one and
       // the meter counts ridden months instead of progress toward fiction.
       goal,
+      prAnnounce,
     }
   }, [data, now, goalKm])
 

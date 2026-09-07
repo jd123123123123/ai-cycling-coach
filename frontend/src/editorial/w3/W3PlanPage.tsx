@@ -225,6 +225,8 @@ export default function W3PlanPage() {
         // "GEFAHREN" is a claim about a ride, not about the calendar — checked
         // against the rider's actual activities, never asserted from `isPast`.
         ridden: acts.some((a) => a.started_at.slice(0, 10) === d.date),
+        // The server's own per-day WHY — fetched all along, rendered nowhere.
+        rationale: isSess && d.rationale ? d.rationale : null,
         dur: secs > 0 ? `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m` : null,
         tss: tss != null ? String(tss) : DASH,
         targetW: w != null ? `${w} W` : DASH,
@@ -306,6 +308,18 @@ export default function W3PlanPage() {
       ],
       dayStrip,
       daySessions,
+      // ── the server's own WHY, finally rendered ──────────────────────────
+      // `preface` is the built weekly rationale; the notes are the coach's own
+      // localized sentences about what changed and what the body says. All of
+      // this arrived in /weeks/current on every load and was discarded.
+      weekWhy: week?.preface || null,
+      planNotes: [
+        week?.plan_changes?.message || null,
+        week?.readiness?.reason || null,
+        week?.missed_yesterday
+          ? `Gestern nicht gefahren: ${week.missed_yesterday.title_de ?? week.missed_yesterday.title} — eingerechnet, kein Nachholen.`
+          : null,
+      ].filter((x): x is string => !!x),
       sessionTitle: hasSession ? todayPlan!.title : null,
       sessionDur: sSecs > 0 ? `${Math.floor(sSecs / 3600)}h ${Math.round((sSecs % 3600) / 60)}m` : null,
       targetW: sW != null ? `${sW} W` : '—',

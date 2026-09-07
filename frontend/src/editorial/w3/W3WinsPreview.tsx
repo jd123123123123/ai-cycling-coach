@@ -35,6 +35,7 @@ const FIXTURE_WEEKS = [1, 2, 0, 2, 3, 1, 3, 3, 0, 3, 3, 2, 3,
 
 const FIXTURE: W3WinsVm = {
   micro: 'ERFOLGE',
+  challenges: null,
   dock: {
     unlocked: 12, total: 30,
     nextTitle: 'Wiederholungstäter', nextPct: 0.947,
@@ -181,6 +182,7 @@ const FIXTURE: W3WinsVm = {
 /** Nothing has resolved — every chapter is null and the page says so once. */
 const EMPTY: W3WinsVm = {
   micro: 'ERFOLGE',
+  challenges: null,
   dock: { unlocked: null, total: null, nextTitle: null, nextPct: null, stats: [] },
   consistency: null,
   loading: false,

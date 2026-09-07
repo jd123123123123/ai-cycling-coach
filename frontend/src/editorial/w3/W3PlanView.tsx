@@ -77,6 +77,8 @@ export interface PlanDaySession {
   /** True only when an actual ride exists on that date — the difference
    *  between "GEFAHREN" and "NICHT GEFAHREN · EINGERECHNET". */
   ridden?: boolean
+  /** The server's per-day rationale — why this session, on this day. */
+  rationale?: string | null
   dur: string | null
   tss: string
   targetW: string
@@ -106,6 +108,12 @@ export interface W3PlanVm {
   dayStrip: PlanDayCell[]
   /** One entry per weekday, so the strip can show future sessions too. */
   daySessions?: PlanDaySession[]
+  /** The server-built weekly rationale (`preface`) — why THIS week looks the
+   *  way it does. Null when the engine sent none. */
+  weekWhy?: string | null
+  /** The coach's own localized notes: what changed, what the body says, what
+   *  was absorbed. Empty on a quiet week. */
+  planNotes?: string[]
   sessionTitle: string | null
   sessionDur: string | null
   targetW: string
@@ -651,6 +659,17 @@ export default function W3PlanView({
         <SectionTitle title="Diese Woche" right={<span style={{ padding: '4px 10px', borderRadius: 100, background: T.acidDim, fontSize: 11, fontWeight: 600, color: T.acid }}>{vm.weekBadge}</span>} />
         <div style={{ ...band(26), gap: 16 }}>
           <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, marginTop: -4 }}>{vm.weekRangeLabel}</span>
+          {/* WHY this week is shaped like this — the engine's own sentence,
+              not a canned phase paragraph. */}
+          {vm.weekWhy && (
+            <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.55, color: T.mid }}>{vm.weekWhy}</span>
+          )}
+          {(vm.planNotes ?? []).map((n) => (
+            <div key={n} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              <div style={{ width: 5, height: 5, borderRadius: 100, flex: 'none', background: T.evening, marginTop: 6 }} />
+              <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.5, color: T.quiet }}>{n}</span>
+            </div>
+          ))}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
             {vm.weekStats.map((s) => (
               <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -661,7 +680,9 @@ export default function W3PlanView({
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 0' }}>
             <Repeat size={14} color={T.mid} />
-            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>Einheiten lassen sich halten und tauschen – der Plan rechnet die Woche neu.</span>
+            {/* Says what the strip actually does. The old line promised
+                holding and swapping — affordances this screen never had. */}
+            <span style={{ fontSize: 11.5, fontWeight: 600, color: T.quiet }}>Tippe einen Tag für seine Einheit — der heutige lässt sich unten anpassen.</span>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
             {vm.dayStrip.map((d, i) => {
@@ -716,6 +737,13 @@ export default function W3PlanView({
             <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -0.9, color: T.ink }}>
               {(selIsToday ? vm.sessionTitle : sel?.title) ?? 'Ruhetag'}
             </span>
+            {/* The server's own WHY for this day — carried by /weeks/current
+                since forever, rendered here for the first time. */}
+            {!selIsToday && sel?.rationale && (
+              <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid, marginTop: -8 }}>
+                {sel.rationale}
+              </span>
+            )}
             {(selIsToday ? vm.sessionTitle : sel?.title) ? (
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                 {(selIsToday

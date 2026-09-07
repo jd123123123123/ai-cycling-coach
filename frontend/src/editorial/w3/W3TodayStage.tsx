@@ -203,6 +203,9 @@ export interface W3StageVm {
   bikeName: string
   /** RideCoin balance, already localised. Null → "—". */
   coins: string | null
+  /** What landed today ("+840 heute"), from real ledger lines. Null → nothing
+   *  is drawn — silence is the honest zero. */
+  coinsDelta?: string | null
   /** The real forgiving streak in days. Null → "—". */
   streak: number | null
   /** The earn multiplier, e.g. "1.75". Null → "—". */
@@ -314,6 +317,15 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
       }}>
         <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />
+        {/* Attribution at the moment it matters: a ride was banked TODAY and
+            the number that grew says by how much. */}
+        {vm.coinsDelta && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: T.acid,
+            padding: '2px 8px', borderRadius: 100, background: `${T.ink}B8`,
+            fontVariantNumeric: 'tabular-nums',
+          }}>{vm.coinsDelta}</span>
+        )}
         <Chip
           icon={<Flame size={20} color={T.acid} />}
           value={vm.streak != null ? String(vm.streak) : DASH} />
