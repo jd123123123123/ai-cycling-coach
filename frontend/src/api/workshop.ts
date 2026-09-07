@@ -97,6 +97,10 @@ export interface Workshop {
    *  when the workshop is already open: six questions up front is a form, and
    *  forms get abandoned. */
   open_question: WorkshopComponent | null
+  /** "Wax tonight, rain tomorrow" — one German sentence when tomorrow has a
+   *  planned ride, likely rain, and a drivetrain worth cleaning first. Null
+   *  on most days; see backend services/maintenance_forecast. */
+  weather_ahead?: string | null
 }
 
 export interface ServiceResult {

@@ -215,6 +215,9 @@ export interface W3StageVm {
    *  object in the app and was the only one that answered no touch — while the
    *  garage family had no unconditional door at all. */
   onTapBike?: () => void
+  /** 0…1 — how much of the last week's road the machine is still carrying
+   *  (`w3BikeSoul.grimeFrom` over real ride km). 0 or absent → clean bike. */
+  grime?: number
 }
 
 /** A floating pill on the stage ground. Never a card — it has no border and no
@@ -509,6 +512,22 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
                   </div>
                 ))}
                 <img src={vm.bike} alt={vm.bikeName} style={{ ...BIKE_ART, width: '100%' }} />
+                {/* ── The road it is still carrying (w3BikeSoul) ─────────
+                    Ported from the retired garage-old: soft irregular spray
+                    weighted to the bottom, its opacity IS the rider's last
+                    week. A bike that has not moved gets none of this — the
+                    clean machine is the honest, motivating answer. */}
+                {(vm.grime ?? 0) > 0.02 && (
+                  <div aria-hidden style={{
+                    position: 'absolute', inset: 0, pointerEvents: 'none',
+                    opacity: vm.grime, mixBlendMode: 'multiply',
+                    background:
+                      'radial-gradient(58% 30% at 14% 94%, #4A3F3273, transparent 72%),' +
+                      'radial-gradient(44% 24% at 61% 99%, #4A3F3266, transparent 74%),' +
+                      'radial-gradient(32% 20% at 88% 90%, #5B4B3A59, transparent 72%),' +
+                      'radial-gradient(26% 16% at 37% 86%, #5B4B3A40, transparent 76%)',
+                  }} />
+                )}
               </div>
             </div>
           )

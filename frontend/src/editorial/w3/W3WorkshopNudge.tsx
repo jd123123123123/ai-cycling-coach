@@ -51,7 +51,8 @@ export default function W3WorkshopNudge() {
   // due but an unanswered part is the one person for whom the question is the
   // most useful thing this card could say.
   const question = due.length === 0 ? workshop.open_question : null
-  if (due.length === 0 && !question) return null
+  const rainAhead = workshop.weather_ahead ?? null
+  if (due.length === 0 && !question && !rainAhead) return null
 
   // The single richest one leads. Sorting by what it PAYS rather than by how
   // far past its interval it is: the rider is being invited, and the size of
@@ -84,19 +85,23 @@ export default function W3WorkshopNudge() {
             fontSize: 15, fontWeight: 700, color: T.ink,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            {lead
-              ? others > 0
-                ? `${lead.name_de} und ${others} weitere sind dran`
-                : `${lead.name_de} ist dran`
-              : `Kurze Frage zu deinem Rad`}
+            {rainAhead
+              ? 'Morgen Regen — heute Abend die Kette'
+              : lead
+                ? others > 0
+                  ? `${lead.name_de} und ${others} weitere sind dran`
+                  : `${lead.name_de} ist dran`
+                : `Kurze Frage zu deinem Rad`}
           </span>
           <span style={{
             fontSize: 11.5, fontWeight: 600, color: T.quiet,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            whiteSpace: rainAhead ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            lineHeight: 1.4,
           }}>
-            {lead
-              ? `${lead.action_de} — dauert fünf Minuten`
-              : `Damit die Erinnerungen für dein Rad stimmen`}
+            {rainAhead
+              ?? (lead
+                ? `${lead.action_de} — dauert fünf Minuten`
+                : `Damit die Erinnerungen für dein Rad stimmen`)}
           </span>
         </div>
 

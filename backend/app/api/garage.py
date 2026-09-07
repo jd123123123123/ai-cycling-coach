@@ -52,6 +52,7 @@ from app.services import (
     backdrops,
     bike_build,
     bike_wear,
+    maintenance_forecast,
     cutout,
     cyclr_studio,
     gear,
@@ -867,6 +868,10 @@ class ChainLifeOut(BaseModel):
 class WorkshopOut(BaseModel):
     components: list[ComponentOut]
     total_bonus_rc: int
+    #: "Wax tonight, rain tomorrow" — the one sentence no competitor can build
+    #: (plan + forecast + wear state in one place). Null on most days; see
+    #: services/maintenance_forecast for the rule.
+    weather_ahead: str | None = None
     #: Whether the +12 % fresh-drivetrain earn bonus is currently live.
     drivetrain_fresh: bool
     #: The genuine drag of a dirty chain, in watts. Null while fresh — the app
@@ -942,7 +947,19 @@ async def get_workshop(
     view = await workshop.read(db, current_user.id)
     balance = await rewards.balance_of(db, current_user.id)
     await db.commit()
-    return _workshop_out(view, balance)
+    out = _workshop_out(view, balance)
+    # Best-effort, after the commit: the nudge must never break or slow the
+    # condition read it decorates (the forecast is 3h-cached per location).
+    try:
+        chain = next((c for c in view.components if c.id == "chain"), None)
+        out.weather_ahead = await maintenance_forecast.weather_ahead(
+            db, current_user.id,
+            chain_progress=chain.progress if chain else 0.0,
+            drivetrain_fresh=view.drivetrain_fresh,
+        )
+    except Exception:  # noqa: BLE001 — decorative, never fatal
+        out.weather_ahead = None
+    return out
 
 
 @router.post("/workshop/service/{component_id}", response_model=ServiceOut, summary="Service a component and harvest its Service Bonus")
@@ -1078,7 +1095,19 @@ async def declare_component(
     view = await workshop.read(db, current_user.id)
     balance = await rewards.balance_of(db, current_user.id)
     await db.commit()
-    return _workshop_out(view, balance)
+    out = _workshop_out(view, balance)
+    # Best-effort, after the commit: the nudge must never break or slow the
+    # condition read it decorates (the forecast is 3h-cached per location).
+    try:
+        chain = next((c for c in view.components if c.id == "chain"), None)
+        out.weather_ahead = await maintenance_forecast.weather_ahead(
+            db, current_user.id,
+            chain_progress=chain.progress if chain else 0.0,
+            drivetrain_fresh=view.drivetrain_fresh,
+        )
+    except Exception:  # noqa: BLE001 — decorative, never fatal
+        out.weather_ahead = None
+    return out
 
 
 class MethodRequest(BaseModel):
@@ -1136,7 +1165,19 @@ async def set_component_method(
     view = await workshop.read(db, current_user.id)
     balance = await rewards.balance_of(db, current_user.id)
     await db.commit()
-    return _workshop_out(view, balance)
+    out = _workshop_out(view, balance)
+    # Best-effort, after the commit: the nudge must never break or slow the
+    # condition read it decorates (the forecast is 3h-cached per location).
+    try:
+        chain = next((c for c in view.components if c.id == "chain"), None)
+        out.weather_ahead = await maintenance_forecast.weather_ahead(
+            db, current_user.id,
+            chain_progress=chain.progress if chain else 0.0,
+            drivetrain_fresh=view.drivetrain_fresh,
+        )
+    except Exception:  # noqa: BLE001 — decorative, never fatal
+        out.weather_ahead = None
+    return out
 
 
 class MeasureRequest(BaseModel):

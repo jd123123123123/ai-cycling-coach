@@ -8,6 +8,8 @@ import { useGarageCollection } from '../../hooks/useShop'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { heroVm } from './w3heroVm'
 import { useWarmRoom } from './useWarmRoom'
+import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { grimeFrom } from './w3BikeSoul'
 
 /**
  * The layout route that owns the room.
@@ -44,6 +46,20 @@ export default function W3HeroRoute() {
   // Every other door in the room, opened before it is knocked on.
   useWarmRoom()
 
+  // ── the bike is MADE OF the rider's training ──────────────────────────
+  // `w3BikeSoul.grimeFrom` shipped with the retired garage-old and died with
+  // it. The last week's real kilometres put road on the machine here, on the
+  // most-seen screen: a rider who rode 300km sees it; a bike that has not
+  // moved stays clean, which is the honest, motivating signal.
+  const weekAgo = new Date(Date.now() - 7 * 864e5)
+  const { data: weekActs } = useActivitiesRange(weekAgo, new Date())
+  const km7d = weekActs
+    ? weekActs.activities
+        .filter((a) => a.sport === 'cycling')
+        .reduce((s, a) => s + (a.distance_meters ?? 0), 0) / 1000
+    : null
+  const grime = grimeFrom(km7d)
+
   return (
     <W3HeroShell
       vm={{
@@ -57,6 +73,7 @@ export default function W3HeroRoute() {
         }),
         onSelectStage: selectStage.mutate,
         rendering: selectStage.isPending,
+        grime,
       }}>
       <Outlet />
     </W3HeroShell>
