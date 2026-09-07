@@ -193,7 +193,10 @@ export function W3ActiveBike({ name, imageUrl, weightKg, km, count, onCustomise 
 }) {
   const facts = [
     weightKg != null ? `${nf1.format(weightKg)} kg` : null,
-    km != null ? `${nf.format(Math.round(km))} km gefahren` : null,
+    // "km gefahren" under a bike's name claimed the RIDER's season for the
+    // machine (and silently reset every January). Named honestly until
+    // per-bike distance is modelled.
+    km != null ? `deine Saison: ${nf.format(Math.round(km))} km` : null,
   ].filter(Boolean).join(' · ')
 
   return (

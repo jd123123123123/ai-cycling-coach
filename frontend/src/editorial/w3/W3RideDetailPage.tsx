@@ -8,6 +8,7 @@ import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
 import { useChest, useClaimRide, useRideEarning } from '../../hooks/useWallet'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
+import { useRehearseRoute } from '../../hooks/useRehearseRoute'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
@@ -702,6 +703,7 @@ export default function W3RideDetailPage() {
   // button would offer another day's coins.
   const { data: chest } = useChest()
   const claim = useClaimRide()
+  const rehearseRoute = useRehearseRoute()
   // The itemised receipt: what THIS ride paid, line by line. Fetched only on
   // the celebration (the sealed chest deliberately never prints its contents;
   // the receipt after the swipe is where the working belongs).
@@ -802,6 +804,15 @@ export default function W3RideDetailPage() {
     <W3RideDetailView
       vm={{ ...vm, hero: heroVm }}
       scene={scene}
+      // The loop from memory back into the plan: this ride's own route,
+      // forecast against today's physiology. Only with a real track.
+      onRehearse={activity?.route_polyline && activity.route_polyline.length > 1 && activityId != null
+        ? () => { void rehearseRoute.rehearse('activity', activityId, activity?.title ?? undefined) }
+        : null}
+      rehearsePending={rehearseRoute.pendingRef != null}
+      rehearseError={rehearseRoute.failed
+        ? (rehearseRoute.error ?? 'Konnte die Probe nicht starten — versuch es gleich nochmal.')
+        : null}
       onCompose={() => { if (activityId != null && !compose.isPending) compose.mutate(activityId) }}
       onOpenStudio={(kind) => navigate(kind === 'rider' ? '/e/w3-avatar-onboard' : '/e/w3-bike-studio')}
       // The SHARE button is the wrap's in celebrate mode — a second one a few

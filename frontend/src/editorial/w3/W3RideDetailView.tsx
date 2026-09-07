@@ -1,6 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type CSSProperties } from 'react'
-import { ChevronRight, Flame, Gauge, HeartPulse, Share2, Sparkles, Timer, Waves, Zap, type LucideIcon } from 'lucide-react'
+import { ChevronRight, Flame, Gauge, HeartPulse, RefreshCw, Share2, Sparkles, Timer, Waves, Zap, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
@@ -118,6 +118,11 @@ export interface W3RideDetailProps {
   onOpenStudio?: (kind: 'rider' | 'bike') => void
   onBack?: () => void
   onShare?: () => void
+  /** "Nochmal fahren" — rehearse this ride's own route against the rider's
+   *  CURRENT physiology. Absent when the ride has no GPS track. */
+  onRehearse?: (() => void) | null
+  rehearsePending?: boolean
+  rehearseError?: string | null
   /** Opens the route full-screen. Omitted when there is nothing to open. */
   onExpandMap?: () => void
 }
@@ -271,7 +276,7 @@ function SceneNote({ text, action, onClick }: { text: string; action?: string; o
     : <div style={box}>{body}</div>
 }
 
-export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap }: W3RideDetailProps) {
+export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap, onRehearse, rehearsePending, rehearseError }: W3RideDetailProps) {
   // ── THE CHAPTERS ARE NUMBERED BY WHAT ACTUALLY RENDERS ──────────────────
   // These ordinals were hardcoded "01".."05", and two of the five are
   // conditional — the repeat set and the season push. So a free outdoor ride,
@@ -663,6 +668,37 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
               ))}
               <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{vm.movedFoot}</span>
             </div>
+          </div>
+        )}
+
+        {/* ── Nochmal fahren ────────────────────────────────────────────
+            The archive's one outbound loop, from memory back into the plan:
+            the same route, forecast against TODAY's physiology. Only for a
+            ride that actually has a track. */}
+        {onRehearse && (
+          <div style={{ ...band(44), gap: 8 }}>
+            <button type="button" onClick={onRehearse} disabled={rehearsePending}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 13, width: '100%',
+                padding: '15px 16px', borderRadius: 22, background: T.surface, border: 0,
+                cursor: rehearsePending ? 'default' : 'pointer', fontFamily: FONT, textAlign: 'left',
+                opacity: rehearsePending ? 0.7 : 1,
+              }}>
+              <span style={{ width: 36, height: 36, borderRadius: 100, flex: 'none', display: 'grid', placeItems: 'center', background: T.acidDim }}>
+                <RefreshCw size={16} color={T.acid} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>
+                  {rehearsePending ? 'Wird vorbereitet…' : 'Nochmal fahren'}
+                </span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, lineHeight: 1.3 }}>
+                  Dieselbe Strecke, gegen deine heutige Form geprobt
+                </span>
+              </span>
+            </button>
+            {rehearseError && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.warn }}>{rehearseError}</span>
+            )}
           </div>
         )}
 
