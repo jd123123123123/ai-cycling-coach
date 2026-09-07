@@ -223,7 +223,9 @@ def _merge_climb_gain(climbs):
 
 
 def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs=None,
-                tss: float = 0.0, total_kj: float = 0.0, de: bool = False):
+                tss: float = 0.0, total_kj: float | None = 0.0,
+                energy_kcal: float | None = None, has_power: bool = True,
+                de: bool = False):
     """Deterministic ranked prescriptions — one per detected problem, each with a
     concrete race tactic + training fix. Tactics reference THIS ride's own hardest
     climb so the advice is course-specific, not generic."""
@@ -276,7 +278,11 @@ def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs
             race_tactic="Schlüssel-Efforts spät üben, auf müden Beinen." if de else "Practice key efforts late, on tired legs.",
             training_fix="Tempo-/Schwellenblöcke nach 2+ h Grundlage einbauen." if de else "Add tempo/threshold blocks after 2+ h of endurance.",
             tone="neutral"))
-    if not plan:
+    # "Keep doing what works" is a judgement on the pacing and the fuelling, and
+    # both of those were read off the power channel. A ride with no meter gets
+    # the recovery beat below and nothing else — praising an execution nobody
+    # measured is the same fabrication as grading it.
+    if not plan and has_power:
         plan.append(dict(priority=len(plan) + 1,
             headline="Weiter so" if de else "Keep doing what works",
             race_tactic="Diese Einteilung und Verpflegung wiederholen." if de else "Repeat this pacing and fuelling.",
@@ -286,7 +292,18 @@ def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs
     # Recovery / next-48h beat — always present, keyed off today's load. The schema
     # has no category field, so we prefix the headline with "Recovery/Erholung".
     # Refuel: rough glycogen replacement ≈ 25% of work as carbs (kJ→g at 4 kcal/g).
-    carbs_g = round(total_kj * 0.25 / 4.0) if total_kj else 0
+    # A ride with no power channel has no kilojoules, so it falls back to the head
+    # unit's own calorie figure — measured off heart rate, not off watts — and
+    # names no gram target at all when there is neither.
+    energy = total_kj or energy_kcal
+    carbs_g = round(energy * 0.25 / 4.0) if energy else None
+    refuel = (
+        (f"In den nächsten 2 h ~{carbs_g} g Kohlenhydrate auffüllen, um die Glykogenspeicher zu füllen (Reis-/Nudelmahlzeit plus Regenerationsgetränk)."
+         if de else f"Replace ~{carbs_g} g of carbs in the next 2 h to refill glycogen (a rice/pasta meal plus a recovery drink).")
+        if carbs_g else
+        ("In den nächsten 2 h kohlenhydratreich essen (Reis-/Nudelmahlzeit plus Regenerationsgetränk)."
+         if de else "Eat a carbohydrate-rich meal in the next 2 h (rice or pasta plus a recovery drink).")
+    )
     if tss >= 250:
         rest = ("Morgen komplett ruhen und zusätzlichen Schlaf einplanen." if de
                 else "Take a full rest day tomorrow and bank extra sleep.")
@@ -301,15 +318,25 @@ def _build_plan(pacing, matchbook_, efficiency, fueling, durability_drop, climbs
         rtone = "good"
     plan.append(dict(priority=len(plan) + 1,
         headline="Erholung — Auffüllen & Ruhe" if de else "Recovery — refuel & rest",
-        race_tactic=(f"In den nächsten 2 h ~{carbs_g} g Kohlenhydrate auffüllen, um die Glykogenspeicher zu füllen (Reis-/Nudelmahlzeit plus Regenerationsgetränk)."
-                     if de else f"Replace ~{carbs_g} g of carbs in the next 2 h to refill glycogen (a rice/pasta meal plus a recovery drink)."),
+        race_tactic=refuel,
         training_fix=rest,
         tone=rtone))
     return plan
 
 
 def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: str = "en") -> RaceDebrief:
-    """Pure assembler: analyzers → RaceDebrief with a rule-based verdict. See docstring."""
+    """Pure assembler: analyzers → RaceDebrief with a rule-based verdict.
+
+    A RIDE WITH NO POWER METER STILL GETS A REPORT. It used not to: the loader
+    refused to build one at all, which cost the rider the map, the elevation
+    profile, the climbs and every heart-rate fact along with the watts they
+    genuinely did not record. Everything power-derived is gated on `has_power`
+    below and is ABSENT — never zero — when the channel was not recorded, because
+    a 0 W normalized power or a 0 kJ work total reads as a measurement of nothing
+    rather than as the absence of a measurement, and the two are not the same
+    ride. Everything the recording does hold is assembled exactly as it always
+    was.
+    """
     de = lang == "de"
     s = stream.streams or {}
     power = [float(p) for p in (s.get("power") or []) if p is not None]
@@ -320,7 +347,14 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
     speed = s.get("speed") or []
     latitude = s.get("latitude") or []
     longitude = s.get("longitude") or []
-    n = len(power)
+    has_power = bool(power)
+    # THE RIDE IS AS LONG AS ITS LONGEST CHANNEL, not as long as its power
+    # channel. This was `len(power)`, which is the same number for every ride
+    # that has a meter and ZERO for every ride that does not — emptying the
+    # story's time axis (misaligning altitude, speed and HR against it) and, on a
+    # ride with no speed stream, reporting a moving time of nought seconds.
+    n = max(len(power), len(hr), len(cadence), len(altitude),
+            len(distance), len(speed), len(latitude))
 
     ftp = float(profile.ftp_watts) if profile and profile.ftp_watts else None
     mass = float(profile.weight_kg) if profile and getattr(profile, "weight_kg", None) else None
@@ -330,31 +364,62 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
 
     # --- analyzer blocks (each defensive) ---
     hr_clean = [float(h) for h in hr] if hr and all(h is not None for h in hr) else None
-    np_watts = _try("np", lambda: calculate_np(power), 0.0) if power else 0.0
+    # The paired analyzers need an HR sample for every power sample; the average
+    # heart rate does not, and survives a dropout mid-ride.
+    hr_values = [float(h) for h in hr if h is not None and h > 0]
+    np_watts = _try("np", lambda: calculate_np(power), 0.0) if has_power else None
 
+    # Segmentation and climbs are read off ALTITUDE and DISTANCE — they need no
+    # power at all, and are the reason a power-less ride still has a report worth
+    # opening. Everything below them that is gated on `has_power` is gated
+    # because its output is, in the end, a watt.
     segments = _try("segmentation", lambda: ride_segmentation.segment_ride(
         altitude, distance, power=power, speed=speed), []) or []
     climbs = _try("climbing", lambda: climbing_analysis.analyze_climbs(segments, mass), []) or []
-    pacing = _try("pacing", lambda: pacing_analysis.analyze_pacing(power, ftp, hr_clean))
-    efficiency = _try("efficiency", lambda: efficiency_metrics.analyze_efficiency(power, hr_clean, ftp))
+    pacing = _try("pacing", lambda: pacing_analysis.analyze_pacing(
+        power, ftp, hr_clean)) if has_power else None
+    efficiency = _try("efficiency", lambda: efficiency_metrics.analyze_efficiency(
+        power, hr_clean, ftp)) if has_power else None
     mb = _try("matchbook", lambda: matchbook.analyze_matchbook(power, cp, w_prime)) if cp > 0 and w_prime > 0 else None
-    quadrant = _try("quadrant", lambda: quadrant_analysis.analyze_quadrants(power, cadence, ftp=ftp))
+    quadrant = _try("quadrant", lambda: quadrant_analysis.analyze_quadrants(
+        power, cadence, ftp=ftp)) if has_power else None
     fueling = _try("fueling", lambda: fueling_analysis.analyze_fueling(
         power, if_=(round(np_watts / ftp, 3) if ftp else None),
         durability_drop_pct=getattr(stream, "durability_drop_pct", None),
-        decoupling_pct=(efficiency.decoupling_pct if efficiency else None), de=de))
-    efforts = _try("efforts", lambda: effort_matching.match_efforts(mmp, athlete_envelope), []) or []
-    wko = _try("wko", lambda: wko_power_model.fit_wko_model(mmp, mass))
+        decoupling_pct=(efficiency.decoupling_pct if efficiency else None), de=de)) if has_power else None
+    # Efforts and the model behind them are mean-maximal POWER records. A stored
+    # MMP curve for a meterless bike would be a curve of zeroes, so this stays
+    # gated on the channel rather than on the curve: no meter, no personal bests.
+    efforts = _try("efforts", lambda: effort_matching.match_efforts(
+        mmp, athlete_envelope), []) or [] if has_power else []
+    wko = _try("wko", lambda: wko_power_model.fit_wko_model(mmp, mass)) if has_power else None
     rho = _try("air_density", lambda: air_density(
         altitude[0] if altitude and altitude[0] is not None else 0.0), 1.225) or 1.225
     cda = _try("cda", lambda: cda_estimate.estimate_cda(
-        power, speed, altitude, mass, air_density=rho)) if mass else None
+        power, speed, altitude, mass, air_density=rho)) if mass and has_power else None
     wbal = _try("wbal", lambda: w_prime_balance(power, cp, w_prime)) if cp > 0 and w_prime > 0 else None
-    moments = _try("moments", lambda: key_moments.detect_key_moments(power, wbal, hr_clean, de=de), []) or []
+    moments = _try("moments", lambda: key_moments.detect_key_moments(
+        power, wbal, hr_clean, de=de), []) or [] if has_power else []
+
+    # The cardiac block WITHOUT a power channel: the average heart rate is a real
+    # measurement and the hero reads it from here, so the block is emitted rather
+    # than dropped. Efficiency factor and decoupling are both power:HR ratios and
+    # stay None — an HR-only ride has no numerator for either.
+    if efficiency is None and hr_values:
+        efficiency_out = {
+            "efficiency_factor": None,
+            "avg_hr": round(sum(hr_values) / len(hr_values), 1),
+            "decoupling_pct": None,
+            "np_watts": None,
+        }
+    else:
+        efficiency_out = efficiency.__dict__ if efficiency else None
 
     # --- header ---
-    total_kj = round(sum(power) / 1000.0, 1) if power else 0.0
-    if_val = round(np_watts / ftp, 3) if ftp else None
+    # None, not 0.0: kilojoules are the integral of the power channel, so a ride
+    # without one did not do zero work — we did not measure the work it did.
+    total_kj = round(sum(power) / 1000.0, 1) if has_power else None
+    if_val = round(np_watts / ftp, 3) if ftp and np_watts is not None else None
     dist_km = round((activity.distance_meters or 0.0) / 1000.0, 1)
     # Moving time & average speed. Streams are 1 Hz (one sample = one second), so a
     # sample count is a second count. When a speed stream exists, count only moving
@@ -391,8 +456,13 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
             if activity.elevation_gain_m is not None
             else (round(sum(seg.elev_gain_m for seg in segments), 0) if segments else None)
         ),
-        moving_time_s=moving_time_s, np_watts=round(np_watts, 1), if_=if_val,
+        moving_time_s=moving_time_s,
+        np_watts=round(np_watts, 1) if np_watts is not None else None, if_=if_val,
         tss=float(activity.tss or 0.0), total_kj=total_kj, avg_speed_kmh=avg_speed_kmh,
+        # The head unit's own energy figure. For a ride with power the kJ total
+        # above is the better number and the client prefers it; for a ride
+        # without one this is the ONLY energy the recording measured.
+        calories=int(activity.calories) if getattr(activity, "calories", None) else None,
     )
 
     # --- story (downsampled) ---
@@ -409,7 +479,10 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
         # a long ride drew only the opening minutes). Keep power per point so the
         # map can be coloured by effort.
         route=_downsample(
-            [{"lat": la, "lng": lo, "power": power[i] if i < n else None, "grade": None}
+            [{"lat": la, "lng": lo,
+              # `i < len(power)`, not `i < n`: n is now the whole recording's
+              # length, and a power-less ride has no watts to colour the map by.
+              "power": power[i] if i < len(power) else None, "grade": None}
              for i, (la, lo) in enumerate(zip(latitude, longitude))
              if la is not None and lo is not None],
             _STORY_MAX_POINTS,
@@ -418,14 +491,29 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
 
     # --- verdict + plan ---
     durability_drop = getattr(stream, "durability_drop_pct", None)
-    score, good, bad = _rule_based_grade(pacing, efficiency, mb, efforts, durability_drop, de)
-    verdict = dict(
-        grade_letter=_grade_from_score(score), grade_score=round(score, 0),
-        ai_verdict=_rule_based_verdict(activity, score, good, bad, de),
-        ai_model="rule-based-fallback", went_well=good, watch_out=bad,
-    )
+    if has_power:
+        score, good, bad = _rule_based_grade(pacing, efficiency, mb, efforts, durability_drop, de)
+        verdict = dict(
+            grade_letter=_grade_from_score(score), grade_score=round(score, 0),
+            ai_verdict=_rule_based_verdict(activity, score, good, bad, de),
+            ai_model="rule-based-fallback", went_well=good, watch_out=bad,
+        )
+    else:
+        # NO POWER, NO GRADE. Every input `_rule_based_grade` reads — the split,
+        # the variability index, the matches burned, the PRs, the durability drop
+        # — is a power measurement, so scoring the ride anyway returns the
+        # scorer's own 80-point starting prior and stamps a "B" on it. That is a
+        # verdict nobody measured, printed in the largest type on the page. The
+        # badge is nulled instead, and the verdict line states the ride's real
+        # figures and says plainly which ones are missing.
+        verdict = dict(
+            grade_letter=None, grade_score=None,
+            ai_verdict=_no_power_verdict(activity, header, hr_values, de),
+            ai_model="rule-based-fallback", went_well=[], watch_out=[],
+        )
     plan = _build_plan(pacing, mb, efficiency, fueling, durability_drop, climbs,
-                       tss=float(activity.tss or 0.0), total_kj=total_kj, de=de)
+                       tss=float(activity.tss or 0.0), total_kj=total_kj,
+                       energy_kcal=header["calories"], has_power=has_power, de=de)
 
     return RaceDebrief(
         activity_id=activity.id, header=header, verdict=verdict, story=story, lang=lang,
@@ -433,7 +521,7 @@ def assemble_debrief(activity, stream, profile, athlete_envelope: dict, lang: st
         climbs=[c.__dict__ for c in climbs],
         pacing=pacing.__dict__ if pacing else None,
         efforts=[e.__dict__ for e in efforts],
-        efficiency=efficiency.__dict__ if efficiency else None,
+        efficiency=efficiency_out,
         matchbook={**mb.__dict__, "matches": [m.__dict__ for m in mb.matches]} if mb else None,
         quadrant=quadrant.__dict__ if quadrant else None,
         fueling=fueling.__dict__ if fueling else None,
@@ -458,6 +546,43 @@ def _rule_based_verdict(activity, score: float, good: list[str], bad: list[str],
     return (lead + win + fix)[:600]
 
 
+def _no_power_verdict(activity, header: dict, hr_values: list[float], de: bool) -> str:
+    """The verdict line for a ride recorded without a power meter.
+
+    The ride's own figures in the order a rider reads them, then one sentence
+    naming what this report does not contain. There is no coaching in it on
+    purpose: with no watts there is nothing to be candid about, and a generated
+    verdict written over a blank scorecard is precisely where a model starts
+    describing an effort the rider never made. Distance is whole kilometres here
+    because clients split this string on the first full stop to get a headline.
+    """
+    facts: list[str] = []
+    dist = header.get("distance_km")
+    if dist:
+        facts.append(f"{round(dist)} km")
+    secs = header.get("moving_time_s") or 0
+    if secs >= 60:
+        facts.append(f"{secs // 3600}:{secs % 3600 // 60:02d} h")
+    elev = header.get("elevation_m")
+    if elev:
+        facts.append(f"{round(elev)} Höhenmeter" if de else f"{round(elev)} m of climbing")
+    if hr_values:
+        avg_hr = round(sum(hr_values) / len(hr_values))
+        facts.append(f"Ø {avg_hr} bpm" if de else f"{avg_hr} bpm average")
+    kcal = header.get("calories")
+    if kcal:
+        facts.append(f"{kcal} kcal")
+    lead = (", ".join(facts) + ".") if facts else ""
+    missing = (
+        "Diese Fahrt wurde ohne Leistungsmesser aufgezeichnet — Watt, Zonen und "
+        "Bestwerte bleiben für sie ungemessen."
+        if de else
+        "This ride was recorded without a power meter, so watts, zones and "
+        "personal bests go unmeasured for it."
+    )
+    return (f"{lead} {missing}".strip())[:600]
+
+
 async def _upsert_debrief(db: AsyncSession, user_id: int, activity_id: int, report: RaceDebrief) -> None:
     now = datetime.now(timezone.utc)
     payload = report.model_dump(mode="json")
@@ -478,7 +603,22 @@ async def build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: 
     if activity is None:
         return None
     stream = await db.get(ActivityStream, activity_id)
-    if stream is None or not (stream.streams or {}).get("power"):
+    if stream is None:
+        return None
+    channels = stream.streams or {}
+    # WAS `not channels.get("power")` — one falsy power channel refused the whole
+    # report. That was survivable while a ride without a meter had no stored
+    # recording at all; it stopped being survivable when the sync started keeping
+    # those rides honestly (GPS, altitude and heart rate stored, the power channel
+    # ABSENT rather than zero-filled), because an absent channel is falsy and this
+    # line then threw away the map, the elevation profile, the climbs and every
+    # heart-rate fact along with the watts. Confirmed live: three real rides from a
+    # rider with no power meter answered 404 while the data sat in the table.
+    #
+    # A ride is analyzable if it recorded any of the three things this report is
+    # built from. Only a stream carrying none of them has nothing to report, and
+    # that is still a 404 rather than an empty page.
+    if not any(channels.get(k) for k in ("power", "heart_rate", "latitude")):
         return None
     profile = (await db.execute(
         select(AthleteProfile).where(AthleteProfile.user_id == user_id))).scalar_one_or_none()
@@ -487,9 +627,15 @@ async def build_debrief(db: AsyncSession, user_id: int, activity_id: int, lang: 
             ActivityStream.user_id == user_id, ActivityStream.mmp_curve.isnot(None)))
     envelope = build_sanitized_envelope([row[0] for row in env_res.all() if row[0]])
     report = assemble_debrief(activity, stream, profile, envelope, lang)
-    text, model = await _ai_verdict(report, lang)
-    report.verdict.ai_verdict = text
-    report.verdict.ai_model = model
+    # The verdict model is prompted with the grade, NP, IF, kJ, the split and the
+    # surge count. For a power-less ride every one of those is absent, and asking
+    # for a candid two-sentence judgement over a blank scorecard is an invitation
+    # to write one anyway. Such a ride keeps the factual line assemble_debrief
+    # composed from what was actually recorded.
+    if channels.get("power"):
+        text, model = await _ai_verdict(report, lang)
+        report.verdict.ai_verdict = text
+        report.verdict.ai_model = model
     return report
 
 

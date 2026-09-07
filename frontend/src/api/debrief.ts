@@ -1,12 +1,24 @@
 import { apiClient } from './client'
 
+// NULLABLE BECAUSE A BIKE WITHOUT A METER MEASURED NONE OF IT. The server used
+// to refuse a debrief outright for such a ride (404, which the ride page turned
+// into a permanent spinner); it builds one now, with every power figure null
+// rather than zero. These types said `number`, so the client would have read a
+// null as a number and printed it — "null W", or a grade nobody scored.
 export interface DebriefHeader {
   title: string; date: string; sport: string
   distance_km: number; elevation_m: number | null; moving_time_s: number
-  np_watts: number; if_: number | null; tss: number; total_kj: number; avg_speed_kmh: number
+  np_watts: number | null; if_: number | null; tss: number
+  total_kj: number | null; avg_speed_kmh: number
+  /** The one honest energy figure for a ride with no power meter. */
+  calories: number | null
 }
 export interface DebriefVerdict {
-  grade_letter: string; grade_score: number; ai_verdict: string; ai_model: string
+  // No grade without power: every input to the scorer is a power measurement,
+  // so grading anyway would stamp the scorer's own starting prior on the ride
+  // as a "B" — a verdict nobody measured, in the largest type on the page.
+  grade_letter: string | null; grade_score: number | null
+  ai_verdict: string; ai_model: string
   went_well: string[]; watch_out: string[]
 }
 export interface KeyMoment { kind: string; at_s: number; label: string; value: number; tone: string }
@@ -37,7 +49,7 @@ export interface EffortMatch {
 }
 export interface Efficiency {
   efficiency_factor: number | null; avg_hr: number | null
-  decoupling_pct: number | null; np_watts: number
+  decoupling_pct: number | null; np_watts: number | null
 }
 export interface Match { start_s: number; end_s: number; depth_j: number; min_bal_j: number }
 export interface Matchbook {

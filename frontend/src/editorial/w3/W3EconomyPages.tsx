@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
 import W3PartsDock from './W3PartsDock'
 import W3GarageLane from './W3GarageLane'
@@ -42,19 +42,18 @@ function Shell({ title, back, right, children }: {
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, minHeight: '100dvh', background: T.heroBg }}>
         <W3StatusBar />
-        <div style={{ padding: '8px 20px 12px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          {back && (
-            <button type="button" onClick={() => navigate('/e/w3-garage')} aria-label="Zurück"
-              style={{
-                width: 44, height: 44, borderRadius: 100, border: 0, background: T.heroChip,
-                display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none', padding: 0,
-              }}>
-              <ArrowLeft size={17} color={T.ink} />
-            </button>
-          )}
-          <span style={{ fontSize: 26, fontWeight: 700, letterSpacing: -0.8, color: T.ink }}>{title}</span>
-          {right && <span style={{ marginLeft: 'auto' }}>{right}</span>}
-        </div>
+        {/* ── THE HEADER IS THE APP'S, NOT THIS FILE'S ──────────────────────
+            This drew its own back button and a 26px title, and carried neither
+            the avatar nor the menu — so the three economy screens were the
+            corner of the app with no route to the profile or the settings, and
+            the furniture jumped every time a rider stepped in or out of them.
+            `W3TopBar` is the same header the rest of W3 wears; the balance is
+            real state rather than furniture, so it rides in `extra` where it
+            stays next to the rider rather than floating in the page. ── */}
+        <W3TopBar
+          title={title}
+          onBack={back ? () => navigate('/e/w3-garage') : undefined}
+          extra={right} />
         {children}
         <W3TabBar />
       </div>

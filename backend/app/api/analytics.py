@@ -344,9 +344,16 @@ async def get_activity_debrief(
     lang = "de" if lang.lower().startswith("de") else "en"
     report = await get_or_build_debrief(db, _user.id, activity_id, lang)
     if report is None:
+        # A MISSING POWER METER IS NO LONGER A 404. This used to answer "No
+        # analyzable ride (with power streams) found", and it meant it: a rider
+        # without a meter got that on every ride they owned, while the route, the
+        # climbs, the ascent and the heart rate sat recorded in the table. The
+        # debrief now builds from those and simply omits the watts. What is left
+        # here is the genuinely empty case — no activity, no stream row, or a
+        # stream with no power, no heart rate and no GPS in it.
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="No analyzable ride (with power streams) found for this activity.",
+            detail="No recorded ride data found for this activity.",
         )
     return report
 

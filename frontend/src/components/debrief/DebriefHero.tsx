@@ -271,9 +271,13 @@ export default function DebriefHero({ report }: { report: RaceDebrief }) {
           style={{ maxHeight: showAll ? 200 : 0, opacity: showAll ? 1 : 0, transition: 'max-height 320ms ease, opacity 240ms ease' }}
         >
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
-            <Stat label="NP" value={`${Math.round(header.np_watts)} W`}
+            {/* A ride recorded without a power meter now reaches this hero at
+                all (the endpoint used to 404 it). Its watts are null, not zero
+                — `Math.round(null)` is 0, which would print a measurement that
+                was never taken. */}
+            <Stat label="NP" value={header.np_watts != null ? `${Math.round(header.np_watts)} W` : '—'}
               hint={de ? 'Normalized Power — gleichmäßige Vergleichsleistung' : 'Normalized Power — steady-state equivalent effort'} />
-            <Stat label="kJ" value={`${Math.round(header.total_kj)}`}
+            <Stat label="kJ" value={header.total_kj != null ? `${Math.round(header.total_kj)}` : '—'}
               hint={de ? 'Verrichtete Arbeit ≈ verbrannte Kalorien' : 'Work done ≈ calories burned'} />
             <Stat label={de ? 'GESCHW.' : 'AVG SPEED'} value={`${header.avg_speed_kmh.toFixed(1)} km/h`} />
             {/* A ride that recorded no ascent has nothing to say here — an

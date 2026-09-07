@@ -21,16 +21,34 @@ class DebriefHeader(BaseModel):
     #: dash. See `race_debrief` for why this stopped being a segment sum.
     elevation_m: float | None
     moving_time_s: int
-    np_watts: float
+    #: Nullable: a ride recorded without a power meter has no normalized power.
+    #: It used to be a hard `float` because the debrief refused to build at all
+    #: without a power channel, so the field could not be absent. Now that such a
+    #: ride gets a report, the number has to be able to say "not measured" —
+    #: 0 W would read as a ride that produced nothing.
+    np_watts: float | None = None
     if_: float | None = None
     tss: float
-    total_kj: float
+    #: Nullable for the same reason as `np_watts`: work done is the integral of
+    #: the power channel, so no channel means no kilojoules. Garmin's own energy
+    #: figure lives in `calories` instead — it is measured from heart rate and
+    #: survives a missing meter.
+    total_kj: float | None = None
     avg_speed_kmh: float
+    #: The head unit's recorded energy expenditure. Present for power-less rides,
+    #: where it is the only honest energy number the report can show.
+    calories: int | None = None
 
 
 class DebriefVerdict(BaseModel):
-    grade_letter: str
-    grade_score: float
+    #: Nullable: every input to the execution score (the split, the variability
+    #: index, the matches burned, the PRs) is a power measurement. A ride with no
+    #: power meter is not a bad ride, it is an UNGRADED one, and printing the
+    #: scorer's 80-point starting prior as a "B" would be a verdict nobody
+    #: measured. Both fields are None together; `ai_verdict` still carries a
+    #: factual line about what the recording does contain.
+    grade_letter: str | None = None
+    grade_score: float | None = None
     ai_verdict: str
     ai_model: str
     went_well: list[str] = []
@@ -112,7 +130,10 @@ class EfficiencyOut(BaseModel):
     efficiency_factor: float | None = None
     avg_hr: float | None = None
     decoupling_pct: float | None = None
-    np_watts: float
+    #: Nullable: this block is emitted for a power-less ride too, carrying the
+    #: average heart rate on its own. EF and decoupling are both power:HR ratios
+    #: and stay None there; so does the NP they would have been divided by.
+    np_watts: float | None = None
 
 
 class MatchOut(BaseModel):

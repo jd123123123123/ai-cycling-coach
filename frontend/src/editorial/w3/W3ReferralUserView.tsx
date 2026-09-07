@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Sparkles, Route as RouteIcon, Bike, Clock } from 'lucide-react'
+import { Sparkles, Route as RouteIcon, Bike, Clock } from 'lucide-react'
 import { T, FONT } from './w3tokens'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -47,10 +48,14 @@ export default function W3ReferralUserView({ vm, onBack, onClaim }: {
           <div style={{ position: 'absolute', inset: 0, background: `linear-gradient(0deg, ${T.card} 4%, ${T.card}00 46%)` }} />
         </div>
 
-        {/* Back */}
-        <div style={{ position: 'relative', padding: '10px 20px 0' }}>
+        {/* THE APP'S OWN BAR, NOT THIS SCREEN'S — this screen drew a private
+            white back circle and carried neither the avatar nor the menu, so it
+            was a dead end. Relative, so the bar sits above the full-bleed hero.
+            The title is the category, not the handle: the handle is the big
+            pill at the foot of the screen and must not be said twice. */}
+        <div style={{ position: 'relative' }}>
           <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
-          <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: '#fff', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color="#000" /></button>
+          <W3TopBar title="Empfehlung" onBack={onBack} />
         </div>
 
         {/* Bottom content */}

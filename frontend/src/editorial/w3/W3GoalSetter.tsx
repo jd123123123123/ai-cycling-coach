@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, Check, Flag, Gauge, Timer } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
 import { S, lux, TNUM } from './w3surfaces'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -244,6 +245,21 @@ export default function W3GoalSetter({ vm, onCancel, onSave, onSkip, skipLabel }
 
   const back = () => (step === 0 ? onCancel() : setStep((s) => s - 1))
 
+  // ── WHOSE HEADER THIS IS ────────────────────────────────────────────────
+  // The rail used to draw its own back button and nothing else, so the setter
+  // was one of the screens with no route to the profile or the settings at
+  // all, and its back button sat at its own position. `W3TopBar` is the
+  // header the rest of W3 wears, and the back it takes is this one — the same
+  // step-or-cancel, not a second affordance beside it.
+  //
+  // NOT MID-SIGNUP, THOUGH. `onSkip` is passed by exactly one caller, the
+  // onboarding step (see `W3GoalSetterActions`), and the bar carries the
+  // avatar and the "everything" menu — a door out of a flow the rider has not
+  // finished, into routes that are guarded on that very fact and would bounce
+  // them straight back. In onboarding the rail keeps its own back button and
+  // the neighbouring steps' chrome; everywhere else the bar is the header.
+  const inOnboarding = !!onSkip
+
   const todayISO = new Date().toISOString().slice(0, 10)
 
   return (
@@ -254,14 +270,23 @@ export default function W3GoalSetter({ vm, onCancel, onSave, onSkip, skipLabel }
       }}>
         <W3StatusBar />
 
+        {/* Short on purpose: the question below is the headline, at 28px, and
+            a bar that whispered it again would say it twice. */}
+        {!inOnboarding && <W3TopBar title="Ziel" onBack={back} />}
+
         {/* ── the rail: how many questions, and which one ──
             A form that does not say how long it is reads as endless, and this
-            one is three questions at most. */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '6px 20px 14px' }}>
-          <button type="button" onClick={back} aria-label="Zurück"
-            style={{ width: 44, height: 44, flex: 'none', borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-            <ArrowLeft size={18} color={T.ink} />
-          </button>
+            one is three questions at most. Set down from the bar rather than
+            tucked under it: without the back button beside it the rail runs
+            the full width, and pressed against the header an acid line that
+            wide stops reading as progress and starts reading as a border. */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: inOnboarding ? '6px 20px 14px' : '14px 20px 14px' }}>
+          {inOnboarding && (
+            <button type="button" onClick={back} aria-label="Zurück"
+              style={{ width: 44, height: 44, flex: 'none', borderRadius: 100, background: T.surface, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
+              <ArrowLeft size={18} color={T.ink} />
+            </button>
+          )}
           <div style={{ flex: 1, display: 'flex', gap: 4 }}>
             {(known ? steps : [steps[0]]).map((s, i) => (
               <span key={s.id} style={{

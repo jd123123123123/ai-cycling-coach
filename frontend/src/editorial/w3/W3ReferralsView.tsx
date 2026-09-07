@@ -1,7 +1,8 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Users, Gift, Clock, Check } from 'lucide-react'
+import { Users, Gift, Clock, Check } from 'lucide-react'
 import { T, FONT, EASE, band } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -85,8 +86,14 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
       <div className="w3-frame" style={{ fontFamily: FONT, background: T.bg }}>
         <W3StatusBar />
 
+        {/* THE APP'S OWN BAR, NOT THIS SCREEN'S. This screen drew a private
+            white back circle and carried neither the avatar nor the menu, so a
+            rider who landed here had no way through to their profile or the
+            settings sheet. No title: "Empfehlungen" is the 40px headline a few
+            pixels below, and the bar must not say it twice. */}
+        <W3TopBar onBack={onBack} />
+
         <div style={{ ...band(20), gap: 14, paddingTop: 6 }}>
-          <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: '#fff', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color="#000" /></button>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <span style={{ fontSize: 40, fontWeight: 700, letterSpacing: -1.4, color: T.ink }}>Empfehlungen</span>
             <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{vm.blurb}</span>

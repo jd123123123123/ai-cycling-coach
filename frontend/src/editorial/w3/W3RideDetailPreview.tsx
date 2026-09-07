@@ -48,7 +48,7 @@ const FIXTURE: W3RideVm = {
   title: 'Berg-Wiederholungen',
   bigStat: '62', bigStatUnit: 'Kilometer', climb: '1240 m hoch', avgSpeed: '30 km/h',
   power, powerNote: 'Sechs Wdh. · keine abgebaut',
-  polyline, intensity: 0.94,
+  polyline,
   movedSub: '62 km und 1 240 Höhenmeter, auf dein Jahr gerechnet.',
   moved: [
     { label: 'Saison-Distanz', delta: '+62 km', value: '4 812', goal: '12 000 km', beforePct: 0.396, pct: 0.401 },

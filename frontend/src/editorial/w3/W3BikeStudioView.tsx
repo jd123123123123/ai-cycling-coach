@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Camera, Sparkles, RefreshCw, Download, Bike, Plus, Loader2 } from 'lucide-react'
+import { Camera, Sparkles, RefreshCw, Download, Bike, Plus, Loader2 } from 'lucide-react'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
 import { W3Coin } from './W3Coin'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
 import W3Loading from './W3Loading'
 import { GhostBike } from './W3BikeHero'
@@ -205,10 +206,12 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
           ))}
           <W3StatusBar />
 
-          <div style={{ padding: '0 12px 0 8px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between', position: 'relative', zIndex: 2 }}>
-            <button onClick={p.onBack} aria-label="Zurück" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={20} color={T.ink} /></button>
-            <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Garage</span>
-            <div style={{ width: 40 }} />
+          {/* The shared header — above the confetti, hence the stacking context.
+              Even the celebration keeps the avatar and the menu: it is a screen
+              in the app, not a modal, and the rider leaves it by the same door
+              they leave every other screen by. */}
+          <div style={{ position: 'relative', zIndex: 2 }}>
+            <W3TopBar title="Garage" onBack={p.onBack} />
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '4px 20px 28px', position: 'relative', zIndex: 2 }}>
@@ -290,14 +293,11 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
         <W3StatusBar />
 
-        {/* Top nav — back + screen title */}
-        <div style={{ padding: '0 12px 0 8px', height: 48, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <button onClick={p.onBack} aria-label="Zurück" style={{ width: 40, height: 40, borderRadius: 100, background: 'transparent', border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}>
-            <ArrowLeft size={20} color={T.ink} />
-          </button>
-          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet }}>Garage</span>
-          <div style={{ width: 40, height: 40 }} aria-hidden />
-        </div>
+        {/* Top nav — the app's shared bar. It said GARAGE in its own dialect and
+            stranded the rider without the avatar or the menu; the word stays,
+            the private header does not. GARAGE and not "Bike Studio": the
+            headline three lines down already says which room this is. */}
+        <W3TopBar title="Garage" onBack={p.onBack} />
 
         {/* Header */}
         <div style={{ ...band(20), padding: '4px 20px 18px', gap: 8 }}>

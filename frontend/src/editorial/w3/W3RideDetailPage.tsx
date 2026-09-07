@@ -12,6 +12,7 @@ import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3RideWrap, { type W3RideWrapVm, type W3WrapStat } from './W3RideWrap'
 import { T, FONT, Kicker, band } from './w3tokens'
 import { S, lux, hairline, TNUM } from './w3surfaces'
@@ -205,9 +206,18 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   // unknown at the time — it is the same Coggan relation solved the other way,
   // and it agrees with the direct figure whenever both exist.
   const hrs = h.moving_time_s / 3600
-  const intensity = h.if_ != null && h.if_ > 0
+  //
+  // BUT NOT WITHOUT POWER. The inversion is only the Coggan relation solved
+  // backwards, and it is only an INTENSITY FACTOR if the TSS going into it was
+  // computed from watts. A ride recorded without a power meter carries hrTSS,
+  // and inverting that produced a confident "INTENSITÄT 0,73 · 73 % VON FTP"
+  // for a ride that never measured a watt — exactly the fabricated figure this
+  // screen spends the rest of its lines refusing to print. Null, and the beam
+  // says so.
+  const hadPower = h.np_watts != null && h.np_watts > 0
+  const intensity: number | null = h.if_ != null && h.if_ > 0
     ? h.if_
-    : h.tss > 0 && hrs > 0 ? Math.sqrt(h.tss / (hrs * 100)) : 0
+    : hadPower && h.tss > 0 && hrs > 0 ? Math.sqrt(h.tss / (hrs * 100)) : null
 
   // "What it moved you toward" — real season totals + this ride's contribution.
   const cyc = season.filter((a) => a.sport === 'cycling')
@@ -303,18 +313,25 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
   // "82 % VON FTP · SCHWELLE" — the IF as a percentage, named by the zone it
   // lands in. The boundaries are Coggan's own training-level bands, so the word
   // beside the number is the one a cyclist already uses for that effort.
-  const ifPct = Math.round(intensity * 100)
-  const zoneWord = intensity >= 1.05 ? 'VO₂MAX'
-    : intensity >= 0.95 ? 'SCHWELLE'
-    : intensity >= 0.85 ? 'TEMPO'
-    : intensity >= 0.75 ? 'GRUNDLAGE'
-    : 'ERHOLUNG'
+  const ifPct = intensity != null ? Math.round(intensity * 100) : null
+  const zoneWord = intensity == null ? null
+    : intensity >= 1.05 ? 'VO₂MAX'
+      : intensity >= 0.95 ? 'SCHWELLE'
+        : intensity >= 0.85 ? 'TEMPO'
+          : intensity >= 0.75 ? 'GRUNDLAGE'
+            : 'ERHOLUNG'
   // The debrief computes this properly when it can. The fallback leans on the
   // coincidence every cyclist's head unit already leans on: a kilojoule of
   // MECHANICAL work costs roughly a kilocalorie of the rider, because human
   // cycling efficiency is close to 1/4.184. It is an approximation, and it is
   // the same approximation Garmin and Wahoo display.
-  const kcal = d.fueling?.total_kcal ?? (h.total_kj > 0 ? h.total_kj : null)
+  //
+  // THE MIDDLE TERM IS THE ONE THAT MATTERS NOW. Since the debrief builds a
+  // report for rides with no power meter, `total_kj` is null on exactly those
+  // rides — and the approximation has nothing to approximate FROM. The header's
+  // own `calories` is the device's measured figure, which beats a derivation
+  // both when it exists and when the kilojoules do not.
+  const kcal = d.fueling?.total_kcal ?? h.calories ?? (h.total_kj != null && h.total_kj > 0 ? h.total_kj : null)
   const hero: W3RideHeroVm = {
     polyline: activity?.route_polyline ?? null,
     grades: activity?.route_grades ?? null,
@@ -322,13 +339,13 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     dateLine: fmtDateTime(h.date),
     duration: fmtHmsFull(h.moving_time_s),
     stats: heroStats,
-    watts: h.np_watts > 0 ? String(Math.round(h.np_watts)) : DASH,
+    watts: h.np_watts != null && h.np_watts > 0 ? String(Math.round(h.np_watts)) : DASH,
     bpm: eff?.avg_hr != null ? String(Math.round(eff.avg_hr)) : DASH,
-    ifValue: intensity > 0 ? intensity.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : DASH,
+    ifValue: intensity != null ? intensity.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : DASH,
     // Against 1.0, which IS threshold — so a threshold ride fills the beam and
     // anything above it is capped rather than overflowing off the end.
-    ifFill: Math.min(1, intensity),
-    effortLabel: intensity > 0 ? `${ifPct} % VON FTP · ${zoneWord}` : 'INTENSITÄT UNBEKANNT',
+    ifFill: intensity != null ? Math.min(1, intensity) : 0,
+    effortLabel: intensity != null ? `${ifPct} % VON FTP · ${zoneWord}` : 'OHNE LEISTUNGSMESSER',
     energyLabel: kcal != null && kcal > 0 ? `${Math.round(kcal).toLocaleString('de-DE')} kcal` : DASH,
   }
 
@@ -337,7 +354,7 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     dateChip: fmtDate(h.date), sportChip: h.sport?.toUpperCase() ?? 'FAHRT', recordChip: bestEffort?.is_pr ? 'NEUER REKORD' : null,
     title: h.title,
     bigStat: h.distance_km != null ? String(Math.round(h.distance_km)) : DASH, bigStatUnit: 'Kilometer',
-    polyline: activity?.route_polyline ?? null, intensity,
+    polyline: activity?.route_polyline ?? null,
     movedSub, moved, movedFoot,
     climb: h.elevation_m != null ? `${Math.round(h.elevation_m)} m hoch` : DASH,
     avgSpeed: h.avg_speed_kmh != null ? `${Math.round(h.avg_speed_kmh)} km/h` : DASH,
@@ -370,10 +387,14 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
         l: 'VARIABILITÄT',
         s: d.pacing?.variability_index == null ? ''
           : d.pacing.variability_index < 1.05 ? 'sehr gleichmäßig getreten' : 'viele Antritte' },
-      { v: h.total_kj > 0 ? `${Math.round(h.total_kj).toLocaleString('de-DE')}` : DASH, l: 'ARBEIT · KJ',
+      { v: h.total_kj != null && h.total_kj > 0 ? `${Math.round(h.total_kj).toLocaleString('de-DE')}` : DASH, l: 'ARBEIT · KJ',
         s: kcal != null && kcal > 0 ? `${Math.round(kcal).toLocaleString('de-DE')} kcal verbrannt` : '' },
     ],
-    execScore: String(v.grade_score), execTotal: '100',
+    // NO GRADE WITHOUT POWER. `grade_score` is null for a ride the scorer had
+    // no inputs for, and `String(null)` is the word "null" set 100px high in
+    // acid — the loudest thing on the page, saying nothing. The em dash is
+    // this file's answer to a figure that does not exist.
+    execScore: v.grade_score != null ? String(Math.round(v.grade_score)) : DASH, execTotal: '100',
     verdictHeadline: v.went_well[0] ?? v.ai_verdict.split('.')[0] ?? '',
     verdictBody: v.ai_verdict, aiModel: v.ai_model || null,
     repeatsScore: rep.score, repeatsSub: rep.sub, repeats: rep.repeats,
@@ -560,10 +581,16 @@ function W3RideReduced({ activity, onBack, onExpandMap }: {
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
         <W3StatusBar />
+        {/* THE HEADER IS THE APP'S, NOT THE HERO'S. A ride without a power
+            meter is still a ride in the app: losing the avatar and the menu
+            because the debrief 404'd would punish the rider for their bike's
+            hardware. The hero therefore gets no `onBack` — its floating arrow
+            and this bar's would be two back buttons on one screen. */}
+        <W3TopBar title="Fahrt" onBack={onBack} />
         {/* SHARE IS DELIBERATELY NOT OFFERED. The share screen reads the same
             debrief this ride does not have, so the button would hand the rider
             to a page that cannot draw their card. */}
-        <W3RideMapHero vm={hero} onBack={onBack} onExpandMap={onExpandMap} />
+        <W3RideMapHero vm={hero} onExpandMap={onExpandMap} />
 
         <div style={{ ...band(S.section), gap: S.md }}>
           <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.quiet }}>
@@ -611,17 +638,35 @@ function W3RideUnavailable({ onBack }: { onBack: () => void }) {
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
         <W3StatusBar />
+        {/* The one way out lives in the bar, where it lives on every other
+            screen. The ZURÜCK pill under the headline was a second back button
+            in a third dialect — and the screen it sat on is the one where the
+            menu matters most, because nothing else here is reachable. */}
+        <W3TopBar title="Fahrt" onBack={onBack} />
         <div style={{ ...band(S.section), gap: S.md, paddingTop: 48 }}>
           <span style={{ fontSize: 25, fontWeight: 600, letterSpacing: -1, lineHeight: 1.06, color: T.ink }}>
             Diese Fahrt lässt sich nicht
             <br />
             <span style={{ color: T.acid }}>laden.</span>
           </span>
-          <button onClick={onBack} style={{
-            alignSelf: 'flex-start', marginTop: S.sm, padding: '11px 20px', borderRadius: 100,
-            background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT,
-            fontSize: 11, fontWeight: 600, letterSpacing: 0.8, color: T.ink,
-          }}>ZURÜCK</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** The wait, wearing the same header as the three states it resolves into —
+ *  a rider does not lose the menu for the seconds a request takes. The loader
+ *  centres itself in a full viewport, so the bar floats over it rather than
+ *  pushing it down past the fold. */
+function W3RideWaiting({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, height: '100dvh', overflow: 'hidden', background: T.bg, position: 'relative' }}>
+        <W3Loading label="Lade deine Fahrt…" />
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0 }}>
+          <W3StatusBar />
+          <W3TopBar title="Fahrt" onBack={onBack} />
         </div>
       </div>
     </div>
@@ -714,7 +759,7 @@ export default function W3RideDetailPage() {
   // Once the debrief has failed there is nothing left to wait for, and the
   // ride renders from its own row instead.
   if (!vm || !heroVm) {
-    if (!debriefFailed) return <W3Loading label="Lade deine Fahrt…" />
+    if (!debriefFailed) return <W3RideWaiting onBack={() => navigate(-1)} />
     if (activity) {
       return (
         <W3RideReduced
@@ -725,7 +770,7 @@ export default function W3RideDetailPage() {
       )
     }
     // The row is still on its way — that IS a wait, and a short one.
-    if (routePending) return <W3Loading label="Lade deine Fahrt…" />
+    if (routePending) return <W3RideWaiting onBack={() => navigate(-1)} />
     return <W3RideUnavailable onBack={() => navigate(-1)} />
   }
 

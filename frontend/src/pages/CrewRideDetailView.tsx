@@ -365,7 +365,9 @@ export default function CrewRideDetailView() {
                 <Stat value={wkg != null ? wkg.toFixed(1) : '—'} unit="W/kg" label={de ? 'NP · W/kg' : 'NP · W/kg'} />
                 <Stat value={avgHr != null ? `${Math.round(avgHr)}` : '—'} unit="bpm" label={de ? 'Ø PULS' : 'AVG HR'} />
                 <Stat value={maxHr != null ? `${Math.round(maxHr)}` : '—'} unit="bpm" label={de ? 'MAX PULS' : 'MAX HR'} color="var(--color-strain)" />
-                <Stat value={`${Math.round(header.total_kj).toLocaleString(de ? 'de' : 'en')}`} unit="kJ" label={de ? 'ARBEIT' : 'WORK'} />
+                {/* Kilojoules are a power measurement; a bike with no meter
+                    has not made one, and the field is null rather than 0. */}
+                <Stat value={header.total_kj != null ? Math.round(header.total_kj).toLocaleString(de ? 'de' : 'en') : '—'} unit="kJ" label={de ? 'ARBEIT' : 'WORK'} />
               </div>
               {wkg == null && np != null && (
                 <div className="flex items-center gap-1.5">

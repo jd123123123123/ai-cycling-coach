@@ -1,7 +1,8 @@
 import { Suspense, lazy, useState } from 'react'
-import { ChevronLeft, Mountain, Moon } from 'lucide-react'
+import { Mountain, Moon } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import { W3_MAP } from './w3map'
 import { GRADE_LEGEND, gradeColours } from './gradeColours'
 import './w3.css'
@@ -34,6 +35,12 @@ export interface W3RideMapViewProps {
   onBack?: () => void
 }
 
+/** The header's own height — the 12px status spacer plus the bar's 56 — as a
+ *  CSS length (it grows with the safe area) and as the number the map's fit
+ *  padding needs. */
+const HEADER_H = 'max(12px, env(safe-area-inset-top)) + 56px'
+const HEADER_LIFT = 68
+
 export default function W3RideMapView({ polyline, grades, onBack }: W3RideMapViewProps) {
   // Two modes, two jobs. FLACH is the app's own register and the resting
   // state; BERGE drapes the same dark map over real elevation and tilts into
@@ -47,7 +54,17 @@ export default function W3RideMapView({ polyline, grades, onBack }: W3RideMapVie
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, minHeight: '100dvh', background: T.bg, position: 'relative' }}>
-        <div style={{ position: 'absolute', inset: 0, zIndex: 0 }}>
+        {/* THE MAP IS LIFTED BY EXACTLY THE HEIGHT OF THE HEADER, and that is
+            about one control. MapLibre hangs its own zoom buttons in the map's
+            top-right corner — which is where the settings menu now sits, so
+            the two drew on top of each other. Sliding the canvas up by the
+            header's height moves the browser's furniture off the top of the
+            screen while the map still fills it: the route runs under the bar
+            as before, and the corner belongs to one thing again. `fitPadding`
+            adds the same lift back to the top so the route stays centred in
+            the part of the map a rider can actually see. Pinch, double-tap and
+            wheel zoom are untouched — the buttons were the map's spare. */}
+        <div style={{ position: 'absolute', top: `calc(-1 * (${HEADER_H}))`, left: 0, right: 0, bottom: 0, zIndex: 0 }}>
           {hasRoute ? (
             <Suspense fallback={null}>
               <RouteMap
@@ -59,6 +76,7 @@ export default function W3RideMapView({ polyline, grades, onBack }: W3RideMapVie
                 terrain={threeD}
                 interactive
                 palette={W3_MAP}
+                fitPadding={{ top: 48 + HEADER_LIFT, bottom: 48, left: 48, right: 48 }}
                 lineColors={ramp ?? undefined}
               lineColor={T.acid}
                 lineWidth={6}
@@ -104,18 +122,24 @@ export default function W3RideMapView({ polyline, grades, onBack }: W3RideMapVie
           </div>
         )}
 
-        <div style={{ position: 'relative', zIndex: 2 }}><W3StatusBar /></div>
+        {/* The app's header, ON the map rather than on a strip of its own. The
+            scrim above is exactly what buys its contrast, so the bar can stay
+            transparent and the route keeps running under it — an opaque strip
+            here would slice the top off the one thing this page exists to
+            show. The private back chip is gone; the bar's is the same button
+            every other screen has, in the same place. */}
+        <div style={{ position: 'relative', zIndex: 3 }}>
+          <W3StatusBar />
+          <W3TopBar title="Route" onBack={onBack} />
+        </div>
 
+        {/* The map's own control, moved out from under the header. It is a map
+            mode, not header furniture, so it keeps its glass pill — one row
+            below the bar, clear of the avatar and the menu. */}
         <div style={{
-          position: 'absolute', top: 54, left: 16, right: 16, zIndex: 3,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+          position: 'absolute', top: `calc(${HEADER_H} + 10px)`, right: 16, zIndex: 3,
+          display: 'flex', justifyContent: 'flex-end', alignItems: 'center',
         }}>
-          <button onClick={onBack} aria-label="Zurück" style={{
-            width: 42, height: 42, borderRadius: 100, border: `1px solid ${T.stroke}`,
-            background: `${T.bg}A6`, backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-            display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none',
-          }}><ChevronLeft size={19} color={T.ink} /></button>
-
           {hasRoute && (
             <div style={{
               display: 'flex', gap: 4, padding: 4, borderRadius: 100,

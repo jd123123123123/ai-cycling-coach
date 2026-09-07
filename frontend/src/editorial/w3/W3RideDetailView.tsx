@@ -1,8 +1,9 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type CSSProperties } from 'react'
-import { ChevronRight, Flame, Gauge, HeartPulse, Sparkles, Timer, Waves, Zap, type LucideIcon } from 'lucide-react'
+import { ChevronRight, Flame, Gauge, HeartPulse, Share2, Sparkles, Timer, Waves, Zap, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
 import { TNUM } from './w3surfaces'
 import './w3.css'
@@ -62,7 +63,10 @@ export interface W3RideVm {
   // The GPX of the route + the ride's intensity (IF). Kept on the vm as well
   // as inside `hero` because the sections further down read them too — the
   // hero is a VIEW of this ride, not a second source of truth about it.
-  polyline: [number, number][] | null; intensity: number
+  // `intensity` used to sit here too. It was set by the page on every render
+  // and read by nothing — the hero draws the IF beam from its own vm — so it
+  // was one more slot the page had to keep correct for no reader.
+  polyline: [number, number][] | null
   /** Everything the map-and-card hero renders. See `W3RideMapHero`. */
   hero: W3RideHeroVm
   // "What it moved you toward" — real season totals + this ride's contribution.
@@ -291,6 +295,25 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <W3StatusBar />
 
+        {/* THE APP'S HEADER, ON THE STATE A RIDER LANDS IN MOST. This screen
+            got its navigation from the hero's floating glass arrow, which is a
+            back button and nothing else — no avatar, no menu. So the full ride
+            report was the one W3 screen with no route to the profile or to
+            settings, and after the debrief learned to build a report without
+            power it became the COMMON path rather than an edge. Share moves
+            into the bar with it: two back dialects on one screen was how the
+            other eight screens went wrong. */}
+        <W3TopBar
+          title="Fahrt"
+          onBack={onBack}
+          extra={onShare ? (
+            <button type="button" onClick={onShare} aria-label="Fahrt teilen" style={{
+              width: 44, height: 44, borderRadius: 100, background: T.heroChip,
+              border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none',
+            }}><Share2 size={18} color={T.ink} /></button>
+          ) : undefined}
+        />
+
         {/* ── THE HERO: map, then the ride's own portrait, then the numbers ──
              Rebuilt from pen frame `XqpcX`. The route is now a REAL basemap
              rather than a bare SVG trace over a wash — a rider recognises the
@@ -306,8 +329,6 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
              three stats under the duration. See `W3RideMapHero`. ── */}
         <W3RideMapHero
           vm={vm.hero}
-          onBack={onBack}
-          onShare={onShare}
           onExpandMap={onExpandMap}
           sceneOverlay={(() => {
             const canCompose = scene.status === 'not_generated' && !scene.pending

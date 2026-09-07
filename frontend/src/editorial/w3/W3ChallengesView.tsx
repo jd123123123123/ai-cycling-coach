@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, MoreHorizontal, Plus, Share2, Check } from 'lucide-react'
+import { MoreHorizontal, Plus, Share2, Check } from 'lucide-react'
 import {
   CHALLENGE_METRICS,
   type RewardChallenge, type ChallengeMetric,
@@ -9,6 +9,7 @@ import { T, FONT, EASE, band, Kicker, Reveal } from './w3tokens'
 import { TNUM } from './w3surfaces'
 import { monthFacts, daysLeftLabel } from './w3challengeMonth'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
 import W3ChallengeRow, { type ChallengeKind } from './W3ChallengeRow'
 import W3MonthStrip from './W3MonthStrip'
@@ -270,27 +271,30 @@ export default function W3ChallengesView(p: W3ChallengesViewProps) {
       }}>
         <W3StatusBar />
 
-        <div style={{ ...band(20), paddingTop: 8, gap: 4 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, height: 44 }}>
-            <button type="button" onClick={p.onBack} aria-label="Zurück" style={{
-              width: 34, height: 34, borderRadius: 100, border: 0, background: T.surface,
-              display: 'grid', placeItems: 'center', cursor: 'pointer', color: T.ink,
+        {/* ── THE BAR IS THE APP'S FURNITURE; THE HEADLINE IS THIS SCREEN'S ──
+            This drew a private 34px back button and nothing else, so the
+            challenges were a room with no door to the profile or the settings
+            menu — and the back button sat at a different size and position
+            from every other W3 screen. No `title`: the bar would whisper
+            "CHALLENGES" ten pixels above the 24px headline that says it. The
+            RC already paid out is real state rather than furniture, so it
+            moves into `extra` instead of floating at the end of the h1 row. ── */}
+        <W3TopBar
+          onBack={p.onBack}
+          extra={p.earned > 0 ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 5,
+              height: 28, padding: '0 12px', borderRadius: 100, background: T.acidDim,
+              fontSize: 11.5, fontWeight: 800, color: T.acid, ...TNUM,
             }}>
-              <ArrowLeft size={17} />
-            </button>
-            <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.6, color: T.ink, margin: 0 }}>
-              Challenges
-            </h1>
-            {p.earned > 0 && (
-              <span style={{
-                marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 5,
-                height: 28, padding: '0 12px', borderRadius: 100, background: T.acidDim,
-                fontSize: 11.5, fontWeight: 800, color: T.acid, ...TNUM,
-              }}>
-                <Check size={12} /> {nf.format(p.earned)} RC
-              </span>
-            )}
-          </div>
+              <Check size={12} /> {nf.format(p.earned)} RC
+            </span>
+          ) : undefined} />
+
+        <div style={{ ...band(20), paddingTop: 4, gap: 4 }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, letterSpacing: -0.6, color: T.ink, margin: 0 }}>
+            Challenges
+          </h1>
           <span style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.5, color: T.mid }}>
             Ein Monat, ein Ziel, und alle anderen, die es sich vorgenommen haben.
             Jede Zahl hier kommt aus deinen eigenen Fahrten.

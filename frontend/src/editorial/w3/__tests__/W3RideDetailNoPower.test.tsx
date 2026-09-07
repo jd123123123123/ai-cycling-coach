@@ -40,6 +40,8 @@ vi.mock('../../../hooks/useWallet', () => ({
 vi.mock('../../../hooks/useGarage', () => ({
   useRideScene: () => ({ data: undefined }),
   useRenderRideScene: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
+  // The shared top bar shows the rider's avatar, which reads the garage.
+  useGarage: () => ({ data: undefined }),
 }))
 // MapLibre does not run under jsdom, and the hero's basemap is not what is
 // being tested — the route SVG fallback beneath it renders either way.

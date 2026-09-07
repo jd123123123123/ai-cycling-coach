@@ -1,9 +1,10 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Route as RouteIcon, CalendarCheck, Sparkles, Zap, HeartPulse, Gauge, Users, Bike } from 'lucide-react'
+import { Route as RouteIcon, CalendarCheck, Sparkles, Zap, HeartPulse, Gauge, Users, Bike } from 'lucide-react'
 import { T, FONT, EASE, grow, band, card } from './w3tokens'
 import W3PeriodTabs from './W3PeriodTabs'
 import { THEM_TINT, type W3Period } from './w3crew'
 import W3TabBar from './W3TabBar'
+import W3TopBar from './W3TopBar'
 import './w3.css'
 
 /**
@@ -202,9 +203,14 @@ export default function W3CrewMemberView({ vm, onBack, onPeriod }: {
             ? <img src={vm.avatar} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
             : <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', fontSize: 128, fontWeight: 800, letterSpacing: -6, color: T.d2, paddingBottom: 40 }}>{initial}</div>}
           <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 120, background: `linear-gradient(0deg, ${T.bg}, transparent)` }} />
-          <div style={{ position: 'relative', padding: '10px 20px 0' }}>
+          {/* THE APP'S OWN BAR, NOT THIS SCREEN'S — it drew a private ink-filled
+              back circle and carried neither the avatar nor the menu, so the
+              furniture jumped on the way in from the crew board. "Crew" is the
+              category: the rider's handle is the pill at the foot of the hero
+              and does not need saying twice. */}
+          <div style={{ position: 'relative' }}>
             <div style={{ height: 'max(12px, env(safe-area-inset-top))' }} />
-            <button onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: T.ink, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><ArrowLeft size={19} color={T.bg} /></button>
+            <W3TopBar title="Crew" onBack={onBack} />
           </div>
           {/* handle + standing, in the referral card's pill language */}
           <div style={{ position: 'absolute', left: 20, right: 20, bottom: 14, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
