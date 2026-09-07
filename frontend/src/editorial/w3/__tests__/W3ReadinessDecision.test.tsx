@@ -346,3 +346,17 @@ describe('the pure helpers', () => {
     expect(sessionMeta(null)).toBeNull()
   })
 })
+
+describe('the age is stated once, not twice', () => {
+  it('strips the note that only repeats the pill, and keeps a real second clause', async () => {
+    const { withoutAgePreamble } = await import('../W3ReadinessDecision')
+    // A three-day-old watch printed "vor 3 Tagen" as a pill AND "Gemessen vor
+    // 3 Tagen." underneath it, on every one of five rows.
+    expect(withoutAgePreamble('Gemessen vor 3 Tagen.', 'vor 3 Tagen')).toBeNull()
+    expect(withoutAgePreamble('Gemessen vor 3 Tagen. Zu alt für heute.', 'vor 3 Tagen'))
+      .toBe('Zu alt für heute.')
+    // With no pill there is nothing to deduplicate against.
+    expect(withoutAgePreamble('Gemessen vor 3 Tagen.', null)).toBe('Gemessen vor 3 Tagen.')
+    expect(withoutAgePreamble(null, 'vor 3 Tagen')).toBeNull()
+  })
+})

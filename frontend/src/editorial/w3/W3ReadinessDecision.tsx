@@ -298,6 +298,25 @@ function DeviationRail({ input }: { input: ReadinessInput }) {
   )
 }
 
+/**
+ * The server's note minus anything the age pill beside it already says.
+ *
+ * MEASURED, NOT ASSUMED: on a three-day-old watch every row printed "vor 3
+ * Tagen" as a pill AND "Gemessen vor 3 Tagen." as a note directly under it —
+ * the same fact twice, five times down the card. An equality check could not
+ * catch it because the server's sentence and ours are worded differently, and
+ * some notes carry a real second clause ("Zu alt für heute.") that must
+ * survive. So this strips the age preamble and keeps whatever is left.
+ */
+export function withoutAgePreamble(
+  note: string | null | undefined, agePill: string | null,
+): string | null {
+  if (!note) return null
+  if (!agePill) return note
+  const rest = note.replace(/^\s*Gemessen\s+vor\s+\d+\s+Tag(?:en)?\.?\s*/i, '').trim()
+  return rest.length > 0 ? rest : null
+}
+
 /** One measured signal, with its value, its own baseline and its age. */
 function InputRow({ input, isDriver }: { input: ReadinessInput; isDriver: boolean }) {
   const age = ageShort(input.age_days)
@@ -310,7 +329,7 @@ function InputRow({ input, isDriver }: { input: ReadinessInput; isDriver: boolea
       ?? (input.baseline_n > 0
         ? `Noch kein Basiswert — erst ${input.baseline_n} Messungen.`
         : 'Noch kein Basiswert.'))
-    : (input.note_de && input.note_de !== ageNote(input.age_days) ? input.note_de : null)
+    : withoutAgePreamble(input.note_de, age)
 
   return (
     <div
