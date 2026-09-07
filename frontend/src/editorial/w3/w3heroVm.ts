@@ -26,6 +26,10 @@ export interface HeroSources {
   balance: number | null | undefined
   /** The wallet's recent ledger lines — used ONLY to say what landed today. */
   ledger?: { amount: number; at: string | null }[] | null
+  /** The rider's own choice of what stands on stage. 'collection' puts the
+   *  bought catalogue bike up even when a photographed machine exists — the
+   *  15 000-RC sink must be able to change what the rider actually sees. */
+  stageBike?: 'photo' | 'collection' | null
   displayName: string | null | undefined
 }
 
@@ -43,6 +47,7 @@ export function earnedToday(ledger: { amount: number; at: string | null }[] | nu
 
 export function heroVm(s: HeroSources): W3StageVm {
   const collectible = s.collection?.render ?? itemById(s.collection?.loadout.bike)?.art ?? null
+  const wantsCollection = s.stageBike === 'collection' && collectible != null
   return {
     handle: s.displayName ? `@${s.displayName}` : '@rider',
     role: blockLine(s.meso ?? null),
@@ -52,8 +57,13 @@ export function heroVm(s: HeroSources): W3StageVm {
     // THE CONFIGURED BIKE FIRST: the machine wearing its equipped parts and
     // standing in the stage the rider chose. The plain garage render is the
     // fallback, and the claimed collectible the last resort — never a stock
-    // bike presented as theirs.
-    bike: s.stage?.bike_image ?? s.garage?.bike?.image_base64 ?? collectible,
+    // bike presented as theirs. The rider may explicitly put their BOUGHT
+    // collection bike on stage instead (goals.stage_bike = 'collection'):
+    // owned is owned, and a sink whose purchase changes nothing visible is a
+    // refund request.
+    bike: wantsCollection
+      ? collectible
+      : s.stage?.bike_image ?? s.garage?.bike?.image_base64 ?? collectible,
     // A COMPOSED render is one the Today endpoint returned that ISN'T the plain
     // garage collectible.
     //
@@ -62,8 +72,16 @@ export function heroVm(s: HeroSources): W3StageVm {
     // scale with its shadows. `bike_image != null` looks like the same test and
     // is not — every rider has a bike_image, so that version calls every
     // machine a scene and blows it up to fill the stage.
-    bikeInScene: Boolean(s.stage?.bike_image && s.stage.bike_image !== s.garage?.bike?.image_base64),
-    bikeName: s.stage?.bike_name ?? s.garage?.bike?.name ?? 'Dein Bike',
+    // Forcing the collection bike also forces the STUDIO treatment: catalogue
+    // art and build renders are cut-outs (services/cutout), so they stand on
+    // the floor line with their shadows — the size switch must describe the
+    // art actually drawn, not the art skipped.
+    bikeInScene: wantsCollection
+      ? false
+      : Boolean(s.stage?.bike_image && s.stage.bike_image !== s.garage?.bike?.image_base64),
+    bikeName: wantsCollection
+      ? itemById(s.collection?.loadout.bike)?.name ?? 'Dein Bike'
+      : s.stage?.bike_name ?? s.garage?.bike?.name ?? 'Dein Bike',
     coins: s.balance != null ? s.balance.toLocaleString('de-DE') : null,
     // What landed TODAY, beside the stock figure — the moment of attribution
     // the silent chip was missing. Real ledger lines only.

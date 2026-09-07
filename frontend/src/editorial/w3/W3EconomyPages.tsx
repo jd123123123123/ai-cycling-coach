@@ -15,7 +15,11 @@ import W3Shops from './W3Shops'
 import { useBuyGear, useEquipGear, useGear, useUnequipGear } from '../../hooks/useGear'
 import { useWorkshop } from '../../hooks/useWorkshop'
 import { useWallet } from '../../hooks/useWallet'
-import { useBackdrops } from '../../hooks/useGarage'
+import { useBackdrops, useGarage } from '../../hooks/useGarage'
+import { useGarageCollection } from '../../hooks/useShop'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { useQueryClient } from '@tanstack/react-query'
+import { updateGoals } from '../../api/athletes'
 
 /**
  * The three live screens of the bike economy, wired to real endpoints.
@@ -107,6 +111,29 @@ export function W3GarageHome() {
   const unequip = useUnequipGear()
   const buy = useBuyGear()
   const [busyId, setBusyId] = useState<string | null>(null)
+
+  // ── which machine stands on the Bühne ─────────────────────────────────
+  // The switch exists only when the rider actually has both machines: a
+  // photographed one AND a bought (non-starter) collection bike.
+  const { data: garage } = useGarage()
+  const { data: collection } = useGarageCollection()
+  const { data: profile } = useAthleteProfile()
+  const qc = useQueryClient()
+  const [stageBusy, setStageBusy] = useState(false)
+  const hasPhoto = Boolean(garage?.bike?.image_base64)
+  const boughtBike = collection?.loadout.bike && collection.loadout.bike !== 'rustbucket'
+  const stageBike = hasPhoto && boughtBike
+    ? {
+        value: (profile?.goals?.stage_bike ?? 'photo') as 'photo' | 'collection',
+        busy: stageBusy,
+        onSet: (v: 'photo' | 'collection') => {
+          setStageBusy(true)
+          void updateGoals({ stage_bike: v })
+            .then(() => qc.invalidateQueries({ queryKey: ['athlete', 'me'] }))
+            .finally(() => setStageBusy(false))
+        },
+      }
+    : null
   const run = (m: { mutate: (id: string, o: object) => void }) => (id: string) => {
     setBusyId(id)
     m.mutate(id, { onSettled: () => setBusyId(null) })
@@ -133,6 +160,7 @@ export function W3GarageHome() {
       onOpenShop={() => navigate('/e/w3-gear')}
       onOpenBikes={() => navigate('/e/w3-shop')}
       stage={stage}
+      stageBike={stageBike}
       onOpenStages={() => navigate('/e/w3-gear#kulissen')} />
   )
 

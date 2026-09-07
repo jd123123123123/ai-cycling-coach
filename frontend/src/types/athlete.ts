@@ -57,6 +57,9 @@ export interface TrainingGoals {
   // The rider's own season distance target in km. The Fahrten dock only fills
   // its season meter against THIS — never a placeholder. 0 clears it.
   season_km_goal?: number
+  // What stands on the hero stage: the photographed machine or the bought
+  // collection bike. Absent → photo (when one exists).
+  stage_bike?: 'photo' | 'collection'
 }
 
 export interface AthleteProfileUpdate {

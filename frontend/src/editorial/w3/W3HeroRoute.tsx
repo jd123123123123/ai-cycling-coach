@@ -9,6 +9,7 @@ import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { heroVm } from './w3heroVm'
 import { useWarmRoom } from './useWarmRoom'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { grimeFrom } from './w3BikeSoul'
 
 /**
@@ -38,6 +39,7 @@ export default function W3HeroRoute() {
   const { data: collection } = useGarageCollection()
   const { data: week } = useCurrentWeek()
   const { user } = useAuth()
+  const { data: profile } = useAthleteProfile()
   // The stage rail belongs to whoever owns the stage, and that is now this
   // layout. Left on the Today page it would be a control over an element the
   // page no longer renders — dead in the room, and dead in the garage.
@@ -69,6 +71,7 @@ export default function W3HeroRoute() {
           streak: streak?.streak ?? null,
           balance: wallet?.balance ?? null,
           ledger: wallet?.ledger ?? null,
+          stageBike: profile?.goals?.stage_bike ?? null,
           displayName: user?.display_name ?? null,
         }),
         onSelectStage: selectStage.mutate,

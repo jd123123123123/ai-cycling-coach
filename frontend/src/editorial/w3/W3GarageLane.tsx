@@ -136,6 +136,14 @@ export interface W3GarageLaneProps {
    *  naming a stage the rider has not chosen. */
   stage: { id: string; name: string } | null
   onOpenStages: () => void
+  /** Which machine stands on the hero stage. Null → the choice does not exist
+   *  (no photographed bike, or no bought collection bike): a switch with one
+   *  position is furniture. */
+  stageBike?: {
+    value: 'photo' | 'collection'
+    busy: boolean
+    onSet: (v: 'photo' | 'collection') => void
+  } | null
 }
 
 export default function W3GarageLane(p: W3GarageLaneProps) {
@@ -210,6 +218,36 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
         <div style={{ paddingBottom: 10 }}><Kicker>Weiter</Kicker></div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {p.stage && <StageRow id={p.stage.id} name={p.stage.name} onOpen={p.onOpenStages} />}
+          {/* WHAT STANDS ON THE BÜHNE. Without this, buying the 15 000-RC
+              catalogue bike changed nothing a photographed-bike rider could
+              ever see — the economy's largest sink was cosmetically inert. */}
+          {p.stageBike && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 13,
+              padding: '13px 16px', borderRadius: 22, background: T.surface, fontFamily: FONT,
+            }}>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>Auf der Bühne</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Welches Rad im Raum steht</span>
+              </span>
+              <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 100, background: T.surface2, opacity: p.stageBike.busy ? 0.6 : 1 }}>
+                {([['photo', 'Dein Foto'], ['collection', 'Sammlung']] as const).map(([v, l]) => {
+                  const on = p.stageBike!.value === v
+                  return (
+                    <button key={v} type="button" disabled={p.stageBike!.busy}
+                      onClick={() => !on && p.stageBike!.onSet(v)}
+                      style={{
+                        height: 28, padding: '0 12px', borderRadius: 100, border: 0,
+                        cursor: on ? 'default' : 'pointer', fontFamily: FONT,
+                        fontSize: 11, fontWeight: 700,
+                        background: on ? T.acid : 'transparent',
+                        color: on ? T.bg : T.quiet,
+                      }}>{l}</button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
           {/* RÄDER FIRST, and it is the row that was missing entirely. The
               bike is the headline collectible and the ladder is where RideCoin
               actually goes — 26 priced bikes that no screen could reach until

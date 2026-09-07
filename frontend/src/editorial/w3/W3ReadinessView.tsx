@@ -247,6 +247,32 @@ export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & 
           </div>
         )}
 
+        {/* ── The science behind the verdict ──────────────────────────────
+            Citations raise trust and every engine competitor hides them (the
+            cross-competitor gap the July-2026 analysis ranks first). These are
+            the load-bearing rules from the coach's own knowledge base
+            (services/coach_knowledge.py) — static, evidence-backed, and the
+            exact frameworks the verdict above applied. Quiet on purpose:
+            a footnote, not a lecture. */}
+        <div style={{ ...band(28) }}>
+          <div style={{ ...bubble(), gap: 10 }}>
+            <Kicker>Die Wissenschaft dahinter</Kicker>
+            {[
+              ['HRV-Trend vor Absolutwert', '7-Tage-Basislinie; 2+ Tage deutlich darunter senkt die Bereitschaft (Plews & Buchheit 2013)'],
+              ['Ruhepuls +5 bpm', 'gegen die 14-Tage-Basislinie gilt als Vorermüdungs- oder Kranksignal (gepaart mit HRV)'],
+              ['Schlaf unter 7 h', 'oder 2 h+ Schlafschuld über 3 Nächte kostet 3–5 % Leistung (Fullagar 2015)'],
+              ['Form (TSB)', '+5 bis −10 produktiv · unter −30 hohes Overreaching-Risiko (Banister-Modell)'],
+            ].map(([t, d]) => (
+              <div key={t} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ width: 5, height: 5, borderRadius: 100, flex: 'none', background: T.acid, marginTop: 6 }} />
+                <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.quiet }}>
+                  <span style={{ color: T.mid }}>{t}</span> — {d}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* Trend */}
         {vm.trend.length > 1 && (
           <div style={{ ...band(40) }}>

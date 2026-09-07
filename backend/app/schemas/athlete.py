@@ -90,6 +90,11 @@ class TrainingGoals(BaseModel):
     # (a hardcoded 12 000 km once told new riders they were "hinter Plan").
     # 0 clears it.
     season_km_goal: int | None = Field(default=None, ge=0, le=100_000)
+    # What stands on the hero stage: the photographed machine or the bought
+    # collection bike. Without this the 15 000-RC catalogue bike changed
+    # nothing a photographed-bike rider could ever see — the economy's largest
+    # sink was cosmetically inert.
+    stage_bike: Literal['photo', 'collection'] | None = None
 
 
 class AthleteProfileCreate(BaseModel):
