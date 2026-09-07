@@ -1,11 +1,12 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Asterisk, ChevronsUp, Flame, Star, UserRound } from 'lucide-react'
+import { Asterisk, ChevronsUp, Star, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
 import W3NavMenu from './W3NavMenu'
 import { W3CoachFab } from './W3CoachChat'
 import W3SyncChip from './W3SyncChip'
+import W3StreakChip from './W3StreakChip'
 
 /**
  * W3 · Today — THE STAGE. A 1:1 rebuild of pen frames `YIU3g` / `qv4Aw`
@@ -317,8 +318,9 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
       }}>
         <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />
-        {/* Attribution at the moment it matters: a ride was banked TODAY and
-            the number that grew says by how much. */}
+        {/* THE FLAME IS A DOOR NOW: tap → the forgiving-streak sheet
+            (sick/injured/break pause instead of breaking — services/streak.py
+            had this all along; the switch was stranded on the legacy app). */}
         {vm.coinsDelta && (
           <span style={{
             fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: T.acid,
@@ -326,9 +328,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
             fontVariantNumeric: 'tabular-nums',
           }}>{vm.coinsDelta}</span>
         )}
-        <Chip
-          icon={<Flame size={20} color={T.acid} />}
-          value={vm.streak != null ? String(vm.streak) : DASH} />
+        <W3StreakChip />
       </div>
 
       {/* ── the rider: a bust in a lit circle, the name fused to its lower edge ── */}

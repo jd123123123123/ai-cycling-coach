@@ -52,7 +52,7 @@ import './w3.css'
 
 // ── view model ──
 export interface PlanStat { value: string; label: string }
-export interface PlanDayCell { letter: string; date: string; frac: number; isToday: boolean; isRest: boolean }
+export interface PlanDayCell { letter: string; date: string; frac: number; isToday: boolean; isRest: boolean; ridden?: boolean }
 export interface PlanSessionBar { w: number; work: boolean }
 export interface ActiveBlockVm {
   phase: string
@@ -161,6 +161,9 @@ export interface W3PlanActions {
   onLoad?: () => void
   onStartRide?: () => void
   onAdapt?: OnAdapt
+  /** Reverts the last adapt (60-min server window). Reversibility is what
+   *  makes the adapt row safe to explore. */
+  onUndoAdapt?: () => Promise<boolean>
   onRebuild?: (p: RebuildPayload) => Promise<boolean>
   onSwitchGoal?: (id: string, p: GoalSwitchPayload) => Promise<boolean>
 }
@@ -493,13 +496,14 @@ function SheetShell({ children, onClose }: { children: ReactNode; onClose: () =>
 // ── main view ──
 export default function W3PlanView({
   vm, chromeless = false,
-  onBack, onGoal, onLoad, onStartRide, onAdapt, onRebuild, onSwitchGoal,
+  onBack, onGoal, onLoad, onStartRide, onAdapt, onUndoAdapt, onRebuild, onSwitchGoal,
 }: { vm: W3PlanVm; chromeless?: boolean } & W3PlanActions) {
   const reduce = useReducedMotion()
   const [sheet, setSheet] = useState<null | 'adjust' | 'goal'>(null)
   const [swapOpen, setSwapOpen] = useState(false)
   const [adaptMsg, setAdaptMsg] = useState<string | null>(null)
   const [adaptBusy, setAdaptBusy] = useState<AdaptKind | null>(null)
+  const [canUndo, setCanUndo] = useState(false)
 
   const doAdapt = async (kind: AdaptKind) => {
     if (!onAdapt || adaptBusy) return
@@ -512,6 +516,7 @@ export default function W3PlanView({
     try {
       const res = await onAdapt(kind)
       setAdaptMsg(res ? (res.railsDowngraded ? `${res.note} · Sicherheitsgrenze aktiv` : res.note) : 'Keine Einheit zum Anpassen.')
+      setCanUndo(res != null)
     } catch {
       setAdaptMsg('Konnte nicht gespeichert werden. Nochmal versuchen.')
     } finally {
@@ -710,6 +715,13 @@ export default function W3PlanView({
                   }}>
                     <div style={{ width: '100%', height: h, borderRadius: 5, background: d.isRest ? T.d2 : d.isToday ? T.acid : T.d3 }} />
                   </div>
+                  {/* COMPLETION IS A FACT, drawn only when a ride exists on
+                      that date — watching the week fill is the cheapest daily
+                      loop a plan can offer, and the strip never showed it. */}
+                  <span aria-hidden style={{
+                    fontSize: 9, fontWeight: 700, lineHeight: 1, height: 9,
+                    color: d.ridden ? T.acid : 'transparent',
+                  }}>✓</span>
                 </button>
               )
             })}
@@ -789,7 +801,26 @@ export default function W3PlanView({
                   <AdaptBtn label="Ruhetag" sub="frei" icon={<ChevronDown size={13} color={T.mid} />} busy={adaptBusy === 'rest'} onClick={() => doAdapt('rest')} />
                 </div>
               )}
-              {adaptMsg && <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>{adaptMsg}</span>}
+              {adaptMsg && (
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, minWidth: 0 }}>{adaptMsg}</span>
+                  {/* One-way was the old behaviour: `undoTodayModify` existed
+                      with no W3 caller, so every adapt was final. 60-min
+                      server window; the button disappears once used. */}
+                  {canUndo && onUndoAdapt && (
+                    <button type="button"
+                      onClick={async () => {
+                        const ok = await onUndoAdapt()
+                        if (ok) { setAdaptMsg('Rückgängig gemacht — die Einheit steht wieder wie geplant.'); setCanUndo(false) }
+                        else setAdaptMsg('Rückgängig nicht mehr möglich.')
+                      }}
+                      style={{ flex: 'none', background: 'none', border: 0, padding: 0, cursor: 'pointer',
+                        fontFamily: FONT, fontSize: 11, fontWeight: 700, color: T.acid }}>
+                      Rückgängig
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
             )}
 

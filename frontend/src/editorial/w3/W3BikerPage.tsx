@@ -90,9 +90,14 @@ export default function W3BikerPage() {
     const ready = life.loaded && wallet != null
 
     // ── the two lifetime figures over the portrait ──
+    // The server's all-time truth first (`/achievements/mine` is already on
+    // this page): the 6-year client reducer and the Wins dock used two
+    // different arithmetics over two different windows and disagreed for any
+    // rider with a longer history.
+    const at = achievements?.all_time
     const pills = [
-      { v: has ? nf.format(Math.round(life.distKm)) : DASH, l: 'KM' },
-      { v: has ? nf.format(life.rides) : DASH, l: 'FAHRTEN' },
+      { v: at?.km != null ? nf.format(Math.round(at.km)) : has ? nf.format(Math.round(life.distKm)) : DASH, l: 'KM' },
+      { v: at?.rides != null ? nf.format(at.rides) : has ? nf.format(life.rides) : DASH, l: 'FAHRTEN' },
     ]
 
     // ── ring 1: where this rider is, in levels earned from real rides ──

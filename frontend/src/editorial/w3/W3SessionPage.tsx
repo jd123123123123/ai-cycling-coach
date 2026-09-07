@@ -9,6 +9,7 @@ import { useGarage } from '../../hooks/useGarage'
 import { downloadWorkoutExport } from '../../api/coach'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
+import { forecastRideRc } from '../../api/rewards'
 import W3SessionView, { type W3SessionVm, type W3Step, type W3ShapeBar, type W3EarnTile, type W3EarnLedger } from './W3SessionView'
 
 /**
@@ -26,9 +27,9 @@ import W3SessionView, { type W3SessionVm, type W3Step, type W3ShapeBar, type W3E
  * extends plus the season ledgers it pays into (season TSS, season saddle
  * time): banked + this session = the season on completion, with this session's
  * exact share of that sum and its size against the season's average ride. All
- * of it is arithmetic over totals already fetched here — no rate is assumed, so
- * nothing is projected. The one `fixture:` is the RideCoin conversion line,
- * since the reward economy isn't wired into this screen.
+ * of it is arithmetic over totals already fetched here — no rate is assumed.
+ * The RideCoin line is the same real forecast Today and the plan show:
+ * `forecastRideRc` over the prescribed TSS and the live streak multiplier.
  *
  * Buttons: back, share (Web Share / clipboard), export the workout (.fit,
  * `downloadWorkoutExport` — the real export path), and back-to-today.
@@ -180,12 +181,15 @@ export default function W3SessionPage() {
         s: effDurMin ? `+${fmtMin(effDurMin)} diese Fahrt` : 'Zeit auf dem Rad dieses Jahr',
       })
     }
-    // fixture: RideCoin conversion — the reward economy (wallet/ledger) is not
-    // wired into this screen, so no coin figure is shown; the note names the
-    // real rule (RideCoin is awarded by a completed session's TSS on ingest).
-    const earnNote = effTss != null
-      ? 'Fährst du sie zu Ende, gibt es zusätzlich RideCoin — skaliert nach TSS.'
-      : ''
+    // The REAL forecast from the one ported earn ladder (api/rewards ←
+    // rewards.py): base = 1 RC/TSS capped 150, × the rider's live streak
+    // multiplier. Labelled "ca." because the session is unridden.
+    const earnNote = (() => {
+      const rc = forecastRideRc(effTss ?? null, streak?.streak ?? null)
+      return rc != null
+        ? `Fährst du sie zu Ende, bringt sie ca. ${rc.toLocaleString('de-DE')} RideCoin.`
+        : ''
+    })()
 
     const prescriptionClaim = isPresent(model.claim)
       ? model.claim.value

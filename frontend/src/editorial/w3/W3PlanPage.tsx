@@ -7,7 +7,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { buildPlan, applyPlanChange, type InterviewAnswers } from '../../api/plan'
 import { listRehearsals } from '../../api/rehearsal'
-import { modifyTodayWorkout, type TodayModificationType } from '../../api/todayModify'
+import { modifyTodayWorkout, undoTodayModify, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan } from '../../api/weeks'
 import {
   parseISO, addDays, daysBetween, fmtRange, fmtDE, fmtDEShort, weeksDaysLabel, fmtHoursHM,
@@ -201,7 +201,11 @@ export default function W3PlanPage() {
     const weekHm = thisWeekActs.reduce((s, a) => s + (a.elevation_gain_m ?? 0), 0)
     const weekTss = week?.planned_tss_total ?? null
 
-    const dayStrip = buildDayStrip(days, today)
+    const dayStrip = buildDayStrip(days, today).map((c, i) => ({
+      ...c,
+      // A ✓ is a claim about a ride — same rule as "GEFAHREN" above.
+      ridden: acts.some((a) => a.started_at.slice(0, 10) === days[i]?.date),
+    }))
 
     // ── every day's session, not just today's ──
     // The strip used to be a read-only chart beside a card that could only ever
@@ -365,6 +369,21 @@ export default function W3PlanPage() {
     }
   }, [qc])
 
+  // The revert half of the adapt row — same invalidations, same source of
+  // truth. `undoTodayModify` sat in the API layer with no W3 caller, which
+  // made every adapt one-way.
+  const onUndoAdapt = useCallback(async (): Promise<boolean> => {
+    try {
+      const res = await undoTodayModify()
+      const ok = !!res.success
+      if (ok) {
+        void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
+        void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
+      }
+      return ok
+    } catch { return false }
+  }, [qc])
+
   // ── real rebuild (Plan anpassen → /plan/change/apply) ──
   const onRebuild = useCallback(async (p: RebuildPayload): Promise<boolean> => {
     const [mon, tue, wed, thu, fri, sat, sun] = p.days
@@ -485,6 +504,7 @@ export default function W3PlanPage() {
       onAdapt={onAdapt}
       onRebuild={onRebuild}
       onSwitchGoal={onSwitchGoal}
+      onUndoAdapt={onUndoAdapt}
     />
     </>
   )
