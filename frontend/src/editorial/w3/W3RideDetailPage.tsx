@@ -6,7 +6,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useActivity } from '../../hooks/useActivity'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
-import { useChest, useClaimRide } from '../../hooks/useWallet'
+import { useChest, useClaimRide, useRideEarning } from '../../hooks/useWallet'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
@@ -702,6 +702,10 @@ export default function W3RideDetailPage() {
   // button would offer another day's coins.
   const { data: chest } = useChest()
   const claim = useClaimRide()
+  // The itemised receipt: what THIS ride paid, line by line. Fetched only on
+  // the celebration (the sealed chest deliberately never prints its contents;
+  // the receipt after the swipe is where the working belongs).
+  const { data: earning } = useRideEarning(celebrate ? activityId : null)
   // The amount is pinned the moment the rider presses, because claiming
   // invalidates the chest — without this the receipt would read "null RC" the
   // instant it succeeded.
@@ -748,9 +752,28 @@ export default function W3RideDetailPage() {
     [vm, celebrate, scene.status, scene.image, scene.pending, routePending],
   )
 
+  // The itemised receipt, German, from the real ledger lines. Only the
+  // interesting ones — base is what the button already said; the bonuses are
+  // the working worth reading (a paid, unannounced Eddington is wasted twice).
+  const earnLines = useMemo(() => {
+    const label: Record<string, string> = {
+      streak_bonus: 'Streak-Bonus',
+      gear_bonus: 'Ausrüstungs-Bonus',
+      eddington: 'Eddington-Meilenstein',
+      challenge_bonus: 'Challenge-Bonus',
+    }
+    return (earning?.lines ?? [])
+      .filter((l) => l.amount > 0 && label[l.reason])
+      .map((l) => `+${l.amount.toLocaleString('de-DE')} ${label[l.reason]}`)
+  }, [earning])
+
   const wrapVm = useMemo(
-    () => (celebrate && data ? toWrapVm(data, activity, rewardRc, claimState) : null),
-    [celebrate, data, activity, rewardRc, claimState],
+    () => {
+      if (!celebrate || !data) return null
+      const vm = toWrapVm(data, activity, rewardRc, claimState)
+      return { ...vm, earnLines }
+    },
+    [celebrate, data, activity, rewardRc, claimState, earnLines],
   )
 
   // ── LOADING AND UNAVAILABLE ARE NOT THE SAME STATE ──────────────────────

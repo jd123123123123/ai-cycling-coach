@@ -104,6 +104,10 @@ export interface W3RideWrapVm {
    * because the code was split that way.
    */
   claimState: 'idle' | 'claiming' | 'claimed'
+  /** The receipt's working, one line per bonus ("+120 Streak-Bonus",
+   *  "+90 Eddington-Meilenstein"). Shown only once claimed — the sealed chest
+   *  never prints its contents. */
+  earnLines?: string[]
 }
 
 function StatTile({ s, i, reduce }: { s: W3WrapStat; i: number; reduce: boolean | null }) {
@@ -365,6 +369,20 @@ export default function W3RideWrap({ vm, onShare, onClose, onUnlock, onDetails }
             </button>
           )}
         </div>
+
+        {/* The receipt's working: the bonuses that made the total, from the
+            real ledger. Only once claimed — the chest never prints its lid. */}
+        {vm.claimState === 'claimed' && (vm.earnLines?.length ?? 0) > 0 && (
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            {vm.earnLines!.map((l) => (
+              <span key={l} style={{
+                fontSize: 10.5, fontWeight: 700, letterSpacing: 0.4, color: T.acid,
+                padding: '3px 9px', borderRadius: 100, background: `${T.ink}66`,
+                backdropFilter: 'blur(8px)', fontVariantNumeric: 'tabular-nums',
+              }}>{l}</span>
+            ))}
+          </div>
+        )}
 
         {onDetails && (
           <button type="button" onClick={onDetails}

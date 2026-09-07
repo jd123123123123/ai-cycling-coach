@@ -36,6 +36,7 @@ vi.mock('../../../hooks/useActivitiesRange', () => ({ useActivitiesRange: () => 
 vi.mock('../../../hooks/useWallet', () => ({
   useChest: () => ({ data: undefined }),
   useClaimRide: () => ({ mutate: vi.fn(), isPending: false, isSuccess: false }),
+  useRideEarning: () => ({ data: undefined }),
 }))
 vi.mock('../../../hooks/useGarage', () => ({
   useRideScene: () => ({ data: undefined }),
