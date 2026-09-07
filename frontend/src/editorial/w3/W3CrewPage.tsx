@@ -371,7 +371,9 @@ export default function W3CrewPage() {
         onEditGoal={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
         board={board}
         onBoard={() => setBoard(true)}
-        onBack={board ? () => setBoard(false) : () => navigate('/e/w3-wins')}
+        // BIKER owns crew in the tab bar — backing out of the crew must land
+        // where the lit tab says you are, not on Erfolge.
+        onBack={board ? () => setBoard(false) : () => navigate('/e/w3-biker')}
         head={
           query != null ? (
             <W3FeedSearch value={query} onChange={setQuery} onClose={() => setQuery(null)} />

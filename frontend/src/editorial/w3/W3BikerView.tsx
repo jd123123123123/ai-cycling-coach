@@ -1,5 +1,5 @@
 import type { ComponentType } from 'react'
-import { Watch, Activity as ActivityIcon, Zap, HeartPulse, ChevronRight, Ticket } from 'lucide-react'
+import { Watch, Activity as ActivityIcon, Zap, HeartPulse, ChevronRight, Ticket, Users } from 'lucide-react'
 import W3RiderHighlights, { type W3RiderHighlightsProps } from './W3RiderHighlights'
 import { W3SeasonGrid, W3FormCurve, W3ActiveBike, type W3SeasonStat } from './W3ProfileBlocks'
 import W3StatusBar from './W3StatusBar'
@@ -74,11 +74,12 @@ function TailRow({ children, first }: { children: React.ReactNode; first: boolea
 }
 
 export default function W3BikerView({
-  vm, onReferral, onBadges, onRecord, onCreateRider,
+  vm, onReferral, onBadges, onRecord, onCreateRider, onCrew,
   season = [], curve = null, bike = null, onGarage,
 }: {
   vm: W3BikerVm
   onReferral?: () => void
+  onCrew?: () => void
   onBadges?: () => void
   onRecord?: (key: string) => void
   onCreateRider?: () => void
@@ -149,9 +150,26 @@ export default function W3BikerView({
               </TailRow>
             )}
 
+            {/* BIKER is the tab that owns crew in the bar — without this row
+                the crew was reachable only through the nav sheet. */}
+            {onCrew && (
+              <button onClick={onCrew} style={{ width: '100%', background: 'transparent', border: 0, padding: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
+                <TailRow first={!vm.coin}>
+                  <div style={{ flex: 'none', width: 32, height: 32, borderRadius: 100, background: T.surface2, display: 'grid', placeItems: 'center' }}>
+                    <Users size={15} color={T.evening} />
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Deine Crew</span>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>Feed, Wochenwertung, Mitglieder</span>
+                  </div>
+                  <ChevronRight size={16} color={T.quiet} />
+                </TailRow>
+              </button>
+            )}
+
             {vm.referral && (
               <button onClick={onReferral} style={{ width: '100%', background: 'transparent', border: 0, padding: 0, cursor: 'pointer', fontFamily: FONT, textAlign: 'left' }}>
-                <TailRow first={!vm.coin}>
+                <TailRow first={!vm.coin && !onCrew}>
                   <div style={{ flex: 'none', width: 32, height: 32, borderRadius: 100, background: T.acidDim, display: 'grid', placeItems: 'center' }}>
                     <Ticket size={15} color={T.acid} />
                   </div>
@@ -167,7 +185,7 @@ export default function W3BikerView({
             {vm.devices.map((d, i) => {
               const Ic = DEV_ICONS[d.icon]
               return (
-                <TailRow key={d.name} first={!vm.coin && !vm.referral && i === 0}>
+                <TailRow key={d.name} first={!vm.coin && !onCrew && !vm.referral && i === 0}>
                   <div style={{ flex: 'none', width: 32, height: 32, borderRadius: 100, background: d.on ? T.acidDim : T.surface2, display: 'grid', placeItems: 'center' }}>
                     <Ic size={15} color={d.on ? T.acid : T.quiet} />
                   </div>

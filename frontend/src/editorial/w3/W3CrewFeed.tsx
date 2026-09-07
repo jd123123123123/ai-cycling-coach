@@ -580,10 +580,11 @@ export default function W3CrewFeed() {
     initial: (r.handle || '?').trim().charAt(0).toUpperCase() || '?',
     mine: r.is_mine,
     card: <W3CrewFeedView rides={[r]} avatars={avatars} variant="page" />,
-    // THE WAY OUT TO THE WHOLE RIDE. A story is a glance; the recap is the
-    // page. Without this the viewer was a dead end, which is the one thing a
-    // story viewer must not be.
-    onOpenRide: () => navigate(`/activities/${r.id}/recap`),
+    // THE WAY OUT TO THE WHOLE RIDE. A story is a glance; the ride page is the
+    // page. The rider's own ride opens the W3 ride detail (the legacy recap was
+    // a cross-design-system leak from a W3 screen); a crewmate's ride keeps the
+    // crew-ride view, which is built for someone else's data.
+    onOpenRide: () => navigate(r.is_mine ? `/e/w3-ride/${r.id}` : `/crew-ride/${r.id}`),
   }))
 
   return (

@@ -243,6 +243,7 @@ export default function W3BikerPage() {
       curve={curve}
       bike={bike}
       onGarage={() => navigate('/e/w3-garage')}
+      onCrew={() => navigate('/e/w3-crew')}
       onReferral={() => navigate('/e/w3-referrals')}
       onBadges={() => navigate('/e/w3-wins')}
       onRecord={() => navigate('/e/w3-wins')}

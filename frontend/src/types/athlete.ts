@@ -54,6 +54,9 @@ export interface TrainingGoals {
   days_per_week?: number
   // How hard the coach should push. Modulates the adaptive engine's upside only.
   push_intensity?: 'steady' | 'balanced' | 'aggressive' | 'all_in'
+  // The rider's own season distance target in km. The Fahrten dock only fills
+  // its season meter against THIS — never a placeholder. 0 clears it.
+  season_km_goal?: number
 }
 
 export interface AthleteProfileUpdate {

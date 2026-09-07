@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, type ReactElement } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { LocaleProvider } from './contexts/LocaleContext'
@@ -150,6 +150,13 @@ const EditorialTabPlate = lazyWithRetry(() => import('./editorial/pages/TabPlate
 const EditorialArchiveDeck = lazyWithRetry(() => import('./editorial/archive/ArchiveDeckPage'))
 const EditorialMorningWrap = lazyWithRetry(() => import('./editorial/pages/MorningWrapPage'))
 const EditorialHistory = lazyWithRetry(() => import('./editorial/history/HistoryPage'))
+
+/** Preview routes are the design flow: unauthenticated screens rendering pen
+ *  fixtures (@jonathan.ghost, the Harz plan, …). They must never ship to a
+ *  real rider — in production every `-preview` path lands on the live app. */
+function preview(el: ReactElement): ReactElement {
+  return import.meta.env.DEV ? el : <Navigate to="/e/w3-today" replace />
+}
 
 function App() {
   return (
@@ -450,11 +457,11 @@ function AppRoutes() {
           {/* EDITORIAL II — a second design system, mounted alongside the first. */}
           <Route path="/e/today" element={<ProtectedRoute checkOnboarding><EditorialTodayPage /></ProtectedRoute>} />
 
-          <Route path="/e/w3-today-preview" element={<W3TodayPreview />} />
+          <Route path="/e/w3-today-preview" element={preview(<W3TodayPreview />)} />
           <Route path="/e/w3-session" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
           <Route path="/e/w3-session/:id" element={<ProtectedRoute checkOnboarding><W3SessionPage /></ProtectedRoute>} />
-          <Route path="/e/w3-session-preview" element={<W3SessionPreview />} />
-          <Route path="/e/w3-rides-preview" element={<W3RidesPreview />} />
+          <Route path="/e/w3-session-preview" element={preview(<W3SessionPreview />)} />
+          <Route path="/e/w3-rides-preview" element={preview(<W3RidesPreview />)} />
           {/* The GARAGE tab: the bike you ride + the shop you buy it from. The
               bike-studio photo upload stays reachable by URL but is no longer a
               tab — see W3GarageView's header for why the ladder replaced it. */}
@@ -482,10 +489,10 @@ function AppRoutes() {
           <Route path="/e/w3-workshop" element={<ProtectedRoute checkOnboarding><W3Guard><W3WorkshopScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-shops" element={<ProtectedRoute checkOnboarding><W3Guard><W3ShopsScreen /></W3Guard></ProtectedRoute>} />
           <Route path="/e/w3-garage-old" element={<ProtectedRoute checkOnboarding><W3Guard><W3GaragePage /></W3Guard></ProtectedRoute>} />
-          <Route path="/e/w3-garage-preview" element={<W3GaragePreview />} />
-          <Route path="/e/w3-workshop-preview" element={<W3WorkshopPreview />} />
-          <Route path="/e/w3-gear-preview" element={<W3GearPreview />} />
-          <Route path="/e/w3-garage-stage-preview" element={<W3GarageStagePreview />} />
+          <Route path="/e/w3-garage-preview" element={preview(<W3GaragePreview />)} />
+          <Route path="/e/w3-workshop-preview" element={preview(<W3WorkshopPreview />)} />
+          <Route path="/e/w3-gear-preview" element={preview(<W3GearPreview />)} />
+          <Route path="/e/w3-garage-stage-preview" element={preview(<W3GarageStagePreview />)} />
           {/* The old catalogue shop is retired — its collectible bikes are
               read from `useGarageCollection` by the hero and the garage, but
               nobody buys one any more. Kept as a redirect rather than a 404 so
@@ -498,101 +505,101 @@ function AppRoutes() {
           {/* The places are a section of the shop now — see `W3GearScreen`. */}
           <Route path="/e/w3-places" element={<Navigate to="/e/w3-gear" replace />} />
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
-          <Route path="/e/w3-bike-studio-preview" element={<W3BikeStudioPreview />} />
+          <Route path="/e/w3-bike-studio-preview" element={preview(<W3BikeStudioPreview />)} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
-          <Route path="/e/w3-ride-preview" element={<W3RideDetailPreview />} />
+          <Route path="/e/w3-ride-preview" element={preview(<W3RideDetailPreview />)} />
           {/* The route, full screen and pannable. Separate from the summary
               because the summary's map is deliberately inert — see
               `W3RideMapPage` on why an embedded map must not eat a scroll. */}
           <Route path="/e/w3-ride-map/:id" element={<ProtectedRoute checkOnboarding><W3RideMapPage /></ProtectedRoute>} />
-          <Route path="/e/w3-ride-map-preview" element={<W3RideMapPreview />} />
-          <Route path="/e/w3-nitro-preview" element={<W3NitroPreview />} />
-          <Route path="/e/w3-match-preview" element={<W3MatchPreview />} />
-          <Route path="/e/w3-rank-preview" element={<W3RankPreview />} />
-          <Route path="/e/w3-garage-hero-preview" element={<W3GarageHeroPreview />} />
-          <Route path="/e/w3-room-preview/*" element={<W3RoomPreview />} />
+          <Route path="/e/w3-ride-map-preview" element={preview(<W3RideMapPreview />)} />
+          <Route path="/e/w3-nitro-preview" element={preview(<W3NitroPreview />)} />
+          <Route path="/e/w3-match-preview" element={preview(<W3MatchPreview />)} />
+          <Route path="/e/w3-rank-preview" element={preview(<W3RankPreview />)} />
+          <Route path="/e/w3-garage-hero-preview" element={preview(<W3GarageHeroPreview />)} />
+          <Route path="/e/w3-room-preview/*" element={preview(<W3RoomPreview />)} />
           {/* The launch mark on its own, so the one animation every cold start
               shows can be looked at without racing a Suspense boundary. */}
-          <Route path="/e/w3-loading-preview" element={<AppLoading label="Einen Moment…" />} />
+          <Route path="/e/w3-loading-preview" element={preview(<AppLoading label="Einen Moment…" />)} />
           {/* No `checkOnboarding`: this IS an onboarding step. The gate is satisfied
               by the NUMBERS screen, which comes after this one — guarding it would
               bounce every mid-onboarding rider back to the welcome screen the
               moment they connected a device. */}
           <Route path="/e/w3-connected" element={<ProtectedRoute><W3ConnectCelebratePage /></ProtectedRoute>} />
-          <Route path="/e/w3-connected-preview" element={<W3ConnectCelebratePreview />} />
+          <Route path="/e/w3-connected-preview" element={preview(<W3ConnectCelebratePreview />)} />
           <Route path="/e/w3-avatar-onboard" element={<ProtectedRoute checkOnboarding><W3AvatarOnboardPage /></ProtectedRoute>} />
-          <Route path="/e/w3-avatar-onboard-preview" element={<W3AvatarOnboardPreview />} />
+          <Route path="/e/w3-avatar-onboard-preview" element={preview(<W3AvatarOnboardPreview />)} />
           <Route path="/e/w3-biker" element={<ProtectedRoute checkOnboarding><W3Guard><W3BikerPage /></W3Guard></ProtectedRoute>} />
-          <Route path="/e/w3-biker-preview" element={<W3BikerPreview />} />
+          <Route path="/e/w3-biker-preview" element={preview(<W3BikerPreview />)} />
           <Route path="/e/w3-first-bike" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />
           {/* ONE RIDE, ONE SCROLL. The celebration is the ride page with its wrap
               on top — the same fetch, the same view model, and "scroll down for
               everything" is literally true rather than a second navigation. */}
           <Route path="/e/w3-ride-celebrate/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
           <Route path="/e/w3-ride-points/:id" element={<ProtectedRoute checkOnboarding><W3RideCelebratePage /></ProtectedRoute>} />
-          <Route path="/e/w3-ride-celebrate-preview" element={<W3RideCelebratePreview />} />
-          <Route path="/e/w3-ride-wrap-preview" element={<W3RideWrapPreview />} />
-          <Route path="/e/w3-story-preview" element={<W3StoryPreview />} />
-          <Route path="/e/w3-morning-preview" element={<W3MorningPreview />} />
+          <Route path="/e/w3-ride-celebrate-preview" element={preview(<W3RideCelebratePreview />)} />
+          <Route path="/e/w3-ride-wrap-preview" element={preview(<W3RideWrapPreview />)} />
+          <Route path="/e/w3-story-preview" element={preview(<W3StoryPreview />)} />
+          <Route path="/e/w3-morning-preview" element={preview(<W3MorningPreview />)} />
           <Route path="/e/w3-wrapped" element={<ProtectedRoute checkOnboarding><W3WrappedPage /></ProtectedRoute>} />
-          <Route path="/e/w3-wrapped-preview" element={<W3WrappedPreview />} />
+          <Route path="/e/w3-wrapped-preview" element={preview(<W3WrappedPreview />)} />
           <Route path="/e/w3-week-review" element={<ProtectedRoute checkOnboarding><W3WeekReviewPage /></ProtectedRoute>} />
-          <Route path="/e/w3-week-review-preview" element={<W3WeekReviewPreview />} />
+          <Route path="/e/w3-week-review-preview" element={preview(<W3WeekReviewPreview />)} />
           {/* W3 first-open onboarding chain: welcome → devices → rewards → garage → today */}
           <Route path="/e/w3-onboard-welcome" element={<ProtectedRoute><W3OnboardWelcomePage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-welcome-preview" element={<W3OnboardWelcomePreview />} />
+          <Route path="/e/w3-onboard-welcome-preview" element={preview(<W3OnboardWelcomePreview />)} />
           <Route path="/e/w3-onboard-devices" element={<ProtectedRoute><W3OnboardDevicesPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-numbers" element={<ProtectedRoute><W3OnboardNumbersPage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-numbers-preview" element={<W3OnboardNumbersPage />} />
-          <Route path="/e/w3-onboard-devices-preview" element={<W3OnboardDevicesPreview />} />
+          <Route path="/e/w3-onboard-numbers-preview" element={preview(<W3OnboardNumbersPage />)} />
+          <Route path="/e/w3-onboard-devices-preview" element={preview(<W3OnboardDevicesPreview />)} />
           <Route path="/e/w3-onboard-rewards" element={<ProtectedRoute><W3OnboardRewardsPage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-rewards-preview" element={<W3OnboardRewardsPreview />} />
+          <Route path="/e/w3-onboard-rewards-preview" element={preview(<W3OnboardRewardsPreview />)} />
           <Route path="/e/w3-onboard-garage" element={<Navigate to="/e/w3-bike-studio?next=%2Fe%2Fw3-today" replace />} />
           {/* Referrals: recruit riders, earn 10% for 30 days, claim on close. */}
           <Route path="/e/w3-referrals" element={<ProtectedRoute checkOnboarding><W3ReferralsPage /></ProtectedRoute>} />
-          <Route path="/e/w3-referrals-preview" element={<W3ReferralsPreview />} />
+          <Route path="/e/w3-referrals-preview" element={preview(<W3ReferralsPreview />)} />
           <Route path="/e/w3-referral-user/:id" element={<ProtectedRoute checkOnboarding><W3ReferralUserPage /></ProtectedRoute>} />
-          <Route path="/e/w3-referral-user-preview" element={<W3ReferralUserPreview />} />
+          <Route path="/e/w3-referral-user-preview" element={preview(<W3ReferralUserPreview />)} />
           {/* Crew */}
           <Route path="/e/w3-crew" element={<ProtectedRoute checkOnboarding><W3CrewPage /></ProtectedRoute>} />
-          <Route path="/e/w3-crew-preview" element={<W3CrewPreview />} />
+          <Route path="/e/w3-crew-preview" element={preview(<W3CrewPreview />)} />
           <Route path="/e/w3-crew-member/:id" element={<ProtectedRoute checkOnboarding><W3CrewMemberPage /></ProtectedRoute>} />
-          <Route path="/e/w3-crew-member-preview" element={<W3CrewMemberPreview />} />
+          <Route path="/e/w3-crew-member-preview" element={preview(<W3CrewMemberPreview />)} />
           {/* Onboarding: training-plan + yearly-goals + rider studio */}
           <Route path="/e/w3-onboard-plan" element={<ProtectedRoute><W3OnboardPlanPage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-plan-preview" element={<W3OnboardPlanPreview />} />
+          <Route path="/e/w3-onboard-plan-preview" element={preview(<W3OnboardPlanPreview />)} />
           {/* THE EVENT ASK — the fact the whole periodisation engine plans
               backwards from, and the one thing onboarding never collected. */}
           <Route path="/e/w3-onboard-goal" element={<ProtectedRoute><W3OnboardGoalPage /></ProtectedRoute>} />
           <Route path="/e/w3-onboard-goals" element={<ProtectedRoute><W3OnboardGoalsPage /></ProtectedRoute>} />
-          <Route path="/e/w3-onboard-goals-preview" element={<W3OnboardGoalsPreview />} />
+          <Route path="/e/w3-onboard-goals-preview" element={preview(<W3OnboardGoalsPreview />)} />
           <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />
           {/* Trainingsplan: periodized plan, goal detail, load forecast */}
-          <Route path="/e/w3-plan-preview" element={<W3PlanPreview />} />
+          <Route path="/e/w3-plan-preview" element={preview(<W3PlanPreview />)} />
           <Route path="/e/w3-goal" element={<ProtectedRoute checkOnboarding><W3GoalPage /></ProtectedRoute>} />
           {/* SETTING a goal is a different job from READING one. The dossier
               at /e/w3-goal answers "what am I aiming at and where do I stand";
               this answers "what should I aim at", one question at a time. */}
           <Route path="/e/w3-goal-set" element={<ProtectedRoute checkOnboarding><W3GoalSetterPage /></ProtectedRoute>} />
-          <Route path="/e/w3-goal-set-preview" element={<W3GoalSetterPreview />} />
-          <Route path="/e/w3-goal-preview" element={<W3GoalPreview />} />
+          <Route path="/e/w3-goal-set-preview" element={preview(<W3GoalSetterPreview />)} />
+          <Route path="/e/w3-goal-preview" element={preview(<W3GoalPreview />)} />
           <Route path="/e/w3-load" element={<ProtectedRoute checkOnboarding><W3LoadForecastPage /></ProtectedRoute>} />
-          <Route path="/e/w3-load-preview" element={<W3LoadForecastPreview />} />
+          <Route path="/e/w3-load-preview" element={preview(<W3LoadForecastPreview />)} />
           {/* Ride sharing */}
           <Route path="/e/w3-share" element={<ProtectedRoute checkOnboarding><W3SharePage /></ProtectedRoute>} />
           <Route path="/e/w3-share/:id" element={<ProtectedRoute checkOnboarding><W3SharePage /></ProtectedRoute>} />
-          <Route path="/e/w3-share-preview" element={<W3SharePreview />} />
+          <Route path="/e/w3-share-preview" element={preview(<W3SharePreview />)} />
           <Route path="/e/w3-readiness" element={<ProtectedRoute checkOnboarding><W3ReadinessPage /></ProtectedRoute>} />
-          <Route path="/e/w3-readiness-preview" element={<W3ReadinessPreview />} />
+          <Route path="/e/w3-readiness-preview" element={preview(<W3ReadinessPreview />)} />
           <Route path="/e/w3-login" element={<W3LoginPage />} />
           <Route path="/e/w3-register" element={<W3RegisterPage />} />
           {/* The short invite link that every shared card prints. */}
           <Route path="/r/:code" element={<InviteRedirect />} />
-          <Route path="/e/w3-auth-preview" element={<W3AuthPreview />} />
-          <Route path="/e/w3-threshold-preview" element={<W3ThresholdPreview />} />
-          <Route path="/e/w3-wins-preview" element={<W3WinsPreview />} />
+          <Route path="/e/w3-auth-preview" element={preview(<W3AuthPreview />)} />
+          <Route path="/e/w3-threshold-preview" element={preview(<W3ThresholdPreview />)} />
+          <Route path="/e/w3-wins-preview" element={preview(<W3WinsPreview />)} />
           <Route path="/e/w3-challenges" element={<ProtectedRoute checkOnboarding><W3ChallengesPage /></ProtectedRoute>} />
-          <Route path="/e/w3-challenges-preview" element={<W3ChallengesPreview />} />
+          <Route path="/e/w3-challenges-preview" element={preview(<W3ChallengesPreview />)} />
           {/* Session Detail renders TODAY's session — `useSessionModel` takes no
               id and this backend has no id-scoped session endpoint. The bare
               path is therefore the honest one; `/:id` stays registered so an

@@ -85,6 +85,11 @@ class TrainingGoals(BaseModel):
     # adaptive engine (escalate/push volume + escalation eagerness); the HRV
     # back-off safety gate is never relaxed. See adaptive_readiness.ambition_from_intensity.
     push_intensity: Literal['steady', 'balanced', 'aggressive', 'all_in'] | None = None
+    # The rider's own season distance target in km. Set BY the rider — the
+    # Fahrten dock refuses to fill its season meter against anything else
+    # (a hardcoded 12 000 km once told new riders they were "hinter Plan").
+    # 0 clears it.
+    season_km_goal: int | None = Field(default=None, ge=0, le=100_000)
 
 
 class AthleteProfileCreate(BaseModel):

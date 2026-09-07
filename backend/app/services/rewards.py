@@ -101,11 +101,16 @@ CHALLENGE_MULTIPLIERS = {"bronze": 1.25, "silver": 1.5, "gold": 2.0}
 CHALLENGE_BONUS_CAP = 1000
 
 # Shop price tiers (§6) — the sink. (name, price) cheapest first.
+# ANCHORED TO THE REAL CATALOGUE, not the spec's draft numbers: common gear is
+# 600, rare gear 1800, legendary gear 4500 (earn_modifiers.PRICE_BY_RARITY) and
+# the top catalogue bike is 15000 (w3catalog). The old 300/900/2500/6000 ladder
+# matched nothing a rider could actually buy, so the Biker page's tier gauge
+# measured progress toward fiction.
 SHOP_TIERS: list[tuple[str, int]] = [
-    ("entry", 300),
-    ("mid", 900),
-    ("prestige", 2500),
-    ("rare", 6000),
+    ("entry", 600),
+    ("mid", 1800),
+    ("prestige", 4500),
+    ("rare", 15000),
 ]
 
 
@@ -441,6 +446,16 @@ async def get_wallet(db: AsyncSession, user_id: int, ledger_limit: int = 25) -> 
     wallet = await db.get(Wallet, user_id)
     balance = int(wallet.balance) if wallet is not None else 0
 
+    # Everything the rider has EARNED, ever — the sum of positive ledger lines.
+    # This is what a level may be built on: spending moves `balance`, never
+    # this. (The frontend derived its level ring from `balance`, so buying a
+    # bike demoted the rider — the shop attacking the progression system.)
+    earned_row = await db.execute(
+        select(func.coalesce(func.sum(PointsLedger.amount), 0))
+        .where(PointsLedger.user_id == user_id, PointsLedger.amount > 0)
+    )
+    lifetime_earned = int(earned_row.scalar_one())
+
     rows = await db.execute(
         select(PointsLedger)
         .where(PointsLedger.user_id == user_id)
@@ -458,7 +473,7 @@ async def get_wallet(db: AsyncSession, user_id: int, ledger_limit: int = 25) -> 
         }
         for r in rows.scalars().all()
     ]
-    return {"balance": balance, "ledger": ledger}
+    return {"balance": balance, "lifetime_earned": lifetime_earned, "ledger": ledger}
 
 
 # ── opening the chest ───────────────────────────────────────────────────────

@@ -270,9 +270,11 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
                 // the dated sentence sat computed two files away and was used
                 // by the morning briefing alone.
                 scoreNote: vm.readinessNote,
+                delta: vm.readinessDelta,
                 // `earnRate` already carries its × (api/rewards formatMultiplier),
                 // so appending one here printed "1,4××".
                 bonus: vm.earnRate === DASH ? null : vm.earnRate,
+                bonusWhy: vm.earnRateWhy,
                 // The unit is its own field now rather than glued into the
                 // value: the card sets it small on the baseline, and "71 ms"
                 // as one string cannot be typeset that way.

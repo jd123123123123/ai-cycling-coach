@@ -35,13 +35,15 @@ const FIXTURE: W3RidesVm = {
     { id: 4, title: 'Berg-Wiederholungen', dateLabel: 'DO 07 AUG', km: '54.8', speed: '27.2', power: '231', dur: '2:01', note: 'Drittbeste VAM dieser Saison', indoor: false, race: false, recent: false, polyline: ZIG },
     { id: 5, title: 'Schwelle auf der Rolle', dateLabel: 'DI 05 AUG', km: '35.0', speed: '33.1', power: '262', dur: '1:03', note: '2 W unter deinem Indoor-Bestwert', indoor: true, race: false, recent: false, polyline: null },
   ],
-  // fixture: goal-tracking block
-  goalChip: 'ZIEL 12 000 KM',
-  ofGoalPct: '40%',
-  progress: 0.4,
-  toGoLabel: 'NOCH 7 188 KM',
-  paceLabel: '312 KM VOR PLAN',
-  paceAhead: true,
+  // fixture: goal-tracking block (a preview rider who set 12 000 km)
+  goal: {
+    chip: 'ZIEL 12 000 KM',
+    ofGoalPct: '40%',
+    progress: 0.4,
+    toGoLabel: 'NOCH 7 188 KM',
+    paceLabel: '312 KM VOR PLAN',
+    paceAhead: true,
+  },
 }
 
 export default function W3RidesPreview() {

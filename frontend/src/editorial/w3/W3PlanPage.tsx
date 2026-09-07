@@ -15,6 +15,8 @@ import {
   displayPhase, phaseRail, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
 } from './w3plan'
 import { hasPlanFromWeek } from './w3hasPlan'
+import { useStreak } from '../../hooks/useStreak'
+import { forecastRideRc, streakMultiplier, formatMultiplier } from '../../api/rewards'
 import W3Loading from './W3Loading'
 import W3LoadError from './W3LoadError'
 import W3PlanEmptyView, { type W3PlanEmptyVm } from './W3PlanEmptyView'
@@ -58,6 +60,7 @@ export default function W3PlanPage() {
   const qc = useQueryClient()
   const { data: week, isLoading: weekLoading, isError: weekError, refetch: refetchWeek, isFetching: weekFetching } = useCurrentWeek(0)
   const { data: profile } = useAthleteProfile()
+  const { data: streak } = useStreak()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: seasonActs } = useActivitiesRange(seasonStart, new Date())
   // /plan/build is idempotent per athlete-local day — it returns the existing
@@ -168,7 +171,10 @@ export default function W3PlanPage() {
       : null
 
     // ── 12-week chart ──
-    const acts = seasonActs?.activities ?? []
+    // Cycling only, like the empty page's ledger already did: this is a BIKE
+    // plan, and a run incrementing the "3 / 5" completion badge or a swim
+    // shading a week's bar counted effort the plan never asked for.
+    const acts = (seasonActs?.activities ?? []).filter((a) => a.sport === 'cycling')
     const actualByWeek = targets && planStart
       ? targets.map((_, i) => {
           const ws = addDays(planStart, i * 7)
@@ -216,6 +222,9 @@ export default function W3PlanPage() {
         dateLabel: dt ? fmtDEShort(dt) : '',
         isToday: !!d.is_today,
         isPast: !!dt && !d.is_today && dt < today,
+        // "GEFAHREN" is a claim about a ride, not about the calendar — checked
+        // against the rider's actual activities, never asserted from `isPast`.
+        ridden: acts.some((a) => a.started_at.slice(0, 10) === d.date),
         dur: secs > 0 ? `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m` : null,
         tss: tss != null ? String(tss) : DASH,
         targetW: w != null ? `${w} W` : DASH,
@@ -261,9 +270,12 @@ export default function W3PlanPage() {
           : 'Renntag setzen – Plan rückwärts vom Ziel',
         state: profile?.target_event_type ? 'active' : 'idle', real: true,
       },
-      { id: 'vo2', icon: 'gauge', title: 'VO2max-Block', meta: '12 Wochen', desc: 'Zwei harte Einheiten pro Woche · Ziel +6 % an der Spitze', state: 'idle', real: false },
-      { id: 'ftp', icon: 'trend', title: 'FTP-Block', meta: '8 Wochen', desc: ftp ? `Schwelle anheben, Volumen halten · Ziel ${ftp} → ${Math.round(ftp * 1.06)} W` : 'Schwelle anheben, Volumen halten', state: 'idle', real: false },
-      { id: 'base', icon: 'base', title: 'Grundlage halten', meta: 'offen', desc: 'Kein Datum, nur Konstanz · 3–5 Einheiten pro Woche', state: 'idle', real: true },
+      // The VO2max/FTP "block" presets are gone: they were previews wearing a
+      // submit button — every non-race option posts goal_changed:'no_event',
+      // which DELETES the race date server-side (plan_interview.py). Two real
+      // destinations remain; a fake option with a real irreversible side
+      // effect is the worst trade the sheet can offer.
+      { id: 'base', icon: 'base', title: 'Grundlage halten', meta: 'offen', desc: 'Kein Datum, nur Konstanz · 3–5 Einheiten pro Woche', state: profile?.target_event_type ? 'idle' : 'active', real: true },
     ]
 
     return {
@@ -303,7 +315,16 @@ export default function W3PlanPage() {
       sessionBars: sBars,
       easierTss: easierD != null ? `−${easierD} TSS` : '−',
       harderTss: harderD != null ? `+${harderD} TSS` : '+',
-      earnNote: sTss != null ? `Diese Einheit bringt RideCoin nach ihrem TSS` : 'RideCoin nach abgeschlossenem TSS',
+      // A reward without a number is a shrug: the same forecast Today's card
+      // shows, from the one ported earn ladder (api/rewards ← rewards.py).
+      earnNote: (() => {
+        const rc = forecastRideRc(sTss, streak?.streak ?? null)
+        if (rc == null) return 'RideCoin nach abgeschlossenem TSS'
+        const mult = streakMultiplier(streak?.streak ?? 0)
+        return mult > 1
+          ? `Bringt ca. ${rc.toLocaleString('de-DE')} RC · ${formatMultiplier(mult)} Streak`
+          : `Bringt ca. ${rc.toLocaleString('de-DE')} RC`
+      })(),
       forecastValue,
       adaptExplainer:
         'Jede gefahrene Einheit, deine HRV und dein Schlaf fließen jede Nacht zurück in den Plan. Verpasste Tage werden nicht nachgeholt, sondern eingerechnet – der Block bleibt, die Dosis ändert sich. Nur Renntag und Phasenlängen sind fix.',
@@ -312,7 +333,7 @@ export default function W3PlanPage() {
       adjustLongDay,
       goalOptions,
     }
-  }, [week, profile, plan, rehearsals, seasonActs, ftp])
+  }, [week, profile, plan, rehearsals, seasonActs, ftp, streak])
 
   // ── real adapt (persists via /workouts/today/modify) ──
   const onAdapt = useCallback(async (kind: AdaptKind): Promise<AdaptResult | null> => {

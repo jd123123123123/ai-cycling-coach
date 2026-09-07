@@ -58,13 +58,20 @@ export interface W3RidesDockVm {
   /** Season distance, already localised ("4.812"). Null → an em dash. */
   totalKm: string | null
   totalUnit: string
-  /** How far through the season goal, 0..1, and how that reads as a share. */
-  progress: number
-  ofGoalPct: string
-  goalChip: string
-  toGoLabel: string
-  paceLabel: string
-  paceAhead: boolean
+  /** The rider's OWN season goal, or null → no goal exists. With no goal the
+   *  season meter counts ridden months and the footer invites the rider to set
+   *  one — it never fills against a target nobody chose. */
+  goal: {
+    chip: string
+    ofGoalPct: string
+    progress: number
+    toGoLabel: string
+    paceLabel: string
+    paceAhead: boolean
+  } | null
+  /** Opens the season-goal editor (the footer button when `goal` is null,
+   *  and the chip's affordance when one exists). */
+  onSetGoal?: () => void
   /** Twelve months, normalised for height and carrying their own real values. */
   bars: number[]
   barMonths: { km: number; label: string; year: number }[]
@@ -174,8 +181,13 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
   // of this window did you actually ride. Each is labelled, because a meter
   // that silently changes meaning is worse than two meters.
   const ridden = buckets.filter((b) => b.rides > 0).length
+  // Season without a goal: the meter answers the same question the other
+  // grains answer — how much of the window was actually ridden (months with
+  // at least one ride). Labelled, like every other meaning change here.
+  const monthsRidden = win ? ridden : vm.barMonths.filter((m) => m.km > 0).length
+  const monthsTotal = win ? buckets.length : vm.barMonths.length
   const share = grain === 'season'
-    ? Math.max(0, Math.min(1, vm.progress))
+    ? (vm.goal ? Math.max(0, Math.min(1, vm.goal.progress)) : monthsTotal ? monthsRidden / monthsTotal : 0)
     : buckets.length ? ridden / buckets.length : 0
   const filled = Math.round(share * SEGMENTS)
 
@@ -226,13 +238,14 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
           <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>
             {picked
               ? picked.label
-              : win && grain !== 'season' ? win.label.toUpperCase() : vm.goalChip}
+              : win && grain !== 'season' ? win.label.toUpperCase()
+                : vm.goal ? vm.goal.chip : 'MONATE GEFAHREN'}
           </span>
           <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.4, color: T.acid }}>
             {picked
               ? `${nf0.format(picked.km)} km`
               : grain === 'season'
-                ? vm.ofGoalPct
+                ? (vm.goal ? vm.goal.ofGoalPct : `${monthsRidden}/${monthsTotal}`)
                 : `${ridden}/${buckets.length}`}
           </span>
         </div>
@@ -382,13 +395,34 @@ export default function W3RidesDock({ vm }: { vm: W3RidesDockVm }) {
             are the same lie the tiles were telling before the switch made it
             visible. A month and a week are not behind or ahead of anything. */}
         {grain === 'season' && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.heroMid, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vm.toGoLabel}</span>
-          <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: vm.paceAhead ? T.acid : T.warn }}>
-            <TrendingUp size={12} color={vm.paceAhead ? T.acid : T.warn} style={{ transform: vm.paceAhead ? 'none' : 'scaleY(-1)' }} />
-            {vm.paceLabel}
-          </span>
-        </div>
+          vm.goal ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <button type="button"
+                onClick={vm.onSetGoal ? (e) => { e.stopPropagation(); vm.onSetGoal?.() } : undefined}
+                aria-label="Saisonziel ändern"
+                style={{
+                  background: 'none', border: 0, padding: 0, cursor: vm.onSetGoal ? 'pointer' : 'default',
+                  fontFamily: FONT, fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.heroMid,
+                  minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left',
+                }}>{vm.goal.toGoLabel}</button>
+              <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', flex: 'none', fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: vm.goal.paceAhead ? T.acid : T.warn }}>
+                <TrendingUp size={12} color={vm.goal.paceAhead ? T.acid : T.warn} style={{ transform: vm.goal.paceAhead ? 'none' : 'scaleY(-1)' }} />
+                {vm.goal.paceLabel}
+              </span>
+            </div>
+          ) : vm.onSetGoal ? (
+            // The invitation, not the accusation: a rider without a goal is
+            // not "behind" anything.
+            <button type="button"
+              onClick={(e) => { e.stopPropagation(); vm.onSetGoal?.() }}
+              style={{
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10,
+                background: 'none', border: 0, padding: 0, cursor: 'pointer', fontFamily: FONT, width: '100%',
+              }}>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.heroMid }}>KEIN SAISONZIEL GESETZT</span>
+              <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.6, color: T.acid }}>ZIEL SETZEN →</span>
+            </button>
+          ) : null
         )}
       </div>
     </div>

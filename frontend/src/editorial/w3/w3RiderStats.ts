@@ -65,10 +65,13 @@ export const EMPTY_LIFETIME: RiderLifetime = {
   rideCoin: 0, level: 1, levelPct: 0, toNextLevel: XP_PER_LEVEL,
 }
 
-/** Pure reducer over the rider's cycling activities + their RideCoin balance. */
+/** Pure reducer over the rider's cycling activities + their RideCoin earnings.
+ *  Takes LIFETIME EARNED, not the spendable balance: a level built on balance
+ *  went DOWN when the rider bought something, which made the shop punish the
+ *  progression system. */
 export function computeRiderLifetime(
   activities: ActivityRead[] | undefined,
-  rideCoinBalance: number | null | undefined,
+  rideCoinEarned: number | null | undefined,
   loaded: boolean,
 ): RiderLifetime {
   const cyc = (activities ?? []).filter((a) => a.sport === 'cycling')
@@ -94,7 +97,7 @@ export function computeRiderLifetime(
 
   // Level — in-app progression only. Lifetime riding fills the STATS, never
   // the level; the level is what you earned inside the app.
-  const rideCoin = Math.max(0, rideCoinBalance ?? 0)
+  const rideCoin = Math.max(0, rideCoinEarned ?? 0)
   const level = 1 + Math.floor(rideCoin / XP_PER_LEVEL)
   const intoLevel = rideCoin % XP_PER_LEVEL
 
@@ -125,7 +128,9 @@ export function useRiderLifetime(): RiderLifetime {
   const { data: acts, isSuccess } = useActivitiesRange(from, to)
   const { data: wallet } = useWallet()
   return useMemo(
-    () => computeRiderLifetime(acts?.activities, wallet?.balance, isSuccess),
+    // Earned-ever when the server sends it; the spendable balance only as the
+    // floor for older servers (it can never exceed lifetime earnings).
+    () => computeRiderLifetime(acts?.activities, wallet?.lifetime_earned ?? wallet?.balance, isSuccess),
     [acts, wallet, isSuccess],
   )
 }

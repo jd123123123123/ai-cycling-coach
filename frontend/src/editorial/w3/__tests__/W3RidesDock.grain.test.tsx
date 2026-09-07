@@ -56,8 +56,11 @@ const RHYTHM: ActivityRhythm = {
 }
 
 const VM = {
-  totalKm: '4.812', totalUnit: 'km', progress: 0.63, ofGoalPct: '63 %',
-  goalChip: 'VON 7.500 KM', toGoLabel: 'noch 2.688 km', paceLabel: '+4 %', paceAhead: true,
+  totalKm: '4.812', totalUnit: 'km',
+  goal: {
+    progress: 0.63, ofGoalPct: '63 %', chip: 'VON 7.500 KM',
+    toGoLabel: 'noch 2.688 km', paceLabel: '+4 %', paceAhead: true,
+  },
   bars: Array.from({ length: 12 }, () => 0.5),
   barMonths: Array.from({ length: 12 }, (_, i) => ({ km: 100, label: 'Jan', year: 2026 + i * 0 })),
   barsAccentFrom: 9,

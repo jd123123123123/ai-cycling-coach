@@ -69,7 +69,9 @@ export default function W3GoalSetterPage() {
       }
       void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
       void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
-      void qc.invalidateQueries({ queryKey: ['athlete', 'profile'] })
+      // ['athlete','me'] is the real profile key (useAthleteProfile) — the old
+      // ['athlete','profile'] matched nothing, so /e/w3-plan read a stale goal.
+      void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
       navigate('/e/w3-plan')
       return true
     } catch {

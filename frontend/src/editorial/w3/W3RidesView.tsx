@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { updateGoals } from '../../api/athletes'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { motion, useReducedMotion } from 'motion/react'
 import { Gauge, Zap, Timer, Bike, Trophy, ChevronRight } from 'lucide-react'
 import { T, FONT, EASE, grow, band, DASH } from './w3tokens'
@@ -59,13 +62,16 @@ export interface W3RidesVm {
   avgPower: string                  // real | "—"
   saddleTime: string                // real | "—"
   rides: W3RideCard[]               // real; the View filters + groups
-  // fixture: goal-tracking block (no season-goal model)
-  goalChip: string
-  ofGoalPct: string
-  progress: number                  // 0..1
-  toGoLabel: string
-  paceLabel: string
-  paceAhead: boolean
+  /** The rider's own season goal, or null → the dock renders the set-a-goal
+   *  invitation instead. Never a placeholder target. */
+  goal: {
+    chip: string
+    ofGoalPct: string
+    progress: number                // 0..1
+    toGoLabel: string
+    paceLabel: string
+    paceAhead: boolean
+  } | null
 }
 
 const FILTERS: { key: W3RideFilter; label: string }[] = [
@@ -234,6 +240,8 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
   const reduce = useReducedMotion()
   const nav = useNavigate()
   const [filter, setFilter] = useState<W3RideFilter>('all')
+  const [goalSheet, setGoalSheet] = useState(false)
+  const [earlierShown, setEarlierShown] = useState(12)
   const openness = useDockOpenness()
   // The three windows the dock zooms between. Undefined until it lands, and
   // the dock keeps its season behaviour until then rather than blanking.
@@ -257,12 +265,8 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
     <W3RidesDock vm={{
       totalKm: vm.totalKm || null,
       totalUnit: vm.totalUnit,
-      progress: vm.progress,
-      ofGoalPct: vm.ofGoalPct,
-      goalChip: vm.goalChip,
-      toGoLabel: vm.toGoLabel,
-      paceLabel: vm.paceLabel,
-      paceAhead: vm.paceAhead,
+      goal: vm.goal,
+      onSetGoal: () => setGoalSheet(true),
       bars: vm.bars,
       rhythm,
       barMonths: vm.barMonths,
@@ -341,16 +345,29 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
             <div style={{ flex: 1, height: 1, background: T.rule }} />
             <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.4, color: T.quiet }}>{earlier.length}</span>
           </div>
-          {earlier.map((r, i) => (
-            <RideRow key={r.id ?? `e${i}`} ride={r} accent={false} reduce={reduce} index={i}
+          {earlier.slice(0, earlierShown).map((r, i) => (
+            <RideRow key={r.id ?? `e${i}`} ride={r} accent={false} reduce={reduce} index={Math.min(i, 13)}
               onOpen={() => r.id != null && nav(`/e/w3-ride/${r.id}`)} />
           ))}
+          {/* No wall at ride 14 any more: the whole year is here, revealed in
+              pages so the first paint stays light. */}
+          {earlier.length > earlierShown && (
+            <button type="button" onClick={() => setEarlierShown((n) => n + 30)}
+              style={{
+                height: 48, borderRadius: 100, border: 0, background: T.surface,
+                color: T.ink, fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: FONT,
+              }}>
+              Alle {earlier.length} anzeigen · {earlier.length - earlierShown} weitere
+            </button>
+          )}
         </div>
       )}
     </>
   )
 
-  if (inShell) return <>{portal}{content}</>
+  const sheet = goalSheet ? <SeasonGoalSheet onClose={() => setGoalSheet(false)} /> : null
+
+  if (inShell) return <>{portal}{content}{sheet}</>
 
   // Outside the room — a preview route, or a deep link that skipped it — the
   // screen still draws its own frame, with the panel where the hero would be.
@@ -362,6 +379,65 @@ export default function W3RidesView({ vm }: { vm: W3RidesVm }) {
         <div style={{ ...band(0), padding: '10px 16px 4px' }}>{dock}</div>
         {content}
         <W3TabBar />
+        {sheet}
+      </div>
+    </div>
+  )
+}
+
+/** The season-goal editor: one number, the rider's own. Writes
+ *  `goals.season_km_goal` via PUT /athletes/me/goals and refreshes the
+ *  profile, so the dock's meter fills against a target somebody actually set.
+ *  "Entfernen" sends 0, which clears the key server-side. */
+function SeasonGoalSheet({ onClose }: { onClose: () => void }) {
+  const qc = useQueryClient()
+  const { data: profile } = useAthleteProfile()
+  const existing = profile?.goals?.season_km_goal ?? null
+  const [km, setKm] = useState(existing ?? 5000)
+  const [busy, setBusy] = useState(false)
+  const save = async (value: number) => {
+    if (busy) return
+    setBusy(true)
+    try {
+      await updateGoals({ season_km_goal: value })
+      await qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
+      onClose()
+    } finally { setBusy(false) }
+  }
+  const STEP = 500
+  return (
+    <div role="dialog" aria-label="Saisonziel"
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, zIndex: 80, background: `${T.bg}CC`, display: 'flex', alignItems: 'flex-end' }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{
+          width: '100%', background: T.surface, borderRadius: '24px 24px 0 0',
+          padding: '22px 20px calc(20px + env(safe-area-inset-bottom))',
+          display: 'flex', flexDirection: 'column', gap: 16, fontFamily: FONT,
+        }}>
+        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Dein Saisonziel</span>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: T.quiet, lineHeight: 1.4 }}>
+          Kilometer in den letzten 12 Monaten. Das Ziel gehört dir — der Zähler misst nur dagegen, wenn du eins setzt.
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 22 }}>
+          <button type="button" aria-label="Weniger" onClick={() => setKm((v) => Math.max(STEP, v - STEP))}
+            style={{ width: 44, height: 44, borderRadius: 100, border: 0, background: T.surface2, color: T.ink, fontSize: 22, cursor: 'pointer' }}>−</button>
+          <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1, color: T.acid, fontVariantNumeric: 'tabular-nums', minWidth: 130, textAlign: 'center' }}>
+            {km.toLocaleString('de-DE')} km
+          </span>
+          <button type="button" aria-label="Mehr" onClick={() => setKm((v) => Math.min(50_000, v + STEP))}
+            style={{ width: 44, height: 44, borderRadius: 100, border: 0, background: T.surface2, color: T.ink, fontSize: 22, cursor: 'pointer' }}>+</button>
+        </div>
+        <button type="button" disabled={busy} onClick={() => void save(km)}
+          style={{ height: 54, borderRadius: 100, border: 0, background: T.acid, color: T.bg, fontSize: 15.5, fontWeight: 700, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
+          {busy ? 'Speichere…' : 'Ziel speichern'}
+        </button>
+        {existing != null && (
+          <button type="button" disabled={busy} onClick={() => void save(0)}
+            style={{ height: 40, borderRadius: 100, border: 0, background: 'none', color: T.quiet, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: FONT }}>
+            Ziel entfernen
+          </button>
+        )}
       </div>
     </div>
   )

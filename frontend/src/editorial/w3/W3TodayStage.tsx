@@ -207,6 +207,10 @@ export interface W3StageVm {
   streak: number | null
   /** The earn multiplier, e.g. "1.75". Null → "—". */
   bonus: string | null
+  /** Tapping the machine opens the garage. The bike is the most-looked-at
+   *  object in the app and was the only one that answered no touch — while the
+   *  garage family had no unconditional door at all. */
+  onTapBike?: () => void
 }
 
 /** A floating pill on the stage ground. Never a card — it has no border and no
@@ -413,7 +417,13 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.45, ease: EASE }}
+        onClick={vm.onTapBike}
+        role={vm.onTapBike ? 'button' : undefined}
+        tabIndex={vm.onTapBike ? 0 : undefined}
+        aria-label={vm.onTapBike ? 'Garage öffnen' : undefined}
+        onKeyDown={vm.onTapBike ? (e) => { if (e.key === 'Enter' || e.key === ' ') vm.onTapBike?.() } : undefined}
         style={{
+          cursor: vm.onTapBike ? 'pointer' : undefined,
           // NOT `relative`. This block used to establish a containing block,
           // so the bike wrapper inside it resolved `bottom: 23.8%` against the
           // LEFTOVER HEIGHT under the avatar rather than against the stage —

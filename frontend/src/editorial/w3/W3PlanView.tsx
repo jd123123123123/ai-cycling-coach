@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import {
   SlidersHorizontal, Pencil, Flag, ChevronRight, Activity,
@@ -73,6 +74,9 @@ export interface PlanDaySession {
   dateLabel: string
   isToday: boolean
   isPast: boolean
+  /** True only when an actual ride exists on that date — the difference
+   *  between "GEFAHREN" and "NICHT GEFAHREN · EINGERECHNET". */
+  ridden?: boolean
   dur: string | null
   tss: string
   targetW: string
@@ -371,13 +375,19 @@ function GoalSwitchSheet({ vm, onClose, onSwitchGoal }: { vm: W3PlanVm; onClose:
   const chosen = vm.goalOptions.find((g) => g.id === sel)
   const icon = (k: GoalOption['icon']) => k === 'flag' ? <Flag size={18} color={T.acid} /> : k === 'gauge' ? <Activity size={18} color={T.evening} /> : k === 'trend' ? <ArrowRight size={18} color={T.mid} style={{ transform: 'rotate(-45deg)' }} /> : <Repeat size={18} color={T.mid} />
 
+  const nav = useNavigate()
+  // Already what the rider trains for → there is nothing to post. The old
+  // sheet sent goal_changed:'same', which matches no server branch — a silent
+  // no-op dressed as a change.
+  const alreadyActive = chosen?.state === 'active'
   const submit = async () => {
-    if (!onSwitchGoal || !chosen || busy) return
+    if (!chosen || busy || alreadyActive) return
+    // A race that is not set yet is set in the goal setter, not here — this
+    // sheet has no date field, so posting anything would be pretending.
+    if (chosen.id === 'race') { onClose(); nav('/e/w3-goal-set?intent=event'); return }
+    if (!onSwitchGoal) return
     setBusy(true)
-    // Map the picked preset to the real /plan/change/apply vocabulary. Only the
-    // race (keep) and the no-event "Grundlage halten" map cleanly; block presets
-    // rebuild as a fitness horizon (goal_changed:no_event) — the closest real action.
-    const payload: GoalSwitchPayload = chosen.id === 'race' ? { goal_changed: 'same' } : { goal_changed: 'no_event' }
+    const payload: GoalSwitchPayload = { goal_changed: 'no_event' }
     const ok = await onSwitchGoal(chosen.id, payload)
     setBusy(false)
     if (ok) onClose()
@@ -413,14 +423,18 @@ function GoalSwitchSheet({ vm, onClose, onSwitchGoal }: { vm: W3PlanVm; onClose:
           )
         })}
       </div>
-      {chosen && !chosen.real && (
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: T.warn }}>
-          Vorschau für den {chosen.title}. Dein Renntag bleibt gespeichert und lässt sich später wieder aktivieren.
+      {/* The consequence, stated before the tap. The old line here promised
+          "Dein Renntag bleibt gespeichert" while the request deleted it. */}
+      {chosen?.id === 'base' && !alreadyActive && vm.goalOptions.some((g) => g.id === 'race' && g.state === 'active') && (
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: T.warn, lineHeight: 1.4 }}>
+          Damit nimmst du dein Rennen aus dem Plan — Datum und Priorität werden gelöscht und müssen später neu gesetzt werden.
         </span>
       )}
-      <button onClick={submit} disabled={busy || !onSwitchGoal}
-        style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
-        <Check size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{busy ? 'Übernehme…' : 'Ziel übernehmen'}</span>
+      <button onClick={submit} disabled={busy || alreadyActive}
+        style={{ height: 56, borderRadius: 100, background: alreadyActive ? T.surface : T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy || alreadyActive ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
+        <Check size={18} color={alreadyActive ? T.quiet : T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: alreadyActive ? T.quiet : T.ink }}>
+          {alreadyActive ? 'Bereits dein Ziel' : busy ? 'Übernehme…' : chosen?.id === 'race' ? 'Renntag setzen' : 'Ziel übernehmen'}
+        </span>
       </button>
     </SheetShell>
   )
@@ -688,7 +702,13 @@ export default function W3PlanView({
         <div style={{ ...band(26) }}>
           <div style={{ ...card(), gap: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Kicker>{selIsToday ? 'HEUTIGE EINHEIT' : (sel?.isPast ? 'GEFAHREN' : 'GEPLANT')}</Kicker>
+              {/* A skipped Monday used to open as "GEFAHREN" with the
+                  prescription presented as the result — `isPast` is date
+                  arithmetic, `ridden` is a fact. The no-guilt register holds:
+                  a missed day is absorbed, not owed. */}
+              <Kicker>{selIsToday ? 'HEUTIGE EINHEIT'
+                : sel?.isPast ? (sel.ridden ? 'GEFAHREN' : 'NICHT GEFAHREN · EINGERECHNET')
+                  : 'GEPLANT'}</Kicker>
               <span style={{ fontSize: 11, fontWeight: 600, color: T.mid }}>
                 {selIsToday ? (vm.sessionDur ?? DASH) : [sel?.weekday, sel?.dur].filter(Boolean).join(' · ')}
               </span>

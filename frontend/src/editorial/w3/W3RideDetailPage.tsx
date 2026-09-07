@@ -14,6 +14,7 @@ import W3Loading from './W3Loading'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import W3RideWrap, { type W3RideWrapVm, type W3WrapStat } from './W3RideWrap'
+import W3CoinBurst from './W3CoinBurst'
 import { T, FONT, Kicker, band } from './w3tokens'
 import { S, lux, hairline, TNUM } from './w3surfaces'
 import './w3.css'
@@ -816,6 +817,9 @@ export default function W3RideDetailPage() {
           }}
           onDetails={() => id && navigate(`/e/w3-ride/${id}`)}
           onShare={() => id && navigate(`/e/w3-share/${id}`)} />
+        {/* The payoff fires on the claim itself — the burst was finished art
+            that only the orphaned /e/w3-ride-points route ever mounted. */}
+        <W3CoinBurst active={claim.isSuccess} />
       </div>
     </div>
   )

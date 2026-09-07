@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import W3TodayStage, { STAGE_PLATE, type W3StageVm } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
 import W3StatusBar from './W3StatusBar'
@@ -83,7 +83,11 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
   const ground = useGroundColour(STAGE_PLATE)
   const reduce = useReducedMotion()
   const { pathname } = useLocation()
+  const nav = useNavigate()
   const [host, setHost] = useState<HTMLElement | null>(null)
+  // The machine is the door to its own garage — from every room screen, and
+  // not from the garage itself, where the tap would be a loop.
+  const onGarage = pathname.startsWith('/e/w3-garage') ? undefined : () => nav('/e/w3-garage')
 
   return (
     <Ctx.Provider value={host}>
@@ -100,7 +104,7 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
             {/* MOUNTED ONCE. No key on this — a key here would be the whole
                 point thrown away, because React would unmount the stage and the
                 bike would flash on every navigation. */}
-            <W3TodayStage fullBleed vm={vm} />
+            <W3TodayStage fullBleed vm={{ ...vm, onTapBike: onGarage }} />
 
             <div style={{
               position: 'relative', zIndex: 2, marginTop: 'auto',

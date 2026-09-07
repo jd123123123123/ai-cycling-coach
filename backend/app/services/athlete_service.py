@@ -125,6 +125,13 @@ async def update_goals(
     if "push_intensity" in goals_data:
         current_goals["push_intensity"] = goals_data["push_intensity"]
 
+    if "season_km_goal" in goals_data:
+        # 0 clears the goal (exclude_none strips None, so 0 is the off switch).
+        if goals_data["season_km_goal"]:
+            current_goals["season_km_goal"] = int(goals_data["season_km_goal"])
+        else:
+            current_goals.pop("season_km_goal", None)
+
     if "target_event_name" in goals_data or "target_event_date" in goals_data:
         target_event = current_goals.get("target_event", {})
         if "target_event_name" in goals_data:

@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react'
 import { ScanFace,
   Menu, X, Activity, CalendarRange, CalendarCheck, Target, Route as RouteIcon, Bike, Trophy,
-  Flag, Users, UserRound, Settings,
+  Flag, Users, UserRound, Settings, Warehouse, Wrench,
 } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 
@@ -40,8 +40,15 @@ const ITEMS: { label: string; sub: string; icon: typeof Activity; route: string 
   // their face or their bike afterwards. Without these two entries the answer
   // to "I want a better photo" would be "clear your storage".
   { label: 'Dein Bike', sub: 'Foto neu aufnehmen', icon: Bike, route: '/e/w3-bike-studio' },
+  // The garage family lost its tab slot to PLAN; without these rows a new
+  // rider earns RideCoin with no reachable place to spend it. The garage hub
+  // carries gear, shop and places; the workshop is its own errand.
+  { label: 'Garage', sub: 'Ausrüstung + Shop + Orte', icon: Warehouse, route: '/e/w3-garage' },
+  { label: 'Werkstatt', sub: 'Zustand + Service-Bonus', icon: Wrench, route: '/e/w3-workshop' },
   { label: 'Dein Avatar', sub: 'Foto neu aufnehmen', icon: ScanFace, route: '/e/w3-avatar-onboard' },
-  { label: 'Erfolge', sub: 'Abzeichen + Challenges', icon: Trophy, route: '/e/w3-wins' },
+  // "Abzeichen + Challenges" promised a chapter the Wins scroll does not hold;
+  // Challenges is its own row directly below.
+  { label: 'Erfolge', sub: 'Abzeichen + Bestwerte', icon: Trophy, route: '/e/w3-wins' },
   { label: 'Challenges', sub: 'Monatsziele', icon: Flag, route: '/e/w3-challenges' },
   { label: 'Crew', sub: 'Deine Fahrer', icon: Users, route: '/e/w3-crew' },
   { label: 'Empfehlungen', sub: 'Bring jemanden mit', icon: UserRound, route: '/e/w3-referrals' },

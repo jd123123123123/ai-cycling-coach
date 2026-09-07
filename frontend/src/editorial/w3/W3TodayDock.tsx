@@ -102,8 +102,16 @@ export interface W3DockVm {
   /** Why there is no score, in the rider's language. Shown ONLY when
    *  `score == null`, and it is the whole reason the dock still renders. */
   scoreNote: string | null
+  /** Readiness vs the previous dated reading ("+6 ggü. gestern"), or null.
+   *  Only ever set when the score above IS the reading the delta was computed
+   *  on — the page guards that, the dock just draws it. */
+  delta?: { text: string; favourable: boolean } | null
   /** The earn multiplier as "1.75×", or null → the bonus column is dropped. */
   bonus: string | null
+  /** The ladder behind the bonus ("14 Tage Streak · noch 6 bis 1,5×"), or
+   *  null. Revealed with the working, not on first sight: a multiplier with a
+   *  visible next rung is a goal gradient; without one it is just a number. */
+  bonusWhy?: string | null
   /** The three overnight signals. Always three, so the row never reflows. */
   stats: [W3DockStat, W3DockStat, W3DockStat]
   /**
@@ -180,6 +188,16 @@ export default function W3TodayDock({ vm, onOpen }: {
           }}>
             {vm.score != null ? (vm.state ?? DASH) : (vm.scoreNote ?? 'Noch keine Messung')}
           </span>
+          {/* Trend beats snapshot for a daily ritual: the same score means a
+              different morning after a 78 than after a 52. Quiet on purpose —
+              the sign carries the direction, no second colour needed. */}
+          {vm.score != null && vm.delta && (
+            <span style={{
+              fontSize: 10.5, fontWeight: 600, color: T.heroMid, minWidth: 0,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              fontVariantNumeric: 'tabular-nums',
+            }}>{vm.delta.text}</span>
+          )}
         </div>
 
         {vm.bonus && (
@@ -214,6 +232,18 @@ export default function W3TodayDock({ vm, onOpen }: {
             }} />
         ))}
       </div>
+
+      {/* ── the ladder behind the bonus ── */}
+      {/* Part of the working, so it opens with the working: the next rung is
+          what turns the ★ multiplier from a stamp into something to keep. */}
+      {vm.bonus && vm.bonusWhy && (
+        <div style={{ height: open * 14, opacity: open, overflow: 'hidden' }} aria-hidden={open < 0.2}>
+          <span style={{
+            fontSize: 10.5, fontWeight: 600, color: T.heroMid,
+            fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+          }}>{vm.bonusWhy}</span>
+        </div>
+      )}
 
       {/* ── the three overnight signals ── */}
       {/* THE WORKING BEHIND THE NUMBER, revealed by scrolling rather than by

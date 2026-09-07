@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import W3RidesView, { type W3RidesVm, type W3RideCard } from './W3RidesView'
 
 /**
@@ -8,12 +9,12 @@ import W3RidesView, { type W3RidesVm, type W3RideCard } from './W3RidesView'
  * REAL: the logged-rides count, the season distance total, the monthly-distance
  * bar chart, the AVG SPEED / AVG POWER / SADDLE TIME footer, and every ride card
  * come from `useActivitiesRange` over the trailing 12 months (cycling only).
- * Honest "—" wherever a field is missing. FIXTURE: the GOAL / OF-GOAL /
- * KM-TO-GO / AHEAD-OF-PACE block — the app has no season-goal model, so those
- * are derived against a placeholder 12,000 km goal, marked `fixture:` below.
+ * Honest "—" wherever a field is missing. The GOAL / OF-GOAL / KM-TO-GO /
+ * AHEAD-OF-PACE block exists ONLY when the rider has set their own season goal
+ * (`goals.season_km_goal` on the profile) — the old hardcoded 12 000 km told
+ * a brand-new rider they were thousands of km "HINTER PLAN" against a target
+ * they never chose.
  */
-
-const GOAL_KM = 12000 // fixture: no season-goal model — placeholder target
 
 /** "4 812" — thin-spaced thousands, matching the pen. */
 const spaced = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ')
@@ -38,6 +39,8 @@ export default function W3RidesPage() {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() - 11, 1) // trailing 12 months
   const { data } = useActivitiesRange(start, now)
+  const { data: profile } = useAthleteProfile()
+  const goalKm = profile?.goals?.season_km_goal ?? null
 
   const vm = useMemo<W3RidesVm>(() => {
     const acts = (data?.activities ?? [])
@@ -83,15 +86,26 @@ export default function W3RidesPage() {
       }
     })
 
-    // ── Goal-tracking block (FIXTURE: derived vs placeholder GOAL_KM) ─────────
-    const progress = Math.min(1, totalKm / GOAL_KM)
+    // ── Goal tracking — ONLY against the rider's own target ──────────────────
     const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 864e5)
-    const expected = GOAL_KM * (dayOfYear / 365)
+    const expected = goalKm != null ? goalKm * (dayOfYear / 365) : 0
     const paceDelta = totalKm - expected
     const paceAhead = paceDelta >= 0
+    const goal = goalKm != null
+      ? {
+          chip: `ZIEL ${spaced(goalKm)} KM`,
+          ofGoalPct: `${Math.round(Math.min(1, totalKm / goalKm) * 100)}%`,
+          progress: Math.min(1, totalKm / goalKm),
+          toGoLabel: `NOCH ${spaced(Math.max(0, goalKm - totalKm))} KM`,
+          paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'VOR' : 'HINTER'} PLAN`,
+          paceAhead,
+        }
+      : null
 
     // ── Ride cards (real) ─────────────────────────────────────────────────────
-    const rides: W3RideCard[] = acts.slice(0, 14).map((a) => {
+    // ALL of them — the archive must not have a wall at ride 14. The view
+    // renders the tail lazily behind its "alle anzeigen" button.
+    const rides: W3RideCard[] = acts.map((a) => {
       const d = new Date(a.started_at)
       const km = a.distance_meters != null ? a.distance_meters / 1000 : null
       const dur = a.duration_seconds ?? 0
@@ -134,15 +148,11 @@ export default function W3RidesPage() {
       avgPower,
       saddleTime,
       rides,
-      // fixture: goal-tracking (no season-goal model)
-      goalChip: `ZIEL ${spaced(GOAL_KM)} KM`,
-      ofGoalPct: `${Math.round(progress * 100)}%`,
-      progress,
-      toGoLabel: `NOCH ${spaced(Math.max(0, GOAL_KM - totalKm))} KM`,
-      paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'VOR' : 'HINTER'} PLAN`,
-      paceAhead,
+      // Real season goal, or null → the dock invites the rider to set one and
+      // the meter counts ridden months instead of progress toward fiction.
+      goal,
     }
-  }, [data, now])
+  }, [data, now, goalKm])
 
   return <W3RidesView vm={vm} />
 }

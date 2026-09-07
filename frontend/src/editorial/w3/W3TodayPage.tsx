@@ -244,12 +244,13 @@ export default function W3TodayPage() {
     // to live here.
 
     // Readiness for the hero: the model withholds its score when the overnight
-    // wearable read is stale (the "date the measurement" rule). But the coach's
-    // adaptive engine still computes a live readiness (daily_decision.readiness)
-    // from the freshest HRV/TSB it has — so fall back to that rather than show an
-    // empty hero. Keeps the big number honest AND populated.
-    const modelReadiness = isPresent(model.readiness) ? model.readiness.value.score : null
-    const readiness = modelReadiness ?? adaptive?.daily_decision?.readiness?.score ?? null
+    // wearable read is stale (the "date the measurement" rule). No backfill from
+    // the adaptive engine here — that put a confident number in the dock while
+    // W3ReadinessDecision two blocks below honestly refused, and the two
+    // surfaces contradicted each other on exactly the mornings that matter.
+    // Withheld → the dock renders `readinessNote`, the gate's own dated
+    // headline, which is the honest hero for a stale morning.
+    const readiness = isPresent(model.readiness) ? model.readiness.value.score : null
 
     // ── Readiness vs yesterday ─────────────────────────────────────────────
     // REAL, from `model.readinessVsPrevious` — the two most recent DATED
@@ -706,7 +707,16 @@ export default function W3TodayPage() {
       },
 
       sessionTitle: session ? session.title : null,
-      sessionDur: session && session.tss ? `${Math.round((session.tss / 100) * 68)} min` : null,
+      // The REAL prescribed duration: the plan day's intervals/duration target
+      // first, then the daily decision's minutes. Never invented from TSS —
+      // `TSS/100×68` drew a made-up number beside three measured ones, and the
+      // route recommendations then parsed the fabrication back as fact. With
+      // no real duration anywhere: null, and the slot shows its dash.
+      sessionDur: (() => {
+        const planSec = todayPlan && todayPlanSession ? planDurSec(todayPlan) : 0
+        const min = planSec > 0 ? Math.round(planSec / 60) : (planned?.duration_minutes ?? null)
+        return min != null && min > 0 ? `${min} min` : null
+      })(),
       sessionTargetW: session?.targetWatts != null ? `${session.targetWatts} W` : '—',
       sessionTss: session?.tss != null ? String(session.tss) : '—',
       sessionFtpPct: session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}%` : '—',

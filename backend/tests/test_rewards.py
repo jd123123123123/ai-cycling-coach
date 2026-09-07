@@ -128,28 +128,42 @@ class TestOnboardingGrant:
 
 
 class TestTierProgress:
-    def test_head_start_clears_the_entry_tier(self):
-        # The 400 RC head start is past the 300 entry tier; next target is mid.
+    # The ladder is anchored to the REAL catalogue: 600 common gear, 1800 rare
+    # gear, 4500 legendary gear, 15000 top bike. A gauge against prices nothing
+    # sells at measured progress toward fiction.
+    def test_head_start_is_partway_to_entry(self):
+        # The 400 RC head start sits inside the 600 entry tier (common gear).
         p = rewards.tier_progress(rewards.ONBOARDING_TOTAL_RC)
-        assert p["next_tier"] == "mid"
-        assert p["next_price"] == 900
+        assert p["next_tier"] == "entry"
+        assert p["next_price"] == 600
+        assert p["to_go"] == 200
 
     def test_partway_to_entry(self):
-        # 250 against the 300 entry tier -> 83% of the way, one ride to go.
-        p = rewards.tier_progress(250)
+        # 450 against the 600 entry tier -> 75% of the way.
+        p = rewards.tier_progress(450)
         assert p["next_tier"] == "entry"
-        assert p["next_price"] == 300
-        assert p["to_go"] == 50
-        assert p["pct"] == 83
+        assert p["next_price"] == 600
+        assert p["to_go"] == 150
+        assert p["pct"] == 75
 
     def test_progress_spans_between_tiers(self):
-        # 900 unlocks mid exactly; next target is prestige (2500), span 900->2500.
-        p = rewards.tier_progress(900)
+        # 1800 unlocks mid exactly; next target is prestige (4500), span 1800->4500.
+        p = rewards.tier_progress(1800)
         assert p["next_tier"] == "prestige"
         assert p["pct"] == 0
 
     def test_above_top_tier_is_maxed(self):
-        p = rewards.tier_progress(10_000)
+        p = rewards.tier_progress(20_000)
         assert p["next_tier"] is None
         assert p["pct"] == 100
         assert p["to_go"] == 0
+
+    def test_tiers_match_the_catalogue(self):
+        # entry/mid/prestige mirror earn_modifiers.PRICE_BY_RARITY so the two
+        # ladders cannot drift apart silently.
+        from app.services.earn_modifiers import PRICE_BY_RARITY
+
+        prices = dict(rewards.SHOP_TIERS)
+        assert prices["entry"] == PRICE_BY_RARITY["common"]
+        assert prices["mid"] == PRICE_BY_RARITY["rare"]
+        assert prices["prestige"] == PRICE_BY_RARITY["legendary"]

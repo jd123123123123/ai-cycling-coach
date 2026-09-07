@@ -37,6 +37,10 @@ export interface TierProgress {
 
 export interface Wallet {
   balance: number
+  /** Sum of every positive ledger line, ever. Levels are built on THIS —
+   *  spending moves `balance`, never what was earned. Optional because a
+   *  server that predates the field may still answer. */
+  lifetime_earned?: number
   ledger: LedgerEntry[]
   tier: TierProgress
 }
