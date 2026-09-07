@@ -45,7 +45,9 @@ import { bucketMeta, thisPeriod, windowChip, windowDays, windowEdges, type W3Per
  *  - the 8-seat crew cap → "seats open"
  */
 
-const SEAT_CAP = 8 // fixture: crew size ceiling not modelled server-side
+// The ceiling is the SERVER'S now (CrewRead.seat_cap, enforced on accept) —
+// this is only the fallback for a payload that predates the field.
+const SEAT_CAP_FALLBACK = 8
 const nf = new Intl.NumberFormat('de-DE')
 
 const ORD = (n: number) => `${n}.`
@@ -65,7 +67,7 @@ const EMPTY: W3CrewVm = {
   showDistanceGoal: false,
   distanceKm: 0, distanceGoalKm: 0, distancePct: 0, distanceToGo: 0,
   yourDistanceNote: '', yourSharePct: 0,
-  highlights: [], highlightsTitle: '', seatsOpen: SEAT_CAP, seatsCopy: '',
+  highlights: [], highlightsTitle: '', seatsOpen: SEAT_CAP_FALLBACK, seatsCopy: '',
 }
 
 export default function W3CrewPage() {
@@ -280,7 +282,7 @@ export default function W3CrewPage() {
       })
     }
 
-    const seatsOpen = Math.max(0, SEAT_CAP - total)
+    const seatsOpen = Math.max(0, (mine?.crew?.seat_cap ?? SEAT_CAP_FALLBACK) - total)
 
     return {
       inCrew: true,

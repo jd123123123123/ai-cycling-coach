@@ -10,6 +10,9 @@ export interface CrewRead {
   id: number
   name: string
   owner_user_id: number
+  /** The crew size ceiling — SERVER-OWNED and enforced on invite accept.
+   *  Optional for older payloads; 8 is the documented product value. */
+  seat_cap?: number
 }
 
 export interface CrewMemberRead {

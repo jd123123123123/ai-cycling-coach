@@ -33,6 +33,10 @@ class CrewRead(BaseModel):
     # frontend render ONE unambiguous crew card — never "crew exists" and
     # "no crew yet" side by side.
     member_count: int = 1
+    # The crew size ceiling, SERVER-OWNED. The frontend used to hard-code 8 as
+    # a fixture and render "N Plätze frei" against a limit the server never
+    # enforced — a claim, not a rule. One number, one owner.
+    seat_cap: int = 8
 
 
 class CrewMineResponse(BaseModel):

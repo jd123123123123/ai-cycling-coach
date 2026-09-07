@@ -103,6 +103,25 @@ async def _crew_pending_invites(
     return list((await db.execute(stmt)).scalars().all())
 
 
+#: One crew, at most this many riders. The value the product has always
+#: claimed (client copy: "Crews von sechs bis acht"); enforced here so the
+#: frontend's "N Plätze frei" is a fact rather than a fixture.
+SEAT_CAP = 8
+
+
+async def _assert_seat_free(db: AsyncSession, crew_id: int) -> None:
+    n = (
+        await db.execute(
+            select(func.count()).select_from(CrewMembership).where(CrewMembership.crew_id == crew_id)
+        )
+    ).scalar_one()
+    if int(n) >= SEAT_CAP:
+        raise HTTPException(
+            status_code=422,
+            detail={"code": "crew_full", "msg": f"this crew already has {SEAT_CAP} riders"},
+        )
+
+
 def _members_to_read(rows: list[tuple[CrewMembership, User]]) -> list[CrewMemberRead]:
     return [
         CrewMemberRead(
@@ -473,6 +492,7 @@ async def accept_invite(
         if (options is not None and options.join_challenges)
         else "member"
     )
+    await _assert_seat_free(db, invite.crew_id)
     db.add(
         CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role=role)
     )
@@ -779,6 +799,7 @@ async def accept_incoming(
         if (options is not None and options.join_challenges)
         else "member"
     )
+    await _assert_seat_free(db, invite.crew_id)
     db.add(CrewMembership(crew_id=invite.crew_id, user_id=current_user.id, role=role))
     invite.status = "accepted"
     invite.accepted_at = datetime.now(UTC)
