@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
 import { Check, Lock } from 'lucide-react'
 import { useGarageCollection, useBuyItem, useEquipItem } from '../../hooks/useShop'
-import { bikesByTier, artFit, type ShopItem } from './w3shop'
+import { bikesByTier, partsBySlot, equippedInSlot, artFit, type ShopItem } from './w3shop'
 import { T, FONT, DASH, band, Kicker } from './w3tokens'
 import { S, lux, TNUM } from './w3surfaces'
 import W3StatusBar from './W3StatusBar'
@@ -144,6 +144,7 @@ export default function W3BikeShop() {
   const owned = useMemo(() => new Set(data?.owned ?? []), [data])
   const worn = data?.loadout.bike ?? null
   const tiers = useMemo(() => bikesByTier(), [])
+  const partSlots = useMemo(() => partsBySlot(), [])
 
   // The cheapest thing not yet owned — what the balance is actually working
   // towards, which is the one number that makes a balance mean anything.
@@ -208,6 +209,31 @@ export default function W3BikeShop() {
                   key={item.id}
                   item={item}
                   status={statusOf(item, owned, worn, balance)}
+                  busy={busyId === item.id}
+                  onBuy={() => run(buy)(item.id)}
+                  onWear={() => run(wear)(item.id)} />
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {/* ── TEILE — the mid-price sink between 600-RC gear and the bike
+            ladder. 24 priced cosmetics with generated art that NO screen
+            rendered until now: a catalogue the rider could not reach was a
+            sink the economy did not have. Same buy/wear verbs, per slot;
+            "worn" is what the loadout's slot column actually points at. */}
+        {partSlots.map((sl) => (
+          <div key={sl.slot} style={{ ...band(S.lg), gap: S.md }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Kicker>{sl.label}</Kicker>
+              <span style={{ fontSize: 11.5, fontWeight: 500, color: T.quiet }}>{sl.note}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: S.md }}>
+              {sl.items.map((item) => (
+                <BikeTile
+                  key={item.id}
+                  item={item}
+                  status={statusOf(item, owned, equippedInSlot(data?.loadout, sl.slot), balance)}
                   busy={busyId === item.id}
                   onBuy={() => run(buy)(item.id)}
                   onWear={() => run(wear)(item.id)} />

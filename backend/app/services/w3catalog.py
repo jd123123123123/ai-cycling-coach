@@ -279,7 +279,7 @@ CATALOG: dict[str, CatalogItem] = {
         prompt="a black drop handlebar wrapped in crisp white bar tape",
     ),
     "saddle-stock": CatalogItem(
-        id="saddle-stock", name="Serienattel", kind="part",
+        id="saddle-stock", name="Seriensattel", kind="part",
         tier=None, slot="saddle", price=0,
         prompt="a plain black bicycle saddle with modest padding and steel rails",
     ),

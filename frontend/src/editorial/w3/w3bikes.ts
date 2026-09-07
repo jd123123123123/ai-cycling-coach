@@ -1,5 +1,5 @@
 /**
- * W3 · The bike ladder — 25 bikes, from the rust bucket everyone starts on to
+ * W3 · The bike ladder — 26 bikes, from the rust bucket everyone starts on to
  * a WorldTour prototype.
  *
  * WHY A LADDER AND NOT AN UPLOAD. Digitalising the rider's own bike made the

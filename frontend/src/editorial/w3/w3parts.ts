@@ -133,7 +133,7 @@ export const PARTS: W3Part[] = [
     prompt: 'a black drop handlebar wrapped in crisp white bar tape' },
 
   // ── SATTEL ──────────────────────────────────────────────────────────────
-  { id: 'saddle-stock', name: 'Serienattel', slot: 'saddle', price: 0,
+  { id: 'saddle-stock', name: 'Seriensattel', slot: 'saddle', price: 0,
     blurb: 'Unauffällig.',
     prompt: 'a plain black bicycle saddle with modest padding and steel rails' },
   { id: 'saddle-leather', name: 'Ledersattel', slot: 'saddle', price: 800,
