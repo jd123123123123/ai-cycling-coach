@@ -83,7 +83,12 @@ describe('W3CrewFeed', () => {
     wrap(<W3CrewFeedView rides={[ride({ comment_count: 3 })]} />)
     expect(screen.getByText('@luca')).toBeTruthy()
     expect(screen.getByText('Alpenrand')).toBeTruthy()
-    expect(screen.getByText('82,4 km · 1.210 hm · 3:14 h')).toBeTruthy()
+    // Today draws the same editorial post the crew feed does, so the ride's
+    // size is the card's own headline figure rather than the compact row's
+    // "82,4 km · 1.210 hm · 3:14 h" meta line. One ride, one shape, both
+    // screens — the old row is gone.
+    expect(screen.getByText('82,4')).toBeTruthy()
+    expect(screen.getByText('1.210')).toBeTruthy()
     expect(screen.getByLabelText('Kommentare öffnen (3)')).toBeTruthy()
   })
 
@@ -98,13 +103,17 @@ describe('W3CrewFeed', () => {
     wrap(<W3CrewFeedView rides={many} />)
     expect(screen.getByText('9 FAHRTEN')).toBeTruthy()
     expect(screen.getAllByText(/^Fahrt \d$/).length).toBe(FEED_VISIBLE)
-    // …and says so, rather than quietly counting nine and drawing four.
-    expect(screen.getByText(`+ ${9 - FEED_VISIBLE} WEITERE IN DER CREW`)).toBeTruthy()
+    // …and says so, rather than quietly counting nine and drawing two.
+    expect(screen.getByText(`${9 - FEED_VISIBLE} weitere Fahrten`)).toBeTruthy()
   })
 
-  it('offers no "more" link when the crew fits in the card', () => {
+  it('always offers the way to the crew, and only claims a remainder when there is one', () => {
+    // The link used to appear ONLY when rides had been cut, so a crew with two
+    // rides had no route to its own feed at all. The button is always there;
+    // what it must never do is invent a count.
     wrap(<W3CrewFeedView rides={[ride()]} />)
-    expect(screen.queryByText(/WEITERE IN DER CREW/)).toBeNull()
+    expect(screen.getByText('Zur Crew')).toBeTruthy()
+    expect(screen.queryByText(/weitere Fahrten/)).toBeNull()
   })
 
   it('opens the detail in place, and dashes what the ride never measured', async () => {
@@ -118,11 +127,14 @@ describe('W3CrewFeed', () => {
     expect(screen.getAllByText('—').length).toBe(2)
     expect(screen.getByText('TSS').parentElement?.textContent).toBe('TSS—')
     expect(screen.getByText('Ø WATT').parentElement?.textContent).toBe('Ø WATT—')
-    // The open card must ADD facts, never repeat the collapsed line's.
-    expect(screen.queryByText('HÖHE')).toBeNull()
-    // The climbing appears once, in the collapsed meta line — the open tile
-    // adds calories instead of printing the same metres again.
-    expect(document.body.textContent?.match(/1\.210 hm/g)?.length).toBe(1)
+    // The open tile must ADD facts, never repeat the card's own. The post
+    // prints HÖHE in its stat row, so the tile below must not print it again.
+    expect(screen.getAllByText('HÖHE').length).toBe(1)
+    // The climbing appears once, in the card's stat row — the open tile adds
+    // calories instead of printing the same metres again. The value and its
+    // unit are separate elements now, so this counts the figure, not the
+    // "1.210 hm" string the old compact row rendered as one run of text.
+    expect(screen.getAllByText('1.210').length).toBe(1)
     expect(screen.getByText('KCAL').parentElement?.textContent).toBe('KCAL2.100')
     await waitFor(() => expect(fetchCrewRideComments).toHaveBeenCalledWith(1))
   })

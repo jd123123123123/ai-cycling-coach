@@ -128,9 +128,15 @@ const BASE = {
  * than production is the same defect as one that draws a shape production
  * cannot: it makes the screen look finished when it is not.
  */
-function PreviewFeed({ tab }: { tab: W3FeedTab }) {
-  const shown = tabRides(FEED_RIDES, tab)
-  const topRecord = headlineRecord(FEED_RIDES)
+function PreviewFeed({ tab, query }: { tab: W3FeedTab; query: string | null }) {
+  // The same two lines the wired page runs. The preview took only the tab and
+  // ignored the query, so the search field opened, typed and filtered nothing
+  // — a control that looked finished on the one route built to review it.
+  const q = (query ?? '').trim().toLowerCase()
+  const shown = tabRides(FEED_RIDES, tab).filter((r) =>
+    !q || [r.handle, r.display_name, r.title].some((f) => (f ?? '').toLowerCase().includes(q)))
+  // Derived from what is on screen, so a record cannot outlive its own ride.
+  const topRecord = headlineRecord(shown)
   const stories = storiesFromRides(FEED_RIDES, new Date(), (r) => ({
     id: r.id,
     name: r.is_mine ? 'Du' : `@${r.handle}`,
@@ -152,11 +158,6 @@ function PreviewFeed({ tab }: { tab: W3FeedTab }) {
         </div>
       ) : (
         <>
-          {(tab === 'crew' || tab === 'all') && (
-            <div style={{ padding: '0 20px' }}>
-              <W3CollectiveGoal km={782} goalKm={1000} pct={0.78} riders={9} daysLeft={2} onContribute={() => {}} />
-            </div>
-          )}
           {tab === 'records' ? (
             <div style={{ padding: '0 20px', display: 'flex', flexDirection: 'column', gap: 14 }}>
               {shown.map((r) => r.record ? (
@@ -182,8 +183,15 @@ function PreviewFeed({ tab }: { tab: W3FeedTab }) {
                   }} />
                 </div>
               ) : null}
+              {/* post, post, Kollektiv, post, post — `dly9G`'s own order. */}
               <div style={{ padding: '0 20px' }}>
-                <W3CrewFeedView rides={shown} variant="page" headlinedId={topRecord?.id ?? null} />
+                <W3CrewFeedView rides={shown.slice(0, 2)} variant="page" headlinedId={topRecord?.id ?? null} />
+              </div>
+              <div style={{ padding: '0 20px' }}>
+                <W3CollectiveGoal km={782} goalKm={1000} pct={0.78} riders={9} daysLeft={2} onContribute={() => {}} />
+              </div>
+              <div style={{ padding: '0 20px' }}>
+                <W3CrewFeedView rides={shown.slice(2)} variant="page" headlinedId={topRecord?.id ?? null} />
               </div>
             </>
           )}
@@ -211,7 +219,7 @@ export default function W3CrewPreview() {
     highlightsTitle: `This ${periodWord(period)} in the crew`,
   }
   return <W3CrewView vm={vm} onPeriod={setPeriod}
-    feed={<PreviewFeed tab={tab} />}
+    feed={<PreviewFeed tab={tab} query={query} />}
     board={board}
     onBoard={() => setBoard(true)}
     onBack={board ? () => setBoard(false) : undefined}

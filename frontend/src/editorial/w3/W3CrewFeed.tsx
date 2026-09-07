@@ -1,15 +1,15 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronDown, ChevronRight, MessageCircle, Send, Plus } from 'lucide-react'
+import { ChevronRight, MessageCircle, Send, Plus } from 'lucide-react'
 import { useCrewStandings } from '../../hooks/useCrew'
 import { useCrewRides } from '../../hooks/useCrewRides'
 import { useCrewRideComments, usePostCrewRideComment } from '../../hooks/useCrewRideComments'
 import { useToggleReaction } from '../../hooks/useCrewReactions'
 import { CREW_EMOJIS, type ReactionState } from '../../api/crewReactions'
 import type { CrewRide, CrewRideComment } from '../../api/crewRides'
-import { T, FONT, DASH, Kicker } from './w3tokens'
-import { S, lux, luxTile, hairline, TNUM } from './w3surfaces'
-import { km, hm, dur, ago } from './w3rideFeed'
+import { T, FONT, DASH } from './w3tokens'
+import { S, luxTile, TNUM } from './w3surfaces'
+import { km, dur, ago } from './w3rideFeed'
 import { THEM_TINT, YOU_TINT } from './w3crew'
 import W3FeedPost, { type W3FeedPostVm } from './W3FeedPost'
 import W3AddDetailsNudge from './W3AddDetailsNudge'
@@ -59,7 +59,10 @@ const nf1 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 })
 const nf = new Intl.NumberFormat('de-DE')
 
 /** How many rides the section shows before it stops being a glance. */
-export const FEED_VISIBLE = 4
+// TWO, NOT FOUR. Today is somebody's own morning and the crew is a column on
+// it; four full posts made the crew the longest thing on the screen. Two is a
+// glimpse, and the button under them is the way to the rest.
+export const FEED_VISIBLE = 2
 /** How many the feed asks the server for — enough to fill the visible window
  *  from a crew where one rider posts several rides in a row. */
 export const FEED_LIMIT = 12
@@ -70,22 +73,6 @@ export const CREW_PAGE_LIMIT = 40
 
 // ── the face ────────────────────────────────────────────────────────────────
 
-function Face({ url, initial, mine }: { url: string | null; initial: string; mine: boolean }) {
-  const hue = mine ? YOU_TINT : THEM_TINT
-  const common = { flex: 'none' as const, width: 34, height: 34, borderRadius: 100 }
-  if (url) {
-    return (
-      <span style={{ ...common, overflow: 'hidden', background: T.heroChip, boxShadow: `0 0 0 1.5px ${hue}66` }}>
-        <img src={url} alt="" aria-hidden style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-      </span>
-    )
-  }
-  return (
-    <span style={{ ...common, background: T.heroChip, display: 'grid', placeItems: 'center', boxShadow: `0 0 0 1.5px ${hue}66` }}>
-      <span style={{ fontSize: 13, fontWeight: 700, color: hue }}>{initial}</span>
-    </span>
-  )
-}
 
 // ── the six-emoji palette, in W3's own tokens ───────────────────────────────
 //
@@ -242,84 +229,6 @@ function Cell({ label, value }: { label: string; value: string }) {
     </div>
   )
 }
-
-export function RideRow({ ride, avatar, open, onToggle, accent }: {
-  ride: CrewRide
-  avatar: string | null
-  open: boolean
-  onToggle: () => void
-  accent: string
-}) {
-  const mine = ride.is_mine
-  const name = mine ? 'Du' : `@${ride.handle}`
-  const initial = (ride.handle || '?').trim().charAt(0).toUpperCase() || '?'
-  const meta = [km(ride.distance_m), hm(ride.elevation_gain_m), dur(ride.duration_seconds)]
-    .filter((v) => v !== DASH).join(' · ')
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-      {/* The whole header opens the ride — a 12px chevron is not a tap target. */}
-      <button type="button" onClick={onToggle} aria-expanded={open}
-        style={{ ...bare, display: 'flex', alignItems: 'center', gap: 10, width: '100%', minWidth: 0 }}>
-        <Face url={avatar} initial={initial} mine={mine} />
-        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {/* HOUSE RULE 5, THREE RUNGS, IN THE RIGHT ORDER. The first frame set
-              the handle in white 12.5 and the ride's name in grey 12.5 — two
-              lines of one size where the brighter one was the smaller fact.
-              The person is the byline; the RIDE is what the row is about. */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
-            <span style={{ ...ellipsis, fontSize: 11, fontWeight: 700, color: mine ? YOU_TINT : T.mid }}>{name}</span>
-            <span style={{ flex: 'none', fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{ago(ride.started_at)}</span>
-          </div>
-          <span style={{ ...ellipsis, fontSize: 13.5, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{ride.title || 'Fahrt'}</span>
-          {meta && <span style={{ ...TNUM, ...ellipsis, fontSize: 10, fontWeight: 600, color: T.quiet }}>{meta}</span>}
-        </div>
-        <ChevronDown size={15} color={T.quiet}
-          style={{ flex: 'none', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 180ms' }} />
-      </button>
-
-      {/* Collapsed, the row still carries the two things a rider acts on: what
-          the crew already said, and how big the conversation is. */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Reactions rideId={ride.id} seed={ride.reactions} accent={accent} />
-        </div>
-        <button type="button" onClick={onToggle} aria-label={`Kommentare öffnen (${ride.comment_count})`}
-          style={{ ...bare, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', borderRadius: 100, background: T.surface2 }}>
-          <MessageCircle size={12} color={ride.comment_count > 0 ? accent : T.quiet} />
-          <span style={{ ...TNUM, fontSize: 11, fontWeight: 700, color: ride.comment_count > 0 ? accent : T.quiet }}>{ride.comment_count}</span>
-        </button>
-      </div>
-
-      {open && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, minWidth: 0 }}>
-          {/* The detail, in the unit riders talk in. Four cells and no fifth:
-              this is the inside of a feed row, not a ride report. */}
-          <div style={{ ...luxTile(16), padding: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
-            <Cell label="TSS" value={ride.tss != null ? nf.format(ride.tss) : DASH} />
-            <Cell label="Ø WATT" value={ride.avg_power_w != null ? nf.format(ride.avg_power_w) : DASH} />
-            <Cell label="Ø PULS" value={ride.avg_hr != null ? nf.format(ride.avg_hr) : DASH} />
-            {/* KCAL, not HÖHE. The first frame had a "HÖHE" cell printing
-                "1.210 hm" directly under a meta line already printing
-                "1.210 hm" — the same number twice, four millimetres apart, in
-                a card whose whole job is to add what the collapsed row does
-                not say. Opening a ride now tells you four NEW things. */}
-            <Cell label="KCAL" value={ride.calories != null ? nf.format(ride.calories) : DASH} />
-          </div>
-          <Thread rideId={ride.id} accent={accent} />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ── the crew screen's feed: one ride, one post ──────────────────────────────
-
-/** Media width inside a full-bleed post card at 390. */
-/** 4:3, not 1:1. A ride's outline is usually wider than it is tall — roads run
- *  along valleys and coasts — so a square plate spends its height on empty
- *  ground. Instagram's own landscape aspect, for the same reason. */
-
 /**
  * THE RIDE, AS A POST.
  *
@@ -538,85 +447,57 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, h
   const shown = page ? rides : rides.slice(0, FEED_VISIBLE)
   const accent = THEM_TINT
 
-  const feedCard = (
-    <div style={{ ...lux(26), padding: S.xl, gap: S.lg, minWidth: 0 }}>
-      {/* On Today the card names itself under the section's eyebrow. On the
-          crew screen the numbered chapter head already says "Zuletzt
-          gefahren", and printing it again two lines below is the same restating
-          this view deleted its highlights strip for. */}
-      {!page && <Kicker>Zuletzt gefahren</Kicker>}
-      {shown.map((r, i) => (
-        <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: S.lg, minWidth: 0 }}>
-          {i > 0 && <div style={hairline(-S.xs)} />}
-          <RideRow
+  // ONE CARD SHAPE, BOTH SCREENS. Today drew `RideRow` — a compact line inside
+  // a shared card — while the crew screen drew the editorial post. So the ride
+  // a rider saw on their morning and the same ride on the crew feed were two
+  // different objects, and every improvement made to the post since was
+  // invisible on the screen people actually open. The furniture around the
+  // list still differs (Today keeps its band, its count and its way out); the
+  // ride itself no longer does.
+  const askFor = shown.find(
+    (r) => r.is_mine && r.photo_urls.length === 0 && !r.description,
+  )
+  const posts = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+      {shown.map((r) => (
+        <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+          {/* THE ASK RIDES WITH THE RIDE IT IS ABOUT. Above the rider's own
+              newest unfilled post, not pinned to the top of the feed: a prompt
+              floating over somebody else's ride is a banner, and this is a
+              caption waiting to be written on the ride directly beneath it. */}
+          {askFor?.id === r.id && (
+            <W3AddDetailsNudge
+              activityId={r.id}
+              rideLabel={`Deine Fahrt von ${ago(r.started_at)}`}
+              needsDetails
+              onSaved={onRefresh}
+            />
+          )}
+          <RidePost
             ride={r}
             avatar={avatars?.[r.user_id] ?? null}
             open={openId === r.id}
             onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
-            accent={accent} />
+            accent={accent}
+            headlined={r.id === headlinedId}
+            onAddPhoto={setAddTo} />
         </div>
       ))}
-
-      {/* NO SILENT CAP. The pill counts every ride the server sent; the card
-          shows four. Without this line a crew of nine rides looked like a
-          crew of four that had miscounted itself. On the crew screen there is
-          nothing left to cap, so the line goes away with the cap. */}
-      {!page && rides.length > shown.length && (
-        <button type="button" onClick={() => navigate('/e/w3-crew')}
-          style={{ ...bare, display: 'flex', alignItems: 'center', gap: 6, fontSize: 10.5, fontWeight: 700, letterSpacing: 0.6, color: T.mid }}>
-          {`+ ${rides.length - shown.length} WEITERE IN DER CREW`}
-          <ChevronRight size={13} color={T.mid} />
-        </button>
+      {/* ONE SHEET FOR THE WHOLE COLUMN, on either screen. */}
+      {addTo != null && (
+        <W3RideDetailsSheet
+          activityId={addTo}
+          open
+          onClose={() => setAddTo(null)}
+          onSaved={() => { setAddTo(null); onRefresh?.() }}
+        />
       )}
     </div>
   )
 
-  // THE CREW SCREEN IS A FEED OF POSTS, not a column inside one card. Today's
-  // reasoning ("a stack of cards would be the loudest thing on the rider's own
-  // morning") is about Today; here the crew IS the subject, so each ride gets
-  // its own full-bleed post.
-  if (page) {
-    // THE ASK RIDES WITH THE RIDE IT IS ABOUT. Above the rider's own newest
-    // unfilled post, not pinned to the top of the feed: a prompt floating over
-    // somebody else's ride is a banner, and this is a caption waiting to be
-    // written on the ride directly beneath it.
-    const askFor = shown.find(
-      (r) => r.is_mine && r.photo_urls.length === 0 && !r.description,
-    )
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-        {shown.map((r) => (
-          <div key={r.id} style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-            {askFor?.id === r.id && (
-              <W3AddDetailsNudge
-                activityId={r.id}
-                rideLabel={`Deine Fahrt von ${ago(r.started_at)}`}
-                needsDetails
-                onSaved={onRefresh}
-              />
-            )}
-            <RidePost
-              ride={r}
-              avatar={avatars?.[r.user_id] ?? null}
-              open={openId === r.id}
-              onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
-              accent={accent}
-              headlined={r.id === headlinedId}
-              onAddPhoto={setAddTo} />
-          </div>
-        ))}
-        {addTo != null && (
-          <W3RideDetailsSheet
-            activityId={addTo}
-            open
-            onClose={() => setAddTo(null)}
-            onSaved={() => { setAddTo(null); onRefresh?.() }}
-          />
-        )}
-      </div>
-    )
-  }
+  if (page) return posts
 
+  const rest = rides.length - shown.length
   return (
     <div style={{ ...band(26), gap: 14 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
@@ -630,7 +511,24 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, h
         </div>
       </div>
 
-      {feedCard}
+      {posts}
+
+      {/* THE WAY OUT IS A BUTTON, NOT A FOOTNOTE. It used to be 10.5px of
+          tracked caps that only appeared when rides had been cut — so a crew
+          with exactly two rides had no route to its own feed at all. It is
+          always here now, and it only claims a remainder when there is one:
+          "+3 weitere" over a crew of two would be a number the screen made up. */}
+      <button type="button" onClick={() => navigate('/e/w3-crew')}
+        style={{
+          ...bare, width: '100%', display: 'flex', alignItems: 'center',
+          justifyContent: 'center', gap: 7, padding: '13px 18px', borderRadius: 100,
+          background: T.surface2, cursor: 'pointer',
+        }}>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>
+          {rest > 0 ? `${rest} weitere Fahrten` : 'Zur Crew'}
+        </span>
+        <ChevronRight size={15} color={T.mid} />
+      </button>
     </div>
   )
 }

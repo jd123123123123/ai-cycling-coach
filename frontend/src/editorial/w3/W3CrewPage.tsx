@@ -102,7 +102,11 @@ export default function W3CrewPage() {
   // Hoisted so the headline card and the feed agree on WHICH ride it is —
   // computing it twice is how the two would drift into showing a card for one
   // ride and suppressing the chip on another.
-  const topRecord = useMemo(() => headlineRecord(rides ?? []), [rides])
+  //
+  // IT IS DERIVED FROM WHAT IS ON SCREEN, NOT FROM EVERYTHING FETCHED. Reading
+  // it off the full list meant searching "kanal" left a NEUE BESTLEISTUNG card
+  // for Mara's ride standing over a feed the ride had just been filtered out
+  // of — a headline about something the screen was no longer showing.
   // My newest ride with no picture on it — what the rail's leading tile is for.
   const myUnfilled = useMemo(
     () => (rides ?? []).find((r) => r.is_mine && r.photo_urls.length === 0),
@@ -117,6 +121,7 @@ export default function W3CrewPage() {
     return cut.filter((r) =>
       [r.handle, r.display_name, r.title].some((f) => (f ?? '').toLowerCase().includes(q)))
   }, [rides, tab, query])
+  const topRecord = useMemo(() => headlineRecord(shown), [shown])
   // The rail is people, and the card it opens is the ride's own post — the
   // same component the feed below draws, so a story and a post can never
   // disagree about the same ride.
@@ -395,23 +400,6 @@ export default function W3CrewPage() {
               onStart={myUnfilled ? () => setDressing(myUnfilled.id) : undefined}
             />
 
-            {/* THE GOAL CARD IS ITSELF A CHALLENGE — the page finds it as the
-                crew's `distance_km` challenge a few lines up. Leaving it above
-                the Challenges cut prints the same object twice, once as a card
-                and once as a row inside the list under it. */}
-            {(tab === 'crew' || tab === 'all') && vm.showDistanceGoal && vm.distanceGoalKm > 0 && (
-              <div style={{ padding: '0 20px' }}>
-                <W3CollectiveGoal
-                  km={vm.distanceKm}
-                  goalKm={vm.distanceGoalKm}
-                  pct={vm.distancePct / 100}
-                  riders={vm.members.length}
-                  daysLeft={null}
-                  onContribute={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
-                />
-              </div>
-            )}
-
             {/* CHALLENGES IS NOT A CUT OF RIDES. The chip swaps the list for
                 the crew's live challenges; `tabRides` returns none for it, so
                 rendering both would draw an empty feed underneath. */}
@@ -456,9 +444,45 @@ export default function W3CrewPage() {
                       </div>
                     ) : null}
 
+                    {/* THE COLLECTIVE CARD SITS INSIDE THE STREAM, NOT ON TOP
+                        OF IT. `dly9G` runs post, post, Kollektiv, post, post —
+                        the card is a beat between rides, and hoisting it above
+                        them made the feed open on a progress bar instead of on
+                        somebody's ride. `W3CrewFeedView` returns null for an
+                        empty list, so the split is safe with one ride or none. */}
                     <div style={{ padding: '0 20px' }}>
                       <W3CrewFeedView
-                        rides={shown}
+                        rides={shown.slice(0, 2)}
+                        avatars={avatars}
+                        variant="page"
+                        onRefresh={() => void refetchRides()}
+                        headlinedId={topRecord?.id ?? null}
+                      />
+                    </div>
+
+                    {/* THE GOAL CARD IS ITSELF A CHALLENGE — the page finds it as
+                        the crew's `distance_km` challenge a few lines up, which is
+                        why it does not appear under the Challenges cut: the same
+                        object would print twice, once as a card and once as a row
+                        in the list. Being inside this branch already excludes that
+                        cut and the records one. */}
+                    {vm.showDistanceGoal && vm.distanceGoalKm > 0 && (
+                      <div style={{ padding: '0 20px' }}>
+                        <W3CollectiveGoal
+                          km={vm.distanceKm}
+                          goalKm={vm.distanceGoalKm}
+                          pct={vm.distancePct / 100}
+                          riders={vm.members.length}
+                          daysLeft={null}
+                          onContribute={vm.inCrew && vm.showDistanceGoal ? () => setEditingGoal(true) : undefined}
+                        />
+                      </div>
+                    )}
+
+
+                    <div style={{ padding: '0 20px' }}>
+                      <W3CrewFeedView
+                        rides={shown.slice(2)}
                         avatars={avatars}
                         variant="page"
                         onRefresh={() => void refetchRides()}
