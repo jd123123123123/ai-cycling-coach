@@ -8,11 +8,14 @@ import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
 import { useChest, useClaimRide } from '../../hooks/useWallet'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
-import type { W3RideHeroVm } from './W3RideMapHero'
+import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
+import W3StatusBar from './W3StatusBar'
 import W3RideWrap, { type W3RideWrapVm, type W3WrapStat } from './W3RideWrap'
-import { T } from './w3tokens'
+import { T, FONT, Kicker, band } from './w3tokens'
+import { S, lux, hairline, TNUM } from './w3surfaces'
+import './w3.css'
 import { splitVerdict } from '../data/verdictSplit'
 import { looksLikeRepeatSet } from './rideRepeats'
 
@@ -30,6 +33,10 @@ import { looksLikeRepeatSet } from './rideRepeats'
  * fatigue / form (CTL / ATL / TSB) and their 7-day trend. Absent signals show
  * an honest "—". No fabricated stats remain (the old placeholder season-goal
  * card was removed — it had no backing data source).
+ *
+ * THE DEBRIEF IS NOT GUARANTEED. It requires a power stream and 404s without
+ * one, which is the normal case for a rider with no power meter. That is a
+ * REDUCED STATE, never a wait — see `W3RideReduced` at the foot of this file.
  */
 
 const DASH = '—'
@@ -54,7 +61,7 @@ const fmtDateTime = (iso: string | null | undefined): string => {
   if (Number.isNaN(d.getTime())) return DASH
   return `${d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })} · ${d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })}`
 }
-const ZONE_NAMES = ['Erholung', 'Ausdauer', 'Tempo', 'Schwelle', 'VO2max']
+const ZONE_NAMES = ['Erholung', 'Ausdauer', 'Tempo', 'Schwelle', 'VO2max', 'Anaerob']
 const sgn = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`
 const durLabel = (s: number) => (s < 60 ? `${s} Sek` : `${Math.round(s / 60)} Min`)
 
@@ -228,11 +235,24 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     const pct = d.pacing?.zone_time_pct ?? {}
     const keys = Object.keys(pct)
     if (keys.length === 0) return []
-    return keys.slice(0, 5).map((k, i) => {
+    // THE PEAK IS THE ZONE THE RIDE ACTUALLY SPENT MOST OF ITSELF IN. This read
+    // `peak: i === 3` — a constant by array index — so every ride on this screen
+    // bolded "Schwelle", including a recovery spin that was ninety per cent
+    // Zone 1. The row contradicted the stacked bar directly above it, and the
+    // real figures were already in scope on the line above.
+    //
+    // Six, not five: `ZONE_TINT` carries six colours and the server sends six
+    // buckets, so the anaerobic zone was being sliced off the end.
+    const rows = keys.slice(0, 6).map((k, i) => {
       const p = Math.round((pct[k] ?? 0) * (pct[k] > 1 ? 1 : 100))
       const min = Math.round(((pct[k] > 1 ? pct[k] / 100 : pct[k]) * h.moving_time_s) / 60)
-      return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} Min`, pct: p, peak: i === 3 }
+      return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} Min`, pct: p, peak: false }
     })
+    // A tie leaves the first one lit rather than lighting two; ">" not ">=".
+    let top = 0
+    for (let i = 1; i < rows.length; i++) if (rows[i].pct > rows[top].pct) top = i
+    if (rows[top] && rows[top].pct > 0) rows[top].peak = true
+    return rows
   })()
 
   const bestEffort = d.efforts.reduce((m, e) => (e.pct_of_best ?? 0) > (m?.pct_of_best ?? 0) ? e : m, d.efforts[0])
@@ -437,6 +457,177 @@ function toWrapVm(
   }
 }
 
+/**
+ * ── THE RIDE WITHOUT ITS DEBRIEF ─────────────────────────────────────────
+ *
+ * `/analytics/activity-debrief/:id` answers 404 for any ride that stored no
+ * power stream — on a rider with no power meter that is nearly every ride. This
+ * page read `!vm` as "still loading", so those rides showed the loading label
+ * for as long as the screen stayed open.
+ *
+ * The ride still happened, and the request that describes it — `useActivity` —
+ * answered. So this renders THAT: the route, the ride's own identity, the
+ * figures the row carries, and average speed derived from distance and time.
+ * That last one is `toWrapVm`'s reasoning applied here rather than a second
+ * dialect for the same idea — a ride without a power meter does not get an
+ * empty tile, it gets the number it does have.
+ *
+ * Nothing is filled in. Every figure the row lacks is an em dash, and the
+ * analysis this page cannot do is named instead of approximated.
+ */
+function toReducedHero(a: ActivityRead): W3RideHeroVm {
+  const secs = a.duration_seconds ?? 0
+  const km = a.distance_meters != null ? a.distance_meters / 1000 : null
+  // Distance over time. Computable for every ride ever recorded, with or
+  // without a meter on the cranks.
+  const kmh = km != null && secs > 0 ? km / (secs / 3600) : null
+  const num = (n: number, d = 0) => n.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d })
+  // The row can carry an average even when the second-by-second stream that
+  // the debrief needs was never stored. Shown when it is there, dashed when not.
+  const watts = a.normalized_power ?? a.average_power
+
+  return {
+    polyline: a.route_polyline ?? null,
+    grades: a.route_grades ?? null,
+    // No composed scene on this state. Composing is an explicit, paid call that
+    // belongs to the full detail view; putting a generated picture on the one
+    // page that cannot explain the ride would be ornament ahead of facts. The
+    // route trace holds the cover, which is this hero's documented fallback.
+    sceneImage: null,
+    dateLine: fmtDateTime(a.started_at),
+    // A ride with no recorded duration gets a dash at 88px rather than
+    // "00:00:00", which would read as a ride that took no time.
+    duration: secs > 0 ? fmtHmsFull(secs) : DASH,
+    stats: [
+      { label: 'DISTANZ', value: km != null ? num(km, 1) : DASH, unit: 'km' },
+      { label: 'Ø TEMPO', value: kmh != null ? num(kmh, 1) : DASH, unit: 'km/h' },
+      { label: 'HÖHE', value: a.elevation_gain_m != null ? num(a.elevation_gain_m) : DASH, unit: 'hm' },
+    ],
+    watts: watts != null ? String(Math.round(watts)) : DASH,
+    bpm: a.average_hr != null ? String(Math.round(a.average_hr)) : DASH,
+    // IF is normalised power against FTP, and neither is on this row. Inverting
+    // the ride's TSS would work arithmetically and lie in substance: on a ride
+    // with no meter that TSS came from heart rate, so the result would print a
+    // power claim the ride never made. Dark beam, em dash.
+    ifValue: DASH,
+    ifFill: 0,
+    // The beam's caption is set in acid by the hero, and acid on this screen
+    // means something was earned. Rendered, it read "INTENSITÄT UNBEKANNT" in
+    // the loudest colour on the card, directly above an eyebrow and a headline
+    // saying the same thing — the same absence stated three times, with the
+    // least informative one shouting. The dashed INTENSITÄT column sits
+    // immediately above the beam and already explains why it is dark.
+    effortLabel: '',
+    // Documented as unread by the hero; nothing should render from it.
+    energyLabel: '',
+  }
+}
+
+/** What the row still carries that the hero has no slot for. Each line renders
+ *  even when absent — a rider should see that the app has a place for their
+ *  calories and did not get one — but the whole card is dropped when none of
+ *  the three landed, rather than standing as a panel of three dashes. */
+function toReducedRows(a: ActivityRead): { label: string; value: string }[] {
+  const de = (n: number) => Math.round(n).toLocaleString('de-DE')
+  return [
+    { label: 'Belastung · TSS', value: a.tss != null ? de(a.tss) : DASH },
+    { label: 'Max. Herzfrequenz', value: a.max_hr != null ? `${de(a.max_hr)} bpm` : DASH },
+    { label: 'Kalorien', value: a.calories != null ? `${de(a.calories)} kcal` : DASH },
+  ]
+}
+
+function W3RideReduced({ activity, onBack, onExpandMap }: {
+  activity: ActivityRead
+  onBack: () => void
+  onExpandMap?: () => void
+}) {
+  const hero = toReducedHero(activity)
+  const rows = toReducedRows(activity)
+  const hasRows = rows.some((r) => r.value !== DASH)
+
+  // The sentence has to be true for the reason it is being shown. A ride whose
+  // row carries no power at all was ridden without a meter; a ride that has an
+  // average and still has no debrief is missing the second-by-second recording
+  // the analysis reads. Two different facts, so two different sentences.
+  const noMeter = activity.average_power == null && activity.normalized_power == null
+  const lead = noMeter ? 'Diese Fahrt hat keine' : 'Für diese Fahrt gibt es keine'
+  const accent = noMeter ? 'Leistungsdaten.' : 'Tiefenanalyse.'
+  const body = noMeter
+    ? 'Zonen, Bestwerte und das KI-Urteil brauchen einen Leistungsmesser.'
+    : 'Zonen, Bestwerte und das KI-Urteil brauchen die aufgezeichneten Sekundenwerte dieser Fahrt.'
+
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
+        <W3StatusBar />
+        {/* SHARE IS DELIBERATELY NOT OFFERED. The share screen reads the same
+            debrief this ride does not have, so the button would hand the rider
+            to a page that cannot draw their card. */}
+        <W3RideMapHero vm={hero} onBack={onBack} onExpandMap={onExpandMap} />
+
+        <div style={{ ...band(S.section), gap: S.md }}>
+          <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.quiet }}>
+            {noMeter ? 'OHNE LEISTUNGSMESSER' : 'OHNE LEISTUNGSAUFZEICHNUNG'}
+          </span>
+          {/* The two-weight headline at this screen's own metrics — 25/600/−1,
+              the sentence in ink and the one word it turns on in acid, on its
+              own line with the full stop on it. SemiBold because nothing in
+              this product is set heavier, and this is the page's only acid
+              spend outside the hero. */}
+          <span style={{ fontSize: 25, fontWeight: 600, letterSpacing: -1, lineHeight: 1.06, color: T.ink }}>
+            {lead}
+            <br />
+            <span style={{ color: T.acid }}>{accent}</span>
+          </span>
+          <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{body}</span>
+
+          {hasRows && (
+            <div style={{ ...lux(24), marginTop: S.sm, padding: `0 ${S.xl}px` }}>
+              {rows.map((r, i) => (
+                <div key={r.label}>
+                  {i > 0 && <div style={hairline()} />}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: S.md, padding: `${S.lg}px 0` }}>
+                    <Kicker>{r.label}</Kicker>
+                    <span style={{
+                      fontSize: 17, fontWeight: 600, letterSpacing: -0.4,
+                      color: r.value === DASH ? T.quiet : T.ink, ...TNUM,
+                    }}>{r.value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/** Neither the debrief NOR the ride's own row came back. There is nothing true
+ *  to draw, and both requests have finished — so the page says so rather than
+ *  waiting on something that already stopped. */
+function W3RideUnavailable({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="w3-root">
+      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh', background: T.bg }}>
+        <W3StatusBar />
+        <div style={{ ...band(S.section), gap: S.md, paddingTop: 48 }}>
+          <span style={{ fontSize: 25, fontWeight: 600, letterSpacing: -1, lineHeight: 1.06, color: T.ink }}>
+            Diese Fahrt lässt sich nicht
+            <br />
+            <span style={{ color: T.acid }}>laden.</span>
+          </span>
+          <button onClick={onBack} style={{
+            alignSelf: 'flex-start', marginTop: S.sm, padding: '11px 20px', borderRadius: 100,
+            background: T.surface, border: 0, cursor: 'pointer', fontFamily: FONT,
+            fontSize: 11, fontWeight: 600, letterSpacing: 0.8, color: T.ink,
+          }}>ZURÜCK</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function W3RideDetailPage() {
   // CELEBRATE MODE COMES FROM THE ROUTE, NOT A PROP. `lazyWithRetry` types every
   // routed page as `ComponentType<unknown>`, so a page that takes props cannot
@@ -446,7 +637,7 @@ export default function W3RideDetailPage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const activityId = id ? Number(id) : undefined
-  const { data } = useRaceDebrief(activityId)
+  const { data, isError: debriefFailed } = useRaceDebrief(activityId)
   const { data: pmc } = usePMC()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: season } = useActivitiesRange(seasonStart, new Date())
@@ -516,7 +707,27 @@ export default function W3RideDetailPage() {
     [celebrate, data, activity, rewardRc, claimState],
   )
 
-  if (!vm || !heroVm) return <W3Loading label="Lade deine Fahrt…" />
+  // ── LOADING AND UNAVAILABLE ARE NOT THE SAME STATE ──────────────────────
+  // `!vm` meant both. The debrief endpoint answers 404 for every ride with no
+  // power stream, so on a rider without a power meter this page showed
+  // "Lade deine Fahrt…" permanently — a finished request rendered as a wait.
+  // Once the debrief has failed there is nothing left to wait for, and the
+  // ride renders from its own row instead.
+  if (!vm || !heroVm) {
+    if (!debriefFailed) return <W3Loading label="Lade deine Fahrt…" />
+    if (activity) {
+      return (
+        <W3RideReduced
+          activity={activity}
+          onBack={() => navigate(-1)}
+          onExpandMap={activity.route_polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
+        />
+      )
+    }
+    // The row is still on its way — that IS a wait, and a short one.
+    if (routePending) return <W3Loading label="Lade deine Fahrt…" />
+    return <W3RideUnavailable onBack={() => navigate(-1)} />
+  }
 
   const detail = (
     <W3RideDetailView

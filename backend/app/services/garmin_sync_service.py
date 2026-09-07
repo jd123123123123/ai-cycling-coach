@@ -30,12 +30,14 @@ Transaction model:
 """
 import asyncio
 import logging
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
+from app.models.activity_stream import ActivityStream
 from app.models.athlete_profile import AthleteProfile
 from app.models.coach_brief import CoachBrief
 from app.models.daily_metric import DailyMetric
@@ -103,6 +105,21 @@ AUTH_FAILURES_BEFORE_DISABLE = 3
 
 # Max days per activity fetch chunk — avoids undocumented pagination limits
 ACTIVITY_CHUNK_DAYS = 30
+
+#: How many stream-less rides one maintenance pass may re-fetch from Garmin.
+#:
+#: `backfill_missing_streams` costs one detail call per ride, and the rides it
+#: has to heal are not a handful: everything the power guard dropped, plus
+#: everything older than the 90-day initial backfill. A rider with four years
+#: of history can have several hundred of them, and asking for all of them in
+#: one sync is precisely the shape of request that got this integration
+#: throttled in the first place (see METRICS_MIN_INTERVAL_MINUTES).
+#:
+#: Fifteen is one ordinary sync's worth of extra calls, spread over a
+#: six-hourly maintenance window, and still clears a 300-ride backlog inside a
+#: few weeks of normal use. The rides are taken newest-first, so the ones a
+#: rider might actually open are healed on the first pass.
+STREAM_BACKFILL_MAX_PER_SYNC = 15
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +280,141 @@ async def sync_activities(
     return synced
 
 
+#: Rides Garmin has already been asked about and had nothing to give.
+#:
+#: The backfill below selects "cycling rides with no stream row" — a query a
+#: barren ride matches forever. An indoor session recorded with neither power,
+#: pulse nor GPS stores nothing, so it stays selectable and, being ordered
+#: newest-first, would take the same slots on every maintenance pass while
+#: older rides never got their turn. Remembering the refusals for the life of
+#: the process is what makes repeated syncs advance instead of re-asking.
+#:
+#: It is a cache, not a fact about the ride: a deploy clears it and each barren
+#: ride is tried once more. That is the right price for not inventing a column
+#: to record "we looked and there was nothing there".
+_STREAMS_UNAVAILABLE: set[int] = set()
+
+#: What makes a recording worth storing. Power drives the CP model; GPS drives
+#: the map and the ride weather, altitude the elevation profile, pulse the
+#: effort. A payload with none of them is a column of timestamps.
+_USABLE_CHANNELS = ("power", "latitude", "longitude", "heart_rate", "altitude")
+
+
+def _has_usable_signal(records: list[dict]) -> bool:
+    """True when the payload carries at least one channel anything reads."""
+    return any(r.get(c) is not None for r in records for c in _USABLE_CHANNELS)
+
+
+async def _fetch_and_store_streams(
+    db: AsyncSession,
+    user_id: int,
+    client,
+    activity,
+    garmin_id: int,
+    profile,
+    *,
+    commit: bool,
+) -> bool:
+    """Fetch one activity's per-second recording from Garmin and persist it.
+
+    Returns True when a stream row was written and False when the payload held
+    nothing worth keeping — both callers record that refusal so neither asks
+    for the same empty ride again. Garmin transport errors propagate; the
+    callers decide what a failed fetch means for the work around it.
+
+    ``commit=False`` keeps the write inside the sync's single transaction (the
+    RLS ``SET LOCAL`` survives it); the backfill commits per ride so a rate
+    limit halfway through keeps what it already stored.
+    """
+    detail = await client.get_activity_details(garmin_id)
+    records = garmin_details_to_records(detail)
+    if not records or not _has_usable_signal(records):
+        return False
+
+    # WHAT THE POWER GUARD COST. Until 2026-09 this returned early for any ride
+    # with no power sample — after the detail payload had already been fetched.
+    # A rider without a power meter had their GPS track, their altitude and
+    # their pulse downloaded and thrown away on every single ride, and because
+    # streams are written at exactly one moment (a freshly inserted activity,
+    # the dedup above skips everything else) no later sync ever went back for
+    # them. The bill was the whole ride page: no map, no elevation profile, no
+    # ride weather, no personal bests, and /analytics/activity-debrief/{id}
+    # answering 404 for good — confirmed live on three rides in production.
+    #
+    # Such a ride is now stored, with the cycling power model switched off for
+    # it exactly as it is for runs: ingest_activity_streams nulls CP, W′, eFTP,
+    # the MMP curve and NP rather than fitting them to the zero-filled power
+    # array records_to_streams produces for an unequipped bike.
+    #
+    # That restores the map, the elevation profile and the ride weather, which
+    # need only what is now stored. It does NOT by itself restore the debrief:
+    # `race_debrief.build_debrief` still returns None for a ride with no power
+    # channel, so /analytics/activity-debrief/{id} keeps answering 404 until
+    # that function learns to build a power-less report (route, climbs,
+    # segments, HR) instead of refusing one. Nor does it restore personal
+    # bests — those are mean-maximal POWER records, and a bike with no meter
+    # has not measured one. Storing a curve of zeroes would produce both, and
+    # both would be fiction.
+    is_ride = getattr(activity, "sport", None) == "cycling"
+    has_power = any(r.get("power") is not None for r in records)
+
+    streams = records_to_streams(records)
+    duration_s = streams.duration_s
+    if not has_power:
+        # AN ABSENT POWER METER IS NOT A RIDE AT 0 W. `records_to_streams`
+        # substitutes 0.0 for a missing power sample, which is right for a
+        # metered bike (a missing sample there means coasting) and a lie for a
+        # bike that has no meter at all. Stored, that lie is worse than the bug
+        # this function is fixing: the array is non-empty, so every reader that
+        # asks `if streams["power"]` believes the ride was measured — the race
+        # debrief would answer with IF 0.00, an efficiency factor of 0.000,
+        # 100 % of the ride in zone 1 and a plan to replace 0 g of carbs, and
+        # the "rides with power" denominator behind the analytics surfaces
+        # would count it. An empty channel is the honest shape, and it is the
+        # one every one of those readers already handles (`or []`, `or None`,
+        # falsy-list guards): the ride keeps its GPS, altitude and pulse, and
+        # says nothing at all about watts.
+        streams = replace(streams, power=[])
+    weather = None
+    if has_gps(streams) and activity.started_at is not None:
+        first_lat = next((v for v in streams.latitude if v is not None), None)
+        first_lng = next((v for v in streams.longitude if v is not None), None)
+        if first_lat is not None and first_lng is not None:
+            # `duration_s` is read from the untouched streams above: it is
+            # len(power), which the empty-channel case would otherwise collapse
+            # to a zero-length weather window.
+            end = activity.started_at + timedelta(seconds=duration_s)
+            weather = await fetch_ride_weather(
+                first_lat, first_lng, activity.started_at, end
+            )
+    ftp = float(profile.ftp_watts) if profile and profile.ftp_watts else None
+    analysis = await ingest_activity_streams(
+        db,
+        user_id=user_id,
+        activity_id=activity.id,
+        streams=streams,
+        ftp=ftp,
+        weather=weather,
+        commit=commit,
+        store_power_model=is_ride and has_power,
+        # Tightens the corrupt-power ingest guard from the absolute 500 W
+        # bound to 5 W/kg when the athlete's weight is known.
+        weight_kg=float(profile.weight_kg) if profile and profile.weight_kg else None,
+    )
+    logger.info(
+        "Ingested streams for activity id=%s (garmin %s): %s",
+        activity.id,
+        garmin_id,
+        (
+            "NP=%.0f, CP=%s"
+            % (analysis.np_watts, analysis.cp.cp_watts if analysis.cp else "n/a")
+            if is_ride and has_power
+            else "no power model (GPS/altitude/HR only)"
+        ),
+    )
+    return True
+
+
 async def _sync_activity_streams(
     db: AsyncSession,
     user_id: int,
@@ -274,64 +426,129 @@ async def _sync_activity_streams(
     """Best-effort: fetch the per-second stream for a freshly-synced ride or run
     and persist it + derived science metrics.
 
-    Rides get the full power-duration model (CP/W′/durability). Runs get their
-    complete stream blob — GPS, pace, grade-adjusted pace, HR, and running
-    dynamics (vertical oscillation, ground contact, vertical ratio, stride
-    length) — but skip the cycling power model. Fully defensive: any failure
-    (no data, Garmin hiccup, parse error) is logged and swallowed so a stream
-    problem can never break the core activity sync. Uses commit=False to stay
-    inside the sync's single transaction (preserves the RLS SET LOCAL).
+    Rides with a power meter get the full power-duration model (CP/W′/
+    durability). Rides without one, and runs, get their complete stream blob —
+    GPS, altitude, pace, HR and the dynamics channels — with the cycling power
+    model left off. Fully defensive: any failure (no data, Garmin hiccup, parse
+    error) is logged and swallowed so a stream problem can never break the core
+    activity sync. Uses commit=False to stay inside the sync's single
+    transaction (preserves the RLS SET LOCAL).
     """
     sport = getattr(activity, "sport", None) if activity is not None else None
     if activity is None or sport not in ("cycling", "running"):
         return
-    is_ride = sport == "cycling"
     garmin_id = raw.get("activityId")
     if garmin_id is None:
         return
     try:
-        detail = await client.get_activity_details(int(garmin_id))
-        records = garmin_details_to_records(detail)
-        if not records:
-            return
-        # Rides need a power stream to be worth storing (drives the CP model);
-        # runs are worth storing for GPS / pace / HR / dynamics even without power.
-        if is_ride and not any(r.get("power") is not None for r in records):
-            return
-        streams = records_to_streams(records)
-        weather = None
-        if has_gps(streams) and activity.started_at is not None:
-            first_lat = next((v for v in streams.latitude if v is not None), None)
-            first_lng = next((v for v in streams.longitude if v is not None), None)
-            if first_lat is not None and first_lng is not None:
-                end = activity.started_at + timedelta(seconds=streams.duration_s)
-                weather = await fetch_ride_weather(
-                    first_lat, first_lng, activity.started_at, end
-                )
-        ftp = float(profile.ftp_watts) if profile and profile.ftp_watts else None
-        analysis = await ingest_activity_streams(
-            db,
-            user_id=user_id,
-            activity_id=activity.id,
-            streams=streams,
-            ftp=ftp,
-            weather=weather,
-            commit=False,
-            store_power_model=is_ride,
-            # Tightens the corrupt-power ingest guard from the absolute 500 W
-            # bound to 5 W/kg when the athlete's weight is known.
-            weight_kg=float(profile.weight_kg) if profile and profile.weight_kg else None,
+        stored = await _fetch_and_store_streams(
+            db, user_id, client, activity, int(garmin_id), profile, commit=False,
         )
-        logger.info(
-            "Ingested streams for activity id=%s (garmin %s): NP=%.0f, CP=%s",
-            activity.id, garmin_id, analysis.np_watts,
-            analysis.cp.cp_watts if analysis.cp else "n/a",
-        )
+        if not stored:
+            # Nothing to store is a property of the recording, not of today —
+            # tell the backfill so it never queues this ride behind the ones
+            # that can actually be healed.
+            _STREAMS_UNAVAILABLE.add(activity.id)
     except Exception as exc:
         logger.warning(
             "Stream ingest failed for garmin activity %s (non-fatal): %s",
             garmin_id, exc,
         )
+
+
+async def backfill_missing_streams(
+    db: AsyncSession,
+    user_id: int,
+    client,
+    limit: int = STREAM_BACKFILL_MAX_PER_SYNC,
+) -> int:
+    """Fetch the per-second recording for Garmin rides that have no stream row.
+
+    Streams are written at exactly one moment — the sync that first inserts the
+    activity — so any ride that missed its stream never gets another chance:
+    every ride the power guard dropped, every ride whose detail fetch failed on
+    the day, and every ride older than the 90-day initial backfill. Each of them
+    is a ride page with no map, no elevation profile and no weather. This is the
+    second chance, and it is self-limiting: a ride that stores a stream stops
+    matching the query, and a ride that has nothing to store is remembered in
+    `_STREAMS_UNAVAILABLE` so the pass moves on to the next one.
+
+    Newest first — the rides a rider is most likely to open. Best-effort by
+    contract, like the other maintenance backfills: it returns rather than
+    raises, and a throttled Garmin ends the pass instead of pressing on.
+    """
+    conditions = [
+        Activity.user_id == user_id,
+        Activity.sport == "cycling",
+        # Only Garmin's own rides: nothing else can be fetched with this client.
+        Activity.source == "garmin",
+        Activity.external_id.isnot(None),
+        ActivityStream.activity_id.is_(None),
+    ]
+    if _STREAMS_UNAVAILABLE:
+        conditions.append(Activity.id.notin_(_STREAMS_UNAVAILABLE))
+    result = await db.execute(
+        select(Activity)
+        .outerjoin(ActivityStream, ActivityStream.activity_id == Activity.id)
+        .where(*conditions)
+        .order_by(Activity.started_at.desc())
+        .limit(limit)
+    )
+    candidates = list(result.scalars().all())
+    if not candidates:
+        return 0
+
+    profile = (
+        await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == user_id)
+        )
+    ).scalar_one_or_none()
+
+    stored = 0
+    for activity in candidates:
+        try:
+            garmin_id = int(activity.external_id)
+        except (TypeError, ValueError):
+            # A cycling row marked source=garmin whose external_id is not an
+            # activity id cannot be fetched at all — drop it from the queue.
+            _STREAMS_UNAVAILABLE.add(activity.id)
+            continue
+        try:
+            if await _fetch_and_store_streams(
+                db, user_id, client, activity, garmin_id, profile, commit=True,
+            ):
+                stored += 1
+            else:
+                _STREAMS_UNAVAILABLE.add(activity.id)
+        except (GarminRateLimitError, GarminTransientError):
+            # Being throttled is a fact about the next quarter hour. Stop the
+            # pass; the rides already stored are committed, the rest are still
+            # selectable next time.
+            logger.info(
+                "Stream backfill stopped early for user_id=%s — Garmin "
+                "unavailable after %d ride(s)",
+                user_id, stored,
+            )
+            break
+        except Exception as exc:  # noqa: BLE001 — a backfill never breaks a sync
+            # A poisoned session would take the rest of the maintenance work
+            # down with it (PendingRollbackError), so roll back before moving
+            # on. The ride is queued out for this process: whatever failed on
+            # this payload will fail on it again in thirty seconds.
+            await db.rollback()
+            _STREAMS_UNAVAILABLE.add(activity.id)
+            logger.warning(
+                "Stream backfill failed for garmin activity %s (non-fatal): %s",
+                garmin_id, exc,
+            )
+        await asyncio.sleep(INTER_REQUEST_DELAY)
+
+    if stored:
+        logger.info(
+            "Stream backfill stored %d/%d missing ride stream(s) for user_id=%s",
+            stored, len(candidates), user_id,
+        )
+    return stored
 
 
 # ---------------------------------------------------------------------------
@@ -776,6 +993,24 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         except Exception:  # noqa: BLE001 — backfill must never break a sync
             logger.warning(
                 "backfill_missing_elevation failed after sync (user_id=%s) — non-fatal",
+                user_id,
+            )
+
+        # Backfill the per-second recording for rides that have no stream row.
+        # Best-effort, never breaks sync.
+        #
+        # BOUNDED, UNLIKE THE ELEVATION ONE ABOVE. That backfill reads a column
+        # this database already holds; this one asks Garmin a question per ride,
+        # and an unbounded pass over a four-year history is hundreds of calls to
+        # an unofficial API in a single sync. STREAM_BACKFILL_MAX_PER_SYNC caps
+        # it; the query heals the rest on later passes because a stored ride
+        # stops matching it.
+        try:
+            if maintenance_due:
+                await backfill_missing_streams(db, user_id, client)
+        except Exception:  # noqa: BLE001 — backfill must never break a sync
+            logger.warning(
+                "backfill_missing_streams failed after sync (user_id=%s) — non-fatal",
                 user_id,
             )
 

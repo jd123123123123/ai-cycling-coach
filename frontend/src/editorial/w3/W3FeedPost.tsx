@@ -483,7 +483,12 @@ function PhotoPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots:
           </span>
         )}
         {vm.elevationProfile && (
-          <W3ElevationProfile series={vm.elevationProfile} w={CARD_W - 32} h={72} />
+          // THE CARD'S OWN TINT, not the default. `W3ElevationProfile` falls
+          // back to acid, which on this screen means "you" — so a crew-mate's
+          // climbing drew in the rider's own colour while the post around it
+          // was violet. The compact branch of this same component already
+          // passes it.
+          <W3ElevationProfile series={vm.elevationProfile} w={CARD_W - 32} h={72} tint={tint} />
         )}
       </button>
 

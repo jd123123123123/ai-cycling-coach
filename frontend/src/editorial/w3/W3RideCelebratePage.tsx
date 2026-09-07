@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { useClaimRide, useRideEarning } from '../../hooks/useWallet'
 import type { RaceDebrief } from '../../api/debrief'
@@ -50,8 +50,15 @@ function toVm(d: RaceDebrief, earn: RideEarning | undefined): W3CelebrateVm {
     const raw = pct[k] ?? 0
     const p = Math.round(raw > 1 ? raw : raw * 100)
     const min = Math.round(((raw > 1 ? raw / 100 : raw) * h.moving_time_s) / 60)
-    return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} min`, pct: p, peak: i === 3 }
+    // Not `i === 3`: see W3RideDetailPage — that constant bolded Schwelle on
+    // every ride. Marked after the map, once the real shares are known.
+    return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} min`, pct: p, peak: false }
   })
+  {
+    let top = 0
+    for (let i = 1; i < zones.length; i++) if (zones[i].pct > zones[top].pct) top = i
+    if (zones[top] && zones[top].pct > 0) zones[top].peak = true
+  }
 
   const prs = d.efforts.filter((e) => e.is_pr)
   const bestEffort = d.efforts.reduce((m, e) => (e.pct_of_best ?? 0) > (m?.pct_of_best ?? 0) ? e : m, d.efforts[0])
@@ -99,12 +106,23 @@ export default function W3RideCelebratePage() {
   const navigate = useNavigate()
   const { id } = useParams<{ id: string }>()
   const activityId = id ? Number(id) : undefined
-  const { data: debrief } = useRaceDebrief(activityId)
+  const { data: debrief, isError: debriefFailed, isPending: debriefPending } = useRaceDebrief(activityId)
+  const debriefSettled = debriefFailed || (!debriefPending && !debrief)
   const { data: earn } = useRideEarning(activityId)
   const claim = useClaimRide()
 
   const vm = useMemo(() => (debrief ? toVm(debrief, earn) : null), [debrief, earn])
-  if (!vm) return <W3Loading label="Zähle deine Punkte…" />
+  // A SETTLED FAILURE IS NOT LOADING. `/analytics/activity-debrief/:id` answers
+  // 404 for a ride recorded without a power meter, and `!vm` meant both "still
+  // fetching" and "there will never be one" — so those rides sat on "Zähle
+  // deine Punkte…" for ever. The ride page had the identical bug. There is
+  // nothing to celebrate without the debrief the points are read from, so this
+  // one hands the rider back to the ride itself rather than inventing a
+  // reduced chest.
+  if (!vm) {
+    if (debriefSettled) return <Navigate to={`/e/w3-ride/${id}`} replace />
+    return <W3Loading label="Zähle deine Punkte…" />
+  }
   return (
     <W3RideCelebrateView
       vm={vm}

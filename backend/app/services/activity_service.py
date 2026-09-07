@@ -41,6 +41,12 @@ from app.services.training_load import (
 
 logger = logging.getLogger(__name__)
 
+#: How many altitude streams one elevation backfill run may read. A stream is a
+#: large JSON blob and this runs inside a sync, so the backlog is walked down
+#: over successive syncs rather than loaded in one pass. Filled rows stop
+#: matching the query, so progress is monotonic.
+ELEVATION_STREAM_BATCH = 40
+
 # 0.90 × HRmax is a standard, widely-used estimate of lactate-threshold HR
 # (LTHR) when no measured threshold is available.
 _LTHR_HRMAX_FRACTION = 0.90
@@ -489,22 +495,40 @@ async def recompute_missing_tss(
 async def backfill_missing_elevation(
     db: AsyncSession, user_id: int, days: int | None = None
 ) -> int:
-    """Backfill elevation_gain_m for rows that have it NULL but carry a raw_data
-    blob with an ascent figure (seeded/synthetic + COROS-preserved rides).
+    """Backfill elevation_gain_m for rows that have it NULL, from the raw payload
+    when there is one and from the recorded altitude otherwise.
 
-    Idempotent and self-healing: only touches rows where elevation is currently
-    NULL and a positive ascent can be extracted from the stored raw_data. Mirrors
-    ``recompute_missing_tss`` — wired into the post-sync path so historical rows
-    fill in once their raw payload is present. `days` limits the trailing scan.
+    TWO SOURCES, BECAUSE THE FIRST ONE IS EMPTY FOR MOST RIDERS. This function
+    used to filter on ``raw_data IS NOT NULL`` and read nothing else. That
+    filter is why it healed nothing: ``map_garmin_activity`` builds its
+    ``ActivityCreate`` without a ``raw_data=`` at all, and so do the Wahoo and
+    Apple Health mappers — only COROS preserves the blob. Every Garmin row was
+    therefore excluded from a backfill written to rescue exactly those rows, and
+    it ran after every sync for months without ever matching one.
 
-    Returns the count of rows updated.
+    MEASURED 2026-09-07 on a real account: 60 of 62 rides had no ascent, among
+    them 106 km through Alta Badia. Their altitude was in the database the whole
+    time — the ride detail endpoint already draws a gradient profile from it —
+    so the climbing was recoverable to 3 081 m for that one ride and 10 134 m
+    across fifteen.
+
+    The stream path reuses ``scan_ride_for_climbs``: the same segmentation-
+    smoothed positive-delta sum the climb detector already runs on these exact
+    streams, so a ride's ascent and its detected climbs can never disagree.
+
+    Idempotent and self-healing: a filled row stops matching. Non-positive
+    ascent is left NULL rather than written as 0 — a trainer ride has no
+    climbing, and an honest "—" is not the same claim as a flat zero.
+
+    `days` limits the trailing scan. Returns the count of rows updated.
     """
+    from app.models.activity_stream import ActivityStream
+    from app.services.achievement_service import scan_ride_for_climbs
     from app.services.garmin_mapper import extract_elevation_gain_m
 
     query = select(Activity).where(
         Activity.user_id == user_id,
         Activity.elevation_gain_m.is_(None),
-        Activity.raw_data.isnot(None),
     )
     if days is not None:
         query = query.where(
@@ -514,20 +538,51 @@ async def backfill_missing_elevation(
     activities = list(result.scalars().all())
 
     updated = 0
+    from_raw: list[int] = []
     for activity in activities:
         elev = extract_elevation_gain_m(activity.raw_data)
         if elev is not None:
             activity.elevation_gain_m = elev
             updated += 1
+            from_raw.append(activity.id)
+
+    # WHAT THE PAYLOAD DID NOT CARRY, THE RECORDING USUALLY DOES. Streams are
+    # large JSON blobs, so this is capped per run rather than loading a decade
+    # of altitude at once; filled rows stop matching, so successive syncs walk
+    # the backlog down instead of re-reading it.
+    remaining = [a for a in activities if a.elevation_gain_m is None]
+    from_stream = 0
+    if remaining:
+        batch = {a.id: a for a in remaining[:ELEVATION_STREAM_BATCH]}
+        rows = (
+            await db.execute(
+                select(ActivityStream.activity_id, ActivityStream.streams).where(
+                    ActivityStream.activity_id.in_(list(batch)),
+                )
+            )
+        ).all()
+        for activity_id, streams in rows:
+            streams = streams or {}
+            ascent, _best = scan_ride_for_climbs(
+                streams.get("altitude"), streams.get("distance")
+            )
+            if ascent and ascent > 0:
+                batch[activity_id].elevation_gain_m = float(ascent)
+                updated += 1
+                from_stream += 1
 
     if updated:
         await db.commit()
 
     logger.info(
-        "backfill_missing_elevation: user_id=%s scanned=%d updated=%d",
+        "backfill_missing_elevation: user_id=%s scanned=%d updated=%d "
+        "(raw=%d stream=%d, %d still without ascent)",
         user_id,
         len(activities),
         updated,
+        len(from_raw),
+        from_stream,
+        sum(1 for a in activities if a.elevation_gain_m is None),
     )
     return updated
 

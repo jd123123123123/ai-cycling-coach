@@ -139,6 +139,12 @@ class StandingRow(BaseModel):
     # leaderboard. Nullable: honest "—" where the source is missing. Elevation
     # and 5K-PR have no data source and are intentionally absent.
     distance_km: float | None = None   # cumulative ridden distance (km)
+    # SAW COMPUTED, NEVER SENT. `crew_score.crew_standings_window` has always
+    # put an `hours` figure in this row and this schema did not declare it, so
+    # pydantic dropped it on the way out and `r.hours` was undefined in the
+    # client — the board's hours column, which the frontend calls "the one
+    # number on this board a rider can actually feel", rendered as nothing.
+    hours: float | None = None         # moving time over the window (h)
     wkg: float | None = None           # ftp_watts / weight_kg (threshold W/kg)
     vo2max: float | None = None        # latest VO2max on/before window end
     # P1-10: points are the share of each rider's OWN weekly target

@@ -118,7 +118,15 @@ async def ingest_activity_streams(
         "mmp_curve": {str(k): v for k, v in analysis.mmp_curve.items()} if store_model else None,
         "normalized_power": analysis.np_watts if store_model else None,
         "decoupling_pct": analysis.decoupling_pct,
-        "total_kj": analysis.total_kj,
+        # KILOJOULES ARE A POWER MEASUREMENT, AND A BIKE WITHOUT A METER HAS
+        # NOT MADE ONE. This was stored unconditionally, so a ride with no power
+        # channel wrote 0.0 into a real column. Nothing downstream can tell that
+        # zero apart from a measured one: `achievement_service` sums
+        # `total_kj IS NOT NULL` for the lifetime work figure, and `bike_wear`
+        # weights chain wear by it. Gated on the channel rather than on
+        # `store_model` on purpose — a ride whose power model was rejected as
+        # implausible still did real work, and its kilojoules are still real.
+        "total_kj": analysis.total_kj if streams.power else None,
         "cp_watts": (analysis.cp.cp_watts if analysis.cp else None) if store_model else None,
         "w_prime_j": (analysis.cp.w_prime_j if analysis.cp else None) if store_model else None,
         "eftp_watts": (analysis.cp.eftp_watts if analysis.cp else None) if store_model else None,

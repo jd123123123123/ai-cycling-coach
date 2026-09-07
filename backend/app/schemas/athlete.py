@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 # Weekday keys used by days_available / hard_day_blackouts (Monday-first,
 # matching Python's date.weekday() order).
@@ -75,6 +75,12 @@ class TrainingGoals(BaseModel):
     target_event_name: str | None = None
     target_event_date: str | None = None  # ISO date string e.g. "2026-09-15"
     weekly_hours: float | None = None
+    # HOW MANY DAYS A WEEK THE RIDER WANTS TO RIDE. Asked during onboarding and
+    # sent by `W3OnboardGoalsPage`, but undeclared here — so this schema
+    # silently dropped it on every save, `coach_service` read it back as None,
+    # and the periodizer's rest-day and quality-session caps never applied. The
+    # rider answered the question and nothing downstream ever saw the answer.
+    days_per_week: int | None = Field(default=None, ge=1, le=7)
     # How hard the athlete wants to be pushed. Modulates ONLY the upside of the
     # adaptive engine (escalate/push volume + escalation eagerness); the HRV
     # back-off safety gate is never relaxed. See adaptive_readiness.ambition_from_intensity.
