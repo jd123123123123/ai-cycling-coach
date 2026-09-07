@@ -72,6 +72,11 @@ export interface W3FeedPostVm {
   headlineUnit: string
   /** The rider's own sentence. Only a filled-in ride has one. */
   description: string | null
+  /** WHAT THE RIDE MEANT TO THE PERSON WHO DID IT — "Längste Fahrt seit Mai".
+   *  Strava ranks a ride against other people; this ranks it against the rider
+   *  themselves, which is the one comparison a crew of three can make and a
+   *  network of thousands cannot. Null on most posts by design. */
+  contextLine: string | null
   /** Every picture on the ride, in the rider's own order. */
   photoUrls: string[]
   /** The GPS track, so the slot has an image even with no photograph. */
@@ -229,7 +234,7 @@ function StatChip({ s }: { s: W3FeedStat }) {
  * between them: two copies of these forty lines would drift the first time one
  * of them was tuned.
  */
-function Headline({ vm, clamp = false }: { vm: W3FeedPostVm; clamp?: boolean }) {
+function Headline({ vm, tint, clamp = false }: { vm: W3FeedPostVm; tint: string; clamp?: boolean }) {
   return (
     <>
       {/* ACID, NOT THE CREW'S TINT. The pen sets this line in the brand colour
@@ -251,6 +256,19 @@ function Headline({ vm, clamp = false }: { vm: W3FeedPostVm; clamp?: boolean }) 
           fontSize: 17, fontWeight: 600, color: T.mid, transform: 'translateY(-5px)',
         }}>{vm.headlineUnit}</span>
       </span>
+      {/* IT SITS UNDER THE FIGURE, NOT BESIDE IT. The number says how much;
+          this says how much THAT IS, for this rider — so it reads as the
+          figure's caption rather than as a second, competing claim. Quiet on
+          purpose: it is a fact, not a trophy, and the card already spends its
+          accent on the eyebrow. */}
+      {vm.contextLine && (
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', gap: 6, alignSelf: 'flex-start',
+          padding: '5px 10px', borderRadius: 100, background: `${tint}1F`,
+          fontSize: 11.5, fontWeight: 600, letterSpacing: -0.1, color: tint,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%',
+        }}>{vm.contextLine}</span>
+      )}
       {vm.description && (
         <span style={{
           fontSize: 14, fontWeight: 500, lineHeight: 1.3, color: `${T.ink}CC`,
@@ -372,7 +390,7 @@ function Stage({ vm, tint }: { vm: W3FeedPostVm; tint: string }) {
           position: 'absolute', left: 16, right: 16, bottom: foot,
           display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0,
         }}>
-          <Headline vm={vm} clamp />
+          <Headline vm={vm} tint={tint} clamp />
         </span>
       </div>
     </div>
@@ -459,7 +477,7 @@ function PhotoPost({ vm, tint, slots }: { vm: W3FeedPostVm; tint: string; slots:
             cursor: vm.onOpen ? 'pointer' : 'default', display: 'flex',
             flexDirection: 'column', gap: 4, textAlign: 'left', fontFamily: FONT,
           }}>
-          <Headline vm={vm} />
+          <Headline vm={vm} tint={tint} />
         </button>
       )}
 

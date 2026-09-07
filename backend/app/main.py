@@ -222,6 +222,8 @@ from app.api.planned_workouts import router as planned_workouts_router  # noqa: 
 from app.api.coach import router as coach_router  # noqa: E402
 from app.api.garage import router as garage_router  # noqa: E402
 from app.api.analytics import router as analytics_router  # noqa: E402
+from app.api.form import router as form_router  # noqa: E402
+from app.api.readiness import router as readiness_router  # noqa: E402
 from app.api.dashboards import router as dashboards_router  # noqa: E402
 from app.api.weeks import router as weeks_router  # noqa: E402
 from app.api.crews import router as crews_router  # noqa: E402
@@ -248,6 +250,11 @@ app.include_router(daily_metrics_router)
 app.include_router(planned_workouts_router)
 app.include_router(coach_router)
 app.include_router(analytics_router)
+# Individually-fitted Banister form projection — see services/form_projection.
+app.include_router(form_router)
+# Readiness as a DECISION plus the session it took away — see
+# services/readiness_decision. Read-only; it never touches the plan.
+app.include_router(readiness_router)
 app.include_router(dashboards_router)
 app.include_router(weeks_router)
 app.include_router(crews_router)

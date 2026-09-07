@@ -38,6 +38,7 @@ from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
 from app.models.ride_photo import RidePhoto
 from app.services.crew_records import records_for_rides
+from app.services.ride_context import context_for_rides
 from app.models.activity_stream import ActivityStream
 from app.services.crew_notify import notify_ride_comment
 from app.models.crew import CrewMembership
@@ -118,6 +119,39 @@ class RideRecord(BaseModel):
     prior_best_at: str | None = None
 
 
+class RideContext(BaseModel):
+    """How big this ride was FOR THIS RIDER, against their own trailing history.
+
+    The one thing a feed of three friends can say that a feed of three thousand
+    strangers cannot: 50 km is a warm-up for one member of the crew and the
+    biggest thing another has done since spring, and the app knows which.
+
+    Null on most posts by design — see `services/ride_context`. Structured
+    rather than a bare sentence, so the card can print the numbers behind the
+    phrase (or its own phrase) instead of parsing German.
+    """
+    #: "longest_ride" | "biggest_climb" | "biggest_week" | "long_for_them".
+    kind: str
+    #: The ready-made German line: "Längste Fahrt seit Mai".
+    text: str
+    #: This ride's number in `unit` — metres for the three distance/climb/week
+    #: kinds, seconds for "long_for_them".
+    value: float
+    unit: str
+    #: What it is measured against: the rider's previous window best, or their
+    #: 90-day median duration for "long_for_them".
+    comparison: float | None = None
+    #: The day the bar it just cleared was set (ISO date). Null when nothing in
+    #: the 330-day window was bigger — the phrase then says "in N Monaten"
+    #: rather than naming a month we cannot see.
+    since_date: str | None = None
+    #: How far back the statement reaches. Null for "long_for_them", which is a
+    #: ratio rather than a record.
+    gap_days: int | None = None
+    #: How many of the rider's OWN rides the claim was measured against.
+    sample_size: int
+
+
 class RideRead(BaseModel):
     id: int  # activity id
     user_id: int
@@ -157,6 +191,11 @@ class RideRead(BaseModel):
     #: durations — the ⚡ REKORD chip on the card. Null for the overwhelming
     #: majority of rides, which is the point: a badge everyone has is not one.
     record: RideRecord | None = None
+    #: What this ride was, for the rider who did it — "Längste Fahrt seit Mai".
+    #: Null unless the ride genuinely tops months of that rider's own riding;
+    #: a feed where every post carries a superlative is a feed where none of
+    #: them mean anything.
+    context: RideContext | None = None
     #: The ride's shape, as `[[lat, lng], ...]` downsampled for a feed
     #: thumbnail — the client projects it (`W3RouteCard.project`). None when the
     #: ride carries no usable GPS track (indoor, trainer, a watch with GPS off),
@@ -419,6 +458,14 @@ async def list_crew_rides(
         activity_ids=ride_ids,
         lang=lang,
     )
+    # Same batching discipline: one query for every rider on the page, not a
+    # history read per post.
+    contexts = await context_for_rides(
+        db,
+        user_ids=sorted({act.user_id for act, _ in rows}),
+        activity_ids=ride_ids,
+        sports=CYCLING_SPORTS,
+    )
     routes = await _route_thumbs(db, activity_ids=ride_ids)
 
     out: list[RideRead] = []
@@ -453,6 +500,7 @@ async def list_crew_rides(
                 elevation_profile=profiles.get(act.id, {}).get("altitude"),
                 power_profile=profiles.get(act.id, {}).get("power"),
                 record=records.get(act.id),
+                context=contexts.get(act.id),
                 route=routes.get(act.id),
             )
         )

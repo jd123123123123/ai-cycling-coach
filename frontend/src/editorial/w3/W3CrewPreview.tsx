@@ -38,11 +38,15 @@ const FEED_RIDES: CrewRide[] = [
     distance_m: 48200, elevation_gain_m: 310, duration_seconds: 5820, sport: 'cycling', tss: 78, avg_power_w: 212, avg_hr: 148,
     description: 'Über den Kesselberg, zurück am Starnberger See', photo_urls: ['/w3/onboard-hero.webp'],
     record: { duration_s: 1200, value_w: 312, prior_best_w: 303, gain_pct: 3.0, label: '20-Minuten', prior_best_at: '2026-03-14' },
+    // ONE of five, on purpose. The server withholds this on roughly nine posts
+    // in ten; a fixture where every ride carries a superlative would review as
+    // finished and ship as noise.
+    context: { kind: 'longest_ride', text: 'Längste Fahrt seit Mai', value: 48200, unit: 'm', comparison: 44100, since_date: '2026-05-18', gap_days: 112, sample_size: 37 },
     elevation_profile: [390.0, 431.8, 472.7, 511.7, 547.9, 545.4, 573.7, 597.1, 615.1, 627.5, 599.0, 599.8, 595.0, 584.8, 569.8, 515.7, 493.0, 467.7, 440.6, 412.7, 350.0, 323.3, 298.7, 277.0, 259.1, 210.5, 201.9, 198.7, 201.2, 209.5, 188.6, 208.3, 233.2, 262.8, 296.6, 298.7, 338.3, 379.6, 421.5, 463.2, 468.6, 506.8, 542.0, 573.3, 600.2, 587.0, 603.3, 614.0], power_profile: null,
     calories: 1180, is_mine: false, comment_count: 2, reactions: { counts: { '🔥': 3, '💪': 1 }, mine: ['💪'] }, route: ROUTE_MARA },
   { id: 902, user_id: 1, handle: 'du', display_name: 'Du', title: 'Intervalle, 4×8', started_at: new Date(now - 26 * H * 1000).toISOString(),
     distance_m: 62400, elevation_gain_m: 680, duration_seconds: 7980, sport: 'cycling', tss: 121, avg_power_w: 241, avg_hr: 156,
-    record: null,
+    record: null, context: null,
     // MY ride, no picture: the `UQhtr` card, and the one that shows the plus.
     description: 'Vier mal acht am Kanal, Wind von vorne auf dem Rückweg',
     photo_urls: [],
@@ -50,7 +54,7 @@ const FEED_RIDES: CrewRide[] = [
     calories: 1640, is_mine: true, comment_count: 1, reactions: { counts: { '🚀': 2 }, mine: [] }, route: ROUTE_DU },
   { id: 903, user_id: 3, handle: 'timo', display_name: 'Timo', title: 'Lange Ausfahrt in die Berge', started_at: new Date(now - 50 * H * 1000).toISOString(),
     distance_m: 118600, elevation_gain_m: 1840, duration_seconds: 16200, sport: 'cycling', tss: 214, avg_power_w: 198, avg_hr: 141,
-    record: null, description: null, photo_urls: [],
+    record: null, context: null, description: null, photo_urls: [],
     elevation_profile: [316.3, 291.7, 270.0, 252.1, 238.5, 194.9, 191.7, 194.2, 202.5, 216.6, 201.3, 226.2, 255.8, 289.6, 326.7, 331.3, 372.6, 414.5, 456.2, 496.6, 499.8, 535.0, 566.3, 593.2, 615.0, 596.3, 607.0, 611.8, 610.8, 604.3, 557.7, 541.4, 521.1, 497.5, 471.6, 409.2, 381.2, 353.7, 327.6, 303.8, 248.1, 231.4, 219.3, 212.3, 210.8, 180.0, 190.1, 205.9], power_profile: null,
     calories: 3120, is_mine: false, comment_count: 0, reactions: { counts: { '👏': 4, '⚡': 2 }, mine: [] }, route: ROUTE_TIMO },
   // A ride imported without a power meter — the card must print DASH, not a
@@ -59,11 +63,11 @@ const FEED_RIDES: CrewRide[] = [
   { id: 904, user_id: 4, handle: 'jo', display_name: 'Jo', title: 'Regeneration', started_at: new Date(now - 74 * H * 1000).toISOString(),
     distance_m: 24100, elevation_gain_m: 90, duration_seconds: 3600, sport: 'cycling', tss: null, avg_power_w: null, avg_hr: 118,
     calories: 620, is_mine: false, comment_count: 0, reactions: { counts: {}, mine: [] },
-    record: null, description: null, photo_urls: [], elevation_profile: null, power_profile: null },
+    record: null, context: null, description: null, photo_urls: [], elevation_profile: null, power_profile: null },
   { id: 905, user_id: 2, handle: 'mara', display_name: 'Mara', title: 'Rolle, Sweetspot', started_at: new Date(now - 98 * H * 1000).toISOString(),
     distance_m: 31000, elevation_gain_m: 0, duration_seconds: 4200, sport: 'cycling', tss: 68, avg_power_w: 205, avg_hr: 144,
     calories: 840, is_mine: false, comment_count: 3, reactions: { counts: { '🙌': 1 }, mine: [] },
-    record: null, description: null, photo_urls: [], elevation_profile: null, power_profile: [120.0, 129.8, 138.7, 146.0, 317.3, 320.8, 133.1, 135.2, 113.9, 118.2, 124.3, 132.4, 307.8, 317.7, 327.3, 335.5, 317.9, 322.4, 135.3, 137.4, 115.6, 119.0, 124.0, 131.0, 305.7, 315.5, 325.4, 334.4, 317.9, 323.5, 137.2, 139.7, 117.7, 120.3, 124.3, 130.2, 304.0, 313.3, 323.2, 332.8, 317.3, 324.0, 138.7, 141.8, 119.9, 122.1, 125.2, 130.0] },
+    record: null, context: null, description: null, photo_urls: [], elevation_profile: null, power_profile: [120.0, 129.8, 138.7, 146.0, 317.3, 320.8, 133.1, 135.2, 113.9, 118.2, 124.3, 132.4, 307.8, 317.7, 327.3, 335.5, 317.9, 322.4, 135.3, 137.4, 115.6, 119.0, 124.0, 131.0, 305.7, 315.5, 325.4, 334.4, 317.9, 323.5, 137.2, 139.7, 117.7, 120.3, 124.3, 130.2, 304.0, 313.3, 323.2, 332.8, 317.3, 324.0, 138.7, 141.8, 119.9, 122.1, 125.2, 130.0] },
 ]
 
 const BASE = {

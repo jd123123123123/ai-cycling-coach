@@ -316,6 +316,10 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
       : nf.format(Math.round(ride.duration_seconds / 60)),
     headlineUnit: hasKm ? 'km' : 'min',
     description: ride.description,
+    // The server decides IF there is anything true to say and writes the
+    // German; the card only decides where it sits. Parsing a phrase back into
+    // numbers on the client would be a second implementation of the rule.
+    contextLine: ride.context?.text ?? null,
     // EVERY picture, plus the track. The slot shows the photos first and the
     // route last, and with no photo the route simply IS the slot.
     photoUrls: ride.photo_urls,

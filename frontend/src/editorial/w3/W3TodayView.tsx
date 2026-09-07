@@ -15,6 +15,9 @@ import W3TabBar from './W3TabBar'
 import { useHeroPanel } from './W3HeroShell'
 import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
+import W3ReadinessDecision from './W3ReadinessDecision'
+import W3FormProjection from './W3FormProjection'
+import { useReadinessDecision } from '../../hooks/useReadinessDecision'
 import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3FormCard from './W3FormCard'
@@ -209,6 +212,11 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
   onOpenWrapped?: () => void
 }) {
   const navigate = useNavigate()
+  // Today's session, the session the plan held before this morning's numbers
+  // were applied, and the one measurement that moved it. Its own query rather
+  // than a field on `vm`: the card renders nothing until it lands and never a
+  // placeholder verdict, so nothing above it has to wait for it.
+  const readinessDecision = useReadinessDecision()
   // The colour the stage picture ends in. Everything the hero touches — the
   // first screen, the section under it, the frame behind both — continues in
   // it, so the app reads as one room rather than as a picture pasted onto a
@@ -393,6 +401,23 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
              signal (HRV/sleep/RHR vs baseline), replacing the long coach text ── */}
         <W3RecoveryNudge />
 
+        {/* ── THE DAY'S ANSWER, AND WHAT IT COST ─────────────────────────
+             Four independent reviewers opened this screen and none of them
+             could find out whether they were riding today without scrolling
+             past the bike: the instruction lived a full screen below the
+             number that caused it. The verdict is the headline here and the
+             score is the evidence under it.
+
+             The line that matters is the second one. A wearable can score your
+             night; it cannot show you the session that score took off your
+             calendar, because it does not own your plan. This card can, and it
+             prints it only on the days something actually changed.
+
+             Next to the health nudge above on purpose, not merged with it:
+             that one is a rare alert about overnight vitals (SpO₂, breathing)
+             and this is the daily training decision. Different jobs. ── */}
+        <Reveal><W3ReadinessDecision decision={readinessDecision.data} /></Reveal>
+
         {/* ── The signals are IN the panel now ────────────────────────────
              Three cards printed HRV, resting pulse and sleep here — the same
              three numbers the hero panel reveals when the rider scrolls. Their
@@ -456,6 +481,19 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
              "is the block working", which is a question about six weeks, not
              about this morning. ── */}
         <Reveal><W3FormCard /></Reveal>
+
+        {/* ── WHERE IT IS GOING, AND BY WHOSE MODEL ──────────────────────
+             The card above answers "where am I now" and explains it in a
+             sentence — a rider who pays for intervals.icu said that sentence
+             was the best thing on this screen and the one thing his tools do
+             not give him. This one answers the next question, and it is the
+             one no competitor can answer at all: intervals.icu, TrainingPeaks
+             and Strava all decay every human being's fitness at 42 days and
+             fatigue at 7. This projects the rider's OWN fitted constants, puts
+             the 42/7 answer beside it as a ghost so the disagreement is seen
+             rather than claimed, and falls back to the population numbers —
+             saying so — whenever the individual fit is not honestly better. ── */}
+        <Reveal><W3FormProjection /></Reveal>
 
         {/* ── The bike's own errand, when it has one. Below the training and
              above the navigation on purpose: it is a real job with a real

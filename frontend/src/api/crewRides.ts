@@ -28,6 +28,22 @@ export interface CrewRideRecord {
   prior_best_at: string | null
 }
 
+export interface CrewRideContext {
+  /** 'longest_ride' | 'biggest_climb' | 'biggest_week' | 'long_for_them' */
+  kind: string
+  /** The ready-made German line, e.g. "Längste Fahrt seit Mai". */
+  text: string
+  value: number
+  /** 'm' for the distance/climb/week kinds, 's' for long_for_them. */
+  unit: string
+  /** The bar it cleared, in the same unit. */
+  comparison: number | null
+  since_date: string | null
+  gap_days: number | null
+  /** How many of the rider's OWN rides the claim was measured against. */
+  sample_size: number
+}
+
 export interface CrewRide {
   id: number
   user_id: number
@@ -64,6 +80,13 @@ export interface CrewRide {
    *  durations. Null for the overwhelming majority of rides, which is the
    *  point — a badge everybody has is not a badge. */
   record: CrewRideRecord | null
+  /** HOW BIG THIS RIDE WAS FOR THIS RIDER, against their own trailing history —
+   *  the one thing a feed of three friends can say that a feed of three
+   *  thousand strangers cannot. 50 km is a warm-up for one member of the crew
+   *  and the biggest thing another has done since spring, and the server knows
+   *  which. Null on most posts on purpose: a feed where every ride carries a
+   *  superlative is a feed where none of them mean anything. */
+  context: CrewRideContext | null
   /** The ride's own shape as `[[lat, lng], ...]`, downsampled for a feed
    *  thumbnail — the crew post projects it with `projectRouteShape`. Null when
    *  the ride carries no usable GPS track (indoor, trainer, satellite off), and
