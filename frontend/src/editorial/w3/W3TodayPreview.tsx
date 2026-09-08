@@ -18,11 +18,9 @@ export const FIXTURE: W3Vm = {
   // real rider sees until they render one in the studio.
   bikeName: 'Starter Bike',
   bikeImage: STARTER_BIKE,
-  bikeLoading: false,
   // The preview demos the photographed-bike hero, so the collectible fallback
   // it would degrade to is not exercised here.
   collectible: null,
-  collectibleName: null,
   // The preview has no garage, so the stage demos its empty states: the empty
   // seat where the rider bust goes, and the labelled example bike.
   riderImage: null,
@@ -30,9 +28,6 @@ export const FIXTURE: W3Vm = {
   // route exists to show. `W3RideChestPreview` covers the other state.
   chest: null,
   coins: '1.448',
-  weekDoneLabel: '4 von 6 erledigt',
-  avatarUrl: null,
-  avatarInitial: 'J',
   streak: 17,
   readiness: 88,
   readinessWord: 'Grünes Licht',
@@ -47,7 +42,6 @@ export const FIXTURE: W3Vm = {
   hrv: { value: '71', unit: 'ms', sub: '+9 zur Baseline', subHue: T.acid, spark: spark([0.18, 0.45, 0.32, 0.68, 0.55, 0.82, 1], T.acid) },
   rhr: { value: '42', unit: 'bpm', sub: '−3 zur Baseline', subHue: T.acid, spark: spark([0.32, 0.45, 0.18, 0.6, 0.72, 0.72, 1], T.acid) },
   sleep: { value: '7:42', unit: 'h', sub: '91 Qualität', subHue: T.acid, spark: spark([0.18, 0.55, 0.4, 1, 0.63, 0.82, 0.9], T.acid) },
-  weekMeta: '486 von 620 TSS',
   weekBlockLabel: 'Aufbaublock · Woche 2',
   weekDoneChip: '1 / 6 erledigt',
   weekLoadLabel: '65 von 540 TSS',
@@ -103,11 +97,7 @@ export const FIXTURE: W3Vm = {
       { hour: 23, q: 0.56, temp: 15, rain: 40, wind: 12, dir: 'W', rideable: false },
     ],
   },
-  sessionTitle: '4 × 8 Schwelle',
   sessionDur: '1 Std. 15 min',
-  sessionTargetW: '285 W',
-  sessionTss: '112',
-  sessionFtpPct: '98%',
   sessionBlocks: [
     { w: 0.2, work: false, label: 'Einfahren · 150 W' }, { w: 0.27, work: false, label: 'Einfahren · 180 W' }, { w: 0.33, work: false, label: 'Rampe · 210 W' },
     { w: 0.77, work: true, label: 'Block 1 · 285 W' }, { w: 0.16, work: false, label: 'Erholen · 120 W' },

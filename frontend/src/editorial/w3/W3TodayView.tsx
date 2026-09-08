@@ -81,18 +81,14 @@ export interface W3Vm {
   bikeInScene?: boolean
   onSelectStage?: (id: string) => void
   stageRendering?: boolean
-  avatarUrl: string | null
-  avatarInitial: string
   // The rider's digitalised bike (garage). `bikeImage` is null until they've
   // rendered one — that absence is what the hero's empty state is for.
   bikeName: string
   bikeImage: string | null
-  bikeLoading: boolean
   /** The RideCoin bike they own, as ridden — the composed build photograph, or
    *  the bike's catalogue photo. The hero's honest fallback when no photographed
    *  real bike exists yet. Null only until the garage loads. */
   collectible: string | null
-  collectibleName: string | null
   /** The rider's digitalised portrait (garage), or null — the identity card
    *  shows an empty seat rather than a photo they never chose. */
   riderImage: string | null
@@ -124,8 +120,6 @@ export interface W3Vm {
   rhr: W3Signal | null
   sleep: W3Signal | null
 
-  weekMeta: string
-  weekDoneLabel: string | null
   weekDays: W3DayFull[]
   // "Deine Woche" — block context + the season goal this week feeds.
   weekBlockLabel: string
@@ -145,11 +139,7 @@ export interface W3Vm {
 
   weather: W3Weather
 
-  sessionTitle: string | null
   sessionDur: string | null
-  sessionTargetW: string
-  sessionTss: string
-  sessionFtpPct: string
   sessionBlocks: W3Block[]
   sessionFtpTag: string
   sessionEarn: string | null

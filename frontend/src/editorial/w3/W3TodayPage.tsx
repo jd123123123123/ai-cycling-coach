@@ -630,7 +630,6 @@ export default function W3TodayPage() {
       // garage render is the fallback for a build that has never been composed,
       // and it is the same bicycle either way — just on the bare floor.
       bikeImage: today?.bike_image ?? garage?.bike?.image_base64 ?? null,
-      bikeLoading: garageLoading,
       // Same for the face: the bust WEARING its helmet and glasses when one has
       // been composed, the bare-headed collectible until then.
       riderImage: today?.rider_image ?? garage?.rider?.image_base64 ?? null,
@@ -651,13 +650,10 @@ export default function W3TodayPage() {
       // owns one. `useGarageCollection` is already warm — W3Guard runs it to
       // enforce the first-bike claim before this route mounts.
       collectible: collectibleArt,
-      collectibleName: collectibleBike?.name ?? null,
       // REAL: the RideCoin wallet balance. "—" until it loads — never a number
       // the ledger can't account for.
       coins: wallet ? wallet.balance.toLocaleString('de-DE') : null,
       weekDoneLabel,
-      avatarUrl: user?.avatar_url ?? null,
-      avatarInitial: (user?.display_name || user?.email || '?').charAt(0).toUpperCase(),
       streak: isPresent(model.streakDays) ? model.streakDays.value : null,
 
       // A sealed chest hides the readiness dock entirely — see `W3RideChest`.
@@ -706,7 +702,6 @@ export default function W3TodayPage() {
         hours: [], bestFrom: null, bestTo: null, peak: null,
       },
 
-      sessionTitle: session ? session.title : null,
       // The REAL prescribed duration: the plan day's intervals/duration target
       // first, then the daily decision's minutes. Never invented from TSS —
       // `TSS/100×68` drew a made-up number beside three measured ones, and the
@@ -717,9 +712,6 @@ export default function W3TodayPage() {
         const min = planSec > 0 ? Math.round(planSec / 60) : (planned?.duration_minutes ?? null)
         return min != null && min > 0 ? `${min} min` : null
       })(),
-      sessionTargetW: session?.targetWatts != null ? `${session.targetWatts} W` : '—',
-      sessionTss: session?.tss != null ? String(session.tss) : '—',
-      sessionFtpPct: session?.intensityFactor != null ? `${Math.round(session.intensityFactor * 100)}%` : '—',
       sessionBlocks: blocks,
       sessionFtpTag: 'FTP',
       // Was a fixture sentence that named no number. RideCoin IS built, and the
