@@ -91,7 +91,7 @@ export default function W3ReferralsView({ vm, onBack, onShare, onOpenUser }: {
             rider who landed here had no way through to their profile or the
             settings sheet. No title: "Empfehlungen" is the 40px headline a few
             pixels below, and the bar must not say it twice. */}
-        <W3TopBar onBack={onBack} />
+        <W3TopBar title="Empfehlungen" onBack={onBack} />
 
         <div style={{ ...band(20), gap: 14, paddingTop: 6 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

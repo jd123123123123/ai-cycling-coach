@@ -6,6 +6,7 @@ import { GhostBike } from './W3BikeHero'
 import { FLOOR, STAGE_PLATE as PLATE, stageThemeById, type StageTheme } from './w3stageThemes'
 import { useCutout } from './useCutout'
 import W3NavMenu from './W3NavMenu'
+import { HEAD } from './W3TopBar'
 import { W3CoachFab } from './W3CoachChat'
 import W3SyncChip from './W3SyncChip'
 import W3StreakChip from './W3StreakChip'
@@ -318,15 +319,21 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
       ))}
 
       {/* ── the corner chips: real figures, floating on the floor ── */}
+      {/* MEASURED AGAINST `W3TopBar`, not eyeballed: its row puts a 44px
+          control at top 18, inset 20. The stage's chips sit on the same
+          coordinates so the gear is pixel-identical whether a rider is in the
+          room or on any screen outside it — it was 10px higher and 4px
+          further out, which is exactly enough to read as "a different
+          header". */}
       <div style={{
-        position: 'absolute', top: 8, left: 16, zIndex: 2,
+        position: 'absolute', top: HEAD.top, left: HEAD.inset, zIndex: 2,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start',
       }}>
         <DiscChip icon={<Star size={12} color={T.ink} fill={T.ink} />} value={vm.bonus ?? DASH} />
-        {/* The pen's gear. It opens the SAME nav sheet the old header burger
-            did — plan, goal, crew, challenges and referrals are reachable from
-            nowhere else, and a lookalike button here would have stranded them. */}
-        <W3NavMenu />
+        {/* THE MENU IS NOT HERE ANY MORE — see the right column. It sat in
+            this left stack while every screen outside the room puts it at the
+            far right of `W3TopBar`, so the one control a rider needs from
+            everywhere jumped corners the moment they left Today. */}
         {/* The coach, moved off the floating FAB that was landing on the dock. */}
         <W3CoachFab variant="chip" background={T.heroChip} iconColor={T.acid} />
         {/* Force a Garmin pull. It lives HERE, on Today, because this is the
@@ -338,9 +345,16 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
       </div>
 
       <div style={{
-        position: 'absolute', top: 8, right: 16, zIndex: 2,
+        position: 'absolute', top: HEAD.top, right: HEAD.inset, zIndex: 2,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
       }}>
+        {/* ── THE MENU, IN THE ONE CORNER IT IS ALWAYS IN ────────────────
+            Top-right, the same place `W3TopBar` puts it on every screen
+            outside the room. The room has no top bar (the stage is the
+            header), so the gear has to hold that corner itself — otherwise
+            the app's only always-available control moves when the rider
+            moves, which is the thing a navigation system may never do. */}
+        <W3NavMenu />
         <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />
         {/* THE FLAME IS A DOOR NOW: tap → the forgiving-streak sheet
             (sick/injured/break pause instead of breaking — services/streak.py
