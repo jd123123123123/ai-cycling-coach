@@ -58,5 +58,9 @@ export default function W3BikerPreview() {
         months: ['MRZ', 'APR', 'MAI', 'JUN', 'JUL'],
       }}
       onGarage={() => { /* preview: the button must be visible to be reviewed */ }}
+      onCrew={() => { /* the crew door, so the tail can be reviewed whole */ }}
+      // A preview that cannot reach a state certifies nothing about it — the
+      // voice picker is a real control and has to be reviewable here.
+      voice={{ value: 'kumpel', busy: false, onSet: () => {} }}
       bike={{ name: 'Canyon Ultimate CF SLX', imageUrl: '/w3/example-bike.webp', weightKg: 7.1, km: 4182, count: 3 }} vm={vm} onCreateRider={() => {}} onBadges={() => {}} onReferral={() => {}} onRecord={() => {}} />
 }
