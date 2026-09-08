@@ -231,6 +231,7 @@ export default function W3PlanPage() {
         ridden: acts.some((a) => a.started_at.slice(0, 10) === d.date),
         // The server's own per-day WHY — fetched all along, rendered nowhere.
         rationale: isSess && d.rationale ? d.rationale : null,
+        dateISO: d.date,
         dur: secs > 0 ? `${Math.floor(secs / 3600)}h ${Math.round((secs % 3600) / 60)}m` : null,
         tss: tss != null ? String(tss) : DASH,
         targetW: w != null ? `${w} W` : DASH,
@@ -505,6 +506,7 @@ export default function W3PlanPage() {
       onRebuild={onRebuild}
       onSwitchGoal={onSwitchGoal}
       onUndoAdapt={onUndoAdapt}
+      onOpenSession={(iso) => navigate(`/e/w3-session/${iso}`)}
     />
     </>
   )

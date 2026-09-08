@@ -72,6 +72,8 @@ export interface PlanDaySession {
   title: string | null
   weekday: string
   dateLabel: string
+  /** ISO YYYY-MM-DD — the address of this day's own session page. */
+  dateISO?: string
   isToday: boolean
   isPast: boolean
   /** True only when an actual ride exists on that date — the difference
@@ -164,6 +166,8 @@ export interface W3PlanActions {
   /** Reverts the last adapt (60-min server window). Reversibility is what
    *  makes the adapt row safe to explore. */
   onUndoAdapt?: () => Promise<boolean>
+  /** Opens a NON-today day's session detail (/e/w3-session/:date). */
+  onOpenSession?: (dateISO: string) => void
   onRebuild?: (p: RebuildPayload) => Promise<boolean>
   onSwitchGoal?: (id: string, p: GoalSwitchPayload) => Promise<boolean>
 }
@@ -496,7 +500,7 @@ function SheetShell({ children, onClose }: { children: ReactNode; onClose: () =>
 // ── main view ──
 export default function W3PlanView({
   vm, chromeless = false,
-  onBack, onGoal, onLoad, onStartRide, onAdapt, onUndoAdapt, onRebuild, onSwitchGoal,
+  onBack, onGoal, onLoad, onStartRide, onAdapt, onUndoAdapt, onRebuild, onSwitchGoal, onOpenSession,
 }: { vm: W3PlanVm; chromeless?: boolean } & W3PlanActions) {
   const reduce = useReducedMotion()
   const [sheet, setSheet] = useState<null | 'adjust' | 'goal'>(null)
@@ -835,6 +839,16 @@ export default function W3PlanView({
               <Zap size={13} color={T.acid} />
               <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{vm.earnNote}</span>
             </div>
+            )}
+            {/* A selected future/past session day gets its OWN door now —
+                /e/w3-session/:date resolves the same week payload, so from
+                Saturday's card you can finally read Saturday's session. */}
+            {!selIsToday && sel?.title && sel.dateISO && onOpenSession && (
+              <button onClick={() => onOpenSession(sel.dateISO!)}
+                style={{ height: 50, borderRadius: 100, background: T.surface2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px 0 22px', border: 0, cursor: 'pointer', fontFamily: FONT, width: '100%' }}>
+                <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>Einheit ansehen · {sel.weekday}</span>
+                <div style={{ width: 34, height: 34, borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={16} color={T.ink} /></div>
+              </button>
             )}
             {selIsToday && vm.sessionTitle && (
               <button onClick={onStartRide}

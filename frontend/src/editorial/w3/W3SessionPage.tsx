@@ -1,11 +1,14 @@
 import { useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useSessionModel } from '../data/useSessionModel'
 import { useTodaySession } from '../../hooks/useTodaySession'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useStreak } from '../../hooks/useStreak'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage } from '../../hooks/useGarage'
+import { useCurrentWeek } from '../../hooks/useCurrentWeek'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { planDurSec, planIF, planTargetWatts, blocksFromIntervals, isSessionDay, parseISO, fmtDEShort, DE_WD } from './w3plan'
 import { downloadWorkoutExport } from '../../api/coach'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
@@ -48,8 +51,18 @@ const vsAvg = (x: number, kind: 'load' | 'length'): string =>
       ? `${x.toFixed(1)}× die Belastung deiner bisherigen Durchschnittsfahrt dieser Saison.`
       : `${x.toFixed(1)}× so lang wie deine bisherige Durchschnittsfahrt dieser Saison.`
 
+const ZONE_NAME = ['', 'Erholung', 'Ausdauer', 'Tempo', 'Schwelle', 'VO2max', 'Anaerob', 'Sprint']
+
 export default function W3SessionPage() {
   const navigate = useNavigate()
+  // ── /e/w3-session/2026-09-13 — ANY day of the plan week, not just today ──
+  // The param existed and was never read: from Saturday's card there was no
+  // way to see Saturday's session. A date param resolves against the same
+  // /weeks/current payload the plan renders, so the two can never disagree.
+  const { id: param } = useParams()
+  const dateParam = param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? param : null
+  const { data: week } = useCurrentWeek(0)
+  const { data: profile } = useAthleteProfile()
   const model = useSessionModel()
   const session = useTodaySession()
   const { data: adaptive } = useAdaptive()
@@ -272,6 +285,75 @@ export default function W3SessionPage() {
       // user dismissed the share sheet — no-op
     }
   }, [vm])
+
+  // ── the date branch, after every hook has run ─────────────────────────
+  const day = dateParam ? (week?.days ?? []).find((d) => d.date === dateParam) ?? null : null
+  if (dateParam && day && !day.is_today && isSessionDay(day)) {
+    const ftp = profile?.ftp_watts ?? null
+    const secs = planDurSec(day)
+    const durMin = secs > 0 ? Math.round(secs / 60) : null
+    const dTss = day.target_tss != null ? Math.round(day.target_tss) : null
+    const iff = planIF(day)
+    const w = planTargetWatts(day, ftp)
+    const dt = parseISO(day.date)
+    const dayLabel = dt ? `${DE_WD[(dt.getDay() + 6) % 7]}, ${fmtDEShort(dt)}` : day.date
+    const bars = day.intervals.length > 0 ? blocksFromIntervals(day.intervals) : []
+    const shape = powerProfile(bars.map((b) => ({ w: b.w, work: b.work })), true)
+    const gaugeSegs: boolean[] = shape.length > 0
+      ? Array.from({ length: 20 }, (_, i) => shape[Math.floor((i / 20) * shape.length)]?.work ?? false)
+      : Array.from({ length: 20 }, () => false)
+    const steps: W3Step[] = day.intervals.map((iv, i) => {
+      const min = Math.round(iv.duration_seconds / 60)
+      const isMain = iv.zone >= 3
+      return {
+        idx: String(i + 1).padStart(2, '0'),
+        name: ZONE_NAME[iv.zone] ?? `Zone ${iv.zone}`,
+        note: iv.reps && iv.reps > 1 && iv.on_s
+          ? `${iv.reps}× ${iv.on_s}s an${iv.off_s ? ` / ${iv.off_s}s locker` : ''}`
+          : iv.power_target_pct_ftp != null ? `${Math.round(iv.power_target_pct_ftp * 100)} % der FTP` : '',
+        watts: ftp != null && iv.power_target_pct_ftp != null ? `${Math.round(ftp * iv.power_target_pct_ftp)} W` : '—',
+        dur: `${min} min`,
+        isMain,
+        fill: Math.min(1, (iv.power_target_pct_ftp ?? 0.6) / 1.2),
+      }
+    })
+    const dayVm: W3SessionVm = {
+      navTitle: dayLabel,
+      bikeImage: garage?.bike?.image_base64 ?? null,
+      funName: funName(day.template_id ?? null, iff, day.title),
+      title: day.title ?? 'Einheit',
+      numeral: dTss != null ? String(dTss) : '—',
+      qualifier: 'TSS geplant',
+      thresholdW: w != null ? `${w} W` : '—',
+      totalTime: durMin != null ? fmtMin(durMin) : '—',
+      gauge: gaugeSegs,
+      prescriptionClaim: `Geplant für ${dayLabel}: ${day.title ?? 'Einheit'}.${day.rationale ? ` ${day.rationale}` : ''}`,
+      stats: [
+        { icon: 'clock', v: durMin != null ? fmtMin(durMin) : '—', l: 'DAUER', s: '' },
+        { icon: 'flame', v: dTss != null ? String(dTss) : '—', l: 'BELASTUNG · TSS', s: iff != null ? `${Math.round(iff * 100)} % von FTP` : '' },
+        { icon: 'zap', v: w != null ? `${w} W` : '—', l: 'ZIEL', s: w != null ? 'im Hauptteil' : 'kein FTP-Anker' },
+        { icon: 'target', v: day.intervals.length > 0 ? String(day.intervals.length) : '—', l: 'BLÖCKE', s: '' },
+      ],
+      shapeBars: shape,
+      shapeFtpTag: w != null ? `Ziel ${w} W` : '',
+      shapeLabels: ['EINROLLEN', 'HAUPTTEIL', 'AUSROLLEN'],
+      stepsMeta: steps.length > 0 ? `${steps.length} Blöcke · ${durMin != null ? fmtMin(durMin) : '—'}` : '',
+      steps,
+      effort: effortGuide(iff),
+      route: null,
+      // Forward-looking honesty: a future day extends no streak yet and pays
+      // nothing until ridden — the note carries the forecast, the tiles stay out.
+      earns: [],
+      ledgers: [],
+      earnNote: (() => {
+        const rc = forecastRideRc(dTss, streak?.streak ?? null)
+        return rc != null ? `Bringt ca. ${rc.toLocaleString('de-DE')} RideCoin, wenn du sie fährst.` : ''
+      })(),
+      canExport: false,
+      primaryLabel: 'Zum Plan',
+    }
+    return <W3SessionView vm={dayVm} onBack={() => navigate(-1)} onToday={() => navigate('/e/w3-plan')} />
+  }
 
   return <W3SessionView vm={vm} onBack={() => navigate(-1)} onShare={onShare} onExport={onExport} onToday={onToday} />
 }
