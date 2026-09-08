@@ -68,7 +68,7 @@ function SegMeter({ frac, hue = T.acid }: { frac: number; hue?: string }) {
           background: i < filled
             ? `linear-gradient(180deg, ${hue} 0%, ${hue}D9 100%)`
             : i === filled ? `${hue}55` : T.d1,
-          boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40` : 'none',
+          boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40, 0 0 7px ${hue}40` : 'none',
         }} />
       ))}
     </div>
@@ -223,8 +223,15 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
       </div>
 
       {/* ── 01 · GUTHABEN & NÄCHSTES ZIEL ── */}
-      <div style={{ ...band(14) }}>
-        <div style={{ ...lux(28), padding: '20px 18px 18px', gap: 14 }}>
+      <div style={{ ...band(18) }}>
+        <div style={{ ...lux(28), padding: '22px 20px 20px', gap: 16, position: 'relative', overflow: 'hidden' }}>
+          {/* The chapter's own light: one soft acid pool behind the numeral —
+              a lit instrument, not a wallpaper glow. */}
+          <span aria-hidden style={{
+            position: 'absolute', left: -40, top: -60, width: 240, height: 200,
+            background: `radial-gradient(closest-side, ${T.acid}14, transparent)`,
+            pointerEvents: 'none',
+          }} />
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <Kicker>01 — Dein Guthaben</Kicker>
             {(p.earnedToday ?? 0) > 0 && (
@@ -234,12 +241,12 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
               }}>+{nf.format(p.earnedToday as number)} heute</span>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
             <span style={{
-              ...TNUM, fontSize: 44, fontWeight: 700, letterSpacing: -1.8, lineHeight: 0.9,
-              color: T.acid,
+              ...TNUM, fontSize: 56, fontWeight: 700, letterSpacing: -2.4, lineHeight: 0.88,
+              color: T.acid, textShadow: `0 0 24px ${T.acid}33`,
             }}>{bal != null ? nf.format(bal) : DASH}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: T.quiet }}>RC</span>
+            <span style={{ fontSize: 15, fontWeight: 700, color: T.quiet }}>RC</span>
           </div>
 
           {next && bal != null && (
@@ -272,16 +279,9 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
       </div>
 
       {/* ── 02 · DEIN RAD LEBT ── */}
-      <div style={{ ...band(14) }}>
-        <div style={{ ...lux(28), padding: '20px 18px 18px', gap: 13 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-            <Kicker>02 — Zustand</Kicker>
-            {bonus != null && bonus > 0 && (
-              <span style={{ fontSize: 10, fontWeight: 700, color: T.acid, ...TNUM }}>
-                {nf.format(bonus)} RC warten
-              </span>
-            )}
-          </div>
+      <div style={{ ...band(18) }}>
+        <div style={{ ...lux(28), padding: '22px 20px 18px', gap: 14 }}>
+          <Kicker>02 — Zustand</Kicker>
 
           {p.workshop == null ? (
             <span style={{ fontSize: 12.5, fontWeight: 600, color: T.quiet }}>Der Zustand wird geladen.</span>
@@ -336,20 +336,32 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
                 </span>
               )}
 
+              {/* Banked value is a TILE, not a whisper: the room's second
+                  faucet deserves its own surface. */}
+              {bonus != null && bonus > 0 && (
+                <div style={{ ...luxTile(16), padding: '12px 14px', flexDirection: 'row', alignItems: 'center', gap: 11 }}>
+                  <span style={{
+                    width: 30, height: 30, borderRadius: 100, flex: 'none',
+                    display: 'grid', placeItems: 'center', background: T.acidDim,
+                    color: T.acid, fontSize: 15, fontWeight: 700,
+                  }}>✱</span>
+                  <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: T.ink, lineHeight: 1.35 }}>
+                    <span style={{ ...TNUM, color: T.acid, fontWeight: 700 }}>{nf.format(bonus)} RC</span> Service-Bonus warten — abholen zahlt aus.
+                  </span>
+                </div>
+              )}
+
               {/* The value link: maintenance PAYS. One sentence, always true. */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingTop: 2 }}>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, lineHeight: 1.4 }}>
-                  {p.workshop.drivetrain_fresh
-                    ? 'Frischer Antrieb: +12 % RideCoin auf jede Fahrt — läuft.'
-                    : 'Frisch geschmiert fährt +12 % RideCoin auf jede Fahrt ein.'}
-                </span>
-                <button onClick={p.onOpenWorkshop}
-                  style={{
-                    flex: 'none', height: 34, padding: '0 14px', borderRadius: 100, border: 0,
-                    cursor: 'pointer', fontFamily: FONT, background: T.tile,
-                    color: T.ink, fontSize: 11.5, fontWeight: 700,
-                  }}>Werkstatt</button>
-              </div>
+              <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, lineHeight: 1.45 }}>
+                {p.workshop.drivetrain_fresh
+                  ? 'Frischer Antrieb: +12 % RideCoin auf jede Fahrt — läuft gerade.'
+                  : 'Frisch geschmiert fährt +12 % RideCoin auf jede Fahrt ein.'}
+              </span>
+              <button onClick={p.onOpenWorkshop}
+                style={{
+                  height: 44, borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT,
+                  background: T.tile, color: T.ink, fontSize: 13, fontWeight: 700, width: '100%',
+                }}>Zur Werkstatt</button>
             </>
           )}
         </div>
@@ -357,8 +369,8 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
 
       {/* ── 03 · DIE SAMMLUNG ── */}
       {(p.bikes?.length ?? 0) > 0 && (
-        <div style={{ ...band(14) }}>
-          <div style={{ ...lux(28), padding: '20px 0 16px', gap: 12 }}>
+        <div style={{ ...band(18) }}>
+          <div style={{ ...lux(28), padding: '22px 0 18px', gap: 13 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 18px' }}>
               <Kicker>03 — Deine Räder</Kicker>
               <span style={{ ...TNUM, fontSize: 11, fontWeight: 700, color: T.quiet }}>
@@ -372,26 +384,35 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
                 <button key={b.id} onClick={p.onOpenBikes}
                   aria-label={`${b.name}${b.owned ? '' : ` · ${nf.format(b.price)} RC`}`}
                   style={{
-                    flex: 'none', width: 96, border: 0, cursor: 'pointer', fontFamily: FONT,
+                    flex: 'none', width: 104, border: 0, cursor: 'pointer', fontFamily: FONT,
                     background: 'transparent', padding: 0, textAlign: 'left',
                     display: 'flex', flexDirection: 'column', gap: 6,
                   }}>
+                  {/* A SHOP WINDOW, not a thumbnail: catalogue art is shot on
+                      studio paper, so the card IS paper — full colour when
+                      owned, greyed behind glass until then. */}
                   <span style={{
-                    position: 'relative', width: 96, height: 68, borderRadius: 14, overflow: 'hidden',
-                    background: T.tile, display: 'block',
-                    boxShadow: b.active ? `0 0 0 2px ${T.acid}` : 'none',
-                    opacity: b.owned ? 1 : 0.55,
+                    position: 'relative', width: 104, height: 74, borderRadius: 16, overflow: 'hidden',
+                    background: T.paper, display: 'block',
+                    boxShadow: b.active
+                      ? `0 0 0 2px ${T.acid}, 0 6px 18px ${T.acid}22`
+                      : `0 4px 14px #00000059`,
                   }}>
                     <img src={b.art} alt="" loading="lazy"
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      style={{
+                        width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                        transform: 'scale(1.12)',
+                        filter: b.owned ? 'none' : 'grayscale(1) brightness(0.96)',
+                        opacity: b.owned ? 1 : 0.8,
+                      }} />
                     {!b.owned && (
                       <span style={{
-                        position: 'absolute', right: 5, top: 5, width: 18, height: 18, borderRadius: 6,
+                        position: 'absolute', right: 6, top: 6, width: 19, height: 19, borderRadius: 7,
                         background: '#000000A6', display: 'grid', placeItems: 'center',
                       }}><Lock size={10} color={T.d4} /></span>
                     )}
                   </span>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: b.owned ? T.ink : T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', width: 96 }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: b.owned ? T.ink : T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', width: 104 }}>
                     {b.name}
                   </span>
                   <span style={{ ...TNUM, fontSize: 9.5, fontWeight: 700, color: b.active ? T.acid : b.owned ? T.quiet : T.mid, display: 'block' }}>
@@ -405,8 +426,8 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
       )}
 
       {/* ── 04 · DEINE BÜHNE ── */}
-      <div style={{ ...band(14) }}>
-        <div style={{ ...lux(28), padding: '20px 18px 16px', gap: 12 }}>
+      <div style={{ ...band(18) }}>
+        <div style={{ ...lux(28), padding: '22px 20px 18px', gap: 13 }}>
           <Kicker>04 — Deine Bühne</Kicker>
 
           {p.stageTheme && (

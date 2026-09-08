@@ -157,6 +157,9 @@ export interface W3Vm {
    *  resolves its own from the profile. Preview routes use this to show every
    *  theme without an account. */
   stageTheme?: import('./w3stageThemes').StageTheme
+  /** True when the bike art is a white-ground catalogue square — the stage
+   *  dissolves it with a multiply blend (see W3TodayStage). */
+  bikeStudioArt?: boolean
 }
 
 // ── primitives ──
@@ -625,6 +628,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
               onSelectStage: vm.onSelectStage,
               rendering: vm.stageRendering,
               theme: vm.stageTheme,
+              bikeStudioArt: vm.bikeStudioArt,
             }} />
           <div style={{
             position: 'relative', zIndex: 2, marginTop: 'auto',

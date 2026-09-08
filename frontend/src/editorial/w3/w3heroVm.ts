@@ -64,6 +64,11 @@ export function heroVm(s: HeroSources): W3StageVm {
     bike: wantsCollection
       ? collectible
       : s.stage?.bike_image ?? s.garage?.bike?.image_base64 ?? collectible,
+    // Catalogue/build art is a white-ground square; the stage dissolves it
+    // with a multiply blend. The rider's own render is already a cut-out.
+    bikeStudioArt: wantsCollection
+      ? true
+      : s.stage?.bike_image == null && s.garage?.bike?.image_base64 == null && collectible != null,
     // A COMPOSED render is one the Today endpoint returned that ISN'T the plain
     // garage collectible.
     //

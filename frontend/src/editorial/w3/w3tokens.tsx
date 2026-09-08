@@ -4,6 +4,10 @@ import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 
  *  from one source. Values transcribed from `w3.pen`. */
 const DARK = {
   bg: '#0B0B0B', surface: '#161616', surface2: '#202020',
+  // The product-card ground: catalogue art is shot on pale studio paper, so
+  // the tile that holds it is paper in BOTH modes — a white card in a dark
+  // room is the shop-window move, not a leak of the light palette.
+  paper: '#F1F1ED',
   // Surface LEVELS for the lit-card treatment (see w3surfaces.ts). They belong
   // in the palette, not inline in a style: `editorial` forbids raw hex in code
   // (isolation.test.ts), and a gradient invented at the call site is exactly
@@ -171,6 +175,7 @@ const LIGHT: typeof DARK = {
   // Inverted in RELATIONSHIP, not in value: a card is lighter than the ground
   // in both modes, so the ground is paper and the cards are white.
   bg: '#F2F2EE', ground: '#EDEDE9',
+  paper: '#FFFFFF',
   surface: '#FFFFFF', surface2: '#F6F6F2',
   cardTop: '#FFFFFF', cardMid: '#FBFBF8', cardBot: '#F6F6F2',
   sheet: '#FFFFFF', tile: '#FFFFFF', card: '#FFFFFF', lift: '#FFFFFF',

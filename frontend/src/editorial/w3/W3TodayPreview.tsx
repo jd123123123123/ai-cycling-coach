@@ -144,6 +144,14 @@ export default function W3TodayPreview() {
   // never show it — which is how a component mounted on the live Today screen
   // went unrendered through three separate passes. A preview that cannot reach
   // a state is a preview that certifies nothing about it.
-  const themeId = new URLSearchParams(window.location.search).get('theme')
-  return <W3TodayView vm={{ ...FIXTURE, stageTheme: stageThemeById(themeId) }} onAdapt={MOCK_ADAPT} onOpenWrapped={() => {}} />
+  const params = new URLSearchParams(window.location.search)
+  const themeId = params.get('theme')
+  // ?bikeart=catalog shows the white-ground catalogue square instead of the
+  // cut-out — the state the multiply blend exists for.
+  const catalog = params.get('bikeart') === 'catalog'
+  return <W3TodayView vm={{
+    ...FIXTURE,
+    stageTheme: stageThemeById(themeId),
+    ...(catalog ? { bikeImage: '/w3/bikes/rustbucket.webp', bikeInScene: false, bikeStudioArt: true } : {}),
+  }} onAdapt={MOCK_ADAPT} onOpenWrapped={() => {}} />
 }

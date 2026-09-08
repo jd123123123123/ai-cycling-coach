@@ -4,6 +4,7 @@ import { T, FONT, EASE, DASH } from './w3tokens'
 import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
 import { FLOOR, STAGE_PLATE as PLATE, stageThemeById, type StageTheme } from './w3stageThemes'
+import { useCutout } from './useCutout'
 import W3NavMenu from './W3NavMenu'
 import { W3CoachFab } from './W3CoachChat'
 import W3SyncChip from './W3SyncChip'
@@ -221,6 +222,11 @@ export interface W3StageVm {
   grime?: number
   /** Which backdrop the room wears (w3stageThemes). Absent → the studio. */
   theme?: StageTheme
+  /** True when `bike` is CATALOGUE/BUILD art — a square product shot on a
+   *  pale studio ground. It is drawn with a multiply blend and an edge mask so
+   *  the white square dissolves and the machine stands IN the room instead of
+   *  on a pasted card. A rider's own cut-out render needs neither. */
+  bikeStudioArt?: boolean
 }
 
 /** A floating pill on the stage ground. Never a card — it has no border and no
@@ -264,6 +270,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
 }) {
   const reduce = useReducedMotion()
   const theme = vm.theme ?? stageThemeById(null)
+  const bikeSrc = useCutout(vm.bike, vm.bikeStudioArt === true)
 
   // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
   // which is flat by construction: no falloff in the corners, no grain, no light
@@ -525,7 +532,11 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
                     <div style={{ ...SHADOW_CORE, left: x }} />
                   </div>
                 ))}
-                <img src={vm.bike} alt={vm.bikeName} style={{ ...BIKE_ART, width: '100%' }} />
+                {/* Catalogue art gets its white studio ground REMOVED (see
+                    useCutout — a blend cannot survive the stage's stacking
+                    contexts), so the machine stands on the floor like every
+                    other bike instead of on a pasted white card. */}
+                <img src={bikeSrc ?? vm.bike} alt={vm.bikeName} style={{ ...BIKE_ART, width: '100%' }} />
                 {/* ── The road it is still carrying (w3BikeSoul) ─────────
                     Ported from the retired garage-old: soft irregular spray
                     weighted to the bottom, its opacity IS the rider's last
