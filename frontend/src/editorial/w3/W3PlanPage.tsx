@@ -6,7 +6,7 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { buildPlan, applyPlanChange, type InterviewAnswers } from '../../api/plan'
-import { listRehearsals } from '../../api/rehearsal'
+import { listRehearsals, getRehearsal } from '../../api/rehearsal'
 import { modifyTodayWorkout, undoTodayModify, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan } from '../../api/weeks'
 import {
@@ -101,6 +101,19 @@ export default function W3PlanPage() {
     retry: false,
   })
 
+  // The target event's PARSED COURSE — climbs with length and gradient. The
+  // list payload carries only distance and ascent, so the plan asks for the
+  // one row it needs, and only when that row exists. Cached hard: a course
+  // does not change between opens.
+  const targetRehearsalId = rehearsals?.find((r) => r.source_kind === 'target_event')?.id ?? null
+  const { data: targetCourse } = useQuery({
+    queryKey: ['rehearsal', targetRehearsalId],
+    queryFn: () => getRehearsal(targetRehearsalId as number),
+    enabled: targetRehearsalId != null,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  })
+
   const ftp = profile?.ftp_watts ?? null
 
   const vm = useMemo<W3PlanVm>(() => {
@@ -162,6 +175,26 @@ export default function W3PlanPage() {
           // hardcoded '50%'/'66%' directly under this honest label.
           weekOfBlockPct: Math.round((weekOfBlock / phaseLen) * 100),
           restNote: restWeekInBlock >= 0 ? `Woche ${restWeekInBlock + 1} ist eine Ruhewoche` : null,
+          // ── THE MOUNTAIN THIS BLOCK IS FOR ──────────────────────────
+          // Every engine in the category plans toward a DATE; the course's
+          // own longest climb is the demand the block actually answers, and
+          // it is sitting parsed in the rehearsal store. Real numbers, and
+          // the answer keyed to the REAL active phase — or nothing at all.
+          terrainNote: (() => {
+            const big = [...(targetCourse?.climbs ?? [])]
+              .sort((a, b) => b.elev_gain_m - a.elev_gain_m)[0]
+            if (!big || big.length_m < 1500) return null
+            const km = (big.length_m / 1000).toFixed(1)
+            const pct = big.avg_grade_pct.toFixed(1)
+            const answer = active === 'Spezifisch'
+              ? 'Genau dafür sind die langen Schwellenblöcke hier.'
+              : active === 'Aufbau'
+                ? 'Dieser Block baut die Grundlage, die den Anstieg trägt.'
+                : active === 'Taper'
+                  ? 'Jetzt nur noch frisch werden — die Arbeit dafür ist gemacht.'
+                  : 'Die Grundlage dafür entsteht in diesem Block.'
+            return `Dein Ziel verlangt ${km} km am Stück bei ${pct} %. ${answer}`
+          })(),
           text: blurb.text,
           tags: blurb.tags,
           next: nextPhase
@@ -295,7 +328,24 @@ export default function W3PlanPage() {
       railProgress: currentIdx / Math.max(1, totalWeeks),
       planWeekNum: planWeek,
       totalWeeks,
-      reqSummary: 'Strecke, Anforderungsprofil und Renntag',
+      // ── WHAT THE COURSE ACTUALLY ASKS FOR ────────────────────────────
+      // This was the hardcoded string 'Strecke, Anforderungsprofil und
+      // Renntag' on a screen whose contract is "structural numbers resolve or
+      // dash" — and it was the plan's only place to say that the event has
+      // TERRAIN, not just a date. The rehearsal store already parsed the
+      // course: its climbs carry length and average gradient. The longest one
+      // is the demand the block is training for, so it is the one named.
+      reqSummary: (() => {
+        if (!targetRe) return 'Lade die Strecke hoch — dann steht hier, was sie verlangt'
+        const parts: string[] = []
+        if (distKm != null) parts.push(`${distKm} km`)
+        if (hm != null) parts.push(`${hm.toLocaleString('de-DE')} hm`)
+        const big = [...(targetCourse?.climbs ?? [])].sort((a, b) => b.elev_gain_m - a.elev_gain_m)[0]
+        if (big && big.length_m >= 1000) {
+          parts.push(`längster Anstieg ${(big.length_m / 1000).toFixed(1)} km à ${big.avg_grade_pct.toFixed(1)} %`)
+        }
+        return parts.length > 0 ? parts.join(' · ') : 'Strecke gespeichert — Anforderungen folgen'
+      })(),
       daysRight: daysToStart != null ? `${daysToStart} Tage` : '—',
       phaseOfTotal: `Phase ${activeSegIdx + 1} von ${phases.length}`,
       block,
@@ -305,6 +355,25 @@ export default function W3PlanPage() {
         ? `${DE_WD2[(weekStartD.getDay() + 6) % 7]} ${weekStartD.getDate()}. – ${DE_WD2[(weekEndD.getDay() + 6) % 7]} ${weekEndD.getDate()}. ${monthDE(weekEndD)} · Woche ${weekOfBlock} im ${active}`
         : '—',
       weekBadge: plannedUnits > 0 ? `${doneUnits} / ${plannedUnits}` : '—',
+      // ── THE MIRROR IS ALLOWED TO SMILE ───────────────────────────────
+      // Every readiness and plan surface in this app speaks when something is
+      // below baseline and stays silent when everything is right, so a rider
+      // who does the work hears nothing back. This is the positive branch,
+      // and it is a FACT rather than praise: the sessions planned for the
+      // days that have already passed are all ridden.
+      weekPraise: (() => {
+        if (plannedUnits === 0) return null
+        const passed = days.filter((d) => {
+          const dt = parseISO(d.date)
+          return isSessionDay(d) && dt != null && !d.is_today && dt < today
+        })
+        if (passed.length < 2) return null
+        const ridden = passed.filter((d) => acts.some((a) => a.started_at.slice(0, 10) === d.date))
+        if (ridden.length !== passed.length) return null
+        return doneUnits >= plannedUnits
+          ? 'Diese Woche steht komplett. Jede geplante Einheit gefahren.'
+          : `${ridden.length} von ${ridden.length} bisher geplanten Einheiten gefahren — die Woche läuft sauber.`
+      })(),
       weekStats: [
         { value: weekSecs > 0 ? `${fmtHoursHM(weekSecs / 3600)} h` : '—', label: 'Zeit' },
         { value: weekTss != null ? String(Math.round(weekTss)) : '—', label: 'TSS' },
@@ -352,7 +421,7 @@ export default function W3PlanPage() {
       adjustLongDay,
       goalOptions,
     }
-  }, [week, profile, plan, rehearsals, seasonActs, ftp, streak])
+  }, [week, profile, plan, rehearsals, targetCourse, seasonActs, ftp, streak])
 
   // ── real adapt (persists via /workouts/today/modify) ──
   const onAdapt = useCallback(async (kind: AdaptKind): Promise<AdaptResult | null> => {

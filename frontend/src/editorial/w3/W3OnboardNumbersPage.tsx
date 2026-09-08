@@ -6,6 +6,8 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { updateProfile } from '../../api/athletes'
 import { grantConsent } from '../../api/consent'
+import { useQueryClient } from '@tanstack/react-query'
+import { ONBOARDING_STATUS_KEY } from '../../hooks/useOnboarding'
 import { CONSENT_TYPES } from '../../types/consent'
 import { estimateFtp, starterFtp, type StarterFitness } from '../../utils/trainingScience'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
@@ -129,6 +131,7 @@ function Row({ label, value, unit, onEdit }: {
 
 export default function W3OnboardNumbersPage() {
   const navigate = useNavigate()
+  const qc = useQueryClient()
   const reduce = useReducedMotion()
   const { data: profile } = useAthleteProfile()
   const ninetyAgo = useMemo(() => {
@@ -208,6 +211,16 @@ export default function W3OnboardNumbersPage() {
         ftp_watts: Math.round(ftp),
         ...(weight ? { weight_kg: Number(weight) } : {}),
       })
+      // ── THE GATE THIS SCREEN JUST SATISFIED ──────────────────────────
+      // `useOnboarding` caches its verdict for five minutes AND the cache is
+      // written to localStorage, so without this the rider who just granted
+      // consent and set their numbers is still 'needs-consent' to
+      // ProtectedRoute — which bounces them from /e/w3-today back to the
+      // welcome screen, forever, and a reload does not help. Observed on
+      // production with a fresh account: onboarding completed, app
+      // unreachable. Awaited so the next route reads the truth.
+      await qc.invalidateQueries({ queryKey: ONBOARDING_STATUS_KEY })
+      await qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
       navigate('/e/w3-onboard-rider')
     } catch (err) {
       // ── THE ERROR HAS TO NAME ITSELF ────────────────────────────────────

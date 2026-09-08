@@ -61,6 +61,10 @@ export interface ActiveBlockVm {
   /** How far through the block, 0–100 — the real ratio behind `weekOfBlock`. */
   weekOfBlockPct?: number
   restNote: string | null
+  /** What the TARGET COURSE demands, in one measured sentence — the link
+   *  between the block and the terrain it is training for. Null when no
+   *  course is stored, or when it has no climb worth naming. */
+  terrainNote?: string | null
   text: string
   tags: string[]
   next: string
@@ -106,6 +110,9 @@ export interface W3PlanVm {
   weekBars: WeekBar[]
   weekRangeLabel: string
   weekBadge: string
+  /** Said only when the week is actually being kept — the app's positive
+   *  branch. Null on every other week; praise that is always on is noise. */
+  weekPraise?: string | null
   weekStats: [PlanStat, PlanStat, PlanStat, PlanStat]
   dayStrip: PlanDayCell[]
   /** One entry per weekday, so the strip can show future sessions too. */
@@ -636,6 +643,14 @@ export default function W3PlanView({
                 </div>
               </div>
               <span style={{ fontSize: 13, fontWeight: 500, color: T.mid, lineHeight: 1.5 }}>{vm.block.text}</span>
+              {/* THE TERRAIN THE BLOCK IS FOR. Every engine plans toward a
+                  date; this names the mountain. Real numbers from the parsed
+                  course, or nothing at all. */}
+              {vm.block.terrainNote && (
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.acid, lineHeight: 1.45 }}>
+                  {vm.block.terrainNote}
+                </span>
+              )}
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {vm.block.tags.map((t) => (
                   <span key={t} style={{ padding: '6px 12px', borderRadius: 100, background: T.surface2, fontSize: 11, fontWeight: 600, color: T.mid }}>{t}</span>
@@ -672,6 +687,12 @@ export default function W3PlanView({
               not a canned phase paragraph. */}
           {vm.weekWhy && (
             <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.55, color: T.mid }}>{vm.weekWhy}</span>
+          )}
+          {vm.weekPraise && (
+            <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+              <Check size={14} color={T.acid} style={{ flex: 'none', marginTop: 2 }} />
+              <span style={{ fontSize: 12.5, fontWeight: 600, lineHeight: 1.45, color: T.acid }}>{vm.weekPraise}</span>
+            </div>
           )}
           {(vm.planNotes ?? []).map((n) => (
             <div key={n} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>

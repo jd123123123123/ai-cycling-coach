@@ -100,6 +100,12 @@ function write(client: QueryClient): void {
     const state = dehydrate(client, {
       shouldDehydrateQuery: (q) => {
         if (q.state.status !== 'success' || q.state.data === undefined) return false
+        // NEVER PERSIST A GATE. The onboarding verdict decides whether a rider
+        // may enter the app at all; served from disk it can strand somebody
+        // who has since granted consent behind a redirect loop that a reload
+        // cannot clear (observed on production). It is one cheap request and
+        // it must always be asked live.
+        if (Array.isArray(q.queryKey) && q.queryKey[0] === 'onboarding') return false
         try {
           return JSON.stringify(q.state.data).length <= MAX_QUERY_BYTES
         } catch {

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, cleanup, fireEvent, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 
 const profile = { data: undefined as unknown }
@@ -27,7 +28,14 @@ vi.mock('motion/react', () => ({
 import W3OnboardNumbersPage from '../W3OnboardNumbersPage'
 
 function renderPage() {
-  return render(<MemoryRouter><W3OnboardNumbersPage /></MemoryRouter>)
+  // The page invalidates the onboarding gate after it writes consent and the
+  // profile (see onboardingGate.test.ts for why), so it needs a real client.
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <MemoryRouter><W3OnboardNumbersPage /></MemoryRouter>
+    </QueryClientProvider>,
+  )
 }
 const cta = () => screen.getByRole('button', { name: /Passt so|Startwerten loslegen|Einen Moment/i }) as HTMLButtonElement
 
