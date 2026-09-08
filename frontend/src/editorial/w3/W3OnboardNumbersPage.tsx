@@ -219,8 +219,15 @@ export default function W3OnboardNumbersPage() {
       // welcome screen, forever, and a reload does not help. Observed on
       // production with a fresh account: onboarding completed, app
       // unreachable. Awaited so the next route reads the truth.
-      await qc.invalidateQueries({ queryKey: ONBOARDING_STATUS_KEY })
-      await qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
+      // WRITTEN, NOT MERELY INVALIDATED. Invalidation alone does not fix it:
+      // an invalidated query still SERVES ITS OLD VALUE while the refetch is
+      // in flight, and ProtectedRoute redirects on that stale verdict long
+      // before the network answers — measured on the deployed build, with a
+      // fresh account. This screen just made both halves of the verdict true,
+      // so it states the result and lets the refetch re-verify it behind.
+      qc.setQueryData(ONBOARDING_STATUS_KEY, 'complete')
+      void qc.invalidateQueries({ queryKey: ONBOARDING_STATUS_KEY })
+      void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
       navigate('/e/w3-onboard-rider')
     } catch (err) {
       // ── THE ERROR HAS TO NAME ITSELF ────────────────────────────────────

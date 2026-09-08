@@ -34,13 +34,15 @@ describe('the onboarding gate cannot strand a rider', () => {
     // It writes the two things the verdict is computed from …
     expect(src).toContain('grantConsent(')
     expect(src).toContain('updateProfile(')
-    // … so it must invalidate the verdict, and await it before navigating.
-    expect(src).toContain('ONBOARDING_STATUS_KEY')
-    expect(src).toMatch(/await qc\.invalidateQueries\(\{\s*queryKey:\s*ONBOARDING_STATUS_KEY\s*\}\)/)
-    const invalidateAt = src.indexOf('ONBOARDING_STATUS_KEY })')
+    // … so it must WRITE the verdict, not merely invalidate it: an
+    // invalidated query keeps serving its old value while the refetch is in
+    // flight, and ProtectedRoute redirects on that stale value first.
+    expect(src).toMatch(/qc\.setQueryData\(ONBOARDING_STATUS_KEY, 'complete'\)/)
+    expect(src).toContain('invalidateQueries({ queryKey: ONBOARDING_STATUS_KEY })')
+    const writeAt = src.indexOf("setQueryData(ONBOARDING_STATUS_KEY")
     const navigateAt = src.indexOf("navigate('/e/w3-onboard-rider')")
-    expect(invalidateAt).toBeGreaterThan(-1)
-    expect(navigateAt).toBeGreaterThan(invalidateAt)
+    expect(writeAt).toBeGreaterThan(-1)
+    expect(navigateAt).toBeGreaterThan(writeAt)
   })
 
   it('the persisted cache refuses to serve the gate from disk', () => {
