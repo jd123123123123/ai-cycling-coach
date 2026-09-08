@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { hrvHeadline } from '../HRVTrend'
-import { sleepEvidenceScore } from '../SessionOfTheDay'
 import { baselineHeadline, type BaselinePoint } from '../../../pages/RecoveryTrendsView'
 
 /**
@@ -108,25 +107,3 @@ describe('baselineHeadline', () => {
   })
 })
 
-describe('sleepEvidenceScore', () => {
-  it("lists today's sleep score as an input to today's session", () => {
-    expect(sleepEvidenceScore({ date: TODAY, sleep_score: 78 }, TODAY)).toBe(78)
-  })
-
-  it('drops a stale score rather than presenting it as a weighed input', () => {
-    expect(sleepEvidenceScore({ date: '2026-07-18', sleep_score: 78 }, TODAY)).toBeNull()
-  })
-
-  it("drops yesterday's score too — the chip claims today's decision", () => {
-    expect(sleepEvidenceScore({ date: '2026-07-26', sleep_score: 78 }, TODAY)).toBeNull()
-  })
-
-  it('handles a today row that carries HRV but no sleep score', () => {
-    expect(sleepEvidenceScore({ date: TODAY, sleep_score: null }, TODAY)).toBeNull()
-  })
-
-  it('handles a missing row and a dateless row', () => {
-    expect(sleepEvidenceScore(null, TODAY)).toBeNull()
-    expect(sleepEvidenceScore({ sleep_score: 78 }, TODAY)).toBeNull()
-  })
-})

@@ -3,7 +3,8 @@
  * flagship state the rest of the Today tab already uses. Never invents a
  * workout: without a real profile the road degrades to a bare horizon.
  */
-import type { FlagshipState } from '../components/dashboard/tabs/TodayTab'
+// Inlined from the deleted legacy TodayTab — the type outlived the screen.
+export type FlagshipState = 'ready' | 'controlled' | 'rest' | 'post' | 'planned-rest' | 'pending'
 
 export type RoadMode =
   | 'prescribed'   // the terrain of today's planned session

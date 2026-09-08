@@ -1,20 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { briefFallbackState as hookFallback, sessionIntensity } from '../useTodaySession'
-import { briefFallbackState as todayTabFallback } from '../../components/dashboard/tabs/TodayTab'
+import { sessionIntensity } from '../useTodaySession'
 import { workoutDisplayTitle, workoutDisplayPurpose, type PrescribedWorkout } from '../../api/coach'
-import { undoEligible } from '../../components/plan/AdaptiveCard'
-import type { PlanAdaptation } from '../../api/plan'
 
 /**
  * One source of truth: both tabs' session card is driven by useTodaySession.
  * These tests pin the shared derivations + the reuse contract (no forks).
  */
-
-describe('briefFallbackState reuse (no fork)', () => {
-  it('TodayTab re-exports the EXACT hook function object', () => {
-    expect(todayTabFallback).toBe(hookFallback)
-  })
-})
 
 const workout = (over: Partial<PrescribedWorkout> = {}): PrescribedWorkout => ({
   template_id: 'vo2_5x4',
@@ -71,31 +62,6 @@ describe('locale-honest display fields (round-2 review)', () => {
     const w = workout({ title_de: null, purpose: 'Base work', purpose_de: null })
     expect(workoutDisplayTitle(w, true)).toBe('VO2 Max 5x4')
     expect(workoutDisplayPurpose(w, true)).toBe('Base work')
-  })
-})
-
-describe('undoEligible (feed "Rückgängig" affordance)', () => {
-  const row = (over: Partial<PlanAdaptation> = {}): PlanAdaptation => ({
-    id: 1, created_at: new Date().toISOString(), target_date: '2026-07-21',
-    source: 'user_change', signal: 'user_change', rule: 'user_modified',
-    before: null, after: null, evidence: null,
-    message_de: 'Du hast angepasst: …', message_en: 'You adjusted: …',
-    ...over,
-  })
-
-  it('eligible: newest row, user_modified, inside 60 min', () => {
-    expect(undoEligible(row(), 1)).toBe(true)
-  })
-  it('not eligible when not the newest row', () => {
-    expect(undoEligible(row(), 2)).toBe(false)
-  })
-  it('not eligible for engine rules or reverts', () => {
-    expect(undoEligible(row({ rule: 'sleep_hrv_downgrade' }), 1)).toBe(false)
-    expect(undoEligible(row({ rule: 'revert' }), 1)).toBe(false)
-  })
-  it('not eligible outside the 60-min window', () => {
-    const old = new Date(Date.now() - 61 * 60 * 1000).toISOString()
-    expect(undoEligible(row({ created_at: old }), 1)).toBe(false)
   })
 })
 
