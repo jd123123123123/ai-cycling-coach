@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import W3TodayStage, { STAGE_PLATE, type W3StageVm } from './W3TodayStage'
+import { stageThemeById } from './w3stageThemes'
 import { useGroundColour } from './useGroundColour'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
@@ -46,6 +47,15 @@ import './w3.css'
 
 const Ctx = createContext<HTMLElement | null>(null)
 
+/** The colour the room's plate ends in, resolved by the shell (known by
+ *  construction for a procedural theme, sampled for the studio webp). Screens
+ *  inside the room read it for their runway instead of re-sampling a plate
+ *  that may not even be the one on stage. Null outside the shell. */
+const GroundCtx = createContext<string | null>(null)
+export function useStageGround(): string | null {
+  return useContext(GroundCtx)
+}
+
 /**
  * Render this screen's panel — the bar that floats over the floor — into the
  * shared room, and report whether the room took it.
@@ -80,7 +90,10 @@ export interface W3HeroShellProps {
 }
 
 export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
-  const ground = useGroundColour(STAGE_PLATE)
+  // The theme knows its own ground; only the studio webp needs sampling.
+  const theme = vm.theme ?? stageThemeById(null)
+  const sampled = useGroundColour(theme.ground == null ? STAGE_PLATE : null)
+  const ground = theme.ground ?? sampled
   const reduce = useReducedMotion()
   const { pathname } = useLocation()
   const nav = useNavigate()
@@ -91,6 +104,7 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
 
   return (
     <Ctx.Provider value={host}>
+    <GroundCtx.Provider value={ground}>
       <div className="w3-root">
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
           <div style={{
@@ -131,6 +145,7 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
           <W3TabBar />
         </div>
       </div>
+    </GroundCtx.Provider>
     </Ctx.Provider>
   )
 }

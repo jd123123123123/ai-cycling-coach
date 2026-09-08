@@ -60,6 +60,9 @@ export interface TrainingGoals {
   // What stands on the hero stage: the photographed machine or the bought
   // collection bike. Absent → photo (when one exists).
   stage_bike?: 'photo' | 'collection'
+  // Which backdrop the hero room wears — an id from w3stageThemes. Absent →
+  // the studio.
+  stage_theme?: string
 }
 
 export interface AthleteProfileUpdate {

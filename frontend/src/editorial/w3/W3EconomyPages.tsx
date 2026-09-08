@@ -121,6 +121,19 @@ export function W3GarageHome() {
   const qc = useQueryClient()
   const [stageBusy, setStageBusy] = useState(false)
   const hasPhoto = Boolean(garage?.bike?.image_base64)
+  // The room's backdrop — always offered; the choice persists in the same
+  // goals JSON the stage-bike switch uses.
+  const [themeBusy, setThemeBusy] = useState(false)
+  const stageTheme = {
+    value: profile?.goals?.stage_theme ?? 'studio',
+    busy: themeBusy,
+    onSet: (id: string) => {
+      setThemeBusy(true)
+      void updateGoals({ stage_theme: id })
+        .then(() => qc.invalidateQueries({ queryKey: ['athlete', 'me'] }))
+        .finally(() => setThemeBusy(false))
+    },
+  }
   const boughtBike = collection?.loadout.bike && collection.loadout.bike !== 'rustbucket'
   const stageBike = hasPhoto && boughtBike
     ? {
@@ -161,6 +174,7 @@ export function W3GarageHome() {
       onOpenBikes={() => navigate('/e/w3-shop')}
       stage={stage}
       stageBike={stageBike}
+      stageTheme={stageTheme}
       onOpenStages={() => navigate('/e/w3-gear#kulissen')} />
   )
 

@@ -11,6 +11,7 @@ import { useWarmRoom } from './useWarmRoom'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { grimeFrom } from './w3BikeSoul'
+import { stageThemeById } from './w3stageThemes'
 
 /**
  * The layout route that owns the room.
@@ -77,6 +78,9 @@ export default function W3HeroRoute() {
         onSelectStage: selectStage.mutate,
         rendering: selectStage.isPending,
         grime,
+        // The room's backdrop — the rider's own pick, from the same goals
+        // JSON the stage-bike switch lives in. Default: the studio.
+        theme: stageThemeById(profile?.goals?.stage_theme),
       }}>
       <Outlet />
     </W3HeroShell>

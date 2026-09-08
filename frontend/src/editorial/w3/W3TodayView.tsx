@@ -12,7 +12,7 @@ import W3RideChest from './W3RideChest'
 import W3WrappedBolt from './W3WrappedBolt'
 import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
-import { useHeroPanel } from './W3HeroShell'
+import { useHeroPanel, useStageGround } from './W3HeroShell'
 import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3ReadinessDecision from './W3ReadinessDecision'
@@ -153,6 +153,10 @@ export interface W3Vm {
   sessionBlocks: W3Block[]
   sessionFtpTag: string
   sessionEarn: string | null
+  /** The room's backdrop, for the standalone (non-shell) branch — the shell
+   *  resolves its own from the profile. Preview routes use this to show every
+   *  theme without an account. */
+  stageTheme?: import('./w3stageThemes').StageTheme
 }
 
 // ── primitives ──
@@ -222,7 +226,12 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
   // it, so the app reads as one room rather than as a picture pasted onto a
   // page. Null until the sample lands, and null forever if a canvas read is
   // refused; both cases fall back to the token.
-  const ground = useGroundColour(STAGE_PLATE)
+  // The shell resolves the ground for whatever plate is ACTUALLY on stage
+  // (a chosen theme knows its own; the studio webp is sampled). Outside the
+  // shell — previews, deep links — fall back to sampling the studio.
+  const shellGround = useStageGround()
+  const sampledGround = useGroundColour(shellGround == null && vm.stageTheme?.ground == null ? STAGE_PLATE : null)
+  const ground = shellGround ?? vm.stageTheme?.ground ?? sampledGround
   // How far the picture's last colour is from the app's own, 0..1 over the
   // range where a hard edge would actually be visible. Below ~2 levels nobody
   // can see a step, so nothing is spent hiding one.
@@ -615,6 +624,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
               stage: vm.stage,
               onSelectStage: vm.onSelectStage,
               rendering: vm.stageRendering,
+              theme: vm.stageTheme,
             }} />
           <div style={{
             position: 'relative', zIndex: 2, marginTop: 'auto',

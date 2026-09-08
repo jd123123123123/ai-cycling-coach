@@ -1,3 +1,4 @@
+import { stageThemeById } from './w3stageThemes'
 import W3TodayView, { type W3Vm } from './W3TodayView'
 import { STARTER_BIKE } from './starterBike'
 import { T } from './w3tokens'
@@ -135,11 +136,14 @@ const MOCK_ADAPT = async (kind: 'easier' | 'harder' | 'shorter' | 'indoor' | 're
   return { targetW: '285 W', tss: 112, ftpPct: '98%', rationale: 'Angepasst — Schwelle · Indoor. Gleiche Watt auf der Rolle — Wetter und Verkehr fallen raus.', railsDowngraded: false, title: '4 × 8 Schwelle · Indoor' }
 }
 
+// ?theme=<id> forces a backdrop — the design flow's way to see all eight
+// stages without an account. Live riders pick theirs in the garage lane.
 export default function W3TodayPreview() {
   // THE BOLT NEEDS A HANDLER TO EXIST AT ALL. `W3TodayView` gates it on
   // `!chest.sealed && onOpenWrapped`, so a preview that passes no handler can
   // never show it — which is how a component mounted on the live Today screen
   // went unrendered through three separate passes. A preview that cannot reach
   // a state is a preview that certifies nothing about it.
-  return <W3TodayView vm={FIXTURE} onAdapt={MOCK_ADAPT} onOpenWrapped={() => {}} />
+  const themeId = new URLSearchParams(window.location.search).get('theme')
+  return <W3TodayView vm={{ ...FIXTURE, stageTheme: stageThemeById(themeId) }} onAdapt={MOCK_ADAPT} onOpenWrapped={() => {}} />
 }

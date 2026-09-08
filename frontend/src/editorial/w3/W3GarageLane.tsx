@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from 'motion/react'
 import { Bike, ChevronRight, MapPin, Package, Sparkles, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Workshop, WorkshopComponent } from '../../api/workshop'
+import { STAGE_THEMES, FLOOR } from './w3stageThemes'
 import { T, FONT, EASE, band, Kicker } from './w3tokens'
 import { hairline } from './w3surfaces'
 import { backdropArt } from './w3backdropArt'
@@ -144,6 +145,13 @@ export interface W3GarageLaneProps {
     busy: boolean
     onSet: (v: 'photo' | 'collection') => void
   } | null
+  /** Which backdrop the room wears (w3stageThemes). Always offered — every
+   *  rider has the room. */
+  stageTheme?: {
+    value: string
+    busy: boolean
+    onSet: (id: string) => void
+  } | null
 }
 
 export default function W3GarageLane(p: W3GarageLaneProps) {
@@ -255,6 +263,47 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
               on. */}
           <Row icon={Bike} title="Räder" note="Die Sammlung — 26 Räder" onClick={p.onOpenBikes} />
           <Row icon={Package} title="Ausrüstung" note="Teile kaufen und montieren" onClick={p.onOpenGear} />
+          {/* THE ROOM'S BACKDROP. Eight stages, every one holding the same
+              crisp horizon the bike stands on — the swatch IS the theme's own
+              wall-and-floor gradient, so what you pick is what you get. */}
+          {p.stageTheme && (
+            <div style={{
+              display: 'flex', flexDirection: 'column', gap: 10,
+              padding: '13px 16px 14px', borderRadius: 22, background: T.surface, fontFamily: FONT,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>Hintergrund</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
+                  {STAGE_THEMES.find((t) => t.id === p.stageTheme!.value)?.name ?? 'Studio'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, opacity: p.stageTheme.busy ? 0.6 : 1 }}>
+                {STAGE_THEMES.map((t) => {
+                  const on = p.stageTheme!.value === t.id
+                  return (
+                    <button key={t.id} type="button" disabled={p.stageTheme!.busy}
+                      onClick={() => !on && p.stageTheme!.onSet(t.id)}
+                      aria-label={`Hintergrund ${t.name}`} aria-pressed={on}
+                      style={{
+                        flex: 'none', width: 58, height: 42, borderRadius: 10, padding: 0,
+                        border: 0, cursor: on ? 'default' : 'pointer', overflow: 'hidden',
+                        background: t.swatch,
+                        boxShadow: on ? `0 0 0 2px ${T.acid}` : `inset 0 0 0 1px ${T.d1}`,
+                        position: 'relative',
+                      }}>
+                      {/* The swatch repeats the theme's own horizon, so even a
+                          thumbnail stands on a floor. */}
+                      <span aria-hidden style={{
+                        position: 'absolute', left: 0, right: 0, top: `${FLOOR * 100}%`,
+                        height: 1, background: '#00000038',
+                      }} />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {/* ONE ROW, because there is now one screen behind it. "Shop" and
               "Orte" were two rows leading to two screens that both sold things
               with RideCoin; the places moved into the shop, so a second row

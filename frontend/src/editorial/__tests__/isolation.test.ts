@@ -78,7 +78,10 @@ describe('editorial isolation', () => {
       // land, water, parks, road weights. Those have no token equivalents and
       // should not get them. Nothing else in this app is a lake, and inventing
       // `T.water` to satisfy a lint rule would put a colour in the design
-      // system that no component may use.
+      // system that no component may use. `w3/w3stageThemes.ts` is the same
+      // role for the hero room's backdrops: a dawn's ember and a night's
+      // star-blue ARE the theme, belong to exactly one stage each, and a
+      // `T.morgenfahrtEmber` token would be a colour no component may use.
       //
       // COLOUR TESTS compare hex as EXPECTED VALUES. `tokens` asserts
       // tokens.css matches the pen; `fadeRunway` measures the distance between
@@ -94,6 +97,7 @@ describe('editorial isolation', () => {
       const EXEMPT = [
         `${path.sep}w3${path.sep}w3tokens.tsx`,
         `${path.sep}w3${path.sep}w3map.ts`,
+        `${path.sep}w3${path.sep}w3stageThemes.ts`,
         `${path.sep}__tests__${path.sep}tokens.test.ts`,
         `${path.sep}__tests__${path.sep}fadeRunway.test.ts`,
         `${path.sep}__tests__${path.sep}groundColour.test.ts`,

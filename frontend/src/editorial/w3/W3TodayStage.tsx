@@ -3,6 +3,7 @@ import { Asterisk, ChevronsUp, Star, UserRound } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import type { Stage } from '../../api/garage'
 import { GhostBike } from './W3BikeHero'
+import { FLOOR, STAGE_PLATE as PLATE, stageThemeById, type StageTheme } from './w3stageThemes'
 import W3NavMenu from './W3NavMenu'
 import { W3CoachFab } from './W3CoachChat'
 import W3SyncChip from './W3SyncChip'
@@ -57,11 +58,11 @@ import W3StreakChip from './W3StreakChip'
  * Re-measure if the plate is ever re-rendered: the row of the largest jump in
  * mean brightness, divided by the height.
  */
-const FLOOR = 0.762
-
-/** The room. Exported so the screen around the stage can read the colour this
- *  picture ends in and carry on in it — see `useGroundColour`. */
-export const STAGE_PLATE = '/w3/stage-studio.webp'
+// FLOOR and the studio plate live with the THEMES now — every procedural
+// stage shares the same measured horizon, so the bike never floats on any of
+// them. Re-exported here because half the app addresses the plate through
+// this module.
+export { STAGE_PLATE } from './w3stageThemes'
 
 const AVATAR = 130
 const GLOW = 178
@@ -218,6 +219,8 @@ export interface W3StageVm {
   /** 0…1 — how much of the last week's road the machine is still carrying
    *  (`w3BikeSoul.grimeFrom` over real ride km). 0 or absent → clean bike. */
   grime?: number
+  /** Which backdrop the room wears (w3stageThemes). Absent → the studio. */
+  theme?: StageTheme
 }
 
 /** A floating pill on the stage ground. Never a card — it has no border and no
@@ -260,6 +263,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
   fullBleed?: boolean
 }) {
   const reduce = useReducedMotion()
+  const theme = vm.theme ?? stageThemeById(null)
 
   // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
   // which is flat by construction: no falloff in the corners, no grain, no light
@@ -283,18 +287,28 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
 
-      {/* The room itself. Covers the stage, anchored to the bottom so the pool
-          of light and the floor line land where the bike stands. */}
-      <img aria-hidden src={STAGE_PLATE} alt=""
-        style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%',
-          // `fill`, not `cover`: cover crops, and a cropped plate carries its
-          // own horizon around with the viewport — which is exactly why the
-          // bike kept floating however the percentages were nudged. Stretching
-          // a flat two-plane gradient is invisible and pins the floor at
-          // `FLOOR` on every screen.
-          objectFit: 'fill', pointerEvents: 'none',
-        }} />
+      {/* The room itself. The studio is the rendered webp; every other theme
+          is a procedural plate — the same flat wall-meets-floor set, drawn as
+          a gradient with a duplicated stop so the horizon stays a LINE, pinned
+          to the same measured FLOOR on every screen. Motifs (a sun, stars, a
+          finish band) are flat positioned layers behind everything. */}
+      {theme.css == null ? (
+        <img aria-hidden src={PLATE} alt=""
+          style={{
+            position: 'absolute', inset: 0, width: '100%', height: '100%',
+            // `fill`, not `cover`: cover crops, and a cropped plate carries its
+            // own horizon around with the viewport — which is exactly why the
+            // bike kept floating however the percentages were nudged. Stretching
+            // a flat two-plane gradient is invisible and pins the floor at
+            // `FLOOR` on every screen.
+            objectFit: 'fill', pointerEvents: 'none',
+          }} />
+      ) : (
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: theme.css, pointerEvents: 'none' }} />
+      )}
+      {(theme.extras ?? []).map((ex, i) => (
+        <div key={i} aria-hidden style={ex} />
+      ))}
 
       {/* ── the corner chips: real figures, floating on the floor ── */}
       <div style={{

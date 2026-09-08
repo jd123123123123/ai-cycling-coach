@@ -95,6 +95,10 @@ class TrainingGoals(BaseModel):
     # nothing a photographed-bike rider could ever see — the economy's largest
     # sink was cosmetically inert.
     stage_bike: Literal['photo', 'collection'] | None = None
+    # Which backdrop the hero room wears. The catalogue of ids lives in the
+    # frontend (w3stageThemes) — the server only remembers the choice, so a
+    # new theme never needs a deploy here. Bounded to keep junk out.
+    stage_theme: str | None = Field(default=None, max_length=32)
 
 
 class AthleteProfileCreate(BaseModel):
