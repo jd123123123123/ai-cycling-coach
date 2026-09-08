@@ -1,29 +1,41 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { Bike, ChevronRight, MapPin, Package, Sparkles, Wrench } from 'lucide-react'
+import { ChevronRight, Lock, MapPin, Package, Wrench } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { Workshop, WorkshopComponent } from '../../api/workshop'
 import { STAGE_THEMES, FLOOR } from './w3stageThemes'
-import { T, FONT, EASE, band, Kicker } from './w3tokens'
-import { hairline } from './w3surfaces'
+import { T, FONT, EASE, band, Kicker, DASH } from './w3tokens'
+import { hairline, lux, luxTile, TNUM } from './w3surfaces'
 import { backdropArt } from './w3backdropArt'
-import { lux } from './w3surfaces'
 
 /**
- * W3 · THE GARAGE, BELOW THE FOLD.
+ * W3 · THE GARAGE, BELOW THE FOLD — rebuilt as a room worth walking into.
  *
- * The garage became a room and, in becoming one, lost everything under it: a
- * full-screen stage with a parts rack floating over the floor and then nothing.
- * A room you cannot walk further into is a poster.
+ * WHAT THE OLD LANE WAS, and why every persona bounced off it: five identical
+ * grey list rows at equal weight (the audited "tool drawer" disease). A rider
+ * arrived holding RideCoin and the lane never said what it buys, what is next,
+ * or why any of it matters to their riding. Zero reward signal in the one room
+ * of the app that IS the reward.
  *
- * So this is the lane beneath it, and it is deliberately NOT a menu of links to
- * screens. It answers the question the rider actually arrives with — is my bike
- * ready — and only then offers the doors:
+ * WHAT IT IS NOW — four differently-shaped chapters, every number real:
  *
- *  1. WHAT IS DUE, named, with the clock that made it due. Real, from
- *     `/workshop`. Nothing due says nothing due; it does not manufacture a job.
- *  2. WHERE TO GET IT DONE. The one thing the app cannot do for the rider is
- *     turn a wrench, so it points at someone who can.
- *  3. THE DOORS — equipment, shop, places.
+ *  01 GUTHABEN   the balance as the hero numeral, and the NEXT UNLOCK under it
+ *                with the house segment meter — a goal gradient, not a menu.
+ *                "Noch 450 RC · etwa 5 Fahrten" converts coins into the unit
+ *                the rider actually spends: rides.
+ *  02 ZUSTAND    the bike's life as the mechanic's instruments: the chain-life
+ *                bar, the banked Service-Bonus, the measured watts a dirty
+ *                chain costs, and the one value sentence that links
+ *                maintenance to earning (+12 % on a fresh drivetrain).
+ *  03 SAMMLUNG   the 26-bike ladder AS A SHELF — owned lit, the active one
+ *                ringed, the rest priced or waiting. The collection was hidden
+ *                behind a text row saying "Räder"; a collection you cannot see
+ *                is not a collection.
+ *  04 BÜHNE      how the room looks: backdrop swatches, the Kulisse, and the
+ *                photo/collection switch — one chapter, because they are one
+ *                decision about the same picture.
+ *
+ * The honesty contract holds everywhere: no invented numbers, absences say so,
+ * and acid is spent once per chapter — the numeral, the meter, the ring.
  */
 
 /** Only what is actually asking for attention. Dormant parts (a bike put away
@@ -34,12 +46,33 @@ function due(w: Workshop | null): WorkshopComponent[] {
     .sort((a, b) => (a.status === 'overdue' ? -1 : 1) - (b.status === 'overdue' ? -1 : 1))
 }
 
-/** The elapsed figure in the unit its own clock is measured in. Rendering a
- *  sealant top-up in kilometres is the confusion the two-clock model exists to
- *  remove — see `WorkshopComponent.clock`. */
+/** The elapsed figure in the unit its own clock is measured in. */
 function elapsed(c: WorkshopComponent): string | null {
   if (c.clock === 'days') return c.days_since == null ? null : `seit ${c.days_since} Tagen`
   return `seit ${Math.round(c.km_since).toLocaleString('de-DE')} km`
+}
+
+const nf = new Intl.NumberFormat('de-DE')
+
+/** The house segment meter: 22 lit steps, the next one brighter — the same
+ *  near-miss instrument the Wins dock uses. */
+function SegMeter({ frac, hue = T.acid }: { frac: number; hue?: string }) {
+  const SEGS = 22
+  const filled = Math.max(0, Math.min(SEGS, Math.round(frac * SEGS)))
+  return (
+    <div style={{ display: 'flex', gap: 3, height: 10, width: '100%', alignItems: 'center' }} aria-hidden>
+      {Array.from({ length: SEGS }).map((_, i) => (
+        <span key={i} style={{
+          flex: 1, borderRadius: 2,
+          height: i <= filled ? 10 : 5,
+          background: i < filled
+            ? `linear-gradient(180deg, ${hue} 0%, ${hue}D9 100%)`
+            : i === filled ? `${hue}55` : T.d1,
+          boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40` : 'none',
+        }} />
+      ))}
+    </div>
+  )
 }
 
 function Row({ icon: Icon, title, note, right, onClick, accent }: {
@@ -74,21 +107,7 @@ function Row({ icon: Icon, title, note, right, onClick, accent }: {
   )
 }
 
-/**
- * THE ROOM THE BIKE IS STANDING IN, one tap from the bike.
- *
- * Changing the backdrop was reachable only from a text list at the foot of the
- * shop, two screens from the machine it changes — and `W3StageRail`, the swipe
- * rail written for exactly this, was mounted NOWHERE. `W3TodayStage`'s comment
- * says it "is still wired there" in the garage; grep finds it in its own file
- * and its tests and nothing else. Today was right to drop the rail (a row of
- * dots naming a room the picture had not rendered yet is the app promising what
- * it is not showing), but dropping it left no in-garage path at all.
- *
- * A row, then, not a carousel: it SHOWS the current room as its own art and
- * says its name, so a rider standing in the garage can see where their bike is
- * and reach the picker in one tap. Nothing here claims to be the render.
- */
+/** The current room, as its own art, one tap from the picker. */
 function StageRow({ id, name, onOpen }: { id: string; name: string; onOpen: () => void }) {
   const art = backdropArt(id)
   return (
@@ -104,7 +123,7 @@ function StageRow({ id, name, onOpen }: { id: string; name: string; onOpen: () =
         background: art.css,
       }} />
       <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Kulisse</span>
+        <span style={{ fontSize: 13.5, fontWeight: 700, color: T.ink }}>Kulisse</span>
         <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
       </span>
       <ChevronRight size={15} color={T.quiet} style={{ flex: 'none' }} />
@@ -112,18 +131,19 @@ function StageRow({ id, name, onOpen }: { id: string; name: string; onOpen: () =
   )
 }
 
-/**
- * "Werkstatt in deiner Nähe" — a plain link, on purpose.
- *
- * The obvious build asks for the browser's location and centres a map on it.
- * That is a permission prompt, a failure path and a stale-coordinate bug in
- * exchange for nothing: a maps search for a bike shop NEARBY is already
- * resolved against the device's own position by the maps app itself, which
- * knows where the rider is standing better than a coordinate we cached. So the
- * app asks for no permission it does not need, and the link works the same on a
- * phone, a tablet and a desktop.
- */
+/** A plain maps link, on purpose — the maps app resolves "nearby" better than
+ *  any coordinate we could cache, and it costs no permission prompt. */
 const REPAIR_SEARCH = 'https://www.google.com/maps/search/Fahrradwerkstatt+in+der+N%C3%A4he/'
+
+/** One rung of the collection shelf. */
+export interface W3ShelfBike {
+  id: string
+  name: string
+  price: number
+  art: string
+  owned: boolean
+  active: boolean
+}
 
 export interface W3GarageLaneProps {
   workshop: Workshop | null
@@ -132,110 +152,302 @@ export interface W3GarageLaneProps {
   onOpenShop: () => void
   /** The BIKE ladder — the economy's only large sink. */
   onOpenBikes: () => void
-  /** The room the bike is standing in right now, and its name. Null while the
-   *  backdrops read is in flight — the row simply does not draw rather than
-   *  naming a stage the rider has not chosen. */
+  /** The room the bike is standing in right now, and its name. */
   stage: { id: string; name: string } | null
   onOpenStages: () => void
-  /** Which machine stands on the hero stage. Null → the choice does not exist
-   *  (no photographed bike, or no bought collection bike): a switch with one
-   *  position is furniture. */
   stageBike?: {
     value: 'photo' | 'collection'
     busy: boolean
     onSet: (v: 'photo' | 'collection') => void
   } | null
-  /** Which backdrop the room wears (w3stageThemes). Always offered — every
-   *  rider has the room. */
   stageTheme?: {
     value: string
     busy: boolean
     onSet: (id: string) => void
   } | null
+
+  // ── the reward layer, finally IN the room ─────────────────────────────
+  /** RideCoin balance. Null while the wallet is unanswered → the numeral
+   *  dashes rather than claiming a zero. */
+  balance?: number | null
+  /** RC credited today, from real ledger lines. Null/0 → no chip. */
+  earnedToday?: number | null
+  /** The cheapest thing the rider does not own yet, across gear and bikes. */
+  nextUnlock?: { name: string; price: number; kind: 'gear' | 'bike' } | null
+  /** Mean RC of the rider's actual ride-earn ledger lines, or null before the
+   *  first earning ride — the honest divisor for "etwa N Fahrten". */
+  avgEarnPerRide?: number | null
+  /** Sum of equipped gear percentages — what the loadout pays on a matching
+   *  ride. Null/0 → the sentence is an invitation instead. */
+  equippedBonusPct?: number | null
+  /** The bike ladder for the shelf, in catalogue order. */
+  bikes?: W3ShelfBike[]
 }
 
 export default function W3GarageLane(p: W3GarageLaneProps) {
   const reduce = useReducedMotion()
   const jobs = due(p.workshop)
   const bonus = p.workshop?.total_bonus_rc ?? null
+  const chain = p.workshop?.chain_life ?? null
+
+  // ── 01 · the goal gradient ────────────────────────────────────────────
+  const bal = p.balance ?? null
+  const next = p.nextUnlock ?? null
+  const toGo = next && bal != null ? Math.max(0, next.price - bal) : null
+  const affordable = next != null && bal != null && bal >= next.price
+  const ridesToGo = toGo != null && toGo > 0 && p.avgEarnPerRide && p.avgEarnPerRide > 0
+    ? Math.max(1, Math.ceil(toGo / p.avgEarnPerRide))
+    : null
+
+  const ownedBikes = (p.bikes ?? []).filter((b) => b.owned).length
 
   return (
     <motion.div
       initial={reduce ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: EASE }}
-      style={{ display: 'flex', flexDirection: 'column', paddingTop: 22, background: T.bg }}>
+      style={{ display: 'flex', flexDirection: 'column', paddingTop: 26, background: T.bg }}>
 
-      {/* ── 1 · what the bike is asking for ── */}
+      {/* ── the opening: what this room IS, in one breath ── */}
+      <div style={{ ...band(22) }}>
+        <Kicker>Garage</Kicker>
+        <h1 style={{
+          margin: '6px 0 0', fontFamily: FONT, fontSize: 38, fontWeight: 700,
+          letterSpacing: -1.4, lineHeight: 1.05, color: T.ink,
+        }}>
+          Verdient ist<br /><span style={{ color: T.acid }}>deins.</span>
+        </h1>
+        <p style={{ margin: '10px 0 0', fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid, maxWidth: 320 }}>
+          Jede Fahrt zahlt RideCoin. Hier steht, was du damit machst — und was dein Rad davon hat.
+        </p>
+      </div>
+
+      {/* ── 01 · GUTHABEN & NÄCHSTES ZIEL ── */}
       <div style={{ ...band(14) }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', paddingBottom: 10 }}>
-          <Kicker>Zustand</Kicker>
-          {bonus != null && bonus > 0 && (
-            <span style={{ fontSize: 10, fontWeight: 700, color: T.acid }}>
-              {bonus.toLocaleString('de-DE')} RC warten
-            </span>
-          )}
-        </div>
-        <div style={{ ...lux(24), padding: 14, gap: 8 }}>
-          {jobs.length === 0 ? (
-            // NOT a placeholder job. A bike with nothing due is the good case
-            // and gets to say so.
-            <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '4px 2px' }}>
-              <Sparkles size={16} color={T.acid} style={{ flex: 'none' }} />
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid, lineHeight: 1.35 }}>
-                {p.workshop
-                  ? 'Nichts steht an. Alles gewartet — fahr sie.'
-                  : 'Der Zustand wird geladen.'}
+        <div style={{ ...lux(28), padding: '20px 18px 18px', gap: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <Kicker>01 — Dein Guthaben</Kicker>
+            {(p.earnedToday ?? 0) > 0 && (
+              <span style={{
+                fontSize: 10, fontWeight: 700, letterSpacing: 0.4, color: T.acid,
+                padding: '3px 9px', borderRadius: 100, background: T.acidDim, ...TNUM,
+              }}>+{nf.format(p.earnedToday as number)} heute</span>
+            )}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{
+              ...TNUM, fontSize: 44, fontWeight: 700, letterSpacing: -1.8, lineHeight: 0.9,
+              color: T.acid,
+            }}>{bal != null ? nf.format(bal) : DASH}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.quiet }}>RC</span>
+          </div>
+
+          {next && bal != null && (
+            <div style={{ ...luxTile(18), padding: '13px 14px 12px', gap: 9 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>NÄCHSTES ZIEL</span>
+                <span style={{ ...TNUM, fontSize: 11, fontWeight: 700, color: T.mid }}>{nf.format(next.price)} RC</span>
+              </div>
+              <span style={{ fontSize: 15, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{next.name}</span>
+              <SegMeter frac={next.price > 0 ? Math.min(1, bal / next.price) : 1} />
+              <span style={{ fontSize: 11, fontWeight: 600, color: affordable ? T.acid : T.quiet, ...TNUM }}>
+                {affordable
+                  ? 'Du kannst es dir leisten — hol es dir.'
+                  : ridesToGo != null
+                    ? `Noch ${nf.format(toGo as number)} RC · etwa ${ridesToGo} ${ridesToGo === 1 ? 'Fahrt' : 'Fahrten'}`
+                    : `Noch ${nf.format(toGo ?? next.price)} RC — jede Fahrt zahlt ~1 RC pro TSS.`}
               </span>
             </div>
+          )}
+
+          <button onClick={next?.kind === 'bike' ? p.onOpenBikes : p.onOpenGear}
+            style={{
+              height: 46, borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT,
+              background: affordable ? T.acid : T.tile,
+              color: affordable ? T.bg : T.ink, fontSize: 13.5, fontWeight: 700,
+            }}>
+            {affordable ? 'Im Shop ansehen' : 'Zum Shop'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── 02 · DEIN RAD LEBT ── */}
+      <div style={{ ...band(14) }}>
+        <div style={{ ...lux(28), padding: '20px 18px 18px', gap: 13 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+            <Kicker>02 — Zustand</Kicker>
+            {bonus != null && bonus > 0 && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: T.acid, ...TNUM }}>
+                {nf.format(bonus)} RC warten
+              </span>
+            )}
+          </div>
+
+          {p.workshop == null ? (
+            <span style={{ fontSize: 12.5, fontWeight: 600, color: T.quiet }}>Der Zustand wird geladen.</span>
           ) : (
-            jobs.map((c) => (
-              <Row key={c.id} icon={Wrench}
-                title={c.action_de}
-                note={[c.name_de, elapsed(c)].filter(Boolean).join(' · ')}
-                right={c.status === 'overdue' ? 'ÜBERFÄLLIG' : 'FÄLLIG'}
-                accent={c.status === 'overdue' ? T.warn : T.acid}
-                onClick={p.onOpenWorkshop} />
-            ))
+            <>
+              {chain && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Kette</span>
+                    <span style={{ ...TNUM, fontSize: 11, fontWeight: 600, color: T.quiet }}>
+                      {chain.km_left >= 0
+                        ? `noch ${nf.format(Math.round(chain.km_left))} km bis 0,5 %`
+                        : `${nf.format(Math.round(-chain.km_left))} km über der Kante`}
+                    </span>
+                  </div>
+                  {/* The continuous bar — a proportion, not countables. */}
+                  <div style={{ height: 8, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
+                    <div style={{
+                      height: '100%', borderRadius: 100,
+                      width: `${Math.round(Math.min(1, chain.progress) * 100)}%`,
+                      background: chain.status === 'fresh' ? T.acid : chain.status === 'due' ? T.warn : T.bad,
+                    }} />
+                  </div>
+                </div>
+              )}
+
+              {jobs.length > 0 ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {jobs.map((c) => (
+                    <Row key={c.id} icon={Wrench}
+                      title={c.action_de}
+                      note={[c.name_de, elapsed(c)].filter(Boolean).join(' · ')}
+                      right={c.status === 'overdue' ? 'ÜBERFÄLLIG' : 'FÄLLIG'}
+                      accent={c.status === 'overdue' ? T.warn : T.acid}
+                      onClick={p.onOpenWorkshop} />
+                  ))}
+                </div>
+              ) : (
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>
+                  Nichts steht an. Alles gewartet — fahr sie.
+                </span>
+              )}
+
+              {p.workshop.drivetrain_watts != null && (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.warn, lineHeight: 1.4 }}>
+                  Deine Kette kostet dich gerade rund {Math.round(p.workshop.drivetrain_watts)} Watt — echte Reibung, kein Spielabzug.
+                </span>
+              )}
+              {p.workshop.weather_ahead && (
+                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.ink, lineHeight: 1.45 }}>
+                  {p.workshop.weather_ahead}
+                </span>
+              )}
+
+              {/* The value link: maintenance PAYS. One sentence, always true. */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingTop: 2 }}>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, lineHeight: 1.4 }}>
+                  {p.workshop.drivetrain_fresh
+                    ? 'Frischer Antrieb: +12 % RideCoin auf jede Fahrt — läuft.'
+                    : 'Frisch geschmiert fährt +12 % RideCoin auf jede Fahrt ein.'}
+                </span>
+                <button onClick={p.onOpenWorkshop}
+                  style={{
+                    flex: 'none', height: 34, padding: '0 14px', borderRadius: 100, border: 0,
+                    cursor: 'pointer', fontFamily: FONT, background: T.tile,
+                    color: T.ink, fontSize: 11.5, fontWeight: 700,
+                  }}>Werkstatt</button>
+              </div>
+            </>
           )}
         </div>
       </div>
 
-      {/* ── 2 · the thing the app cannot do itself ── */}
-      <div style={{ ...band(14) }}>
-        <a href={REPAIR_SEARCH} target="_blank" rel="noopener noreferrer"
-          style={{
-            display: 'flex', alignItems: 'center', gap: 13, textDecoration: 'none',
-            padding: '15px 16px', borderRadius: 22, background: T.surface, fontFamily: FONT,
-          }}>
-          <span style={{ width: 36, height: 36, borderRadius: 100, flex: 'none', display: 'grid', placeItems: 'center', background: T.acidDim }}>
-            <MapPin size={17} color={T.acid} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>Werkstatt in deiner Nähe</span>
-            <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, lineHeight: 1.3 }}>
-              Für alles, was Hände braucht — öffnet die Karte
-            </span>
-          </span>
-          <ChevronRight size={16} color={T.quiet} style={{ flex: 'none' }} />
-        </a>
-      </div>
+      {/* ── 03 · DIE SAMMLUNG ── */}
+      {(p.bikes?.length ?? 0) > 0 && (
+        <div style={{ ...band(14) }}>
+          <div style={{ ...lux(28), padding: '20px 0 16px', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '0 18px' }}>
+              <Kicker>03 — Deine Räder</Kicker>
+              <span style={{ ...TNUM, fontSize: 11, fontWeight: 700, color: T.quiet }}>
+                {ownedBikes} VON {p.bikes!.length}
+              </span>
+            </div>
+            {/* The shelf: the ladder you can SEE. Owned lit, the active one
+                ringed, the next ones priced, the rest waiting. */}
+            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '2px 18px 4px' }}>
+              {p.bikes!.map((b) => (
+                <button key={b.id} onClick={p.onOpenBikes}
+                  aria-label={`${b.name}${b.owned ? '' : ` · ${nf.format(b.price)} RC`}`}
+                  style={{
+                    flex: 'none', width: 96, border: 0, cursor: 'pointer', fontFamily: FONT,
+                    background: 'transparent', padding: 0, textAlign: 'left',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                  }}>
+                  <span style={{
+                    position: 'relative', width: 96, height: 68, borderRadius: 14, overflow: 'hidden',
+                    background: T.tile, display: 'block',
+                    boxShadow: b.active ? `0 0 0 2px ${T.acid}` : 'none',
+                    opacity: b.owned ? 1 : 0.55,
+                  }}>
+                    <img src={b.art} alt="" loading="lazy"
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    {!b.owned && (
+                      <span style={{
+                        position: 'absolute', right: 5, top: 5, width: 18, height: 18, borderRadius: 6,
+                        background: '#000000A6', display: 'grid', placeItems: 'center',
+                      }}><Lock size={10} color={T.d4} /></span>
+                    )}
+                  </span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: b.owned ? T.ink : T.quiet, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', width: 96 }}>
+                    {b.name}
+                  </span>
+                  <span style={{ ...TNUM, fontSize: 9.5, fontWeight: 700, color: b.active ? T.acid : b.owned ? T.quiet : T.mid, display: 'block' }}>
+                    {b.active ? 'AUF DER BÜHNE' : b.owned ? 'DEINS' : `${nf.format(b.price)} RC`}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* ── 3 · the doors ── */}
-      <div style={{ ...band(30) }}>
-        <div style={{ paddingBottom: 10 }}><Kicker>Weiter</Kicker></div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* ── 04 · DEINE BÜHNE ── */}
+      <div style={{ ...band(14) }}>
+        <div style={{ ...lux(28), padding: '20px 18px 16px', gap: 12 }}>
+          <Kicker>04 — Deine Bühne</Kicker>
+
+          {p.stageTheme && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Hintergrund</span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
+                  {STAGE_THEMES.find((t) => t.id === p.stageTheme!.value)?.name ?? 'Studio'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, opacity: p.stageTheme.busy ? 0.6 : 1 }}>
+                {STAGE_THEMES.map((t) => {
+                  const on = p.stageTheme!.value === t.id
+                  return (
+                    <button key={t.id} type="button" disabled={p.stageTheme!.busy}
+                      onClick={() => !on && p.stageTheme!.onSet(t.id)}
+                      aria-label={`Hintergrund ${t.name}`} aria-pressed={on}
+                      style={{
+                        flex: 'none', width: 58, height: 42, borderRadius: 10, padding: 0,
+                        border: 0, cursor: on ? 'default' : 'pointer', overflow: 'hidden',
+                        background: t.swatch,
+                        boxShadow: on ? `0 0 0 2px ${T.acid}` : `inset 0 0 0 1px ${T.d1}`,
+                        position: 'relative',
+                      }}>
+                      <span aria-hidden style={{
+                        position: 'absolute', left: 0, right: 0, top: `${FLOOR * 100}%`,
+                        height: 1, background: '#00000038',
+                      }} />
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           {p.stage && <StageRow id={p.stage.id} name={p.stage.name} onOpen={p.onOpenStages} />}
-          {/* WHAT STANDS ON THE BÜHNE. Without this, buying the 15 000-RC
-              catalogue bike changed nothing a photographed-bike rider could
-              ever see — the economy's largest sink was cosmetically inert. */}
+
           {p.stageBike && (
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: 13,
-              padding: '13px 16px', borderRadius: 22, background: T.surface, fontFamily: FONT,
-            }}>
-              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>Auf der Bühne</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Auf der Bühne</span>
                 <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>Welches Rad im Raum steht</span>
               </span>
               <div style={{ display: 'flex', gap: 4, padding: 3, borderRadius: 100, background: T.surface2, opacity: p.stageBike.busy ? 0.6 : 1 }}>
@@ -256,60 +468,19 @@ export default function W3GarageLane(p: W3GarageLaneProps) {
               </div>
             </div>
           )}
-          {/* RÄDER FIRST, and it is the row that was missing entirely. The
-              bike is the headline collectible and the ladder is where RideCoin
-              actually goes — 26 priced bikes that no screen could reach until
-              now, so a rider watched a balance climb with nothing to spend it
-              on. */}
-          <Row icon={Bike} title="Räder" note="Die Sammlung — 26 Räder" onClick={p.onOpenBikes} />
-          <Row icon={Package} title="Ausrüstung" note="Teile kaufen und montieren" onClick={p.onOpenGear} />
-          {/* THE ROOM'S BACKDROP. Eight stages, every one holding the same
-              crisp horizon the bike stands on — the swatch IS the theme's own
-              wall-and-floor gradient, so what you pick is what you get. */}
-          {p.stageTheme && (
-            <div style={{
-              display: 'flex', flexDirection: 'column', gap: 10,
-              padding: '13px 16px 14px', borderRadius: 22, background: T.surface, fontFamily: FONT,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: T.ink }}>Hintergrund</span>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>
-                  {STAGE_THEMES.find((t) => t.id === p.stageTheme!.value)?.name ?? 'Studio'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 2, opacity: p.stageTheme.busy ? 0.6 : 1 }}>
-                {STAGE_THEMES.map((t) => {
-                  const on = p.stageTheme!.value === t.id
-                  return (
-                    <button key={t.id} type="button" disabled={p.stageTheme!.busy}
-                      onClick={() => !on && p.stageTheme!.onSet(t.id)}
-                      aria-label={`Hintergrund ${t.name}`} aria-pressed={on}
-                      style={{
-                        flex: 'none', width: 58, height: 42, borderRadius: 10, padding: 0,
-                        border: 0, cursor: on ? 'default' : 'pointer', overflow: 'hidden',
-                        background: t.swatch,
-                        boxShadow: on ? `0 0 0 2px ${T.acid}` : `inset 0 0 0 1px ${T.d1}`,
-                        position: 'relative',
-                      }}>
-                      {/* The swatch repeats the theme's own horizon, so even a
-                          thumbnail stands on a floor. */}
-                      <span aria-hidden style={{
-                        position: 'absolute', left: 0, right: 0, top: `${FLOOR * 100}%`,
-                        height: 1, background: '#00000038',
-                      }} />
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* ONE ROW, because there is now one screen behind it. "Shop" and
-              "Orte" were two rows leading to two screens that both sold things
-              with RideCoin; the places moved into the shop, so a second row
-              pointing at the same scroll is a choice with no difference in it. */}
-          <Row icon={Sparkles} title="Shop" note="Teile, Kulissen und Orte" onClick={p.onOpenShop} />
         </div>
+      </div>
+
+      {/* ── the quiet tail: the two errands ── */}
+      <div style={{ ...band(30), gap: 8 }}>
+        <Row icon={Package} title="Ausrüstung" note={
+          (p.equippedBonusPct ?? 0) > 0
+            ? `Dein Loadout zahlt +${p.equippedBonusPct} % auf passende Fahrten`
+            : 'Teile mit echtem Bonus auf jede passende Fahrt'
+        } onClick={p.onOpenGear} />
+        <a href={REPAIR_SEARCH} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none' }}>
+          <Row icon={MapPin} title="Werkstatt in deiner Nähe" note="Für alles, was Hände braucht — öffnet die Karte" onClick={() => {}} />
+        </a>
       </div>
     </motion.div>
   )

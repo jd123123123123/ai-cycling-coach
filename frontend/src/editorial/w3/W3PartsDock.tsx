@@ -271,7 +271,49 @@ export default function W3PartsDock({
         )}
       </div>
 
-      {slots.length > 0 ? (
+      {slots.length > 0 && worn.length === 0 && !(gear?.items ?? []).some((i) => i.owned) ? (
+        // ── THE FRESH RIDER'S DOCK ──────────────────────────────────────
+        // Seven empty sockets with plus signs read as a form the rider failed
+        // to fill in — bureaucracy as a first impression. A fresh garage shows
+        // ONE thing instead: the cheapest real part, what it pays, and what it
+        // costs. An invitation with a number on it, not an empty shelf.
+        (() => {
+          const first = (gear?.items ?? [])
+            .filter((i) => !i.owned && i.price_rc > 0)
+            .sort((a, b) => a.price_rc - b.price_rc)[0]
+          if (!first) return (
+            <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.45, color: T.quiet }}>
+              Deine Teile erscheinen hier, sobald der Shop geladen hat.
+            </span>
+          )
+          return (
+            <button onClick={onOpenGear}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left',
+                background: T.tile, border: 0, borderRadius: 18, padding: '12px 14px',
+                cursor: 'pointer', fontFamily: FONT,
+              }}>
+              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>
+                  DEIN ERSTES TEIL
+                </span>
+                <span style={{ fontSize: 14, fontWeight: 700, letterSpacing: -0.2, color: T.ink }}>
+                  {first.name_de} <span style={{ color: T.acid }}>+{first.pct} %</span>
+                </span>
+                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, lineHeight: 1.35 }}>
+                  {first.why}
+                </span>
+              </span>
+              <span style={{
+                flex: 'none', fontSize: 11.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+                padding: '6px 11px', borderRadius: 100,
+                background: first.affordable ? T.acid : T.surface2,
+                color: first.affordable ? T.bg : T.quiet,
+              }}>{first.price_rc.toLocaleString('de-DE')} RC</span>
+            </button>
+          )
+        })()
+      ) : slots.length > 0 ? (
         <>
           <div style={{ display: 'flex', gap: 8 }}>
             {slots.map(([slot, label], i) => (

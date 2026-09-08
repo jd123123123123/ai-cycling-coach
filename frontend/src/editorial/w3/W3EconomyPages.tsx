@@ -16,6 +16,9 @@ import { useBuyGear, useEquipGear, useGear, useUnequipGear } from '../../hooks/u
 import { useWorkshop } from '../../hooks/useWorkshop'
 import { useWallet } from '../../hooks/useWallet'
 import { useBackdrops, useGarage } from '../../hooks/useGarage'
+import { earnedToday } from './w3heroVm'
+import { BIKES, bikeArt } from './w3bikes'
+import type { W3ShelfBike } from './W3GarageLane'
 import { useGarageCollection } from '../../hooks/useShop'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useQueryClient } from '@tanstack/react-query'
@@ -165,6 +168,39 @@ export function W3GarageHome() {
   )
   const { inShell, portal } = useHeroPanel(dock)
 
+  // ── the reward layer's numbers, all real ──────────────────────────────
+  const { data: wallet } = useWallet()
+  const balance = wallet?.balance ?? null
+  const todayRc = earnedToday(wallet?.ledger ?? null)
+  // The honest divisor for "etwa N Fahrten": the mean of the rider's own
+  // ride-earn ledger lines. Null before the first earning ride.
+  const rideEarns = (wallet?.ledger ?? []).filter((l) => l.reason === 'ride_earn' && l.amount > 0)
+  const avgEarnPerRide = rideEarns.length > 0
+    ? rideEarns.reduce((s, l) => s + l.amount, 0) / rideEarns.length
+    : null
+  // The cheapest thing not yet owned, across gear and the bike ladder — ONE
+  // goal gradient, not a menu of them.
+  const ownedIds = new Set(collection?.owned ?? [])
+  const gearNext = (gear?.items ?? [])
+    .filter((i) => !i.owned && i.price_rc > 0)
+    .sort((a, b) => a.price_rc - b.price_rc)[0]
+  const bikeNext = BIKES
+    .filter((b) => b.price > 0 && !ownedIds.has(b.id))
+    .sort((a, b) => a.price - b.price)[0]
+  const nextUnlock = gearNext && (!bikeNext || gearNext.price_rc <= bikeNext.price)
+    ? { name: gearNext.name_de, price: gearNext.price_rc, kind: 'gear' as const }
+    : bikeNext
+      ? { name: bikeNext.name, price: bikeNext.price, kind: 'bike' as const }
+      : null
+  const equippedBonusPct = (gear?.items ?? [])
+    .filter((i) => i.equipped)
+    .reduce((s, i) => s + i.pct, 0) || null
+  const shelfBikes: W3ShelfBike[] = BIKES.map((b) => ({
+    id: b.id, name: b.name, price: b.price, art: bikeArt(b.id),
+    owned: ownedIds.has(b.id),
+    active: (collection?.loadout.bike ?? null) === b.id,
+  }))
+
   const lane = (
     <W3GarageLane
       workshop={workshop ?? null}
@@ -175,6 +211,12 @@ export function W3GarageHome() {
       stage={stage}
       stageBike={stageBike}
       stageTheme={stageTheme}
+      balance={balance}
+      earnedToday={todayRc}
+      nextUnlock={nextUnlock}
+      avgEarnPerRide={avgEarnPerRide}
+      equippedBonusPct={equippedBonusPct}
+      bikes={shelfBikes}
       onOpenStages={() => navigate('/e/w3-gear#kulissen')} />
   )
 
