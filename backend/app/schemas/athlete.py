@@ -99,6 +99,10 @@ class TrainingGoals(BaseModel):
     # frontend (w3stageThemes) — the server only remembers the choice, so a
     # new theme never needs a deploy here. Bounded to keep junk out.
     stage_theme: str | None = Field(default=None, max_length=32)
+    # Which register the coach writes in (D10). The catalogue lives in
+    # services/coach_prompt.COACH_VOICES; unknown values degrade to the default
+    # voice rather than erroring, so this stays a plain bounded string.
+    coach_voice: str | None = Field(default=None, max_length=24)
 
 
 class AthleteProfileCreate(BaseModel):

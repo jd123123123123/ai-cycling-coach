@@ -1414,6 +1414,11 @@ async def build_snapshot(
             # UI depth register ('guide' | 'numbers' | 'pro') — drives how much
             # evidence the rule-based reasoning layer weaves into its prose.
             "detail_level": profile.detail_level if profile else None,
+            # The register the athlete picked for the coach (D10). Free text on
+            # purpose — `voice_suffix` falls back to silence for anything it
+            # does not recognise, so an older or newer build cannot break the
+            # brief with a stored value.
+            "coach_voice": (profile.goals or {}).get("coach_voice") if profile else None,
         },
         "readiness": {
             "score": readiness_report.overall,
@@ -3475,7 +3480,10 @@ async def generate_brief(snapshot: dict, language: str = "simple", locale: str =
         system_blocks = [
             {
                 "type": "text",
-                "text": system_prompt_for_language(language, locale=locale),  # type: ignore[arg-type]
+                "text": system_prompt_for_language(
+                    language, locale=locale,
+                    voice=(snapshot.get("athlete") or {}).get("coach_voice"),
+                ),  # type: ignore[arg-type]
                 "cache_control": {"type": "ephemeral"},
             }
         ]
@@ -3629,7 +3637,10 @@ async def get_or_generate_brief(
         # persist a non-list / malformed outlook (poisoned rows 500'd reads).
         outlook_7d=sanitize_outlook_7d(brief_payload.get("outlook_7d")),
         frameworks_cited=brief_payload.get("frameworks_cited") or [],
-        raw_prompt=system_prompt_for_language(language, locale=locale),  # type: ignore[arg-type]
+        raw_prompt=system_prompt_for_language(
+            language, locale=locale,
+            voice=(snapshot.get("athlete") or {}).get("coach_voice"),
+        ),  # type: ignore[arg-type]
         model_used=brief_payload["model_used"],
     )
     db.add(brief)

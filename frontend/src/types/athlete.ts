@@ -63,6 +63,9 @@ export interface TrainingGoals {
   // Which backdrop the hero room wears — an id from w3stageThemes. Absent →
   // the studio.
   stage_theme?: string
+  // The register the coach's brief is written in — an id from w3coachVoices,
+  // mirrored from the server's COACH_VOICES. Absent → 'sachlich'.
+  coach_voice?: string
 }
 
 export interface AthleteProfileUpdate {

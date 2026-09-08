@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
-import { Watch, Activity as ActivityIcon, Zap, HeartPulse, ChevronRight, Ticket, Users } from 'lucide-react'
+import { Watch, Activity as ActivityIcon, Zap, HeartPulse, ChevronRight, Ticket, Users, MessageSquare } from 'lucide-react'
+import { COACH_VOICES, coachVoiceById } from './w3coachVoices'
 import W3RiderHighlights, { type W3RiderHighlightsProps } from './W3RiderHighlights'
 import { W3SeasonGrid, W3FormCurve, W3ActiveBike, type W3SeasonStat } from './W3ProfileBlocks'
 import W3StatusBar from './W3StatusBar'
@@ -74,12 +75,14 @@ function TailRow({ children, first }: { children: React.ReactNode; first: boolea
 }
 
 export default function W3BikerView({
-  vm, onReferral, onBadges, onRecord, onCreateRider, onCrew,
+  vm, onReferral, onBadges, onRecord, onCreateRider, onCrew, voice,
   season = [], curve = null, bike = null, onGarage,
 }: {
   vm: W3BikerVm
   onReferral?: () => void
   onCrew?: () => void
+  /** The coach's register — the rider's own choice of how the brief speaks. */
+  voice?: { value: string; busy: boolean; onSet: (id: string) => void }
   onBadges?: () => void
   onRecord?: (key: string) => void
   onCreateRider?: () => void
@@ -182,10 +185,45 @@ export default function W3BikerView({
               </button>
             )}
 
+            {/* ── THE COACH'S VOICE ────────────────────────────────────
+                The register the daily brief is written in. It changes HOW the
+                coach speaks and never WHAT it says — the honesty rules stay
+                with the prompt (services/coach_prompt). */}
+            {voice && (
+              <TailRow first={!vm.coin && !onCrew && !vm.referral}>
+                <div style={{ flex: 'none', width: 32, height: 32, borderRadius: 100, background: T.surface2, display: 'grid', placeItems: 'center' }}>
+                  <MessageSquare size={15} color={T.evening} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: T.ink }}>Coach-Stimme</span>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', opacity: voice.busy ? 0.6 : 1 }}>
+                    {COACH_VOICES.map((v) => {
+                      const on = (voice.value || COACH_VOICES[0].id) === v.id
+                      return (
+                        <button key={v.id} type="button" disabled={voice.busy}
+                          onClick={() => !on && voice.onSet(v.id)}
+                          aria-pressed={on}
+                          style={{
+                            height: 28, padding: '0 11px', borderRadius: 100, border: 0,
+                            cursor: on ? 'default' : 'pointer', fontFamily: FONT,
+                            fontSize: 11, fontWeight: 700,
+                            background: on ? T.acid : T.surface2,
+                            color: on ? T.bg : T.quiet,
+                          }}>{v.label}</button>
+                      )
+                    })}
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>
+                    {coachVoiceById(voice.value).note}
+                  </span>
+                </div>
+              </TailRow>
+            )}
+
             {vm.devices.map((d, i) => {
               const Ic = DEV_ICONS[d.icon]
               return (
-                <TailRow key={d.name} first={!vm.coin && !onCrew && !vm.referral && i === 0}>
+                <TailRow key={d.name} first={!vm.coin && !onCrew && !vm.referral && !voice && i === 0}>
                   <div style={{ flex: 'none', width: 32, height: 32, borderRadius: 100, background: d.on ? T.acidDim : T.surface2, display: 'grid', placeItems: 'center' }}>
                     <Ic size={15} color={d.on ? T.acid : T.quiet} />
                   </div>

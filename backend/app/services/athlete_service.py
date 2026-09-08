@@ -131,6 +131,9 @@ async def update_goals(
     if "stage_theme" in goals_data:
         current_goals["stage_theme"] = goals_data["stage_theme"]
 
+    if "coach_voice" in goals_data:
+        current_goals["coach_voice"] = goals_data["coach_voice"]
+
     if "season_km_goal" in goals_data:
         # 0 clears the goal (exclude_none strips None, so 0 is the off switch).
         if goals_data["season_km_goal"]:

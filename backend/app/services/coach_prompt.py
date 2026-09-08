@@ -263,10 +263,80 @@ LOCALE_DE_INSTRUCTION = (
 )
 
 
+# ======================================================================
+# COACH VOICES — the register the brief is written in (D10)
+# ======================================================================
+#
+# WHAT A VOICE MAY AND MAY NOT CHANGE. A voice changes HOW a finding is said
+# and never WHAT is said: no voice may add a number, soften a safety call,
+# invent enthusiasm about a result the data does not support, or drop the
+# honest "we don't know". Every instruction below therefore ends by handing
+# the honesty rules back to the base prompt, which still owns them.
+#
+# Appended as a SUFFIX, exactly like `LOCALE_DE_INSTRUCTION`, so the cached
+# prefix (knowledge base + base prompt) keeps its hash and prompt caching
+# stays warm — a voice must not cost a cold prefix on every request.
+CoachVoice = Literal["sachlich", "kumpel", "kapitaen", "nerd"]
+
+#: id → (label the picker shows, one-line description, prompt instruction)
+COACH_VOICES: dict[str, tuple[str, str, str]] = {
+    "sachlich": (
+        "Sachlich",
+        "Sagt, was die Zahl ist. Kein Wort zu viel.",
+        "",  # the base prompt's own register — no suffix, no cache change
+    ),
+    "kumpel": (
+        "Kumpel",
+        "Wie ein Trainingspartner, der dich kennt.",
+        "\n\nVOICE — TRAINING PARTNER: write like a friend who rides with this "
+        "athlete and knows their week. Warm, direct, second person, contractions "
+        "welcome. You may acknowledge how something feels ('that one hurt') "
+        "before stating what it means. NEVER add praise the data does not "
+        "support, never soften a back-off call, and never add or round a "
+        "number to sound encouraging. Same facts, same caution — spoken by "
+        "somebody who likes them.",
+    ),
+    "kapitaen": (
+        "Kapitän",
+        "Klare Ansage. Kurze Sätze.",
+        "\n\nVOICE — CAPTAIN: write in short declarative sentences with the "
+        "decision first and the reason second. Imperative where an action is "
+        "prescribed ('Ride easy today. HRV is 1.4 SD down.'). No hedging "
+        "adverbs, no filler. This is a register, not a licence: an uncertain "
+        "finding is still stated as uncertain, and a rest call is never dressed "
+        "up as a challenge.",
+    ),
+    "nerd": (
+        "Datennerd",
+        "Nennt die Größen beim Namen.",
+        "\n\nVOICE — DATA: name the quantities and their frameworks explicitly "
+        "(TSB, CTL ramp, rMSSD vs 7-day baseline, IF, W'). Prefer the measured "
+        "value over the adjective, and say which window each number came from. "
+        "Still prose, still second person, still short — never a table or a "
+        "list of raw fields. Where a value is missing, say it is missing "
+        "rather than filling the sentence with the ones you have.",
+    ),
+}
+
+DEFAULT_COACH_VOICE = "sachlich"
+
+
+def voice_suffix(voice: str | None) -> str:
+    """The register instruction for a voice id, or '' for the default/unknown.
+
+    Unknown ids fall back to silence rather than an error: the catalogue lives
+    in this file and the stored preference is free text, so a value written by
+    an older or newer build must never break the brief.
+    """
+    entry = COACH_VOICES.get(voice or DEFAULT_COACH_VOICE)
+    return entry[2] if entry else ""
+
+
 def system_prompt_for_language(
     language: Language,
     context: PromptContext = "brief",
     locale: str | None = None,
+    voice: str | None = None,
 ) -> str:
     """Return the system prompt for the requested language mode + context.
 
@@ -283,6 +353,9 @@ def system_prompt_for_language(
                                     "make it harder", "swap to indoor").
     """
     locale_suffix = LOCALE_DE_INSTRUCTION if locale == "de" else ""
+    # The register the athlete chose, appended after the locale so both stay
+    # outside the cached prefix. Empty for the default voice.
+    locale_suffix = f"{locale_suffix}{voice_suffix(voice)}"
 
     if context == "chat_modification":
         base = (

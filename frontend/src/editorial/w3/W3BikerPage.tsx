@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
 import { useWallet } from '../../hooks/useWallet'
@@ -11,7 +11,10 @@ import { useGarage } from '../../hooks/useGarage'
 import { useActivityRhythm } from '../../hooks/useActivityRhythm'
 import { useFtpHistory } from '../../hooks/useFtpHistory'
 import { useFormProgress } from '../../hooks/useFormProgress'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
+import { updateGoals } from '../../api/athletes'
+import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { fetchPMC } from '../../api/dashboard'
 import { useRiderLifetime } from './w3RiderStats'
 import { highlightRecords } from './w3RiderRecords'
@@ -82,6 +85,9 @@ export default function W3BikerPage() {
     staleTime: 30 * 60 * 1000,
   })
   const life = useRiderLifetime()
+  const { data: profile } = useAthleteProfile()
+  const qc = useQueryClient()
+  const [voiceBusy, setVoiceBusy] = useState(false)
 
   const vm = useMemo<W3BikerVm>(() => {
     const has = life.loaded && life.rides > 0
@@ -249,6 +255,22 @@ export default function W3BikerPage() {
       bike={bike}
       onGarage={() => navigate('/e/w3-garage')}
       onCrew={() => navigate('/e/w3-crew')}
+      voice={{
+        value: profile?.goals?.coach_voice ?? 'sachlich',
+        busy: voiceBusy,
+        onSet: (id: string) => {
+          setVoiceBusy(true)
+          void updateGoals({ coach_voice: id })
+            // The brief is cached server-side for hours, so a new voice must
+            // also drop the cached one — otherwise the rider picks a register
+            // and hears yesterday's sentence in the old one.
+            .then(() => Promise.all([
+              qc.invalidateQueries({ queryKey: ['athlete', 'me'] }),
+              qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT }),
+            ]))
+            .finally(() => setVoiceBusy(false))
+        },
+      }}
       onReferral={() => navigate('/e/w3-referrals')}
       onBadges={() => navigate('/e/w3-wins')}
       onRecord={() => navigate('/e/w3-wins')}
