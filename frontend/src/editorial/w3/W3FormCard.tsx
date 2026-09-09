@@ -1,271 +1,90 @@
-import { motion, useReducedMotion } from 'motion/react'
+import { useId, useState } from 'react'
+import { ArrowUpRight, ArrowDownRight, ArrowRight, Info } from 'lucide-react'
 import { usePMC } from '../../hooks/usePMC'
-import { T, FONT, EASE, band, DASH } from './w3tokens'
-import { S, lux } from './w3surfaces'
+import { useTodaySession } from '../../hooks/useTodaySession'
+import { useCurrentWeek } from '../../hooks/useCurrentWeek'
+import { T, FONT, band, w3Mode } from './w3tokens'
+import { lux, S, TNUM } from './w3surfaces'
+import { DailyBars, TrainingImpactChart } from './W3TrainingImpactChart'
+import { metricTrend, nextDate, trainingImpact, validFormPoint } from './w3TrainingImpact'
+import type { FormPoint, TrainingImpact } from './w3TrainingImpact'
+export type { FormPoint } from './w3TrainingImpact'
 
-/**
- * W3 · TODAY — "Wo du stehst", from pen frame `Vt2TQ` (`YjCIs`).
- *
- * THREE NUMBERS THAT ONLY MEAN ANYTHING TOGETHER. Fitness (CTL), Ermüdung (ATL)
- * and Form (TSB) are one model seen from three sides — form IS fitness minus
- * fatigue — so they belong on one card, and the sentence at the bottom is what
- * turns them from three gauges into a reading. A rider does not need to know
- * the acronyms; they need to know whether the work is landing.
- *
- * FORM LEADS, BECAUSE FORM IS THE ANSWER. It gets the arc and the big figure;
- * fitness and fatigue are the working. The arc is signed and centred on zero:
- * TSB is the one number here that is meaningfully negative, and drawing it as a
- * bar from zero would hide that a deep negative is the POINT of a build week.
- *
- * WHAT IT REFUSES TO DO. With fewer than eight days of history there is no
- * trend, so no trend is claimed — the deltas and the sentence disappear rather
- * than being computed off two data points. With no PMC at all the card does not
- * render. `services/training_load` owns the model; this only reads it.
- */
-
-/** How far out the arc reaches for a given TSB.
- *
- *  ±30 is the practical span: past −30 an athlete is deep in a build and past
- *  +25 they are rested to the point of detraining, so anything beyond simply
- *  fills the arc rather than compressing the middle where every real reading
- *  lives. */
-const TSB_SPAN = 30
-const R = 46
-const STROKE = 9
-
-/**
- * Degrees are measured FROM THE TOP, clockwise, so the numbers in this file
- * read the way the gauge looks: 0 is twelve o'clock, +135 is the bottom-right
- * end of the track and −135 the bottom-left. The gauge opens at the BOTTOM and
- * zero sits at the TOP, which is what lets a negative form sweep visibly left
- * and a positive one right — the first version had this rotated a quarter turn
- * and drew a deficit as a stub pointing down-right, which reads as "small"
- * rather than as "below zero".
- */
-const HALF = 135
-
-function arcPath(fromDeg: number, toDeg: number): string {
-  const pt = (deg: number) => {
-    const a = ((deg - 90) * Math.PI) / 180
-    return [60 + R * Math.cos(a), 60 + R * Math.sin(a)]
-  }
-  const [x0, y0] = pt(fromDeg)
-  const [x1, y1] = pt(toDeg)
-  const large = Math.abs(toDeg - fromDeg) > 180 ? 1 : 0
-  const sweep = toDeg > fromDeg ? 1 : 0
-  return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${large} ${sweep} ${x1.toFixed(2)} ${y1.toFixed(2)}`
+const number = (n: number) => new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 }).format(n)
+const signed = (n: number) => `${n > 0.049 ? '+' : ''}${number(Math.abs(n) < 0.05 ? 0 : n)}`
+const dateText = (date?: string) => date ? new Intl.DateTimeFormat('de-DE', { day: 'numeric', month: 'short' }).format(new Date(`${date}T12:00:00`)) : 'Verlauf'
+const explanations = {
+  ctl: 'Fitness ist dein langfristiger Aufbau aus Trainingsbelastung. Sie reagiert langsam; ein Ruhetag gehört dazu.',
+  atl: 'Ermüdung reagiert schneller auf Training und Pause. Mehr Belastung setzt einen Reiz, Erholung lässt sie sinken.',
+  tsb: 'Form = Fitness − Ermüdung. Positiv bedeutet frischer, negativ stärker belastet. Höher ist nicht immer besser.',
+  zone: 'Aufbaubereich im 42/7-Modell: Ermüdung bei 110–130 % der Fitness. Er wächst mit deiner Fitness. Eine Orientierung für Aufbauphasen, kein persönliches Optimum.',
+  model: 'Die gestrichelten Linien zeigen deinen bestehenden Plan im 42/7-Modell. Die Rechnung endet, sobald für einen Tag eine Belastungsangabe fehlt. Modellwerte sind keine garantierte Leistungssteigerung.',
 }
+const resetButton = () => ({ border: 0, fontFamily: FONT, cursor: 'pointer', color: T.ink, background: 'transparent' } as const)
 
-/** A segmented level bar — the same visual grammar as the readiness dock, so
- *  fitness and fatigue read as the same kind of quantity it shows. */
-function Level({ pct, tone, reduce }: { pct: number; tone: string; reduce: boolean | null }) {
-  const STEPS = 10
-  const lit = Math.round(Math.max(0, Math.min(1, pct)) * STEPS)
-  return (
-    <div style={{ display: 'flex', gap: 3, height: 7 }} aria-hidden>
-      {Array.from({ length: STEPS }, (_, i) => (
-        <motion.div key={i}
-          initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, ease: EASE, delay: 0.1 + i * 0.03 }}
-          style={{ flex: 1, borderRadius: 2, background: i < lit ? tone : T.d1 }} />
-      ))}
-    </div>
-  )
+export function W3FormCardView({ entries, impact }: { entries: FormPoint[]; impact?: TrainingImpact }) {
+  const history = entries.filter(validFormPoint).slice(-14)
+  if (!history.length) return null
+  return <FormCard key={history.at(-1)?.date ?? history.length} history={history} impact={impact} />
 }
-
-
-/**
- * The six weeks behind the three numbers.
- *
- * A CTL of 77 is meaningless on its own — 77 climbing out of 60 and 77 sliding
- * down from 90 are opposite situations wearing the same figure. This is why the
- * fitness reading and the fitness CHART belonged on one card rather than in two
- * places on the same page: the number is the reading and the curve is what
- * makes it one.
- *
- * Fitness is the filled area (the thing being built), fatigue the line over it
- * (the cost). Where the line sits ABOVE the fill, form is negative — the rider
- * can see the deficit as a shape rather than having to subtract two numbers.
- * That crossing is the entire model, drawn once.
- */
-function Trajectory({ entries: e, reduce }: { entries: FormPoint[]; reduce: boolean | null }) {
-  const W = 300, H = 62
-  const lo = Math.min(...e.map((p) => Math.min(p.ctl, p.atl)))
-  const hi = Math.max(...e.map((p) => Math.max(p.ctl, p.atl)))
-  // A floor under the span: a quiet six weeks would otherwise be amplified into
-  // dramatic peaks by auto-scaling a range of two points.
-  const span = Math.max(12, hi - lo)
-  const x = (i: number) => (i / Math.max(1, e.length - 1)) * W
-  const y = (v: number) => H - ((v - lo) / span) * (H - 6) - 3
-  const line = (key: 'ctl' | 'atl') =>
-    e.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ')
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H} preserveAspectRatio="none" aria-hidden
-         style={{ display: 'block', overflow: 'visible' }}>
-      <defs>
-        <linearGradient id="w3ctlfill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={T.acid} stopOpacity="0.34" />
-          <stop offset="100%" stopColor={T.acid} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <motion.path d={`${line('ctl')} L${W} ${H} L0 ${H} Z`} fill="url(#w3ctlfill)"
-        initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
-        transition={{ duration: 0.6, ease: EASE }} />
-      <motion.path d={line('ctl')} fill="none" stroke={T.acid} strokeWidth={2}
-        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke"
-        initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }}
-        transition={{ duration: 0.9, ease: EASE }} />
-      <path d={line('atl')} fill="none" stroke={T.mid} strokeWidth={1.4} strokeDasharray="3 3"
-        strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" opacity={0.9} />
-    </svg>
-  )
-}
-
-function Row({ label, value, note, pct, tone, reduce }: {
-  label: string; value: string; note: string; pct: number; tone: string; reduce: boolean | null
-}) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>{label}</span>
-        <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.7, lineHeight: 1, color: T.ink, fontVariantNumeric: 'tabular-nums' }}>
-          {value}
-        </span>
+function FormCard({ history, impact }: { history: FormPoint[]; impact?: TrainingImpact }) {
+  const [selection, setSelection] = useState<number | null>(null)
+  const [explanation, setExplanation] = useState<keyof typeof explanations | null>(null)
+  const explanationId = useId()
+  const future = impact?.plan ?? []
+  const all = [...history, ...future.slice(1)]
+  const selected = Math.min(selection ?? history.length - 1, all.length - 1)
+  const current = all[selected]
+  const previous = selected > 0 ? all[selected - 1] : null
+  const consecutive = previous && (!current.date || !previous.date || nextDate(previous.date) === current.date)
+  const projected = selected >= history.length
+  const explain = (key: keyof typeof explanations) => setExplanation(explanation === key ? null : key)
+  const metrics = [
+    { key: 'ctl' as const, label: 'Fitness', color: T.cool },
+    { key: 'atl' as const, label: 'Ermüdung', color: T.orbit },
+    { key: 'tsb' as const, label: 'Form', color: T.acid },
+  ]
+  return <section style={band(26)} aria-label="Form und Trainingswirkung" data-training-impact="w3-today-form-v2">
+    <div style={{ ...lux(24), padding: S.xl, gap: S.lg, fontFamily: FONT }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <h2 style={{ margin: 0, color: T.ink, fontSize: 19, fontWeight: 650, letterSpacing: -0.6 }}>Deine Form</h2>
+        <span style={{ fontSize: 11, color: T.mid }}>{projected ? 'Plan · ' : ''}{current.date === impact?.today ? 'Heute' : dateText(current.date)}</span>
       </div>
-      <Level pct={pct} tone={tone} reduce={reduce} />
-      {note && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet }}>{note}</span>}
-    </div>
-  )
-}
-
-/** The reading, in one sentence, built only from what the series actually did.
- *  Every branch here is a statement about the two deltas — there is no branch
- *  that characterises a rider, a week, or a plan. */
-function reading(ctlD: number, atlD: number, tsb: number): string {
-  const up = (x: number) => x > 1.5
-  const down = (x: number) => x < -1.5
-  if (up(ctlD) && down(atlD)) {
-    return 'Fitness steigt, Ermüdung fällt — beides zugleich, und genau so soll ein Umfangsblock laufen.'
-  }
-  if (up(ctlD) && up(atlD)) {
-    return tsb < -15
-      ? 'Fitness und Ermüdung steigen zusammen. Das ist der Preis der Arbeit — er wird erst nach der Entlastung sichtbar.'
-      : 'Fitness und Ermüdung steigen zusammen, und die Form hält noch mit. Der Block trägt.'
-  }
-  if (down(ctlD) && down(atlD)) {
-    return 'Beides fällt. Nach einer ruhigen Woche ist das normal; über zwei hinweg verlierst du den Aufbau.'
-  }
-  if (down(ctlD) && up(atlD)) {
-    return 'Ermüdung steigt, Fitness nicht. Das ist die Kombination, die sich lohnt zu unterbrechen.'
-  }
-  return 'Wenig Bewegung in beide Richtungen — die letzte Woche hat gehalten, was da war.'
-}
-
-export interface FormPoint { ctl: number; atl: number; tsb: number }
-
-/**
- * The card as a pure function of a PMC series, so it can be rendered from a
- * preview route with a synthetic block. `W3FormCard` owns the fetch.
- */
-export function W3FormCardView({ entries: e }: { entries: FormPoint[] }) {
-  const reduce = useReducedMotion()
-  if (e.length === 0) return null
-
-  const last = e[e.length - 1]
-  // Eight entries, not two: a "trend" from yesterday is noise, and the pen's
-  // own header says LETZTE 6 WOCHEN — the deltas have to be a week apart to
-  // deserve the word.
-  const prev = e.length > 7 ? e[e.length - 8] : null
-  const ctl = Math.round(last.ctl)
-  const atl = Math.round(last.atl)
-  const tsb = last.tsb
-  const ctlD = prev ? last.ctl - prev.ctl : 0
-  const atlD = prev ? last.atl - prev.atl : 0
-
-  // Zero at the top, the arc growing left for a deficit and right for freshness.
-  const clamped = Math.max(-TSB_SPAN, Math.min(TSB_SPAN, tsb))
-  const end = (clamped / TSB_SPAN) * HALF
-  // A BUILD WEEK IS NOT A WARNING. −13 is an ordinary Tuesday inside a volume
-  // block, and colouring it amber tells a rider something is wrong when the
-  // plan is working exactly as written. Warm only past −20, where the fatigue
-  // has genuinely outrun what the week asked for.
-  const tone = tsb >= -20 ? T.acid : tsb >= -30 ? T.warn : T.bad
-  // Fitness and fatigue are scaled against the athlete's OWN six-week peak, not
-  // an absolute ceiling: a CTL of 78 means something different for every rider,
-  // and a bar against a made-up maximum would be decoration.
-  const peak = Math.max(1, ...e.map((x) => Math.max(x.ctl, x.atl)))
-
-  const trend = (d: number) => (d > 1.5 ? 'steigt' : d < -1.5 ? 'fällt' : 'hält')
-
-  return (
-    <div style={band(26)}>
-      <div style={{ ...lux(28), padding: S.xl, gap: S.xl, fontFamily: FONT }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: T.quiet }}>WO DU STEHST</span>
-          <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1.1, color: T.mid }}>LETZTE 6 WOCHEN</span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: S.md }}>
+        {metrics.map(({ key, label, color }) => {
+          const delta = consecutive && previous ? current[key] - previous[key] : null
+          const positive = delta != null && (key === 'ctl' ? delta > 0.049 : delta * (key === 'atl' ? -1 : 1) > 0.049)
+          return <button key={key} type="button" aria-label={`${label} erklären`} aria-expanded={explanation === key} aria-controls={explanationId} onClick={() => explain(key)} style={{ ...resetButton(), textAlign: 'left', padding: 0, minWidth: 0 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: T.mid }}><i style={{ width: 5, height: 5, borderRadius: '50%', background: color }} />{label}</span>
+            <span style={{ ...TNUM, display: 'block', marginTop: 7, fontSize: 28, fontWeight: 600, letterSpacing: -1.3, lineHeight: 1 }}>{key === 'tsb' ? signed(current[key]) : number(current[key])}</span>
+            <span style={{ ...TNUM, display: 'block', margin: '7px 0 6px', fontSize: 10, color: positive ? (w3Mode() === 'light' ? T.acid : T.training) : T.mid, whiteSpace: 'nowrap' }}>{delta == null ? null : <>{delta > 0.049 ? <ArrowUpRight size={10} aria-hidden style={{ display: 'inline' }} /> : delta < -0.049 ? <ArrowDownRight size={10} aria-hidden style={{ display: 'inline' }} /> : <ArrowRight size={10} aria-hidden style={{ display: 'inline' }} />} {signed(delta)} </>}<span style={{ color: T.mid }}>{metricTrend(key, delta)}</span></span>
+            <DailyBars values={all.slice(Math.max(0, selected - 6), selected + 1).map(p => p[key])} color={color} />
+          </button>
+        })}
+      </div>
+      {explanation && <p id={explanationId} role="status" style={{ margin: '-4px 0 0', paddingLeft: 10, borderLeft: `2px solid ${T.rule}`, fontSize: 12, lineHeight: 1.5, color: T.mid }}>{explanations[explanation]}{explanation === 'model' && impact?.target != null ? ` Heute: ${number(impact.target)} TSS geplant.` : ''}{['ctl', 'atl', 'tsb'].includes(explanation) && current.tss != null ? ` ${dateText(current.date)}: ${number(current.tss)} TSS${projected ? ' geplant' : ' erfasst'}.` : ''}</p>}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <button type="button" aria-expanded={explanation === 'zone'} onClick={() => explain('zone')} style={{ ...resetButton(), display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0', fontSize: 10, color: T.mid }}><i style={{ width: 9, height: 5, background: T.training, opacity: 0.6, borderRadius: 2 }} />Aufbaubereich <Info size={11} aria-hidden /></button>
+          {future.length > 0 && <button type="button" aria-expanded={explanation === 'model'} onClick={() => explain('model')} style={{ ...resetButton(), display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: T.mid, padding: '4px 0' }}>Planrechnung <Info size={11} aria-hidden /></button>}
         </div>
-
-        <div style={{ display: 'flex', gap: S.xl, alignItems: 'center' }}>
-          <div style={{ width: 120, height: 120, flex: 'none', position: 'relative' }}>
-            <svg width={120} height={120} viewBox="0 0 120 120" aria-hidden>
-              <path d={arcPath(-HALF, HALF)} fill="none" stroke={T.d1}
-                strokeWidth={STROKE} strokeLinecap="round" />
-              <motion.path d={arcPath(0, end)} fill="none" stroke={tone}
-                strokeWidth={STROKE} strokeLinecap="round"
-                initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }}
-                transition={{ duration: 0.9, ease: EASE }} />
-            </svg>
-            <div style={{
-              position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: 1,
-            }}>
-              <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1, color: tone, fontVariantNumeric: 'tabular-nums' }}>
-                {tsb > 0 ? '+' : ''}{Math.round(tsb)}
-              </span>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>FORM</span>
-            </div>
-          </div>
-
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: S.lg }}>
-            <Row label="FITNESS" value={String(ctl)} note={prev ? trend(ctlD) : ''}
-              pct={ctl / peak} tone={T.acid} reduce={reduce} />
-            <Row label="ERMÜDUNG" value={String(atl)} note={prev ? trend(atlD) : ''}
-              pct={atl / peak} tone={T.mid} reduce={reduce} />
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <Trajectory entries={e} reduce={reduce} />
-          <div style={{ display: 'flex', gap: 14 }}>
-            {([['Fitness', T.acid, false], ['Ermüdung', T.mid, true]] as const).map(([label, hue, dashed]) => (
-              <span key={label} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{
-                  width: 12, height: 0, flex: 'none',
-                  borderTop: `2px ${dashed ? 'dashed' : 'solid'} ${hue}`,
-                }} />
-                <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 0.8, color: T.quiet }}>
-                  {label.toUpperCase()}
-                </span>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {prev && (
-          <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
-            {reading(ctlD, atlD, tsb)}
-          </span>
-        )}
+        <TrainingImpactChart history={history} impact={impact} selected={selected} onSelect={setSelection} />
       </div>
     </div>
-  )
+  </section>
 }
-
-export { DASH }
-
 
 export default function W3FormCard() {
-  const { data: pmc } = usePMC()
-  return <W3FormCardView entries={pmc?.entries ?? []} />
+  const { data: pmc } = usePMC(42)
+  const session = useTodaySession()
+  const { data: week } = useCurrentWeek()
+  const entries = (pmc?.entries ?? []).map(entry => ({ ...entry, tss: entry.tss ?? entry.daily_tss ?? null }))
+  const impact = trainingImpact({
+    entries,
+    today: session.decision?.date ?? session.weekToday?.date ?? null,
+    state: session.decision?.state ?? (session.isRestDay ? 'planned_rest' : null),
+    target: session.workout?.predicted_tss ?? session.decision?.tss_target ?? null,
+    days: week?.days ?? [],
+  })
+  return <W3FormCardView entries={entries} impact={impact} />
 }
