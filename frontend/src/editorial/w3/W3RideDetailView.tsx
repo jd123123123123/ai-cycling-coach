@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useState, type CSSProperties } from 'react'
 import { ChevronRight, Flame, Gauge, HeartPulse, RefreshCw, Share2, Sparkles, Timer, Waves, Zap, type LucideIcon } from 'lucide-react'
@@ -111,6 +112,7 @@ const SCENE_IDLE: W3RideSceneState = { status: 'loading', image: null, pending: 
 
 export interface W3RideDetailProps {
   vm: W3RideVm
+  trainingReview?: ReactNode
   /** Omitted → the cover stays the route trace, exactly as before. */
   scene?: W3RideSceneState
   /** Explicit intent only: this fires the slow, paid image-model call. */
@@ -276,7 +278,7 @@ function SceneNote({ text, action, onClick }: { text: string; action?: string; o
     : <div style={box}>{body}</div>
 }
 
-export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap, onRehearse, rehearsePending, rehearseError }: W3RideDetailProps) {
+export default function W3RideDetailView({ vm, trainingReview, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap, onRehearse, rehearsePending, rehearseError }: W3RideDetailProps) {
   // ── THE CHAPTERS ARE NUMBERED BY WHAT ACTUALLY RENDERS ──────────────────
   // These ordinals were hardcoded "01".."05", and two of the five are
   // conditional — the repeat set and the season push. So a free outdoor ride,
@@ -411,7 +413,7 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
             executed WELL or BADLY, it was just ridden, and a 94/100 stamped on
             it is a mark out of nothing. The coach's sentence stays either way;
             that one is about the ride rather than about compliance. */}
-        <div style={{ ...band(28), gap: 12 }}>
+        {trainingReview ?? <div style={{ ...band(28), gap: 12 }}>
           {vm.repeats.length > 0 && (
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
             <span style={{ fontSize: 100, fontWeight: 600, letterSpacing: -4.5, lineHeight: 0.86, color: T.acid }}>{vm.execScore}</span>
@@ -430,6 +432,8 @@ export default function W3RideDetailView({ vm, scene = SCENE_IDLE, onCompose, on
           <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
           {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>KI-Urteil · {vm.aiModel}</span>}
         </div>
+
+        }
 
         {/* Hero stats */}
         <div style={{ ...band(26), gap: 8 }}>

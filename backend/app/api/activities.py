@@ -66,7 +66,10 @@ async def create_activity(
         profile=profile,
     )
     await db.commit()
-    return ActivityRead.model_validate(activity)
+    response = ActivityRead.model_validate(activity)
+    from app.services.plan_absorption import absorb_new_activities
+    await absorb_new_activities(db, current_user.id)
+    return response
 
 
 @router.post(

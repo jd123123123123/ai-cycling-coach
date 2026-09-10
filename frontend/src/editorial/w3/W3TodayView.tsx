@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DayTraining, WeekTrainingCard, WeekNavCards, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
+import { DayTraining, WeekTrainingCard, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, band } from './w3tokens'
 import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
 import W3TodayDock from './W3TodayDock'
+import W3ReadinessExplanation from './W3ReadinessExplanation'
 import W3PickGoalCard from './W3PickGoalCard'
 import W3TodayComposer from './W3TodayComposer'
 import W3RideChest from './W3RideChest'
@@ -13,11 +14,11 @@ import W3WrappedBolt from './W3WrappedBolt'
 import W3TabBar from './W3TabBar'
 import { useHeroPanel, useStageGround } from './W3HeroShell'
 import W3RecoveryNudge from './W3RecoveryNudge'
-import W3FormProjection from './W3FormProjection'
 import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
+import W3TodayGoals, { W3TodayGoalsSummary } from './W3TodayGoals'
 import W3TodayRank from './W3TodayRank'
 import W3CrewFeed from './W3CrewFeed'
 import W3WeekRecapCard from './W3WeekRecapCard'
@@ -98,6 +99,8 @@ export interface W3Vm {
    *  belongs to the chest — see `W3RideChest` for why one screen answers one
    *  question at a time. */
   chest: Chest | null
+  readinessAction?: string | null
+  readinessDetails?: import('../../api/coach').DailyDecisionReadiness | null
   readiness: number | null
   readinessWord: string | null
   /** WHY there is no readiness figure, dated — "Seit 3 Tagen keine
@@ -114,12 +117,17 @@ export interface W3Vm {
   /** What earns that multiplier — "14-day streak", or the next tier to reach. */
   earnRateWhy: string | null
 
+  recoveryDate?: string
   hrv: W3Signal | null
   rhr: W3Signal | null
   sleep: W3Signal | null
 
   weekDays: W3DayFull[]
   // "Deine Woche" — block context + the season goal this week feeds.
+  planPhaseSchedule?: string[] | null
+  planWeekIndex?: number | null
+  planPhaseKey?: string | null
+  planPhase?: string | null
   weekBlockLabel: string
   weekDoneChip: string | null
   weekLoadLabel: string
@@ -247,6 +255,8 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
     <W3RideChest chest={vm.chest} onOpen={onOpenChest ?? (() => {})} />
   ) : (
             <W3TodayDock
+              endDate={vm.recoveryDate}
+              action={vm.readinessAction}
               vm={{
                 score: vm.readiness,
                 state: vm.readinessWord,
@@ -285,6 +295,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
                 compact: true,
                 planLabel: vm.weekDays[todayIdx]?.rest ? 'Heute Ruhetag' : vm.weekDays[todayIdx]?.title ?? null,
               }}
+              explanation={<W3ReadinessExplanation report={vm.readinessDetails} score={vm.readiness} action={vm.readinessAction} />}
               onOpen={() => navigate('/e/w3-readiness')} />
   )
   const { inShell, portal } = useHeroPanel(dock)
@@ -295,13 +306,16 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
       <W3ThresholdProposal />
       <W3RecoveryNudge />
       <W3TodayOverview vm={vm}
+        selectedWeekDay={selDay} onSelectWeekDay={setSelDay}
+        onOpenPlan={() => navigate('/e/w3-plan')}
+        onPickGoal={intent => navigate(intent ? `/e/w3-goal-set?intent=${intent}` : '/e/w3-goal-set')}
         today={vm.weekDays[todayIdx] && vm.hasPlan ? <DayTraining
           day={vm.weekDays[todayIdx]}
           session={{ dur: vm.sessionDur, blocks: vm.weekDays[todayIdx].blocks?.length ? vm.weekDays[todayIdx].blocks! : vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
           weather={vm.weather} onAdapt={onAdapt}
         /> : <W3TodayComposer readiness={vm.readiness} />}
         week={<>
-          {vm.hasPlan ? <WeekTrainingCard embedded
+          {vm.hasPlan ? <WeekTrainingCard embedded detailsOnly
             days={vm.weekDays} selected={selDay} onSelect={setSelDay}
             blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
             day={selectedDay}
@@ -311,13 +325,14 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
           <W3WeekRecapCard />
           {!vm.chest?.sealed && onOpenWrapped && <div style={band(0)}><W3WrappedBolt onOpen={onOpenWrapped} /></div>}
         </>}
-        form={<><W3FormCard embedded /><details className="w3-long-projection"><summary>Langfristige Projektion</summary><W3FormProjection /></details></>}
+        form={null}
+        persistentForm={expanded => <W3FormCard embedded expanded={expanded} />}
         crew={<><W3TodayRank /><W3CrewFeed /></>}
+        progress={<W3TodayProgress />}
+        goalSummary={<W3TodayGoalsSummary />}
         goals={<>
-          {vm.hasPlan
-            ? <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks} onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
-            : <W3PickGoalCard onPick={key => navigate(`/e/w3-goal-set?intent=${key}`)} />}
-          <W3TodayProgress /><W3WorkshopNudge />
+          {!vm.hasPlan && <W3PickGoalCard onPick={key => navigate(`/e/w3-goal-set?intent=${key}`)} />}
+          <W3TodayGoals /><W3WorkshopNudge />
         </>}
       />
     </div>

@@ -1014,9 +1014,9 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
                 user_id,
             )
 
-        # Absorb-and-replan (P1.4): unplanned/oversized rides get absorbed and
-        # the week gently rebalanced. Best-effort by contract — never breaks sync.
-        if total_activities > 0:
+        # Revisit after stream backfill too: a previously incomplete recording
+        # can now support stimulus comparison. Durable audits prevent repeats.
+        if total_activities > 0 or maintenance_due:
             from app.services.plan_absorption import absorb_new_activities
 
             await absorb_new_activities(db, user_id)

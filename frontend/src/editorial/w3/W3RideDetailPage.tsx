@@ -1,4 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { fetchTrainingReview } from '../../api/trainingReview'
+import W3TrainingReview from './W3TrainingReview'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { usePMC } from '../../hooks/usePMC'
@@ -559,10 +562,11 @@ function toReducedRows(a: ActivityRead): { label: string; value: string }[] {
   ]
 }
 
-function W3RideReduced({ activity, onBack, onExpandMap }: {
+function W3RideReduced({ activity, onBack, onExpandMap, review }: {
   activity: ActivityRead
   onBack: () => void
   onExpandMap?: () => void
+  review?: ReactNode
 }) {
   const hero = toReducedHero(activity)
   const rows = toReducedRows(activity)
@@ -593,6 +597,7 @@ function W3RideReduced({ activity, onBack, onExpandMap }: {
             debrief this ride does not have, so the button would hand the rider
             to a page that cannot draw their card. */}
         <W3RideMapHero vm={hero} onExpandMap={onExpandMap} />
+        {review}
 
         <div style={{ ...band(S.section), gap: S.md }}>
           <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.quiet }}>
@@ -685,6 +690,7 @@ export default function W3RideDetailPage() {
   const { id } = useParams<{ id: string }>()
   const activityId = id ? Number(id) : undefined
   const { data, isError: debriefFailed } = useRaceDebrief(activityId)
+  const trainingReview = useQuery({queryKey:['training-review',activityId],queryFn:()=>fetchTrainingReview(activityId!),enabled:activityId!=null,staleTime:30_000,retry:1})
   const { data: pmc } = usePMC()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: season } = useActivitiesRange(seasonStart, new Date())
@@ -790,6 +796,7 @@ export default function W3RideDetailPage() {
       return (
         <W3RideReduced
           activity={activity}
+          review={trainingReview.data ? <W3TrainingReview review={trainingReview.data} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
           onBack={() => navigate(-1)}
           onExpandMap={activity.route_polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
         />
@@ -803,6 +810,7 @@ export default function W3RideDetailPage() {
   const detail = (
     <W3RideDetailView
       vm={{ ...vm, hero: heroVm }}
+      trainingReview={trainingReview.data ? <W3TrainingReview review={trainingReview.data} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
       scene={scene}
       // The loop from memory back into the plan: this ride's own route,
       // forecast against today's physiology. Only with a real track.

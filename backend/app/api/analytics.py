@@ -9,6 +9,7 @@ RLS-protected via `get_db_for_user`, so even malformed specs can only see
 the current user's data.
 """
 import logging
+from datetime import date
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -483,3 +484,19 @@ async def get_weekly_recap(
     from app.services.weekly_recap import build_weekly_recap
 
     return await build_weekly_recap(db, current_user.id, lang=locale)
+
+
+from app.schemas.progress_explorer import ProgressExplorer, ProgressPeriod
+
+@router.get('/progress-explorer', response_model=ProgressExplorer)
+async def get_progress_explorer(
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    period: ProgressPeriod = 'month',
+    reference_date: date | None = None,
+) -> ProgressExplorer:
+    from app.services.progress_explorer import load_progress
+    try:
+        return await load_progress(db, user.id, period, reference_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

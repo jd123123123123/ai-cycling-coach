@@ -330,6 +330,8 @@ export interface DailyDecisionPlanned {
 export interface DailyDecisionReadiness {
   score?: number | null
   tier?: string | null // 'rest' | 'easy' | 'moderate' | 'push'
+  components?: { name: string; score: number | null; weight: number }[]
+  coverage?: number | null
 }
 
 export interface DailyDecision {

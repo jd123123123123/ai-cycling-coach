@@ -240,6 +240,9 @@ async def ingest_workout(
     profile = await _load_profile(db, user_id)
     created = await _persist_workout(db, user_id, profile, raw)
     await db.commit()
+    if created:
+        from app.services.plan_absorption import absorb_new_activities
+        await absorb_new_activities(db, user_id)
     return 1 if created else 0
 
 
@@ -277,5 +280,8 @@ async def sync_user(
 
     credential.last_sync_at = datetime.now(timezone.utc)
     await db.commit()
+    if imported:
+        from app.services.plan_absorption import absorb_new_activities
+        await absorb_new_activities(db, user_id)
     logger.info("Wahoo sync for user_id=%s imported %d workouts", user_id, imported)
     return {"workouts_imported": imported}

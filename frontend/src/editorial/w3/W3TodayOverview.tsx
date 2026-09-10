@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from 'react'
+import { Fragment, useId, useState, type ReactNode } from 'react'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
@@ -6,10 +6,12 @@ import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useW3FormData } from './useW3FormData'
 import { validFormPoint, type FormPoint } from './w3TrainingImpact'
 import { T, FONT, EASE } from './w3tokens'
+import W3PlanPhaseProgress from './W3PlanPhaseProgress'
+import W3ProgressCompact from './W3ProgressCompact'
 import type { W3Vm } from './W3TodayView'
 
-type Section = 'today' | 'week' | 'form' | 'crew' | 'goals'
-interface Sections { today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
+type Section = 'today' | 'week' | 'form' | 'crew' | 'progress' | 'goals'
+interface Sections { progress?:ReactNode; progressSummary?:ReactNode; goalSummary?:ReactNode; persistentForm?: (expanded:boolean) => ReactNode; selectedWeekDay?: number; onSelectWeekDay?: (index:number) => void; onOpenPlan?: () => void; onPickGoal?: (intent: 'ftp' | 'event' | 'hours' | null) => void; today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
 export interface OverviewData {
   form: FormPoint | null
   history?: FormPoint[]
@@ -32,46 +34,55 @@ function FormSpark({ points, metric, color }: { points: FormPoint[]; metric: 'ct
   </svg>
 }
 
-export function W3TodayOverviewView({ vm, data, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
+export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
   const [open, setOpen] = useState<Section | null>(null)
+  const [localWeekDay, setLocalWeekDay] = useState<number | null>(null)
+  const selected = selectedWeekDay ?? localWeekDay ?? Math.max(0,vm.weekDays.findIndex(d=>d.status==='today'))
   const uid = useId()
   const reduce = useReducedMotion()
   const today = vm.weekDays.find(day => day.status === 'today')
   const blocks = today?.rest ? [] : (today?.blocks?.length ? today.blocks : vm.sessionBlocks ?? [])
   const weekMax = Math.max(1, ...vm.weekDays.map(d => Math.max(d.actual || 0, d.planned ?? 0)))
   const form = data.form
-  const pct = data.ftp != null && data.ftpGoal != null && data.ftpGoal > 0 ? Math.min(100, data.ftp / data.ftpGoal * 100) : null
-  const titles: Record<Section, string> = { today: 'Heute', week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', goals: 'Fortschritt & Ziele' }
+  const titles: Record<Section, string> = { today: 'Heute', week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', progress:'Fortschritt', goals: 'Ziele' }
   const subtitle: Record<Section, string> = {
     today: today?.rest ? 'Ruhetag' : [today?.title ?? 'Noch kein Training geplant', today?.title ? vm.sessionDur : null].filter(Boolean).join(' · '),
-    week: vm.hasPlan ? (vm.weekLoadLabel || vm.weekBlockLabel || 'Dein Wochenplan') : 'Dein Training planen',
+    week: vm.hasPlan ? [vm.weekLoadLabel || vm.weekBlockLabel || 'Dein Wochenplan', vm.weekDoneChip].filter(Boolean).join(' · ') : 'Dein Training planen',
     form: form == null ? 'Noch kein Verlauf' : form.tsb >= 0 ? 'Wenig Ermüdung' : 'Belastung im Körper',
     crew: data.crewState === 'loading' ? 'Crew wird geladen' : data.crewState === 'error' ? 'Crew nicht verfügbar' : data.crew?.name ?? 'Gemeinsam fahren',
-    goals: data.ftp == null ? (vm.weekGoal?.name ?? 'Dein nächstes Ziel') : data.ftpGoal != null ? `FTP ${num(data.ftp)} von ${num(data.ftpGoal)} W` : `FTP ${num(data.ftp)} W`,
+    goals:'',
+    progress: data.ftp == null ? (vm.weekGoal?.name ?? 'Dein nächstes Ziel') : data.ftpGoal != null ? `FTP ${num(data.ftp)} von ${num(data.ftpGoal)} W` : `FTP ${num(data.ftp)} W`,
   }
   return <div className="w3-today-overview" style={{ fontFamily: FONT }}>
-    {(['today', 'week', 'form', 'crew', 'goals'] as const).map(key => <section key={key} data-today-card={key} className="w3-overview-card" data-open={open === key}>
+    {(['today', 'week', 'form', 'crew', 'progress', 'goals'] as const).map(key => <Fragment key={key}><section data-today-card={key} className="w3-overview-card" data-open={open === key}>
       <div className="w3-overview-header">
         <h2 id={`${uid}-${key}-title`} className="w3-overview-title">{titles[key]}</h2>
         <motion.button id={`${uid}-${key}-toggle`} className="w3-overview-toggle" type="button" aria-label={`${titles[key]} ${open === key ? 'schließen' : 'öffnen'}`} aria-expanded={open === key} aria-controls={`${uid}-${key}`} onClick={() => setOpen(open === key ? null : key)} whileTap={reduce ? undefined : {scale:0.93}}>
           {open === key ? <ArrowLeft size={16} aria-hidden /> : <ArrowUpRight size={16} aria-hidden />}
         </motion.button>
       </div>
-      <motion.div initial={false} animate={{height:open === key ? 0 : 'auto',opacity:open === key ? 0 : 1}} transition={{duration:reduce ? 0 : 0.26,ease:EASE}} aria-hidden={open === key} style={{overflow:'hidden'}}>
+      {key === 'form' && persistentForm ? <div id={`${uid}-${key}`} className="w3-overview-form-persistent" role="region" aria-labelledby={`${uid}-${key}-title`}>{persistentForm(open==='form')}</div> : <>
+      <motion.div initial={false} animate={{height:open === key && key !== 'week' ? 0 : 'auto',opacity:open === key && key !== 'week' ? 0 : 1}} transition={{duration:reduce ? 0 : 0.26,ease:EASE}} aria-hidden={open === key && key !== 'week'} style={{overflow:'hidden'}}>
       <div className="w3-overview-summary">
-          <span className="w3-overview-copy">{subtitle[key]}</span>
+          <span className="w3-overview-copy">{key!=='goals'&&key!=='progress'&&subtitle[key]}</span>{key==='goals'&&<div className="w3-overview-goals-summary">{goalSummary??'Dein nächstes Ziel'}</div>}
           {key === 'today' && <span className="w3-overview-workout" role="img" aria-label={today?.rest ? 'Ruhetag, keine Trainingsbelastung geplant' : blocks.length ? `Trainingsprofil: ${blocks.map(b => b.label).join(', ')}` : 'Kein Trainingsprofil verfügbar'}>
             {blocks.length ? blocks.map((b, i) => <span key={i} style={{ flex: 1, minWidth: 0, height: `${Math.max(4, Math.min(100, b.w * 100))}%`, borderRadius: '2px 2px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : T.heroOff }} />) : <span style={{ width: '100%', height: 2, background: T.rule }} />}
           </span>}
-          {key === 'week' && <span aria-label={vm.weekLoadLabel} className="w3-overview-week" role="img">
-            {vm.weekDays.map((d, i) => <span key={i} className="w3-overview-day" data-current={d.status === 'today'} title={`${d.dateLabel}: ${d.title ?? 'Kein Training geplant'} · ${d.actual} TSS gefahren${d.planned != null ? ` / ${d.planned} TSS geplant` : ''}`}>
-              <span className="w3-overview-day-track">
-                <span className="w3-overview-day-plan" style={{height:Math.max(3, Math.min(34, (d.planned ?? 0) / weekMax * 34))}} />
-                {d.actual > 0 && <span className="w3-overview-day-done" style={{height:Math.min(34, d.actual / weekMax * 34)}} />}
-              </span>
-              <span>{d.letter}</span>
-            </span>)}
-          </span>}
+          {key === 'week' && <div aria-label="Trainingsbelastung der Woche" className="w3-overview-week">
+            {vm.weekDays.map((d, i) => {
+              const expanded=open==='week'
+              const height=expanded?58:34
+              const label=`${d.dateLabel??d.letter}: ${d.title ?? (d.rest?'Ruhetag':'Kein Training geplant')} · ${d.actual??0} TSS gefahren${d.planned != null ? ` / ${d.planned} TSS geplant` : ''}`
+              return <button type="button" key={d.dateLabel??i} className="w3-overview-day" data-current={d.status === 'today'} aria-pressed={selected===i} aria-label={label} title={label} onClick={()=>{setLocalWeekDay(i);onSelectWeekDay?.(i);setOpen('week')}}>
+                <motion.span className="w3-overview-day-track" initial={false} animate={{height}} transition={{duration:reduce?0:.3,ease:EASE}} aria-hidden>
+                  <motion.span className="w3-overview-day-plan" initial={false} animate={{height:Math.max(3,(d.planned??0)/weekMax*height)}} transition={{duration:reduce?0:.3,ease:EASE}} />
+                  {d.actual>0&&<motion.span className="w3-overview-day-done" initial={false} animate={{height:d.actual/weekMax*height}} transition={{duration:reduce?0:.3,ease:EASE}}/>}
+                </motion.span>
+                <span>{d.letter}</span>
+                <motion.span className="w3-overview-day-date" initial={false} animate={{height:expanded?14:0,opacity:expanded?1:0}} transition={{duration:reduce?0:.25,ease:EASE}} aria-hidden={!expanded}>{d.num}</motion.span>
+              </button>
+            })}
+          </div>}
           {key === 'form' && form && <span className="w3-overview-metrics">
             {([{ key: 'ctl', label: 'Fitness', color: T.cool }, { key: 'atl', label: 'Ermüdung', color: T.orbit }, { key: 'tsb', label: 'Form', color: T.acid }] as const).map(m => <span key={m.key} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <span style={{ fontSize: 10, fontWeight: 600, color: T.mid }}>{m.label}</span>
@@ -85,10 +96,7 @@ export function W3TodayOverviewView({ vm, data, ...details }: { vm: W3Vm; data: 
             </span>)}</span>
             {data.crew.rank != null && <span style={{ fontSize: 22, fontWeight: 700 }}>#{data.crew.rank}<span style={{ fontSize: 10, color: T.mid }}> / {data.crew.count}</span></span>}
           </span>}
-          {key === 'goals' && pct != null && <span className="w3-overview-goal">
-            <span className="w3-overview-goal-track"><span style={{ display: 'block', height: '100%', width: `${pct}%`, background: T.acid, borderRadius: 3 }} /></span>
-            <span style={{ fontSize: 18, fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>{Math.round(pct)}%</span>
-          </span>}
+          {key === 'progress' && (progressSummary??<span style={{fontSize:14,color:T.ink}}>FTP {data.ftp==null?'—':num(data.ftp)} W · VO₂max · Rekorde</span>)}
       </div>
       </motion.div>
       <div id={`${uid}-${key}`} role="region" aria-labelledby={`${uid}-${key}-title`} aria-hidden={open !== key} inert={open !== key}>
@@ -98,7 +106,27 @@ export function W3TodayOverviewView({ vm, data, ...details }: { vm: W3Vm; data: 
           </motion.div>}
         </AnimatePresence>
       </div>
-    </section>)}
+      </>}
+    </section>
+    {key === 'today' && <section data-today-card="plan" className="w3-overview-card" aria-label="Planphase">
+      <div className="w3-overview-header">
+        <h2 className="w3-overview-title">{vm.hasPlan ? 'Planphase' : 'Dein Plan'}</h2>
+        <button type="button" className="w3-overview-toggle" aria-label={vm.hasPlan ? 'Plan ansehen' : 'Plan setzen'} onClick={() => vm.hasPlan ? onOpenPlan?.() : onPickGoal?.(null)}><ArrowUpRight size={16} aria-hidden /></button>
+      </div>
+      <div className="w3-overview-plan">
+        {vm.hasPlan ? <>
+          <W3PlanPhaseProgress schedule={vm.planPhaseSchedule} index={vm.planWeekIndex} fallback={vm.planPhase} />
+        </> : <>
+          <span className="w3-overview-plan-label">NOCH KEIN PLAN</span>
+          <div className="w3-overview-plan-choices">
+            <button type="button" onClick={() => onPickGoal?.('ftp')}>FTP steigern</button>
+            <button type="button" onClick={() => onPickGoal?.('event')}>Event</button>
+            <button type="button" onClick={() => onPickGoal?.(null)}>Eigenes Ziel <ArrowUpRight size={13} aria-hidden /></button>
+          </div>
+        </>}
+      </div>
+    </section>}
+    </Fragment>)}
   </div>
 }
 
@@ -122,5 +150,5 @@ export default function W3TodayOverview(props: { vm: W3Vm } & Sections) {
     ftp: profile?.ftp_watts ?? null,
     ftpGoal: profile?.goals?.target_ftp ?? null,
   }
-  return <W3TodayOverviewView {...props} data={data} />
+  return <W3TodayOverviewView {...props} data={data} progressSummary={<W3ProgressCompact fallbackFtp={data.ftp}/>} />
 }

@@ -47,6 +47,7 @@ export interface MesoBlockContext {
   phase: string
   block_position: 'accumulation' | 'transmutation' | 'realization' | 'recovery'
   block_index_in_meso: number
+  phase_schedule?: string[] | null
   weekly_tss_target: number
   days_to_event: number | null
   target_event_type: string | null

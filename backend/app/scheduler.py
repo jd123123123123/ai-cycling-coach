@@ -89,6 +89,7 @@ async def run_hourly_plan_adaptation() -> None:
     never blocks the rest. Cheap when nothing changes — the engine fingerprints
     its signal snapshot and exits quietly on an unchanged hour."""
     from app.services.plan_adaptation_engine import run_for_user
+    from app.services.plan_absorption import absorb_new_activities
 
     adapted = 0
     failed = 0
@@ -104,6 +105,7 @@ async def run_hourly_plan_adaptation() -> None:
 
         for uid in user_ids:
             try:
+                await absorb_new_activities(db, uid)
                 result = await run_for_user(db, uid)
                 if result.get("changes"):
                     adapted += 1

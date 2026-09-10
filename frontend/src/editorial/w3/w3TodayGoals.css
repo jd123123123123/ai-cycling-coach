@@ -1,0 +1,42 @@
+.w3-goals-summary { width:100%; display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; color:var(--goal-ink); }
+.w3-goal-mini { min-width:0; }
+.w3-goal-mini-top { display:flex; align-items:center; gap:8px; margin-bottom:7px; }
+.w3-goal-mini-top > span { color:var(--goal-mid); font-size:11px; }
+.w3-goal-ring-small { width:52px; height:52px; flex:none; }
+.w3-goal-mini-title { font-size:13px; line-height:1.25; font-weight:600; margin-bottom:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.w3-goal-mini > strong { font-family:Archivo,sans-serif; font-size:21px; font-weight:600; letter-spacing:-.4px; }
+.w3-goal-mini strong small { color:var(--goal-mid); font-family:inherit; font-size:11px; font-weight:500; letter-spacing:0; }
+.w3-goal-target { display:block; color:var(--goal-mid); font-size:11px; margin-top:3px; }
+.w3-today-goals { color:var(--goal-ink); }
+.w3-goal-picker { display:flex; gap:7px; overflow-x:auto; scroll-snap-type:x proximity; scrollbar-width:none; padding-bottom:4px; margin-bottom:16px; }
+.w3-goal-picker button { flex:none; max-width:220px; overflow:hidden; text-overflow:ellipsis; border:0; padding:10px 13px; background:var(--goal-surface); color:var(--goal-mid); border-radius:16px; font-family:inherit; font-size:12px; font-weight:600; cursor:pointer; text-align:left; scroll-snap-align:start; }
+.w3-goal-picker button span { display:block; margin-top:3px; font-size:9px; opacity:.7; }
+.w3-goal-picker button[aria-pressed=true] { color:var(--goal-acid); background:var(--goal-acid-dim); }
+.w3-goal-hero { display:flex; align-items:center; gap:18px; }
+.w3-goal-ring { width:104px; height:104px; flex:none; }
+.w3-goal-hero-values { display:flex; flex-direction:column; gap:5px; min-width:0; }
+.w3-goal-hero-values > span { color:var(--goal-mid); font-size:12px; }
+.w3-goal-hero-values strong { font-family:Archivo,sans-serif; font-size:33px; font-weight:600; letter-spacing:-1px; }
+.w3-goal-hero-values strong small { font-size:13px; color:var(--goal-mid); font-weight:500; letter-spacing:0; }
+.w3-goal-milestones { display:flex; gap:3px; margin:18px 0 9px; }
+.w3-goal-milestones > span { flex:1; height:7px; border-radius:3px; overflow:hidden; }
+.w3-goal-remaining { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+.w3-goal-remaining strong { font-size:12px; font-weight:600; }
+.w3-goal-remaining > span { color:var(--goal-mid); font-size:10px; }
+.w3-goal-days { margin-top:22px; }
+.w3-goal-days-reading { display:flex; justify-content:space-between; gap:8px; font-size:11px; }
+.w3-goal-days-reading > span { color:var(--goal-mid); }
+.w3-goal-days-reading strong { font-weight:600; }
+.w3-goal-days svg { display:block; width:100%; margin-top:5px; touch-action:pan-y; }
+.w3-goal-days input { width:100%; margin:8px 0 0; height:12px; accent-color:var(--goal-acid); cursor:ew-resize; }
+.w3-goal-members { display:grid; gap:12px; margin-top:22px; }
+.w3-goal-members > div { display:grid; grid-template-columns:minmax(0,1fr) 1fr auto; align-items:center; gap:10px; font-size:11px; }
+.w3-goal-members > div > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.w3-goal-members > div > div { height:5px; border-radius:5px; overflow:hidden; background:var(--goal-rule); }
+.w3-goal-members i { display:block; height:100%; background:var(--goal-acid); }
+.w3-goal-members strong { font-size:11px; font-weight:600; }
+.w3-goal-manage { display:flex; align-items:center; justify-content:space-between; width:100%; background:none; color:var(--goal-mid); border:0; border-top:1px solid var(--goal-rule); padding:14px 0 0; margin-top:18px; font-family:inherit; font-size:12px; cursor:pointer; }
+.w3-goal-actions { display:flex; gap:7px; margin-top:16px; }
+.w3-goal-actions button { display:flex; gap:6px; align-items:center; border:0; border-radius:20px; padding:10px 12px; background:var(--goal-surface); color:var(--goal-ink); font-family:inherit; font-size:12px; cursor:pointer; }
+.w3-goal-empty { color:var(--goal-mid); font-size:12px; margin:12px 0; }
+.w3-today-goals button:focus-visible { outline:2px solid var(--goal-acid); outline-offset:2px; }

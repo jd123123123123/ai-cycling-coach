@@ -395,5 +395,8 @@ async def sync_user(
 
     credential.last_sync_at = datetime.now(timezone.utc)
     await db.commit()
+    if imported:
+        from app.services.plan_absorption import absorb_new_activities
+        await absorb_new_activities(db, user_id)
     logger.info("COROS sync for user_id=%s imported %d activities", user_id, imported)
     return {"workouts_imported": imported}

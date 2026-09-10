@@ -64,6 +64,7 @@ class MesoBlockContext(BaseModel):
     phase: str  # Friel phase
     block_position: str  # 'accumulation' | 'transmutation' | 'realization' | 'recovery'
     block_index_in_meso: int  # 0..3
+    phase_schedule: list[str] | None = None  # actual ordered generator phases, one per week
     weekly_tss_target: int
     days_to_event: int | None
     target_event_type: str | None

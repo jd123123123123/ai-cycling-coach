@@ -35,6 +35,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
+from app.models.athlete_profile import AthleteProfile
+from app.services.athlete_time import local_date_of, today_local, day_local_window, set_athlete_tz_from_profile
+from app.services.plan_stimulus_adaptation import decide_stimulus, adapt_stimulus, PROTECTED
 from app.models.coach_brief import CoachBrief
 from app.models.plan_adaptation import PlanAdaptation
 from app.models.planned_workout import PlannedWorkout
@@ -71,16 +74,24 @@ def _category_of(template_id: str | None) -> str | None:
 async def absorb_new_activities(
     db: AsyncSession, user_id: int, window_days: int = 3
 ) -> list[dict[str, Any]]:
-    """Detect + absorb recent unplanned/oversized rides. Returns absorption
+    """Review recent cycling load and stimulus, then adapt existing sessions.
+    Returns absorption
     records (also persisted as audit rows). Never raises — sync must survive."""
     try:
         return await _absorb(db, user_id, window_days)
     except Exception:  # noqa: BLE001 — absorption is best-effort by contract
+        try:
+            await db.rollback()
+        except Exception:
+            logger.warning("absorption rollback failed (user_id=%s)", user_id)
         logger.exception("plan absorption failed (user_id=%s) — non-fatal", user_id)
         return []
 
 
 async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict[str, Any]]:
+    # Serialize absorption for one athlete; duplicate syncs cannot both reflow.
+    profile = (await db.execute(select(AthleteProfile).where(AthleteProfile.user_id == user_id).with_for_update())).scalar_one_or_none()
+    set_athlete_tz_from_profile(profile)
     since = datetime.now(timezone.utc) - timedelta(days=window_days)
     acts = (
         await db.execute(
@@ -88,8 +99,9 @@ async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict
                 Activity.user_id == user_id,
                 Activity.sport == "cycling",
                 Activity.started_at >= since,
+                Activity.started_at <= datetime.now(timezone.utc),
                 Activity.tss.isnot(None),
-            )
+            ).order_by(Activity.started_at.asc())
         )
     ).scalars().all()
     if not acts:
@@ -127,16 +139,17 @@ async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict
     for act in acts:
         if act.id in absorbed_ids or act.started_at is None:
             continue
-        d = act.started_at.date()
+        d = local_date_of(act.started_at)
         plan_rows = (
             await db.execute(
                 select(PlannedWorkout).where(
-                    PlannedWorkout.user_id == user_id, PlannedWorkout.date == d
+                    PlannedWorkout.user_id == user_id, PlannedWorkout.date == d, PlannedWorkout.sport == "cycling"
                 )
             )
         ).scalars().all()
         planned_tss = sum(_tss_of(p.template_id) for p in plan_rows)
         actual = float(act.tss or 0.0)
+        review = None
 
         if not plan_rows or all(_is_rest(p.template_id) for p in plan_rows):
             kind = "unplanned"
@@ -145,9 +158,35 @@ async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict
         elif planned_tss > 0 and actual >= planned_tss * BIGGER_FACTOR:
             kind = "bigger"
         else:
-            continue
+            # Use the same original prescription and measured stream evidence
+            # as the rider-facing review; never compare to a post-ride re-pick.
+            if not getattr(act, 'duration_seconds', None):
+                continue
+            from app.services.training_review import load_review
+            review = await load_review(db, user_id, act)
+            if review.score is None:
+                continue  # incomplete streams can be revisited by a later sync
+            stimulus_kind = decide_stimulus(review)
+            kind = stimulus_kind or ('different_stimulus' if review.status in ('different','extra') else 'within_plan')
 
-        rebalance = await _rebalance_week(db, user_id, d, actual, planned_tss)
+        stimulus_changes = []
+        decision = None
+        if kind in ('unexpected_intensity', 'quality_replaced_by_endurance'):
+            future_rows = (await db.execute(select(PlannedWorkout).where(
+                PlannedWorkout.user_id == user_id,
+                PlannedWorkout.date >= d-timedelta(days=d.weekday()),
+                PlannedWorkout.date <= d+timedelta(days=6-d.weekday()),
+            ).with_for_update())).scalars().all()
+            allow_reflow = False
+            if kind == 'quality_replaced_by_endurance':
+                from app.services.adaptive_readiness import build_adaptive_directive
+                directive = await build_adaptive_directive(db, user_id, lang='de')
+                allow_reflow = directive.hrv_state in ('in','above') and directive.intensity_ceiling in ('push','hard') and directive.directive not in ('rest','deload','hold')
+            stimulus_changes, decision = adapt_stimulus(future_rows, ride_date=d, today=today_local(), kind=kind, readiness_allows_reflow=allow_reflow)
+
+        rebalance = await _rebalance_week(db, user_id, d, actual, planned_tss) if kind in ('bigger','unplanned') else None
+        if decision is None:
+            decision = {'state':'adapted' if rebalance else 'unchanged', 'reason': 'Die zusätzliche Belastung wurde automatisch in der verbleibenden Woche ausgeglichen.' if rebalance else 'Deine Fahrt ist berücksichtigt. Die verbleibende Woche passt; es kommt kein Nachholtraining hinzu.'}
         record = {
             "activity_id": act.id,
             "date": d.isoformat(),
@@ -155,6 +194,15 @@ async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict
             "actual_tss": round(actual),
             "planned_tss": round(planned_tss),
             "rebalance": rebalance,
+            "decision": decision,
+            "stimulus_changes": stimulus_changes,
+            "review_basis": ({
+                "prescribed_title": review.planned_title,
+                "power_coverage": review.coverage,
+                "planned_hard_seconds": sum(z.planned_seconds or 0 for z in review.zones[4:]),
+                "actual_hard_seconds": sum(z.actual_seconds or 0 for z in review.zones[4:]),
+                "rule_basis": "Recorded power-zone dose versus the pre-ride prescription; scheduling guardrail, not a measured adaptation.",
+            } if review else None),
         }
         db.add(
             CoachBrief(
@@ -168,23 +216,21 @@ async def _absorb(db: AsyncSession, user_id: int, window_days: int) -> list[dict
         # Feed row (plan-engine v2): every absorption is an athlete-visible
         # plan adaptation — no-guilt register, and durable dedup memory.
         msg_de, msg_en = _feed_messages(record)
-        await log_adaptation(
-            db,
-            user_id,
-            target_date=date.fromisoformat(rebalance["moved_date"]) if rebalance else d,
-            source="post_workout",
-            signal="extra_load" if rebalance else "session_done",
-            rule="absorb_and_replan",
-            message_de=msg_de,
-            message_en=msg_en,
-            before=(
-                {"template_id": rebalance["from"], "title": rebalance["from_title"]}
-                if rebalance else None
-            ),
-            after={"template_id": rebalance["to"]} if rebalance else None,
-            evidence={"absorption": record},
-            commit=False,
-        )
+        changes = stimulus_changes or ([{'before':{'date':rebalance['moved_date'], 'template_id':rebalance['from'], 'title':rebalance['from_title']}, 'after':{'date':rebalance['moved_date'], 'template_id':rebalance['to']}}] if rebalance else [])
+        for change in changes or [None]:
+            await log_adaptation(
+                db, user_id,
+                target_date=date.fromisoformat(change['after']['date']) if change else d,
+                source='post_workout',
+                signal='stimulus_substitution' if kind in ('unexpected_intensity','quality_replaced_by_endurance') else 'extra_load' if rebalance else 'session_done',
+                rule='absorb_and_replan',
+                message_de=decision['reason'] if kind in ('unexpected_intensity','quality_replaced_by_endurance','within_plan','different_stimulus') else msg_de,
+                message_en='Your recorded training is included automatically; the remaining week was reviewed.' if kind in ('unexpected_intensity','quality_replaced_by_endurance','within_plan','different_stimulus') else msg_en,
+                before=change['before'] if change else None,
+                after=change['after'] if change else None,
+                evidence={'absorption':record}, commit=False,
+            )
+        absorbed_ids.add(act.id)
         out.append(record)
 
     if out:
@@ -215,7 +261,7 @@ async def _rebalance_week(
     ).scalars().all()
     if not week_plans:
         return None
-    week_target = sum(_tss_of(p.template_id) for p in week_plans)
+    week_target = sum(_tss_of(p.template_id) for p in week_plans if getattr(p, 'sport', 'cycling') == 'cycling')
     if week_target <= 0:
         return None
 
@@ -223,8 +269,9 @@ async def _rebalance_week(
         await db.execute(
             select(Activity.tss).where(
                 Activity.user_id == user_id,
-                Activity.started_at >= datetime.combine(monday, time.min, tzinfo=timezone.utc),
-                Activity.started_at <= datetime.combine(ride_date, time.max, tzinfo=timezone.utc),
+                Activity.sport == "cycling",
+                Activity.started_at >= day_local_window(monday)[0],
+                Activity.started_at < day_local_window(max(ride_date, today_local()))[1],
                 Activity.tss.isnot(None),
             )
         )
@@ -233,7 +280,7 @@ async def _rebalance_week(
 
     remaining = [
         p for p in week_plans
-        if p.date > ride_date and not _is_rest(p.template_id)
+        if p.date > max(ride_date, today_local()) and getattr(p, 'sport', 'cycling') == 'cycling' and not _is_rest(p.template_id)
     ]
     remaining_tss = sum(_tss_of(p.template_id) for p in remaining)
     projected = banked + remaining_tss
@@ -244,7 +291,7 @@ async def _rebalance_week(
     # ever touching the week's key/quality session, and never re-ease a day
     # absorption already eased (one downgrade per day, one swap per ride —
     # the pre-cb0b702 death-spiral serially ate the biggest session).
-    fresh = [p for p in remaining if p.blocks_source != "coach_absorbed"]
+    fresh = [p for p in remaining if p.blocks_source not in PROTECTED]
     if not fresh:
         return None
     filler_pool = [
@@ -333,6 +380,8 @@ def _feed_messages(record: dict[str, Any]) -> tuple[str, str]:
 
 
 def _narrative(record: dict[str, Any]) -> str:
+    if record['kind'] not in ('unplanned','bigger'):
+        return f"Reviewed the {record['actual_tss']}-TSS ride on {record['date']} against its pre-ride prescription. " + record['decision']['reason']
     base = (
         f"Absorbed a {record['actual_tss']}-TSS "
         f"{'unplanned ride' if record['kind'] == 'unplanned' else 'bigger-than-planned ride'} "

@@ -613,6 +613,7 @@ export default function W3TodayPage() {
     const planWeeks = weeksToEv != null ? `${weeksToEv} Wochen` : ''
 
     return {
+      recoveryDate: new Intl.DateTimeFormat('en-CA', {timeZone:profile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),
       handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
       // Was 'Silber · Woche 6 von 16' — a tier and a season the app does not
       // model, invented under the handle of every rider. Replaced with the one
@@ -678,6 +679,12 @@ export default function W3TodayPage() {
 
       weekMeta,
       weekDays,
+      readinessAction: adaptive?.daily_decision?.verdict ?? null,
+      readinessDetails: adaptive?.daily_decision?.readiness ?? null,
+      planPhaseSchedule: meso?.phase_schedule ?? null,
+      planWeekIndex: meso?.block_index_in_meso ?? null,
+      planPhaseKey: meso?.block_position ?? null,
+      planPhase: meso ? blockName : null,
       weekBlockLabel,
       weekDoneChip,
       weekLoadLabel,
@@ -731,7 +738,7 @@ export default function W3TodayPage() {
       })(),
     }
   }, [
-    model, user, streak, adaptive, week, ftp, todayWeather, weekActs,
+    model, user, streak, adaptive, week, ftp, todayWeather, weekActs, profile,
     garage, garageLoading, wallet, chest,
     // Without these the memo never re-runs when the collection query lands, and
     // the hero would keep showing the empty state to a rider who owns a bike.

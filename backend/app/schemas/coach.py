@@ -47,9 +47,17 @@ class DailyDecisionPlanned(BaseModel):
     duration_minutes: int | None = None
 
 
+class ReadinessComponentRead(BaseModel):
+    name: str
+    score: float | None = None
+    weight: float
+
+
 class DailyDecisionReadiness(BaseModel):
     score: int | None = None
     tier: str | None = None  # 'rest' | 'easy' | 'moderate' | 'push'
+    components: list[ReadinessComponentRead] = Field(default_factory=list)
+    coverage: float | None = None
 
 
 class DailyDecision(BaseModel):

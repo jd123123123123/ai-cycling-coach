@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
 import { Gift, Star } from 'lucide-react'
 import { T, FONT, DASH } from './w3tokens'
 import W3ReadinessSpectrum from './W3ReadinessSpectrum'
+import W3MetricHistorySheet from './W3MetricHistorySheet'
+import type { RecoveryMetric } from './w3MetricHistory'
 
 /**
  * W3 · Today — THE DOCK. A 1:1 rebuild of the pen's `Today Stats Dock`
@@ -139,13 +141,17 @@ export interface W3DockVm {
   expand?: number
 }
 
-export default function W3TodayDock({ vm, onOpen }: {
+export default function W3TodayDock({ vm, onOpen, explanation, endDate, action }: {
+  endDate?: string
+  action?: string | null
   vm: W3DockVm
+  explanation?: ReactNode
   onOpen?: () => void
 }) {
   // Clamped here rather than at the call site: a scroll value that overshoots
   // would otherwise animate the panel past its own open state.
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [metric, setMetric] = useState<RecoveryMetric | null>(null)
   const open = vm.compact ? Number(detailsOpen) : Math.max(0, Math.min(1, vm.expand ?? 0))
   const reduce = useReducedMotion()
   const hue = vm.score != null ? scoreHue(vm.score) : T.heroOff
@@ -153,6 +159,7 @@ export default function W3TodayDock({ vm, onOpen }: {
 
   return (
     <div>
+    <div style={{background:T.heroDock,borderRadius:28,padding:`${12+open*4}px 16px`}}>
     <button
       onClick={vm.compact ? () => setDetailsOpen(!detailsOpen) : onOpen}
       aria-expanded={vm.compact ? detailsOpen : undefined}
@@ -162,7 +169,7 @@ export default function W3TodayDock({ vm, onOpen }: {
         background: T.heroDock, borderRadius: 28,
         // SMALLER WHEN CLOSED. 16 all round pushed the panel up into the back
         // wheel; it breathes out again as it opens.
-        padding: `${12 + open * 4}px 16px ${12 + open * 4}px`,
+        padding: 0,
         display: 'flex', flexDirection: 'column', gap: 10, fontFamily: FONT,
       }}>
 
@@ -229,6 +236,7 @@ export default function W3TodayDock({ vm, onOpen }: {
         </div>
       )}
 
+    </button>
       {/* ── the three overnight signals ── */}
       {/* THE WORKING BEHIND THE NUMBER, revealed by scrolling rather than by
           navigating. Height and opacity are driven together so the row grows
@@ -241,8 +249,9 @@ export default function W3TodayDock({ vm, onOpen }: {
         height: open * STAT_CARD_H, opacity: open, overflow: 'hidden',
         marginTop: open * 4, pointerEvents: open > 0.6 ? 'auto' : 'none',
       }}>
-        {vm.stats.map((s) => (
-          <div key={s.label} style={{
+        {vm.stats.map((s,i) => (
+          <button type="button" key={s.label} disabled={open<0.6 || !endDate} aria-label={`${s.label} Verlauf öffnen`} onClick={()=>setMetric((['hrv','rhr','sleep'] as const)[i])} style={{
+            border:0,textAlign:'left',fontFamily:FONT,cursor:'pointer',color:T.ink,
             flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column',
             gap: 7, padding: '11px 12px 10px', borderRadius: 16,
             background: T.heroDock, height: STAT_CARD_H,
@@ -283,11 +292,13 @@ export default function W3TodayDock({ vm, onOpen }: {
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>{s.note}</span>
             )}
-          </div>
+          </button>
         ))}
       </div>
       )}
-    </button>
+    </div>
+    {metric && endDate && <W3MetricHistorySheet initialMetric={metric} endDate={endDate} action={action} onClose={()=>setMetric(null)}/> }
+    {vm.compact && detailsOpen && explanation && <div style={{marginTop:8}}>{explanation}</div>}
     {vm.compact && detailsOpen && onOpen && <button type="button" onClick={onOpen} style={{ display: 'block', margin: '8px auto 0', padding: '8px 12px', background: 'none', border: 0, color: T.mid, fontFamily: FONT, fontSize: 12, cursor: 'pointer' }}>Alle Bereitschaftsdetails →</button>}
     </div>
   )

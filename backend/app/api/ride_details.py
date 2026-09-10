@@ -217,3 +217,17 @@ async def delete_photo(
     # orphaned ROW is a broken picture in the feed.
     ride_photos.remove(rel)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# Separate from the cached narrative: adaptation records may arrive after sync.
+from app.schemas.training_review import TrainingReview
+
+@router.get('/{activity_id}/training-review', response_model=TrainingReview)
+async def get_training_review(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> TrainingReview:
+    from app.services.training_review import load_review
+    activity = await _own_activity(db, activity_id, current_user.id)
+    return await load_review(db, current_user.id, activity)

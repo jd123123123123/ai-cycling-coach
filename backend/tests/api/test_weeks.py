@@ -174,6 +174,7 @@ class TestAuthenticatedHappyPath:
         data = resp.json()
         assert len(data["days"]) == 7
         assert data["preface"] != ""
+        assert data["meso_block"]["phase_schedule"] == ["accumulation", "transmutation", "realization", "recovery"]
         assert data["days"][0]["is_today"] is True
         # One-producer weekly planned TSS: present in the payload; None (never
         # a fabricated 0) when the mocked DB has no PlannedWorkout rows.
@@ -378,6 +379,7 @@ class TestWeekOffset:
         # This week is meso week index 1 (transmutation) with its own TSS target.
         assert data["meso_block"]["block_index_in_meso"] == 1
         assert data["meso_block"]["block_position"] == "transmutation"
+        assert data["meso_block"]["phase_schedule"][1] == "transmutation"
         assert data["meso_block"]["weekly_tss_target"] == meso.weekly_tss_targets[1]
 
     def test_offset_0_unchanged(self, client: TestClient):

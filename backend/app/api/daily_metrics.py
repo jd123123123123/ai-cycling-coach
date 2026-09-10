@@ -1,5 +1,6 @@
 """GET /daily-metrics endpoint — returns the authenticated user's daily metrics for a date range."""
 import logging
+from math import isfinite
 from datetime import date, datetime, time as dtime, timezone
 from typing import Annotated
 
@@ -82,6 +83,20 @@ def _enrich(m) -> DailyMetricRead:
             raw = json.loads(raw)
         except Exception:
             raw = {}
+
+    if not isinstance(raw, dict):
+        raw = {}
+    # hrv_status historically mixes nightly mean, five-minute peak and weekly
+    # mean. Preserve scoring compatibility; expose only comparable nights in
+    # the new history field. Provider and payload provenance must both agree.
+    hrv = raw.get('hrv')
+    summary = hrv.get('hrvSummary') if isinstance(hrv, dict) else None
+    if read.source == 'garmin' and isinstance(summary, dict):
+        nightly = summary.get('lastNightAvg')
+        measured_date = summary.get('calendarDate')
+        same_date = measured_date is None or (read.date is not None and measured_date == read.date.isoformat())
+        if same_date and isinstance(nightly, (int, float)) and not isinstance(nightly, bool) and isfinite(nightly) and nightly > 0:
+            read.hrv_nightly_mean = float(nightly)
 
     dto = ((raw.get("sleep") or {}).get("dailySleepDTO")) or {}
     if dto.get("sleepTimeSeconds"):

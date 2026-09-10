@@ -1,0 +1,27 @@
+.w3-readiness-effects { color:var(--re-ink); background:var(--re-bg); border-radius:20px; padding:12px 14px; }
+.w3-effects-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.w3-effects-heading h3 { margin:0; font-size:13px; line-height:1.2; font-weight:650; letter-spacing:-.3px; }
+.w3-effects-heading button,.w3-effect-close { border:0; display:grid; place-items:center; width:28px; height:28px; border-radius:50%; color:var(--re-mid); background:var(--re-surface); cursor:pointer; }
+.w3-effects-bubbles { display:flex; flex-wrap:wrap; gap:6px; }
+.w3-effects-group { display:contents; }
+.w3-effect-bubble { display:flex; align-items:center; gap:6px; border:1px solid var(--re-rule); padding:7px 10px; min-height:30px; border-radius:16px; font-family:inherit; font-size:11px; line-height:1.1; font-weight:600; color:var(--re-ink); background:transparent; cursor:pointer; transition:background .18s,border-color .18s; }
+.w3-effect-bubble[aria-pressed=true] { border-color:var(--effect); background:color-mix(in srgb,var(--effect) 16%,var(--re-bg)); }
+.w3-effect-bubble:hover { background:color-mix(in srgb,var(--effect) 16%,var(--re-bg)); }
+.w3-readiness-effects button:focus-visible { outline:2px solid var(--re-acid); outline-offset:3px; }
+.w3-effect-panel { overflow:hidden; }
+.w3-effect-panel-inner { position:relative; margin-top:12px; padding:14px; background:var(--re-surface); border-radius:14px; }
+.w3-effect-close { position:absolute; right:8px; top:8px; background:var(--re-bg); }
+.w3-effect-value { display:flex; gap:5px; align-items:center; margin-bottom:8px; }
+.w3-effect-value strong { font-family:Archivo,sans-serif; font-size:32px; line-height:1; font-weight:650; letter-spacing:-1px; }
+.w3-effect-value span { font-size:11px; color:var(--re-mid); }
+.w3-effect-value small { display:block; margin-top:2px; font-size:10px; }
+.w3-effect-panel h4 { font-size:12px; font-weight:650; margin:0 20px 5px 0; }
+.w3-effect-panel p { font-size:12px; line-height:1.45; color:var(--re-mid); margin:0; }
+.w3-effect-panel p+p { margin-top:8px; }
+.w3-effects-action { display:flex; align-items:flex-start; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid var(--re-rule); }
+.w3-effects-action svg { flex:none; color:var(--re-acid); margin-top:1px; }
+.w3-effects-action p,.w3-effects-empty { margin:0; font-size:12px; line-height:1.5; }
+.w3-effects-empty { color:var(--re-mid); }
+@media(prefers-reduced-motion:reduce) { .w3-effect-bubble { transition:none; } }
+
+.w3-effect-dot { width:5px; height:5px; border-radius:50%; background:var(--effect); flex:none; }

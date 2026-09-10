@@ -24,6 +24,8 @@ export interface DailyMetric {
   recorded_at: string         // ISO datetime
   sleep_score: number | null
   hrv_status: number | null
+  /** Verified Garmin overnight mean; never a 5-minute maximum or weekly average. */
+  hrv_nightly_mean?: number | null
   body_battery: number | null
   resting_hr: number | null
   stress_level: number | null

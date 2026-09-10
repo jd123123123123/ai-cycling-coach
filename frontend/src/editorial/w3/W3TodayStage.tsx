@@ -287,7 +287,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
 
   return (
     <div style={compact ? {
-      position: 'relative', height: 'calc(328px + env(safe-area-inset-top))', width: '100%', flex: 'none', overflow: 'hidden', background: floor, fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 'max(12px, env(safe-area-inset-top))',
+      position: 'relative', height: 'calc(460px + env(safe-area-inset-top))', width: '100%', flex: 'none', overflow: 'hidden', background: floor, fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 'max(12px, env(safe-area-inset-top))',
     } : fullBleed ? {
       position: 'absolute', inset: 0, overflow: 'hidden', background: floor,
       fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center',
@@ -358,7 +358,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
             the app's only always-available control moves when the rider
             moves, which is the thing a navigation system may never do. */}
         <W3NavMenu />
-        {!compact && <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />}
+        <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />
         {/* THE FLAME IS A DOOR NOW: tap → the forgiving-streak sheet
             (sick/injured/break pause instead of breaking — services/streak.py
             had this all along; the switch was stranded on the legacy app). */}
@@ -369,13 +369,8 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
             fontVariantNumeric: 'tabular-nums',
           }}>{vm.coinsDelta}</span>
         )}
-        {!compact && <W3StreakChip />}
-      </div>
-
-      {compact && <div style={{ position: 'absolute', top: 76, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, alignItems: 'center', zIndex: 2 }}>
-        <Chip icon={<Asterisk size={16} color={T.lilac} />} value={vm.coins ?? DASH} />
         <W3StreakChip />
-      </div>}
+      </div>
 
       {/* ── the rider: a bust in a lit circle, the name fused to its lower edge ── */}
       <motion.div
@@ -383,7 +378,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE }}
         style={{
-          position: 'relative', display: 'flex', flexDirection: compact ? 'row' : 'column',
+          position: 'relative', display: 'flex', flexDirection: 'column',
           alignItems: 'center', paddingTop: 8, flex: 'none',
           // ABOVE THE MACHINE, at the same level as the corner chips. This and
           // the bike were both zIndex 1, so DOM order decided and the bike —
@@ -397,22 +392,22 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           zIndex: 2,
         }}>
 
-        <div style={{ position: 'relative', width: compact ? 52 : AVATAR, height: compact ? 52 : AVATAR, display: 'grid', placeItems: 'center' }}>
+        <div style={{ position: 'relative', width: AVATAR, height: AVATAR, display: 'grid', placeItems: 'center' }}>
           {/* The glow is wider than the bust and sits behind it — it is the
               light the rider stands in, not a ring around them. */}
           <div aria-hidden style={{
-            position: 'absolute', width: compact ? 76 : GLOW, height: compact ? 76 : GLOW, borderRadius: '50%',
+            position: 'absolute', width: GLOW, height: GLOW, borderRadius: '50%',
             background: 'radial-gradient(circle, #FFFFFF14 0%, #FFFFFF08 50%, #FFFFFF00 100%)',
           }} />
           {vm.rider ? (
             <img src={vm.rider} alt="Dein Rider"
               style={{
-                position: 'relative', width: compact ? 52 : AVATAR, height: compact ? 52 : AVATAR, borderRadius: '50%',
+                position: 'relative', width: AVATAR, height: AVATAR, borderRadius: '50%',
                 objectFit: 'cover', display: 'block',
               }} />
           ) : (
             <div aria-label="Noch kein Rider" style={{
-              position: 'relative', width: compact ? 52 : AVATAR, height: compact ? 52 : AVATAR, borderRadius: '50%',
+              position: 'relative', width: AVATAR, height: AVATAR, borderRadius: '50%',
               display: 'grid', placeItems: 'center', background: '#FFFFFF08',
               border: `1.5px dashed ${T.acid}59`,
             }}>
@@ -424,18 +419,18 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
         {/* The handle pill overlaps the bust. That overlap is the whole trick —
             it makes the two read as one object. */}
         <div style={{
-          marginTop: compact ? 0 : HANDLE_OVERLAP, marginLeft: compact ? -4 : undefined, display: 'flex', alignItems: 'center', gap: 10,
-          height: compact ? 28 : 44, padding: compact ? '0 12px 0 4px' : '0 20px 0 6px', borderRadius: 100,
+          marginTop: HANDLE_OVERLAP, display: 'flex', alignItems: 'center', gap: 10,
+          height: 44, padding: '0 20px 0 6px', borderRadius: 100,
           background: T.acid, position: 'relative', maxWidth: '100%',
         }}>
           <span style={{
-            width: compact ? 22 : 32, height: compact ? 22 : 32, borderRadius: 100, background: T.heroBg,
+            width: 32, height: 32, borderRadius: 100, background: T.heroBg,
             display: 'grid', placeItems: 'center', flex: 'none',
           }}>
             <ChevronsUp size={17} color={T.acid} />
           </span>
           <span style={{
-            fontFamily: 'Archivo, "Inter Tight", sans-serif', fontSize: compact ? 16 : 22, fontWeight: 700,
+            fontFamily: 'Archivo, "Inter Tight", sans-serif', fontSize: 22, fontWeight: 700,
             color: T.heroInk, minWidth: 0, overflow: 'hidden',
             textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{vm.handle}</span>
@@ -443,7 +438,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
 
         {/* Null, not "—": a rider with no tier gets no pill at all rather than
             a badge with a dash in it. */}
-        {vm.role && !compact && (
+        {vm.role && (
           <span style={{
             marginTop: 10, height: 26, padding: '0 14px', borderRadius: 100,
             background: T.heroChip, display: 'grid', placeItems: 'center',

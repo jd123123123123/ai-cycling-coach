@@ -148,7 +148,7 @@ def _is_filler_endurance(row: Any, *, sunday: date) -> bool:
         _category_of(row.template_id) == "endurance"
         and row.date.weekday() != 6
         and row.date != sunday
-        and (row.blocks_source or "") not in PROTECTED_SOURCES
+        and (row.blocks_source or "") not in PROTECTED_SOURCES | {"coach_absorbed"}
     )
 
 
@@ -499,7 +499,7 @@ async def _rule_missed_key(db: AsyncSession, snap: _Snapshot) -> dict | None:
         fillers = [
             r for r in rows
             if _category_of(r.template_id) in ("endurance", "recovery")
-            and (r.blocks_source or "") not in PROTECTED_SOURCES
+            and (r.blocks_source or "") not in PROTECTED_SOURCES | {"coach_absorbed"}
         ]
         day_free = (
             bool(fillers)

@@ -885,8 +885,8 @@ function AdjustButton({ onOpen }: { onOpen: () => void }) {
 /** THE card: week selector + selected day's training + selected day's weather.
  *  Controlled — `selected` lives in W3TodayView, so the whole card is one
  *  pure function of the day you tapped. */
-export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChip, loadLabel, day, session, weather, onAdapt, embedded = false }: {
-  days: W3DayFull[]; selected: number; onSelect: (i: number) => void; embedded?: boolean
+export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChip, loadLabel, day, session, weather, onAdapt, embedded = false, detailsOnly = false }: {
+  days: W3DayFull[]; selected: number; onSelect: (i: number) => void; embedded?: boolean; detailsOnly?: boolean
   blockLabel: string; doneChip: string | null; loadLabel: string
   day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt
 }) {
@@ -898,6 +898,7 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
   const doneTss = Math.round(days.reduce((s, d) => s + (d.actual || 0), 0))
   const planTss = Math.round(days.reduce((s, d) => s + Math.max(d.actual, d.planned ?? 0), 0))
   const weekTss = planTss > 0 ? `${doneTss} VON ${planTss} TSS` : loadLabel
+  if (detailsOnly) return <DayTraining key={day.dateLabel} day={day} session={session} weather={weather} onAdapt={onAdapt} />
   // band(26), like every other band on Today. This one sat at 20 and was the
   // only section whose bottom gap did not match its neighbours — the eye reads
   // that inconsistency as a mistake long before it can name it.

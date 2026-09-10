@@ -9,6 +9,7 @@ import { readinessFreshness, withholdReadiness } from '../../utils/readinessGate
 import type { DailyMetric } from '../../api/dashboard'
 import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon, type SleepStage } from './W3ReadinessView'
 import { T } from './w3tokens'
+import W3ReadinessExplanation from './W3ReadinessExplanation'
 
 /**
  * W3 · READINESS, wired to real data. Route /e/w3-readiness.
@@ -206,7 +207,7 @@ export default function W3ReadinessPage() {
 
     const vo2 = num(latest?.vo2max ?? null) != null ? `${Math.round(latest!.vo2max as number)}` : null
 
-    return { score, word, tierLabel, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, context, limiterNote, sleep, recovery, fitness, vo2 }
+    return { explanation: <W3ReadinessExplanation report={adaptive?.daily_decision?.readiness} score={score} action={adaptive?.daily_decision?.verdict} />, score, word, tierLabel, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, context, limiterNote, sleep, recovery, fitness, vo2 }
   }, [metricsResp, snapshot, adaptive, pmc])
 
   return <W3ReadinessView vm={vm} onBack={() => navigate(-1)} />

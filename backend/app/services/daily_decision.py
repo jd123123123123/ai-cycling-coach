@@ -399,6 +399,8 @@ async def _readiness_summary(db: AsyncSession, user_id: int) -> DailyDecisionRea
         return DailyDecisionReadiness(
             score=int(round(score)) if score is not None else None,
             tier=report.ceiling,
+            components=[{"name": c.name, "score": c.score, "weight": c.weight} for c in report.components],
+            coverage=report.coverage,
         )
     except Exception:  # pragma: no cover
         return DailyDecisionReadiness()

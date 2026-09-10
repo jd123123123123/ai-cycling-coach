@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react'
+import { type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Activity, HeartPulse, Moon, BatteryCharging, Waves, Timer, Wind, TrendingUp, Sparkles } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
@@ -19,6 +19,7 @@ export type DriverIcon = 'hrv' | 'rhr' | 'sleep' | 'battery' | 'stress' | 'recov
 export interface DriverVm { icon: DriverIcon; label: string; value: string; unit: string; delta: string | null; deltaGood: boolean | null; frac: number; spark: number[] }
 export interface SleepStage { label: string; frac: number; hue: string }
 export interface W3ReadinessVm {
+  explanation?: ReactNode
   score: number | null
   word: string | null
   tierLabel: string | null
@@ -147,6 +148,7 @@ export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & 
           </div>
         </div>
 
+        {vm.explanation && <div style={band(16)}>{vm.explanation}</div>}
         {/* Drivers */}
         <Sec title="Was es treibt" sub="Deine Signale gegen den 7-Tage-Schnitt" />
         <div style={{ ...band(26), gap: 8 }}>

@@ -1,0 +1,9 @@
+.w3-compact-progress { width:100%; }
+.w3-compact-performance { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.w3-compact-performance>div>span { color:#9ba0a6; font-size:11px; }
+.w3-compact-performance strong { display:flex; align-items:baseline; gap:5px; color:#fff; font-family:Archivo,'Inter Tight',sans-serif; font-size:29px; font-weight:600; letter-spacing:-1px; line-height:1.4; font-variant-numeric:tabular-nums; }
+.w3-compact-performance strong small { font-family:'Inter Tight',sans-serif; font-size:10px; font-weight:500; letter-spacing:0; color:#9ba0a6; }
+.w3-compact-record { display:flex; justify-content:space-between; gap:8px; padding-top:10px; margin-top:10px; border-top:1px solid #ffffff0a; font-size:11px; color:#9ba0a6; }
+.w3-compact-record>span:first-child { color:#fff; font-weight:600; }
+.w3-compact-record strong { font-weight:400; }
+.w3-compact-record b { margin-left:6px; color:#fff; font-weight:600; }

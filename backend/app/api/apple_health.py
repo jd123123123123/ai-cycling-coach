@@ -180,4 +180,7 @@ async def sync(
             continue
 
     await db.commit()
+    if imported:
+        from app.services.plan_absorption import absorb_new_activities
+        await absorb_new_activities(db, current_user.id)
     return {"workouts_imported": imported, "days_updated": days, "source": "apple_health"}

@@ -31,6 +31,8 @@ class DailyMetricRead(BaseModel):
     recorded_at: datetime
     sleep_score: int | None
     hrv_status: float | None
+    # Comparable overnight mean only; enriched from original Garmin evidence.
+    hrv_nightly_mean: float | None = None
     body_battery: int | None
     resting_hr: int | None
     stress_level: int | None
