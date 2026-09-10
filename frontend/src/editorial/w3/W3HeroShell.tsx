@@ -100,6 +100,7 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
   const [host, setHost] = useState<HTMLElement | null>(null)
   // The machine is the door to its own garage — from every room screen, and
   // not from the garage itself, where the tap would be a loop.
+  const compact = pathname === '/e/w3-today'
   const onGarage = pathname.startsWith('/e/w3-garage') ? undefined : () => nav('/e/w3-garage')
 
   return (
@@ -109,22 +110,22 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
           <div style={{
             position: 'relative',
-            height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+            height: compact ? 'auto' : 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
             display: 'flex', flexDirection: 'column',
             background: ground ?? T.heroBg,
           }}>
-            <W3StatusBar />
+            {!compact && <W3StatusBar />}
 
             {/* MOUNTED ONCE. No key on this — a key here would be the whole
                 point thrown away, because React would unmount the stage and the
                 bike would flash on every navigation. */}
-            <W3TodayStage fullBleed vm={{ ...vm, onTapBike: onGarage }} />
+            <W3TodayStage fullBleed={!compact} compact={compact} vm={{ ...vm, onTapBike: onGarage }} />
 
             <div style={{
               position: 'relative', zIndex: 2, marginTop: 'auto',
               // The bike stands on a floor line at 76 % of the stage; a panel
               // starting higher cuts across the machine beside it.
-              padding: '10px 16px 18px', flex: 'none',
+              padding: compact ? '0 16px 8px' : '10px 16px 18px', flex: 'none',
             }}
               // The landing site for whatever the current screen portals in.
               ref={setHost} />

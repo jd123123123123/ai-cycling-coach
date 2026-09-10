@@ -55,5 +55,5 @@ export function metricTrend(key: 'ctl' | 'atl' | 'tsb', delta: number | null): s
   if (Math.abs(delta) < 0.05) return 'Stabil'
   if (key === 'ctl') return delta > 0 ? 'Aufbau' : 'Entlastung'
   if (key === 'atl') return delta > 0 ? 'Trainingsreiz' : 'Erholung'
-  return delta > 0 ? 'Frischer' : 'Im Aufbau'
+  return delta > 0 ? 'Frischer' : 'Sinkend'
 }

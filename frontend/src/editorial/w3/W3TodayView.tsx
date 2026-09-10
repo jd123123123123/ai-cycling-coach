@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { WeekTrainingCard, WeekNavCards, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
-import { T, FONT, DASH, Reveal, band } from './w3tokens'
+import { T, FONT, DASH, band } from './w3tokens'
 import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
 import { useGroundColour } from './useGroundColour'
@@ -10,14 +10,10 @@ import W3PickGoalCard from './W3PickGoalCard'
 import W3TodayComposer from './W3TodayComposer'
 import W3RideChest from './W3RideChest'
 import W3WrappedBolt from './W3WrappedBolt'
-import W3StatusBar from './W3StatusBar'
 import W3TabBar from './W3TabBar'
 import { useHeroPanel, useStageGround } from './W3HeroShell'
-import { useDockOpenness } from './useDockOpenness'
 import W3RecoveryNudge from './W3RecoveryNudge'
-import W3ReadinessDecision from './W3ReadinessDecision'
 import W3FormProjection from './W3FormProjection'
-import { useReadinessDecision } from '../../hooks/useReadinessDecision'
 import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3FormCard from './W3FormCard'
@@ -25,7 +21,9 @@ import W3TodayProgress from './W3TodayProgress'
 import W3TodayRank from './W3TodayRank'
 import W3CrewFeed from './W3CrewFeed'
 import W3WeekRecapCard from './W3WeekRecapCard'
+import W3TodayOverview from './W3TodayOverview'
 import './w3.css'
+import './w3todayOverview.css'
 
 export type { W3DayFull, W3Weather, W3Block, OnAdapt, AdaptResult } from './W3Sections'
 
@@ -209,11 +207,6 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
   onOpenWrapped?: () => void
 }) {
   const navigate = useNavigate()
-  // Today's session, the session the plan held before this morning's numbers
-  // were applied, and the one measurement that moved it. Its own query rather
-  // than a field on `vm`: the card renders nothing until it lands and never a
-  // placeholder verdict, so nothing above it has to wait for it.
-  const readinessDecision = useReadinessDecision()
   // The colour the stage picture ends in. Everything the hero touches — the
   // first screen, the section under it, the frame behind both — continues in
   // it, so the app reads as one room rather than as a picture pasted onto a
@@ -228,18 +221,12 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
   // How far the picture's last colour is from the app's own, 0..1 over the
   // range where a hard edge would actually be visible. Below ~2 levels nobody
   // can see a step, so nothing is spent hiding one.
-  const fadeH = fadeRunway(ground, T.bg)
-  // How far the readiness panel is open, from the page's own scroll.
-  const openness = useDockOpenness()
+  const fadeH = Math.min(24, fadeRunway(ground, T.bg))
   // The week strip and the training card share ONE selection: tapping a day
   // drives which recommendation the card shows. Defaults to today.
   const todayIdx = Math.max(0, vm.weekDays.findIndex((d) => d.status === 'today'))
   const [selDay, setSelDay] = useState(todayIdx)
   const selectedDay = vm.weekDays[selDay] ?? vm.weekDays[todayIdx]
-  // Does the PLAN prescribe rest today? `status` can't answer this — it is
-  // 'today' for today whatever the day type is — so read the day's own `rest`.
-  const todayIsRest = vm.weekDays[todayIdx]?.rest === true
-
   // ── THE ROOM IS THE SHELL'S, NOT THIS PAGE'S ────────────────────────
   // The stage used to be rendered here, which meant navigating away tore it
   // down and rebuilt it: the rider watched their own machine flash out and
@@ -293,297 +280,42 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
                 // live below the fold — see `W3DockVm.showStats`.
                 // Not hidden — FOLDED. The row is in the panel and opens with
                 // the scroll; see `W3DockVm.expand`.
-                showStats: true,
-                expand: openness,
+                showStats: false,
+                expand: 0,
+                compact: true,
+                planLabel: vm.weekDays[todayIdx]?.rest ? 'Heute Ruhetag' : vm.weekDays[todayIdx]?.title ?? null,
               }}
               onOpen={() => navigate('/e/w3-readiness')} />
   )
   const { inShell, portal } = useHeroPanel(dock)
 
   const content = (
-    <>
-        {/* The overnight signals used to live here as their own band. They are
-            inside the readiness panel now, opened by scrolling — which removes
-            a whole surface from the screen, and with it the second place where
-            a background colour had to stop. */}
-
-        {/* THE ONE TRANSITION IN THE SCREEN.
-            The stage's ground colour used to stop at the bottom of the first
-            screen and the page resumed in flat black — a second hard line,
-            directly below the horizon line that belongs there. A colour that
-            ENDS is always an edge; a colour that runs out is not. This band
-            carries the sampled ground into the app's own black over 180px, so
-            the eye reads one continuous room rather than three stacked
-            surfaces. It draws nothing and holds nothing — it is only the
-            distance the two colours need to meet in. */}
-        <div aria-hidden style={{
-          // THE BAND IS AS LONG AS THE TWO COLOURS ARE APART, and no longer.
-          //
-          // It was a flat 180 px because the stage plate used to end far lighter
-          // than the app — #32353F against #0B0B0B — and a step that size needs
-          // real distance to run out in. The plate now ends at #080A0B, three
-          // levels off the app's own black, so that same 180 px was fading black
-          // into black: 110 px of dead screen between the hero and the first
-          // thing the coach says, guarding against a step that no longer exists.
-          //
-          // Measuring it means this cannot go stale in either direction. Re-render
-          // the plate lighter and the runway comes back on its own; keep it dark
-          // and the page closes up. `marginBottom` scales with it so the
-          // content still begins INSIDE the tail rather than after it.
-          height: fadeH, flex: 'none',
-          marginBottom: -Math.round(fadeH * 0.39),
-          background: `linear-gradient(180deg, ${ground ?? T.heroBg} 0%, ${T.bg} 100%)`,
-        }} />
-
-        {/* THE WEEK'S BOLT. This lived only in the non-shell branch below,
-            which no live route renders — so the once-a-week wrapped invitation
-            never appeared for anybody. Same rule as there: never beside the
-            sealed chest; one glowing offer per screen. */}
-        {!vm.chest?.sealed && onOpenWrapped && (
-          <div style={{ ...band(0), paddingTop: 6 }}>
-            <W3WrappedBolt onOpen={onOpenWrapped} />
-          </div>
-        )}
-
-        {/* ── Hero: readiness + charge meter ──
-             The card is `W3ScoreCard` now — the same element grades a finished
-             ride's execution score. Everything it prints is passed in from real
-             data; it owns no copy of its own.
-
-             REST-DAY RECONCILIATION: a 76 next to "Bereit" on a day the plan
-             prescribes rest reads as a contradiction the rider has to solve.
-             Both facts are true — readiness measures the BODY, the plan decides
-             the DAY — so the card says so instead of hiding the number. The
-             rest flag comes from `day.rest` (the plan's day TYPE), never from
-             `status`, which is 'today' whatever kind of day it is. ── */}
-        {/* band(26) — every content band on Today now shares one bottom gap. */}
-        {/* ── What the number MEANS ───────────────────────────────────────
-             `W3ScoreCard` used to open this section with the readiness score, a
-             second time. The hero panel answers "how am I today" — a card
-             repeating it 300px later is the app saying the same thing twice and
-             trusting neither telling. It is gone from Today; it still grades a
-             finished ride's execution elsewhere, which is what it is for.
-             The delta and the multiplier caption it carried are not lost: they
-             belong to the score, so they live with the score, in the panel.
-
-             What follows the hero is the next question, not the same one: the
-             coach's own sentence about what that number is asking of today.
-
-             ONE THING FROM THAT CARD IS KEPT, because it resolves a real
-             contradiction rather than decorating one: on a rest day a high
-             readiness next to "Ruhetag" reads as the app arguing with itself.
-             Both are true — readiness measures the BODY, the plan decides the
-             DAY — so it is said out loud here instead of leaving the rider to
-             reconcile it. ── */}
-        {/* ── THE KI-COACH IS GONE FROM TODAY ───────────────────────────
-             It said what this screen already says. The hero panel answers
-             "how am I today" with the readiness figure and its verdict word;
-             the coach card restated that figure in a sentence, and its
-             reasoning restated the HRV, resting-pulse and sleep tiles that sit
-             further down with their own deltas and sparklines. Three tellings
-             of the same numbers on one screen.
-
-             The reasoning is not lost: `W3WhyButton` on the session header
-             opens the same explanation, which is where a rider goes when they
-             want the argument rather than the answer.
-
-             THE REST-DAY LINE SURVIVES, and it is not coach output. A high
-             readiness beside "Ruhetag" reads as the app arguing with itself —
-             both are true, readiness measures the BODY and the plan decides
-             the DAY — so the screen reconciles its own two numbers rather than
-             leaving a rider to do it. That was kept once already when the rest
-             of the card was trimmed; removing it now would drop a fix that had
-             nothing to do with the coach. ── */}
-        {vm.hasPlan && todayIsRest && vm.readiness != null && (
-          <div style={{ ...band(26) }}>
-            <span style={{ fontSize: 13, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>
-              Ruhetag — die {vm.readiness} beschreibt deinen Körper, nicht den Plan.
-              Heute wird die Erholung angelegt, nicht ausgegeben.
-            </span>
-          </div>
-        )}
-
-        {/* ── "Deine Schwelle hat sich bewegt" ───────────────────────────
-             Above the recovery nudge, and only because it needs an ANSWER:
-             everything else on this screen is read, this one is pressed. It
-             renders nothing on the days there is no evidence, which is nearly
-             all of them. FTP is the unit every other number here is measured
-             in, so the engine asks rather than writing it. ── */}
-        <W3ThresholdProposal />
-
-        {/* ── Recovery nudge: the real "Erholungssignal / Gute Erholung" morning
-             signal (HRV/sleep/RHR vs baseline), replacing the long coach text ── */}
-        <W3RecoveryNudge />
-
-        {/* ── THE DAY'S ANSWER, AND WHAT IT COST ─────────────────────────
-             Four independent reviewers opened this screen and none of them
-             could find out whether they were riding today without scrolling
-             past the bike: the instruction lived a full screen below the
-             number that caused it. The verdict is the headline here and the
-             score is the evidence under it.
-
-             The line that matters is the second one. A wearable can score your
-             night; it cannot show you the session that score took off your
-             calendar, because it does not own your plan. This card can, and it
-             prints it only on the days something actually changed.
-
-             Next to the health nudge above on purpose, not merged with it:
-             that one is a rare alert about overnight vitals (SpO₂, breathing)
-             and this is the daily training decision. Different jobs. ── */}
-        <Reveal><W3ReadinessDecision decision={readinessDecision.data} /></Reveal>
-
-        {/* ── The signals are IN the panel now ────────────────────────────
-             Three cards printed HRV, resting pulse and sleep here — the same
-             three numbers the hero panel reveals when the rider scrolls. Their
-             one advantage was the trend line under each value, so that line
-             moved INTO the panel rather than being deleted: opening it now
-             gives the evidence, not a repeat. Today asks its question once. ── */}
-
-        {/* ── Deine Woche — ONE card: the day selector, the SELECTED day's
-             training (plan / adapt / planned-vs-done), and that day's weather.
-             Tapping a day drives everything below the strip inside the card. ── */}
-        {/* ── THE SESSION SLOT, AND WHO IS ALLOWED TO FILL IT ─────────────
-             With a plan, this is the week: the day strip, the prescribed
-             session and that day's weather, all of it the plan talking.
-
-             Without a plan there is no prescription, and the app had two bad
-             options — invent a session and dress it as coaching, or print
-             "Deine Woche" over seven empty days. The first is the worse one: a
-             rider who believes they are already being coached never goes and
-             switches coaching on.
-
-             So the slot changes its job rather than its contents. What is left
-             is the one fact Today still genuinely has (when it is worth going
-             out) and one question only the rider can answer (what they feel
-             like), which composes into a real, savable, exportable workout.
-             See `W3TodayComposer`. ── */}
-        {vm.hasPlan ? (
-          <WeekTrainingCard
+    <div className="w3-today-content">
+      <div aria-hidden style={{ height: fadeH, marginBottom: -fadeH, pointerEvents: 'none', background: `linear-gradient(180deg, ${ground ?? T.heroBg}, ${T.bg})` }} />
+      <W3ThresholdProposal />
+      <W3RecoveryNudge />
+      <W3TodayOverview vm={vm}
+        week={<>
+          {vm.hasPlan ? <WeekTrainingCard
             days={vm.weekDays} selected={selDay} onSelect={setSelDay}
             blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
             day={selectedDay}
-            session={{
-              dur: vm.sessionDur,
-              // The card follows the selected day: its own real power profile when
-              // it has one (today, or a set future day), else today's bars.
-              blocks: selectedDay.blocks && selectedDay.blocks.length > 0 ? selectedDay.blocks : vm.sessionBlocks,
-              ftpTag: vm.sessionFtpTag,
-              earn: vm.sessionEarn,
-            }}
-            weather={vm.weather}
-            onAdapt={onAdapt} />
-        ) : (
-          <>
-            <TodayWeatherCard weather={vm.weather} />
-            <W3TodayComposer readiness={vm.readiness} />
-          </>
-        )}
-
-        {/* "Warum diese Einheit?" is no longer a section here. It moved to the
-             (i) ON the session header, several screens up — the answer now sits
-             beside the question instead of below the fold. See `W3WhyButton`. */}
-
-        {/* The "Empfohlene Route" card stood here. Removed 2026-08-25: it
-            answered a question Today does not ask. The screen's job is what to
-            do and whether the body is up to it; WHERE to ride is a decision a
-            rider makes with a map, and a single suggested loop under the
-            session read as the app filling space it had. W3RouteCard still
-            exists and is still mounted by W3NitroPreview. */}
-
-        {/* ── Wo du stehst — fitness, fatigue and form as one reading. Below
-             the day and the road, because it is the slow story: it answers
-             "is the block working", which is a question about six weeks, not
-             about this morning. ── */}
-        <Reveal><W3FormCard /></Reveal>
-
-        {/* ── WHERE IT IS GOING, AND BY WHOSE MODEL ──────────────────────
-             The card above answers "where am I now" and explains it in a
-             sentence — a rider who pays for intervals.icu said that sentence
-             was the best thing on this screen and the one thing his tools do
-             not give him. This one answers the next question, and it is the
-             one no competitor can answer at all: intervals.icu, TrainingPeaks
-             and Strava all decay every human being's fitness at 42 days and
-             fatigue at 7. This projects the rider's OWN fitted constants, puts
-             the 42/7 answer beside it as a ghost so the disagreement is seen
-             rather than claimed, and falls back to the population numbers —
-             saying so — whenever the individual fit is not honestly better. ── */}
-        <Reveal><W3FormProjection /></Reveal>
-
-        {/* ── The bike's own errand, when it has one. Below the training and
-             above the navigation on purpose: it is a real job with a real
-             payout, so it outranks a link to the plan — and it is never more
-             urgent than today's session, so it never outranks that. Renders
-             nothing on the great majority of days. ── */}
-        <W3WorkshopNudge />
-
-        {/* ── Navigation, not week content: the season goal + the whole plan ── */}
-        {/* Navigation, not week content — but only when there is a plan to
-            navigate INTO. Without one the slot asks for the goal instead of
-            linking to an empty one.
-
-            THE KEY TRAVELS NOW, in the no-plan branch. `W3PickGoalCard` has
-            always passed which of the three the rider tapped, and this call
-            site threw it away and sent all three to the same dossier — a card
-            offering three choices with one outcome. */}
-        {vm.hasPlan
-          ? (
-            <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks}
-              onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
-          )
-          : <W3PickGoalCard onPick={(key) => navigate(`/e/w3-goal-set?intent=${key}`)} />}
-
-
-        {/* ── The lower half arrives as you reach it ─────────────────────────
-             These four sections are the long tail of the scroll, and a long
-             tail that is entirely static reads as a list rather than a page.
-             Each lifts and fades ONCE as its top edge arrives (see `Reveal`).
-
-             Wrapped HERE rather than inside each component on purpose: each of
-             these owns its own `band(26)` root, and the reveal is a property of
-             how Today composes them, not of what they are — W3TodayProgress
-             renders the same on its own preview route without inheriting a
-             scroll behaviour it never asked for. ── */}
-
-        {/* ── Dein aktueller Status — the real 90-day CTL/ATL curve on a proper
-             axis, what the number MEANS (peak / "so fit wie zuletzt am …" /
-             the 4-week move), the form band, and the server's own forward
-             projection. Self-fetching (usePMC + /weeks + /coach/trajectory),
-             like W3WhyToday and W3TodayProgress. ── */}
-        {/* `W3TodayStatus` used to draw the 90-day fitness/fatigue series here.
-             Its reading now lives INSIDE "Wo du stehst" — a CTL of 77 climbing
-             out of 60 and a CTL of 77 sliding down from 90 are opposite
-             situations wearing the same number, so the figure and the curve
-             belong to one card rather than to two places on one page. */}
-
-        {/* ── Dein Rang — REAL crew standings (GET /crews/me/standings). The old
-             fixture leaderboard and its invented "um die Welt" challenge are
-             gone; no crew now renders an honest empty state. ── */}
-        <Reveal><W3TodayRank /></Reveal>
-
-        {/* ── Deine Crew fährt — the same crew, one question later. The rank
-             card says where the rider STANDS in it; this says what the people
-             in it actually did, and gives them somewhere to answer. Directly
-             below on purpose: a standings table is a scoreboard, and a
-             scoreboard without the riders on it is the thinnest possible
-             version of belonging to a crew.
-
-             It renders nothing without a crew — the invitation to join one is
-             the card immediately above, and saying it twice is filler. ── */}
-        <Reveal><W3CrewFeed /></Reveal>
-
-        {/* ── Your progress: real fitness goals (FTP/VO2max/20-min) + challenges ── */}
-        <Reveal><W3TodayProgress /></Reveal>
-
-        {/* ── Letzte Woche — LAST, and that is the point. Today is a page about
-             today: what the body says, what the session is, where to ride it,
-             where the block has got you. Last week is the one section on it
-             that is about a week that has already ended, so it belongs after
-             everything still in play rather than in the middle interrupting
-             them. It renders nothing when last week held no story. ── */}
-        <Reveal><W3WeekRecapCard /></Reveal>
-
-
-    </>
+            session={{ dur: vm.sessionDur, blocks: selectedDay?.blocks?.length ? selectedDay.blocks : vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
+            weather={vm.weather} onAdapt={onAdapt}
+          /> : <><TodayWeatherCard weather={vm.weather} /><W3TodayComposer readiness={vm.readiness} /></>}
+          <W3WeekRecapCard />
+          {!vm.chest?.sealed && onOpenWrapped && <div style={band(0)}><W3WrappedBolt onOpen={onOpenWrapped} /></div>}
+        </>}
+        form={<><W3FormCard embedded /><details className="w3-long-projection"><summary>Langfristige Projektion</summary><W3FormProjection /></details></>}
+        crew={<><W3TodayRank /><W3CrewFeed /></>}
+        goals={<>
+          {vm.hasPlan
+            ? <WeekNavCards goal={vm.weekGoal} planWeeks={vm.planWeeks} onGoal={() => navigate('/e/w3-goal')} onPlan={() => navigate('/e/w3-plan')} />
+            : <W3PickGoalCard onPick={key => navigate(`/e/w3-goal-set?intent=${key}`)} />}
+          <W3TodayProgress /><W3WorkshopNudge />
+        </>}
+      />
+    </div>
   )
 
   if (inShell) return <>{portal}{content}</>
@@ -593,13 +325,12 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
         <div style={{
           position: 'relative',
-          height: 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+          height: 'auto',
           display: 'flex', flexDirection: 'column',
           background: ground ?? T.heroBg,
         }}>
-          <W3StatusBar />
           <W3TodayStage
-            fullBleed
+            compact
             vm={{
               handle: vm.handle,
               role: vm.tierLine,
@@ -622,20 +353,11 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
             }} />
           <div style={{
             position: 'relative', zIndex: 2, marginTop: 'auto',
-            padding: '10px 16px 18px', flex: 'none',
+            padding: '0 16px 8px', flex: 'none',
           }}>
             {dock}
           </div>
         </div>
-        {/* THE WEEK'S BOLT, above the day's content but never beside the chest.
-            An unclaimed ride is a more urgent invitation than last week's
-            recap, and two glowing offers on one screen means the rider reads
-            neither — so this waits until the chest is empty. */}
-        {!vm.chest?.sealed && onOpenWrapped && (
-          <div style={{ paddingBottom: 18 }}>
-            <W3WrappedBolt onOpen={onOpenWrapped} />
-          </div>
-        )}
         {content}
         <W3TabBar />
       </div>

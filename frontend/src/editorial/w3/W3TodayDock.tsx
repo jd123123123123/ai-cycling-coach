@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
-import { motion, useReducedMotion } from 'motion/react'
+import { useReducedMotion } from 'motion/react'
 import { Gift, Star } from 'lucide-react'
-import { T, FONT, EASE, DASH } from './w3tokens'
+import { T, FONT, DASH } from './w3tokens'
+import W3ReadinessSpectrum from './W3ReadinessSpectrum'
 
 /**
  * W3 · Today — THE DOCK. A 1:1 rebuild of the pen's `Today Stats Dock`
@@ -30,7 +31,6 @@ import { T, FONT, EASE, DASH } from './w3tokens'
  */
 
 /** The pen's meter: 22 segments, 3px apart, 10 tall, radius 2. */
-const SEGMENTS = 22
 
 const ARCHIVO = 'Archivo, "Inter Tight", sans-serif'
 
@@ -134,6 +134,8 @@ export interface W3DockVm {
    * overnight signals INTO the panel removes the surface, and scrolling
    * becomes the gesture that asks "why 88" instead of a jump to another card.
    */
+  compact?: boolean
+  planLabel?: string | null
   expand?: number
 }
 
@@ -147,7 +149,6 @@ export default function W3TodayDock({ vm, onOpen }: {
   const reduce = useReducedMotion()
   const hue = vm.score != null ? scoreHue(vm.score) : T.heroOff
   const shown = useCountUp(vm.score ?? 0, reduce)
-  const filled = vm.score != null ? Math.round((vm.score / 100) * SEGMENTS) : 0
 
   return (
     <button
@@ -166,12 +167,12 @@ export default function W3TodayDock({ vm, onOpen }: {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, width: '100%', minWidth: 0 }}>
         {vm.score != null ? (
           <span style={{
-            fontFamily: ARCHIVO, fontSize: 44, fontWeight: 700, lineHeight: 0.86,
+            fontFamily: ARCHIVO, fontSize: vm.compact ? 36 : 44, fontWeight: 700, lineHeight: 0.86,
             color: hue, fontVariantNumeric: 'tabular-nums', flex: 'none',
           }}>{shown}</span>
         ) : (
           <span style={{
-            fontFamily: ARCHIVO, fontSize: 44, fontWeight: 700, lineHeight: 0.86,
+            fontFamily: ARCHIVO, fontSize: vm.compact ? 36 : 44, fontWeight: 700, lineHeight: 0.86,
             color: T.heroOff, flex: 'none',
           }}>{DASH}</span>
         )}
@@ -191,7 +192,7 @@ export default function W3TodayDock({ vm, onOpen }: {
           {/* Trend beats snapshot for a daily ritual: the same score means a
               different morning after a 78 than after a 52. Quiet on purpose —
               the sign carries the direction, no second colour needed. */}
-          {vm.score != null && vm.delta && (
+          {!vm.compact && vm.score != null && vm.delta && (
             <span style={{
               fontSize: 10.5, fontWeight: 600, color: T.heroMid, minWidth: 0,
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -200,7 +201,7 @@ export default function W3TodayDock({ vm, onOpen }: {
           )}
         </div>
 
-        {vm.bonus && (
+        {vm.compact && vm.planLabel ? <span style={{ maxWidth: 110, textAlign: 'right', color: T.ink, fontSize: 12, lineHeight: 1.3 }}>{vm.planLabel}</span> : vm.bonus && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'flex-end', flex: 'none' }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.2, color: T.heroMid }}>BONUS</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -211,27 +212,7 @@ export default function W3TodayDock({ vm, onOpen }: {
         )}
       </div>
 
-      {/* ── the meter: the score itself, in 22 segments ── */}
-      <div style={{ display: 'flex', gap: 3, height: 10, width: '100%' }} aria-hidden>
-        {Array.from({ length: SEGMENTS }).map((_, i) => (
-          <motion.span key={i}
-            initial={reduce ? false : { opacity: 0.25 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.3, ease: EASE, delay: i < filled ? i * 0.018 : 0 }}
-            style={{
-              flex: 1, height: 10, borderRadius: 3,
-              // A LIT SEGMENT, not a filled rectangle. The same material move
-              // the interval bars and the stage make: light from above, so the
-              // top edge catches and the body falls away. An unlit segment gets
-              // neither — light is what separates "reached" from "not yet", so
-              // the meter reads at a glance without a second colour.
-              background: i < filled
-                ? `linear-gradient(180deg, ${hue} 0%, ${hue}D9 100%)`
-                : T.heroOff,
-              boxShadow: i < filled ? `inset 0 1px 0 ${T.ink}40` : 'none',
-            }} />
-        ))}
-      </div>
+      <W3ReadinessSpectrum score={vm.score} />
 
       {/* ── the ladder behind the bonus ── */}
       {/* Part of the working, so it opens with the working: the next rung is

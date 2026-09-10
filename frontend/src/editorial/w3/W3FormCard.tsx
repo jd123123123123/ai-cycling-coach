@@ -1,12 +1,11 @@
 import { useId, useState } from 'react'
 import { ArrowUpRight, ArrowDownRight, ArrowRight, Info } from 'lucide-react'
-import { usePMC } from '../../hooks/usePMC'
-import { useTodaySession } from '../../hooks/useTodaySession'
-import { useCurrentWeek } from '../../hooks/useCurrentWeek'
+import { useW3FormData } from './useW3FormData'
+import { formStory } from './w3FormStory'
 import { T, FONT, band, w3Mode } from './w3tokens'
 import { lux, S, TNUM } from './w3surfaces'
 import { DailyBars, TrainingImpactChart } from './W3TrainingImpactChart'
-import { metricTrend, nextDate, trainingImpact, validFormPoint } from './w3TrainingImpact'
+import { metricTrend, nextDate, validFormPoint } from './w3TrainingImpact'
 import type { FormPoint, TrainingImpact } from './w3TrainingImpact'
 export type { FormPoint } from './w3TrainingImpact'
 
@@ -17,17 +16,17 @@ const explanations = {
   ctl: 'Fitness ist dein langfristiger Aufbau aus Trainingsbelastung. Sie reagiert langsam; ein Ruhetag gehört dazu.',
   atl: 'Ermüdung reagiert schneller auf Training und Pause. Mehr Belastung setzt einen Reiz, Erholung lässt sie sinken.',
   tsb: 'Form = Fitness − Ermüdung. Positiv bedeutet frischer, negativ stärker belastet. Höher ist nicht immer besser.',
-  zone: 'Aufbaubereich im 42/7-Modell: Ermüdung bei 110–130 % der Fitness. Er wächst mit deiner Fitness. Eine Orientierung für Aufbauphasen, kein persönliches Optimum.',
+  zone: 'Dein persönlicher Zielbereich ist noch nicht ermittelt. Er muss deine Trainingsbelastung, Erholung und Leistungsentwicklung verbinden. Die farbige Fläche zeigt hier den Abstand zwischen Fitness und Ermüdung – deine Form.',
   model: 'Die gestrichelten Linien zeigen deinen bestehenden Plan im 42/7-Modell. Die Rechnung endet, sobald für einen Tag eine Belastungsangabe fehlt. Modellwerte sind keine garantierte Leistungssteigerung.',
 }
 const resetButton = () => ({ border: 0, fontFamily: FONT, cursor: 'pointer', color: T.ink, background: 'transparent' } as const)
 
-export function W3FormCardView({ entries, impact }: { entries: FormPoint[]; impact?: TrainingImpact }) {
+export function W3FormCardView({ entries, impact, embedded = false }: { entries: FormPoint[]; impact?: TrainingImpact; embedded?: boolean }) {
   const history = entries.filter(validFormPoint).slice(-14)
   if (!history.length) return null
-  return <FormCard key={history.at(-1)?.date ?? history.length} history={history} impact={impact} />
+  return <FormCard key={history.at(-1)?.date ?? history.length} history={history} impact={impact} embedded={embedded} />
 }
-function FormCard({ history, impact }: { history: FormPoint[]; impact?: TrainingImpact }) {
+function FormCard({ history, impact, embedded }: { history: FormPoint[]; impact?: TrainingImpact; embedded: boolean }) {
   const [selection, setSelection] = useState<number | null>(null)
   const [explanation, setExplanation] = useState<keyof typeof explanations | null>(null)
   const explanationId = useId()
@@ -44,12 +43,13 @@ function FormCard({ history, impact }: { history: FormPoint[]; impact?: Training
     { key: 'atl' as const, label: 'Ermüdung', color: T.orbit },
     { key: 'tsb' as const, label: 'Form', color: T.acid },
   ]
-  return <section style={band(26)} aria-label="Form und Trainingswirkung" data-training-impact="w3-today-form-v2">
-    <div style={{ ...lux(24), padding: S.xl, gap: S.lg, fontFamily: FONT }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-        <h2 style={{ margin: 0, color: T.ink, fontSize: 19, fontWeight: 650, letterSpacing: -0.6 }}>Deine Form</h2>
+  return <section style={embedded ? { padding: '0 16px' } : band(26)} aria-label="Form und Trainingswirkung" data-training-impact="w3-today-form-v3">
+    <div style={{ ...lux(24), ...(embedded ? { boxShadow: 'none', padding: 0 } : { padding: S.xl }), gap: S.lg, fontFamily: FONT }}>
+      <div style={{ display: embedded ? 'none' : 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+        <h2 style={{ display: embedded ? 'none' : undefined, margin: 0, color: T.ink, fontSize: 19, fontWeight: 650, letterSpacing: -0.6 }}>Deine Form</h2>
         <span style={{ fontSize: 11, color: T.mid }}>{projected ? 'Plan · ' : ''}{current.date === impact?.today ? 'Heute' : dateText(current.date)}</span>
       </div>
+      <p style={{ margin: '-4px 0 0', fontSize: 14, color: T.mid, lineHeight: 1.45, letterSpacing: -0.15 }}>{formStory(history, impact)}</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: S.md }}>
         {metrics.map(({ key, label, color }) => {
           const delta = consecutive && previous ? current[key] - previous[key] : null
@@ -65,8 +65,8 @@ function FormCard({ history, impact }: { history: FormPoint[]; impact?: Training
       {explanation && <p id={explanationId} role="status" style={{ margin: '-4px 0 0', paddingLeft: 10, borderLeft: `2px solid ${T.rule}`, fontSize: 12, lineHeight: 1.5, color: T.mid }}>{explanations[explanation]}{explanation === 'model' && impact?.target != null ? ` Heute: ${number(impact.target)} TSS geplant.` : ''}{['ctl', 'atl', 'tsb'].includes(explanation) && current.tss != null ? ` ${dateText(current.date)}: ${number(current.tss)} TSS${projected ? ' geplant' : ' erfasst'}.` : ''}</p>}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <button type="button" aria-expanded={explanation === 'zone'} onClick={() => explain('zone')} style={{ ...resetButton(), display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0', fontSize: 10, color: T.mid }}><i style={{ width: 9, height: 5, background: T.training, opacity: 0.6, borderRadius: 2 }} />Aufbaubereich <Info size={11} aria-hidden /></button>
-          {future.length > 0 && <button type="button" aria-expanded={explanation === 'model'} onClick={() => explain('model')} style={{ ...resetButton(), display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: T.mid, padding: '4px 0' }}>Planrechnung <Info size={11} aria-hidden /></button>}
+          <button type="button" aria-expanded={explanation === 'zone'} onClick={() => explain('zone')} style={{ ...resetButton(), display: 'flex', alignItems: 'center', gap: 5, padding: '4px 0', fontSize: 10, color: T.mid }}>Persönlicher Zielbereich <Info size={11} aria-hidden /></button>
+          {future.length > 0 && <button type="button" aria-expanded={explanation === 'model'} onClick={() => explain('model')} style={{ ...resetButton(), display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, color: T.mid, padding: '4px 0' }}>Dein Plan <Info size={11} aria-hidden /></button>}
         </div>
         <TrainingImpactChart history={history} impact={impact} selected={selected} onSelect={setSelection} />
       </div>
@@ -74,17 +74,7 @@ function FormCard({ history, impact }: { history: FormPoint[]; impact?: Training
   </section>
 }
 
-export default function W3FormCard() {
-  const { data: pmc } = usePMC(42)
-  const session = useTodaySession()
-  const { data: week } = useCurrentWeek()
-  const entries = (pmc?.entries ?? []).map(entry => ({ ...entry, tss: entry.tss ?? entry.daily_tss ?? null }))
-  const impact = trainingImpact({
-    entries,
-    today: session.decision?.date ?? session.weekToday?.date ?? null,
-    state: session.decision?.state ?? (session.isRestDay ? 'planned_rest' : null),
-    target: session.workout?.predicted_tss ?? session.decision?.tss_target ?? null,
-    days: week?.days ?? [],
-  })
-  return <W3FormCardView entries={entries} impact={impact} />
+export default function W3FormCard({ embedded = false }: { embedded?: boolean }) {
+  const { entries, impact } = useW3FormData()
+  return <W3FormCardView entries={entries} impact={impact} embedded={embedded} />
 }

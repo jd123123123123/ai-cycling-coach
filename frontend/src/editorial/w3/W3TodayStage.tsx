@@ -263,11 +263,12 @@ function DiscChip({ icon, value }: { icon: React.ReactNode; value: string }) {
   )
 }
 
-export default function W3TodayStage({ vm, fullBleed = false }: {
+export default function W3TodayStage({ vm, fullBleed = false, compact = false }: {
   vm: W3StageVm
   /** Fill the whole first screen and let the panel float over the floor,
    *  rather than occupying one band of a column above it. */
   fullBleed?: boolean
+  compact?: boolean
 }) {
   const reduce = useReducedMotion()
   const theme = vm.theme ?? stageThemeById(null)
@@ -285,7 +286,9 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
   const floor = `linear-gradient(180deg, ${T.heroFloor[0]} 0%, ${T.heroFloor[1]} 40%, ${T.heroFloor[2]} 76%, ${T.heroFloor[3]} 100%)`
 
   return (
-    <div style={fullBleed ? {
+    <div style={compact ? {
+      position: 'relative', height: 'calc(328px + env(safe-area-inset-top))', width: '100%', flex: 'none', overflow: 'hidden', background: floor, fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center', paddingTop: 'max(12px, env(safe-area-inset-top))',
+    } : fullBleed ? {
       position: 'absolute', inset: 0, overflow: 'hidden', background: floor,
       fontFamily: FONT, display: 'flex', flexDirection: 'column', alignItems: 'center',
       paddingTop: 44,
@@ -312,7 +315,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
             objectFit: 'fill', pointerEvents: 'none',
           }} />
       ) : (
-        <div aria-hidden style={{ position: 'absolute', inset: 0, background: theme.css, pointerEvents: 'none' }} />
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: compact ? theme.css.replaceAll('76.2%', '94%') : theme.css, pointerEvents: 'none' }} />
       )}
       {(theme.extras ?? []).map((ex, i) => (
         <div key={i} aria-hidden style={ex} />
@@ -329,7 +332,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         position: 'absolute', top: HEAD.top, left: HEAD.inset, zIndex: 2,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start',
       }}>
-        <DiscChip icon={<Star size={12} color={T.ink} fill={T.ink} />} value={vm.bonus ?? DASH} />
+        {!compact && <DiscChip icon={<Star size={12} color={T.ink} fill={T.ink} />} value={vm.bonus ?? DASH} />}
         {/* THE MENU IS NOT HERE ANY MORE — see the right column. It sat in
             this left stack while every screen outside the room puts it at the
             far right of `W3TopBar`, so the one control a rider needs from
@@ -355,7 +358,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
             the app's only always-available control moves when the rider
             moves, which is the thing a navigation system may never do. */}
         <W3NavMenu />
-        <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />
+        {!compact && <Chip icon={<Asterisk size={20} color={T.lilac} />} value={vm.coins ?? DASH} />}
         {/* THE FLAME IS A DOOR NOW: tap → the forgiving-streak sheet
             (sick/injured/break pause instead of breaking — services/streak.py
             had this all along; the switch was stranded on the legacy app). */}
@@ -366,8 +369,13 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
             fontVariantNumeric: 'tabular-nums',
           }}>{vm.coinsDelta}</span>
         )}
-        <W3StreakChip />
+        {!compact && <W3StreakChip />}
       </div>
+
+      {compact && <div style={{ position: 'absolute', top: 76, left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: 8, alignItems: 'center', zIndex: 2 }}>
+        <Chip icon={<Asterisk size={16} color={T.lilac} />} value={vm.coins ?? DASH} />
+        <W3StreakChip />
+      </div>}
 
       {/* ── the rider: a bust in a lit circle, the name fused to its lower edge ── */}
       <motion.div
@@ -375,7 +383,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: EASE }}
         style={{
-          position: 'relative', display: 'flex', flexDirection: 'column',
+          position: 'relative', display: 'flex', flexDirection: compact ? 'row' : 'column',
           alignItems: 'center', paddingTop: 8, flex: 'none',
           // ABOVE THE MACHINE, at the same level as the corner chips. This and
           // the bike were both zIndex 1, so DOM order decided and the bike —
@@ -389,22 +397,22 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
           zIndex: 2,
         }}>
 
-        <div style={{ position: 'relative', width: AVATAR, height: AVATAR, display: 'grid', placeItems: 'center' }}>
+        <div style={{ position: 'relative', width: compact ? 52 : AVATAR, height: compact ? 52 : AVATAR, display: 'grid', placeItems: 'center' }}>
           {/* The glow is wider than the bust and sits behind it — it is the
               light the rider stands in, not a ring around them. */}
           <div aria-hidden style={{
-            position: 'absolute', width: GLOW, height: GLOW, borderRadius: '50%',
+            position: 'absolute', width: compact ? 76 : GLOW, height: compact ? 76 : GLOW, borderRadius: '50%',
             background: 'radial-gradient(circle, #FFFFFF14 0%, #FFFFFF08 50%, #FFFFFF00 100%)',
           }} />
           {vm.rider ? (
             <img src={vm.rider} alt="Dein Rider"
               style={{
-                position: 'relative', width: AVATAR, height: AVATAR, borderRadius: '50%',
+                position: 'relative', width: compact ? 52 : AVATAR, height: compact ? 52 : AVATAR, borderRadius: '50%',
                 objectFit: 'cover', display: 'block',
               }} />
           ) : (
             <div aria-label="Noch kein Rider" style={{
-              position: 'relative', width: AVATAR, height: AVATAR, borderRadius: '50%',
+              position: 'relative', width: compact ? 52 : AVATAR, height: compact ? 52 : AVATAR, borderRadius: '50%',
               display: 'grid', placeItems: 'center', background: '#FFFFFF08',
               border: `1.5px dashed ${T.acid}59`,
             }}>
@@ -416,18 +424,18 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
         {/* The handle pill overlaps the bust. That overlap is the whole trick —
             it makes the two read as one object. */}
         <div style={{
-          marginTop: HANDLE_OVERLAP, display: 'flex', alignItems: 'center', gap: 10,
-          height: 44, padding: '0 20px 0 6px', borderRadius: 100,
+          marginTop: compact ? 0 : HANDLE_OVERLAP, marginLeft: compact ? -4 : undefined, display: 'flex', alignItems: 'center', gap: 10,
+          height: compact ? 28 : 44, padding: compact ? '0 12px 0 4px' : '0 20px 0 6px', borderRadius: 100,
           background: T.acid, position: 'relative', maxWidth: '100%',
         }}>
           <span style={{
-            width: 32, height: 32, borderRadius: 100, background: T.heroBg,
+            width: compact ? 22 : 32, height: compact ? 22 : 32, borderRadius: 100, background: T.heroBg,
             display: 'grid', placeItems: 'center', flex: 'none',
           }}>
             <ChevronsUp size={17} color={T.acid} />
           </span>
           <span style={{
-            fontFamily: 'Archivo, "Inter Tight", sans-serif', fontSize: 22, fontWeight: 700,
+            fontFamily: 'Archivo, "Inter Tight", sans-serif', fontSize: compact ? 16 : 22, fontWeight: 700,
             color: T.heroInk, minWidth: 0, overflow: 'hidden',
             textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>{vm.handle}</span>
@@ -435,7 +443,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
 
         {/* Null, not "—": a rider with no tier gets no pill at all rather than
             a badge with a dash in it. */}
-        {vm.role && (
+        {vm.role && !compact && (
           <span style={{
             marginTop: 10, height: 26, padding: '0 14px', borderRadius: 100,
             background: T.heroChip, display: 'grid', placeItems: 'center',
@@ -522,7 +530,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
             // they cannot disagree.
             <div style={{
               position: 'absolute', left: 0, right: 0,
-              bottom: `${(1 - FLOOR) * 100}%`,
+              bottom: `${(1 - (compact ? 0.94 : FLOOR)) * 100}%`,
               // NO FIXED HEIGHT. A height here re-introduced the original bug
               // one level down: `contain` inside a 52%-tall box is limited by
               // the HEIGHT again, so the bike drew at ~45% of the width with
@@ -539,7 +547,7 @@ export default function W3TodayStage({ vm, fullBleed = false }: {
               {/* The shadows live INSIDE the bike's own box, so their
                   percentages are measured against the machine rather than
                   against the stage — the two cannot drift apart again. */}
-              <div style={{ position: 'relative', width: BIKE_ART.width, display: 'flex' }}>
+              <div style={{ position: 'relative', width: compact ? '80%' : BIKE_ART.width, display: 'flex' }}>
                 {TYRE_X.map((x) => (
                   <div key={x} aria-hidden>
                     <div style={{ ...SHADOW_POOL, left: x }} />
