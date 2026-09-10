@@ -590,7 +590,7 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
 /** The selected day's training, weather and actions — the lower two thirds of
  *  the week card. Mounted with a per-day key, so switching days resets the
  *  adapt state and replays the entrance. */
-function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt }) {
+export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt }) {
   const [adapt, setAdapt] = useState<Adapt>('none')
   const [busy, setBusy] = useState<Adapt>('none')
   const [result, setResult] = useState<AdaptResult | null>(null)

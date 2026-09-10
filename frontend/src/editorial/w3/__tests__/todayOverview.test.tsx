@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { W3TodayOverviewView, type OverviewData } from '../W3TodayOverview'
 import type { W3Vm } from '../W3TodayView'
+import W3TodayDock from '../W3TodayDock'
 import W3ReadinessSpectrum from '../W3ReadinessSpectrum'
 import { readinessBand } from '../w3ReadinessBands'
 import { formStory } from '../w3FormStory'
@@ -14,7 +15,7 @@ const data: OverviewData = { form:{ctl:16.2,atl:1,tsb:15.2}, crew:null, crewStat
 describe('Today overview', () => {
   it('keeps details off the quick view and opens only the requested section', () => {
     render(<W3TodayOverviewView vm={vm} data={data} week={<p>Wocheninhalt</p>} form={<p>Forminhalt</p>} crew={<p>Crewinhalt</p>} goals={<p>Zielinhalt</p>} />)
-    expect(screen.getAllByRole('button')).toHaveLength(4)
+    expect(screen.getAllByRole('button')).toHaveLength(5)
     expect(screen.queryByText('Forminhalt')).toBeNull()
     fireEvent.click(screen.getByRole('button',{name:/Deine Form/}))
     expect(screen.getByText('Forminhalt')).toBeTruthy()
@@ -51,5 +52,21 @@ describe('form summary', () => {
     expect(text).toContain('Ruhetag')
     expect(text).not.toMatch(/Optimum|Vollgas|Aufbau/)
     expect(formStory(h,{today:'2026-09-08',mode:'training',target:90,plan:[]})).not.toContain('90 TSS')
+  })
+})
+
+
+describe('compact readiness details', () => {
+  it('reveals the existing health values without leaving Today', () => {
+    render(<W3TodayDock vm={{score:73,state:'Bereit',scoreNote:null,bonus:null,compact:true,showStats:false,stats:[{label:'HRV',value:'67',unit:'ms'},{label:'RUHEPULS',value:'45',unit:'bpm'},{label:'SCHLAF',value:'7:41',unit:'h'}]}} onOpen={() => {}} />)
+    const toggle = screen.getByRole('button', {name:'Bereitschaft im Detail'})
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('true')
+    expect(screen.getByText('HRV')).toBeTruthy()
+    expect(screen.getByText('67')).toBeTruthy()
+    expect(screen.getByRole('button', {name:'Alle Bereitschaftsdetails →'})).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(toggle.getAttribute('aria-expanded')).toBe('false')
   })
 })

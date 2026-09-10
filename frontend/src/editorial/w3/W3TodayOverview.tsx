@@ -9,8 +9,8 @@ import { T, FONT, EASE } from './w3tokens'
 import { lux } from './w3surfaces'
 import type { W3Vm } from './W3TodayView'
 
-type Section = 'week' | 'form' | 'crew' | 'goals'
-interface Sections { week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
+type Section = 'today' | 'week' | 'form' | 'crew' | 'goals'
+interface Sections { today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
 export interface OverviewData {
   form: FormPoint | null
   crew: { name: string; rank: number | null; count: number; avatars: { handle: string; image: string | null }[] } | null
@@ -24,23 +24,29 @@ export function W3TodayOverviewView({ vm, data, ...details }: { vm: W3Vm; data: 
   const [open, setOpen] = useState<Section | null>(null)
   const uid = useId()
   const reduce = useReducedMotion()
+  const today = vm.weekDays.find(day => day.status === 'today')
+  const blocks = today?.rest ? [] : (today?.blocks?.length ? today.blocks : vm.sessionBlocks ?? [])
   const form = data.form
   const pct = data.ftp != null && data.ftpGoal != null && data.ftpGoal > 0 ? Math.min(100, data.ftp / data.ftpGoal * 100) : null
-  const titles: Record<Section, string> = { week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', goals: 'Fortschritt & Ziele' }
+  const titles: Record<Section, string> = { today: 'Heute', week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', goals: 'Fortschritt & Ziele' }
   const subtitle: Record<Section, string> = {
+    today: today?.rest ? 'Ruhetag' : [today?.title ?? 'Noch kein Training geplant', today?.title ? vm.sessionDur : null].filter(Boolean).join(' · '),
     week: vm.hasPlan ? (vm.weekLoadLabel || vm.weekBlockLabel || 'Dein Wochenplan') : 'Dein Training planen',
     form: form == null ? 'Noch kein Verlauf' : form.tsb >= 0 ? 'Wenig Ermüdung' : 'Belastung im Körper',
     crew: data.crewState === 'loading' ? 'Crew wird geladen' : data.crewState === 'error' ? 'Crew nicht verfügbar' : data.crew?.name ?? 'Gemeinsam fahren',
     goals: data.ftp == null ? (vm.weekGoal?.name ?? 'Dein nächstes Ziel') : data.ftpGoal != null ? `FTP ${num(data.ftp)} von ${num(data.ftpGoal)} W` : `FTP ${num(data.ftp)} W`,
   }
   return <div className="w3-today-overview" style={{ fontFamily: FONT }}>
-    {(['week', 'form', 'crew', 'goals'] as const).map(key => <section key={key} data-today-card={key} style={{ ...lux(24), overflow: 'hidden' }}>
+    {(['today', 'week', 'form', 'crew', 'goals'] as const).map(key => <section key={key} data-today-card={key} style={{ ...lux(24), overflow: 'hidden' }}>
       <h2 style={{ margin: 0, font: 'inherit' }}>
         <button id={`${uid}-${key}-toggle`} className="w3-overview-toggle" type="button" aria-expanded={open === key} aria-controls={`${uid}-${key}`} onClick={() => setOpen(open === key ? null : key)} style={{ color: T.ink }}>
           <span className="w3-overview-copy">
             <span style={{ fontSize: 14, fontWeight: 650, letterSpacing: -0.3 }}>{titles[key]}</span>
             {open !== key && <span style={{ fontSize: 11, color: T.mid, lineHeight: 1.35 }}>{subtitle[key]}</span>}
           </span>
+          {key === 'today' && <span className="w3-overview-workout" role="img" aria-label={today?.rest ? 'Ruhetag, keine Trainingsbelastung geplant' : blocks.length ? `Trainingsprofil: ${blocks.map(b => b.label).join(', ')}` : 'Kein Trainingsprofil verfügbar'}>
+            {blocks.length ? blocks.map((b, i) => <span key={i} style={{ flex: 1, minWidth: 0, height: `${Math.max(4, Math.min(100, b.w * 100))}%`, borderRadius: '2px 2px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : T.heroOff }} />) : <span style={{ width: '100%', height: 2, background: T.rule }} />}
+          </span>}
           {key === 'week' && <span aria-label={vm.weekLoadLabel} className="w3-overview-week">
             {vm.weekDays.map((d, i) => <span key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <span style={{ display: 'flex', alignItems: 'flex-end', height: 18 }}><span style={{ width: 7, height: Math.max(3, Math.min(18, (d.planned ?? d.actual) / 100 * 18)), borderRadius: 2, background: d.status === 'today' || d.actual > 0 ? T.acid : T.rule }} /></span>

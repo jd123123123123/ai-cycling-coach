@@ -145,17 +145,20 @@ export default function W3TodayDock({ vm, onOpen }: {
 }) {
   // Clamped here rather than at the call site: a scroll value that overshoots
   // would otherwise animate the panel past its own open state.
-  const open = Math.max(0, Math.min(1, vm.expand ?? 0))
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const open = vm.compact ? Number(detailsOpen) : Math.max(0, Math.min(1, vm.expand ?? 0))
   const reduce = useReducedMotion()
   const hue = vm.score != null ? scoreHue(vm.score) : T.heroOff
   const shown = useCountUp(vm.score ?? 0, reduce)
 
   return (
+    <div>
     <button
-      onClick={onOpen}
+      onClick={vm.compact ? () => setDetailsOpen(!detailsOpen) : onOpen}
+      aria-expanded={vm.compact ? detailsOpen : undefined}
       aria-label="Bereitschaft im Detail"
       style={{
-        width: '100%', border: 0, textAlign: 'left', cursor: onOpen ? 'pointer' : 'default',
+        width: '100%', border: 0, textAlign: 'left', cursor: vm.compact || onOpen ? 'pointer' : 'default',
         background: T.heroDock, borderRadius: 28,
         // SMALLER WHEN CLOSED. 16 all round pushed the panel up into the back
         // wheel; it breathes out again as it opens.
@@ -232,8 +235,8 @@ export default function W3TodayDock({ vm, onOpen }: {
           out of the panel instead of appearing on top of it — and at `open: 0`
           it occupies nothing at all, so the closed panel is genuinely small
           rather than merely transparent. */}
-      {vm.showStats !== false && (
-      <div style={{
+      {(vm.compact || vm.showStats !== false) && (
+      <div aria-hidden={open < 0.2} style={{
         display: 'flex', gap: 10, width: '100%',
         height: open * STAT_CARD_H, opacity: open, overflow: 'hidden',
         marginTop: open * 4, pointerEvents: open > 0.6 ? 'auto' : 'none',
@@ -285,6 +288,8 @@ export default function W3TodayDock({ vm, onOpen }: {
       </div>
       )}
     </button>
+    {vm.compact && detailsOpen && onOpen && <button type="button" onClick={onOpen} style={{ display: 'block', margin: '8px auto 0', padding: '8px 12px', background: 'none', border: 0, color: T.mid, fontFamily: FONT, fontSize: 12, cursor: 'pointer' }}>Alle Bereitschaftsdetails →</button>}
+    </div>
   )
 }
 

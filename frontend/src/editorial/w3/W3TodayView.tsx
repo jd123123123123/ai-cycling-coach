@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { WeekTrainingCard, WeekNavCards, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
+import { DayTraining, WeekTrainingCard, WeekNavCards, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, band } from './w3tokens'
 import type { Chest } from '../../api/rewards'
 import W3TodayStage, { STAGE_PLATE } from './W3TodayStage'
@@ -295,12 +295,17 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
       <W3ThresholdProposal />
       <W3RecoveryNudge />
       <W3TodayOverview vm={vm}
+        today={vm.weekDays[todayIdx] && vm.hasPlan ? <DayTraining
+          day={vm.weekDays[todayIdx]}
+          session={{ dur: vm.sessionDur, blocks: vm.weekDays[todayIdx].blocks?.length ? vm.weekDays[todayIdx].blocks! : vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
+          weather={vm.weather} onAdapt={onAdapt}
+        /> : <W3TodayComposer readiness={vm.readiness} />}
         week={<>
           {vm.hasPlan ? <WeekTrainingCard
             days={vm.weekDays} selected={selDay} onSelect={setSelDay}
             blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
             day={selectedDay}
-            session={{ dur: vm.sessionDur, blocks: selectedDay?.blocks?.length ? selectedDay.blocks : vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
+            session={{ dur: selDay === todayIdx ? vm.sessionDur : null, blocks: selectedDay?.blocks ?? (selDay === todayIdx ? vm.sessionBlocks : []), ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
             weather={vm.weather} onAdapt={onAdapt}
           /> : <><TodayWeatherCard weather={vm.weather} /><W3TodayComposer readiness={vm.readiness} /></>}
           <W3WeekRecapCard />
