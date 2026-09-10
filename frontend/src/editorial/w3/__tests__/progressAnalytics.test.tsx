@@ -16,7 +16,7 @@ it('switches periods and metrics with explicit selected state',()=>{
  expect(screen.queryByText('Ganzer Plan')).toBeNull()
 })
 it('scrubs dated measurements using a keyboard-accessible range',()=>{
- render(<ProgressTrend metric={metric} start="2026-09-01" end="2026-09-10" kind="ftp"/>)
+ render(<ProgressTrend showDetails metric={metric} start="2026-09-01" end="2026-09-10" kind="ftp"/>)
  fireEvent.change(screen.getByRole('slider',{name:'Messung auswählen'}),{target:{value:'0'}})
  expect(screen.getByRole('slider').getAttribute('aria-valuetext')).toContain('240')
  expect(screen.getByText('Noch 32 W')).toBeTruthy()
@@ -28,7 +28,7 @@ it('does not manufacture a trend from the current value alone',()=>{
 })
 it('opens the source ride for a period record',()=>{
  const ids:number[]=[]
- render(<ProgressRecords records={data.records} onRide={id=>ids.push(id)}/>)
+ render(<ProgressRecords showDetails records={data.records} onRide={id=>ids.push(id)}/>)
  fireEvent.click(screen.getByRole('button',{name:/Fahrt vom/}))
  expect(ids).toEqual([42])
  expect(screen.getByText('−20 W zum Bestwert')).toBeTruthy()
@@ -96,5 +96,16 @@ it('compact performance uses measured history and never draws a made-up FTP targ
  expect(screen.queryByRole('progressbar')).toBeNull()
  rerender(<W3ProgressCompactView fallbackFtp={240} data={data}/>)
  expect(screen.getByRole('img',{name:'Gespeicherter Verlauf von 240 auf 248'})).toBeTruthy()
- expect(screen.getByText('300 W')).toBeTruthy()
+ expect(screen.queryByText('5-Minuten-Rekord')).toBeNull()
+ expect(screen.queryByText('300 W')).toBeNull()
+})
+
+
+it('keeps methodology out of the default view and reveals it on demand',()=>{
+ render(<W3ProgressAnalyticsView data={data} period="month" onPeriod={()=>{}}/>)
+ expect(screen.queryByText(/Gespeicherte FTP-Werte/)).toBeNull()
+ fireEvent.click(screen.getByRole('button',{name:'Daten und Vergleich erklären'}))
+ expect(screen.getByText(/Gespeicherte FTP-Werte/)).toBeTruthy()
+ fireEvent.click(screen.getByRole('button',{name:'Daten und Vergleich erklären'}))
+ expect(screen.queryByText(/Gespeicherte FTP-Werte/)).toBeNull()
 })

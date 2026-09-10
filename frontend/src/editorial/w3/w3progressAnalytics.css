@@ -15,3 +15,61 @@
 
 .w3-calendar-rail::before,.w3-calendar-rail::after { content:""; flex:0 0 calc((100% - var(--calendar-item-width))/2 - 5px); }
 .w3-calendar-rail button { width:var(--calendar-item-width); box-sizing:border-box; padding-left:6px; padding-right:6px; }
+
+/* W3: one dominant value; selectors stay quiet around the data. */
+.w3-progress-analytics{padding:0 0 2px}
+.w3-progress-modes{margin:0 0 18px;display:grid;grid-template-columns:repeat(3,1fr);gap:4px;border:0;padding:4px;background:var(--pa-soft);border-radius:14px}
+.w3-progress-modes button{position:relative;isolation:isolate;padding:10px 4px;font-size:14px;font-weight:600;border:0;color:var(--pa-mid)}
+.w3-progress-modes button[aria-pressed=true]{color:var(--pa-ink);border:0}
+.w3-progress-selection{position:absolute;inset:0;z-index:-1;border-radius:10px;background:var(--pa-bg);box-shadow:inset 0 0 0 1px var(--pa-rule)}
+.w3-progress-periods{padding:0;background:transparent;border-radius:0;gap:0;border-bottom:1px solid var(--pa-rule)}
+.w3-progress-periods button{position:relative;min-height:37px;border-radius:0;font-size:12px;font-weight:500}
+.w3-progress-periods button[aria-pressed=true]{background:transparent;color:var(--pa-ink)}
+.w3-period-selection{position:absolute;bottom:-1px;left:16%;right:16%;height:2px;background:var(--pa-acid);border-radius:2px}
+.w3-progress-calendar{margin:3px 0 14px}
+.w3-calendar-rail button[aria-pressed=true]{background:transparent;box-shadow:none;color:var(--pa-ink)}
+.w3-calendar-rail button{font-size:12px;font-weight:500}
+.w3-progress-range{margin:0 0 12px;font-size:11px}
+.w3-progress-reading{align-items:flex-start;gap:8px;margin:0 0 20px}
+.w3-progress-reading strong{font-family:Archivo,'Inter Tight',sans-serif;font-size:56px;letter-spacing:-2.4px;font-weight:600;line-height:1.05}
+.w3-progress-reading small{font-size:12px;letter-spacing:0;margin-left:5px}
+.w3-progress-reading>div>span{margin-top:6px;font-size:10px}
+.w3-progress-delta{padding-top:5px;align-items:flex-end!important}
+.w3-progress-delta strong{font-family:inherit;font-size:13px;font-weight:600;letter-spacing:-.2px;line-height:1.2;padding:7px 9px;background:var(--pa-soft);border-radius:20px;white-space:nowrap}
+.w3-progress-delta span{font-size:9px!important}
+.w3-progress-goal{margin-top:18px;padding:12px 0 0;border-top:1px solid var(--pa-rule)}
+.w3-progress-goal>div:first-child{font-size:11px}
+.w3-progress-goal [role=progressbar]{height:3px}
+.w3-progress-method{margin-top:14px;font-size:11px}
+.w3-record-comparison-heading{margin:5px 0 18px}
+.w3-record-comparison-heading>strong{font-family:Archivo,sans-serif;font-size:24px;font-weight:600;letter-spacing:-.7px}
+.w3-progress-durations{display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;padding:3px 0;margin:16px 0 12px;scroll-snap-type:x proximity}
+.w3-progress-durations button{flex:0 0 auto;min-width:48px;min-height:32px;border-radius:20px;padding:0 10px;scroll-snap-align:center}
+.w3-progress-durations button[aria-pressed=true]{background:var(--pa-acid);color:var(--pa-button-ink);box-shadow:none}
+.w3-progress-record-detail{border-top:1px solid var(--pa-rule);padding-top:12px}
+
+.w3-progress-range{position:absolute;clip-path:inset(50%);width:1px;height:1px;overflow:hidden;white-space:nowrap}
+.w3-progress-reading{margin-top:20px;margin-bottom:14px}
+
+/* The controls support the figure; source notes appear only on request. */
+.w3-progress-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.w3-progress-toolbar .w3-progress-modes{flex:1;min-width:0;margin:0;background:none;padding:0;gap:3px}
+.w3-progress-modes button{min-height:38px;font-size:14px;padding:8px 3px}
+.w3-progress-selection{background:var(--pa-soft);box-shadow:none}
+.w3-progress-info-button{flex:none;display:grid;place-items:center;width:28px;height:32px;color:var(--pa-mid);background:none;border:0;cursor:pointer}
+.w3-progress-periods button{min-height:38px;font-size:13px}
+.w3-calendar-rail button{font-size:13px}
+.w3-progress-reading{align-items:baseline;margin:22px 0 22px}
+.w3-progress-reading strong{font-size:54px}
+.w3-progress-reading>div>span{font-size:12px;color:var(--pa-mid)}
+.w3-progress-delta{padding-top:0}
+.w3-progress-delta strong{font-size:16px;font-weight:500;background:none;padding:0;color:inherit}
+.w3-progress-trend svg{margin-top:4px}
+.w3-progress-records svg{font-family:Archivo,'Inter Tight',sans-serif;margin-top:20px}
+.w3-progress-record-detail{border:0;padding:0;font-size:13px;margin-top:10px}
+.w3-progress-record-detail button{font-size:13px;justify-content:flex-end}
+.w3-progress-durations{margin:18px 0 8px;gap:6px}
+.w3-progress-durations button{font-size:12px;min-height:34px;min-width:49px}
+.w3-progress-method{font-size:13px;line-height:1.55;padding:16px;border:0;background:var(--pa-soft);border-radius:14px;margin-top:20px}
+.w3-progress-method p{margin:0 0 10px}.w3-progress-method p:last-child{margin:0}
+.w3-progress-empty{font-size:14px;line-height:1.5;padding:30px 0}
