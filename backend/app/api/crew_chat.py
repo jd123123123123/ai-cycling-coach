@@ -629,6 +629,28 @@ async def _crew_ride_or_404(
     return act
 
 
+@router.get("/rides/{activity_id}/telemetry")
+async def get_ride_telemetry(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    from app.services.crew_ride_telemetry import chart_samples, ride_zones
+    from app.models.athlete_profile import AthleteProfile
+    mem = await require_membership(db, current_user.id)
+    ride = await _crew_ride_or_404(db, activity_id=activity_id, crew_id=mem.crew_id)
+    streams = (await db.execute(select(ActivityStream.streams).where(
+        ActivityStream.activity_id == activity_id,
+        ActivityStream.user_id == ride.user_id,
+    ))).scalar_one_or_none()
+    profile = (await db.execute(select(
+        AthleteProfile.ftp_watts, AthleteProfile.ftp_history,
+        AthleteProfile.lthr_cycling, AthleteProfile.lthr_running, AthleteProfile.max_heart_rate,
+    ).where(AthleteProfile.user_id == ride.user_id))).one_or_none()
+    return {"activity_id": activity_id, "samples": chart_samples(streams),
+            "zones": ride_zones(profile, ride.started_at, ride.sport)}
+
+
 @router.get("/rides/{activity_id}/comments", response_model=list[CommentRead])
 async def list_ride_comments(
     activity_id: int,

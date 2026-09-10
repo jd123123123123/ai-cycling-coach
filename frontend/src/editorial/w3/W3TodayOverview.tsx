@@ -10,8 +10,8 @@ import W3PlanPhaseProgress from './W3PlanPhaseProgress'
 import W3ProgressCompact from './W3ProgressCompact'
 import type { W3Vm } from './W3TodayView'
 
-type Section = 'today' | 'week' | 'form' | 'crew' | 'progress' | 'goals'
-interface Sections { progress?:ReactNode; progressSummary?:ReactNode; goalSummary?:ReactNode; persistentForm?: (expanded:boolean) => ReactNode; selectedWeekDay?: number; onSelectWeekDay?: (index:number) => void; onOpenPlan?: () => void; onPickGoal?: (intent: 'ftp' | 'event' | 'hours' | null) => void; today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
+type Section = 'today' | 'week' | 'form' | 'crew' | 'progress' | 'goals' | 'rides'
+interface Sections { rides?:ReactNode; ridesSummary?:ReactNode; progress?:ReactNode; progressSummary?:ReactNode; goalSummary?:ReactNode; persistentForm?: (expanded:boolean) => ReactNode; selectedWeekDay?: number; onSelectWeekDay?: (index:number) => void; onOpenPlan?: () => void; onPickGoal?: (intent: 'ftp' | 'event' | 'hours' | null) => void; today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
 export interface OverviewData {
   form: FormPoint | null
   history?: FormPoint[]
@@ -34,7 +34,7 @@ function FormSpark({ points, metric, color }: { points: FormPoint[]; metric: 'ct
   </svg>
 }
 
-export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
+export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ridesSummary, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
   const [open, setOpen] = useState<Section | null>(null)
   const [localWeekDay, setLocalWeekDay] = useState<number | null>(null)
   const selected = selectedWeekDay ?? localWeekDay ?? Math.max(0,vm.weekDays.findIndex(d=>d.status==='today'))
@@ -44,17 +44,17 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
   const blocks = today?.rest ? [] : (today?.blocks?.length ? today.blocks : vm.sessionBlocks ?? [])
   const weekMax = Math.max(1, ...vm.weekDays.map(d => Math.max(d.actual || 0, d.planned ?? 0)))
   const form = data.form
-  const titles: Record<Section, string> = { today: 'Heute', week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', progress:'Fortschritt', goals: 'Ziele' }
+  const titles: Record<Section, string> = { today: 'Heute', week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', rides:'Unterwegs', progress:'Fortschritt', goals: 'Ziele' }
   const subtitle: Record<Section, string> = {
     today: today?.rest ? 'Ruhetag' : [today?.title ?? 'Noch kein Training geplant', today?.title ? vm.sessionDur : null].filter(Boolean).join(' · '),
     week: vm.hasPlan ? [vm.weekLoadLabel || vm.weekBlockLabel || 'Dein Wochenplan', vm.weekDoneChip].filter(Boolean).join(' · ') : 'Dein Training planen',
     form: form == null ? 'Noch kein Verlauf' : form.tsb >= 0 ? 'Wenig Ermüdung' : 'Belastung im Körper',
     crew: data.crewState === 'loading' ? 'Crew wird geladen' : data.crewState === 'error' ? 'Crew nicht verfügbar' : data.crew?.name ?? 'Gemeinsam fahren',
-    goals:'',
+    goals:'', rides:'',
     progress: data.ftp == null ? (vm.weekGoal?.name ?? 'Dein nächstes Ziel') : data.ftpGoal != null ? `FTP ${num(data.ftp)} von ${num(data.ftpGoal)} W` : `FTP ${num(data.ftp)} W`,
   }
   return <div className="w3-today-overview" style={{ fontFamily: FONT }}>
-    {(['today', 'week', 'form', 'crew', 'progress', 'goals'] as const).map(key => <Fragment key={key}><section data-today-card={key} className="w3-overview-card" data-open={open === key}>
+    {(['today', 'week', 'form', 'crew', 'rides', 'progress', 'goals'] as const).filter(key=>key!=='rides'||(details.rides!==undefined&&data.crew!=null)).map(key => <Fragment key={key}><section data-today-card={key} className="w3-overview-card" data-open={open === key}>
       <div className="w3-overview-header">
         <h2 id={`${uid}-${key}-title`} className="w3-overview-title">{titles[key]}</h2>
         <motion.button id={`${uid}-${key}-toggle`} className="w3-overview-toggle" type="button" aria-label={`${titles[key]} ${open === key ? 'schließen' : 'öffnen'}`} aria-expanded={open === key} aria-controls={`${uid}-${key}`} onClick={() => setOpen(open === key ? null : key)} whileTap={reduce ? undefined : {scale:0.93}}>
@@ -62,7 +62,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
         </motion.button>
       </div>
       {key === 'form' && persistentForm ? <div id={`${uid}-${key}`} className="w3-overview-form-persistent" role="region" aria-labelledby={`${uid}-${key}-title`}>{persistentForm(open==='form')}</div> : <>
-      <motion.div initial={false} animate={{height:open === key && key !== 'week' ? 0 : 'auto',opacity:open === key && key !== 'week' ? 0 : 1}} transition={{duration:reduce ? 0 : 0.26,ease:EASE}} aria-hidden={open === key && key !== 'week'} style={{overflow:'hidden'}}>
+      <motion.div initial={false} animate={{height:open === key && key !== 'week' ? 0 : 'auto',opacity:open === key && key !== 'week' ? 0 : 1}} transition={{duration:reduce ? 0 : 0.26,ease:EASE}} aria-hidden={open === key && key !== 'week'} inert={open === key && key !== 'week'} style={{overflow:'hidden'}}>
       <div className="w3-overview-summary">
           <span className="w3-overview-copy">{key!=='goals'&&key!=='progress'&&subtitle[key]}</span>{key==='goals'&&<div className="w3-overview-goals-summary">{goalSummary??'Dein nächstes Ziel'}</div>}
           {key === 'today' && <span className="w3-overview-workout" role="img" aria-label={today?.rest ? 'Ruhetag, keine Trainingsbelastung geplant' : blocks.length ? `Trainingsprofil: ${blocks.map(b => b.label).join(', ')}` : 'Kein Trainingsprofil verfügbar'}>
@@ -96,6 +96,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
             </span>)}</span>
             {data.crew.rank != null && <span style={{ fontSize: 22, fontWeight: 700 }}>#{data.crew.rank}<span style={{ fontSize: 10, color: T.mid }}> / {data.crew.count}</span></span>}
           </span>}
+          {key === 'rides' && ridesSummary}
           {key === 'progress' && (progressSummary??<span style={{fontSize:14,color:T.ink}}>FTP {data.ftp==null?'—':num(data.ftp)} W · VO₂max · Rekorde</span>)}
       </div>
       </motion.div>

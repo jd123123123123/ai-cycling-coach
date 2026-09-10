@@ -20,7 +20,7 @@ import W3FormCard from './W3FormCard'
 import W3TodayProgress from './W3TodayProgress'
 import W3TodayGoals, { W3TodayGoalsSummary } from './W3TodayGoals'
 import W3TodayRank from './W3TodayRank'
-import W3CrewFeed from './W3CrewFeed'
+import W3TodayRides, { W3TodayRidesSummary } from './W3TodayRides'
 import W3WeekRecapCard from './W3WeekRecapCard'
 import W3TodayOverview from './W3TodayOverview'
 import './w3.css'
@@ -327,7 +327,9 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
         </>}
         form={null}
         persistentForm={expanded => <W3FormCard embedded expanded={expanded} />}
-        crew={<><W3TodayRank /><W3CrewFeed /></>}
+        crew={<W3TodayRank />}
+        ridesSummary={<W3TodayRidesSummary />}
+        rides={<W3TodayRides />}
         progress={<W3TodayProgress />}
         goalSummary={<W3TodayGoalsSummary />}
         goals={<>

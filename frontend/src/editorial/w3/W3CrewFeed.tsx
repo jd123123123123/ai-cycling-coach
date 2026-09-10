@@ -1,6 +1,8 @@
+import W3RideTelemetryPanel from './W3RideTelemetryPanel'
+import { AnimatePresence } from 'motion/react'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ChevronRight, MessageCircle, Send, Plus } from 'lucide-react'
+import { ChevronRight, MessageCircle, Send, Plus, ChartNoAxesCombined } from 'lucide-react'
 import { useCrewStandings } from '../../hooks/useCrew'
 import { useCrewRides } from '../../hooks/useCrewRides'
 import { useCrewRideComments, usePostCrewRideComment } from '../../hooks/useCrewRideComments'
@@ -263,12 +265,15 @@ function Cell({ label, value }: { label: string; value: string }) {
  * exact would have replaced that with a redraw of it. They are passed in as
  * slots.
  */
-function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onAddPhoto }: {
+function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onAddPhoto, onOpenCharts, chartsOpen=false, onCloseCharts }: {
   ride: CrewRide
   avatar: string | null
   open: boolean
   onToggle: () => void
   accent: string
+  chartsOpen?: boolean
+  onCloseCharts?: () => void
+  onOpenCharts?: () => void
   onAddPhoto?: (activityId: number) => void
   /** This ride's record is already the feed's headline card, so the chip on
    *  its own post would state the same thing twice, ten pixels apart. */
@@ -358,12 +363,12 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
             u: 'km/h',
           }] : []),
     ],
-    elevationProfile: ride.elevation_profile,
-    powerProfile: ride.power_profile,
+    elevationProfile: onOpenCharts ? null : ride.elevation_profile,
+    powerProfile: onOpenCharts ? null : ride.power_profile,
     reactionCount: Object.values(ride.reactions?.counts ?? {}).reduce((a, b) => a + b, 0),
     commentCount: ride.comment_count,
     alsoLine: null,
-    onOpen: onToggle,
+    onOpen: onOpenCharts ?? onToggle,
     // Only your own ride, only while it has no picture. The feed owns the
     // sheet so the plus works from any card without each one carrying a modal.
     onAddPhoto: mine && ride.photo_urls.length === 0 && onAddPhoto
@@ -381,6 +386,7 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
             <div style={{ flex: 1, minWidth: 0 }}>
               <Reactions rideId={ride.id} seed={ride.reactions} accent={tint} />
             </div>
+            <>{onOpenCharts&&<button type="button" onClick={onOpenCharts} aria-label={chartsOpen?"Fahrtanalyse schließen":"Fahrtanalyse öffnen"} aria-expanded={chartsOpen} style={{...bare,display:'flex',alignItems:'center',gap:5,color:T.mid,fontSize:11,padding:'7px 3px'}}><ChartNoAxesCombined size={15}/>Analyse</button>}</>
             <button type="button" onClick={onToggle} aria-label={`Kommentare öffnen (${ride.comment_count})`}
               style={{ ...bare, flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 11px', borderRadius: 100, background: T.surface2 }}>
               <MessageCircle size={13} color={ride.comment_count > 0 ? tint : T.quiet} />
@@ -388,7 +394,7 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
             </button>
           </div>
         ),
-        thread: open ? (
+        thread: <><AnimatePresence initial={false}>{chartsOpen&&<W3RideTelemetryPanel key={ride.id} ride={ride} onClose={()=>onCloseCharts?.()}/>}</AnimatePresence>{open ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: S.md, minWidth: 0 }}>
             <div style={{ ...luxTile(16), padding: 14, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
               <Cell label="TSS" value={ride.tss != null ? nf.format(ride.tss) : DASH} />
@@ -405,7 +411,7 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
               {ride.comment_count === 1 ? '1 Kommentar ansehen' : `Alle ${ride.comment_count} Kommentare ansehen`}
             </button>
           ) : null
-        ),
+        )}</>,
       }}
     />
   )
@@ -413,7 +419,8 @@ function RidePost({ ride, avatar, open, onToggle, accent, headlined = false, onA
 
 // ── the section ─────────────────────────────────────────────────────────────
 
-export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, headlinedId = null }: {
+export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, headlinedId = null, chartsOnDemand = false }: {
+  chartsOnDemand?: boolean
   rides: CrewRide[]
   /** user_id → their rendered rider portrait, from the standings the rank card
    *  already fetched. A member without one gets their initial. */
@@ -439,6 +446,7 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, h
   // One open at a time. Two expanded threads in a column push the second one's
   // composer off the bottom of a 390×844 screen, and a rider who opens a ride
   // is reading that ride.
+  const [telemetryRide,setTelemetryRide] = useState<CrewRide|null>(null)
   const [openId, setOpenId] = useState<number | null>(null)
   // ONE SHEET FOR THE WHOLE COLUMN. Every card's plus opens this; giving each
   // post its own modal would mount one per ride in the list.
@@ -484,6 +492,9 @@ export function W3CrewFeedView({ rides, avatars, variant = 'today', onRefresh, h
             onToggle={() => setOpenId((prev) => (prev === r.id ? null : r.id))}
             accent={accent}
             headlined={r.id === headlinedId}
+            chartsOpen={telemetryRide?.id===r.id}
+            onCloseCharts={()=>setTelemetryRide(null)}
+            onOpenCharts={chartsOnDemand?()=>setTelemetryRide(current=>current?.id===r.id?null:r):undefined}
             onAddPhoto={setAddTo} />
         </div>
       ))}

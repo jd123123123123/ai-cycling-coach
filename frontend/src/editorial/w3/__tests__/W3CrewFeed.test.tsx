@@ -8,10 +8,12 @@ import type { CrewRide, CrewRideComment } from '../../../api/crewRides'
 // what the server said — never about reaching a server.
 const fetchCrewRideComments = vi.fn()
 const postCrewRideComment = vi.fn()
+const fetchCrewRideTelemetry = vi.fn()
 vi.mock('../../../api/crewRides', () => ({
   fetchCrewRides: vi.fn(async () => []),
   fetchCrewRideComments: (id: number) => fetchCrewRideComments(id),
   postCrewRideComment: (id: number, text: string) => postCrewRideComment(id, text),
+  fetchCrewRideTelemetry: (id: number) => fetchCrewRideTelemetry(id),
 }))
 const toggleReaction = vi.fn()
 vi.mock('../../../api/crewReactions', async (orig) => ({
@@ -27,6 +29,10 @@ beforeEach(() => {
   fetchCrewRideComments.mockReset().mockResolvedValue([])
   postCrewRideComment.mockReset()
   toggleReaction.mockReset()
+  fetchCrewRideTelemetry.mockReset().mockResolvedValue({activity_id:1,samples:[
+    {position:0,power:120,heart_rate:110,altitude:20,cadence:80},
+    {position:1,power:240,heart_rate:150,altitude:40,cadence:90},
+  ]})
 })
 
 const ride = (over: Partial<CrewRide> = {}): CrewRide => ({
@@ -74,6 +80,19 @@ describe('the honest formatters', () => {
 })
 
 describe('W3CrewFeed', () => {
+  it('loads analysis only on request and expands it inside the ride without a dialog', async () => {
+    wrap(<W3CrewFeedView rides={[ride()]} chartsOnDemand />)
+    expect(fetchCrewRideTelemetry).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region',{name:'Fahrtanalyse: Alpenrand'})).toBeNull()
+    fireEvent.click(screen.getByRole('button',{name:'Fahrtanalyse öffnen'}))
+    await waitFor(()=>expect(fetchCrewRideTelemetry).toHaveBeenCalledWith(1))
+    expect(screen.getByRole('region',{name:'Fahrtanalyse: Alpenrand'})).toBeTruthy()
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button',{name:'Puls'}))
+    await waitFor(()=>expect(screen.getByRole('img',{name:'Pulsverlauf der Fahrt'})).toBeTruthy())
+    fireEvent.click(screen.getByRole('button',{name:'Graphen einklappen'}))
+    await waitFor(()=>expect(screen.queryByRole('region',{name:'Fahrtanalyse: Alpenrand'})).toBeNull())
+  })
   it('renders NOTHING without a crew ride — the invitation belongs to the rank card above', () => {
     const { container } = wrap(<W3CrewFeedView rides={[]} />)
     expect(container.firstChild).toBeNull()

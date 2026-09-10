@@ -128,3 +128,13 @@ export async function postCrewRideComment(
   )
   return res.data
 }
+
+export type CrewTelemetryMetric = 'power'|'heart_rate'|'altitude'|'cadence'
+export type CrewTelemetrySample = {position:number;distance?:number|null;grade_pct?:number|null} & Record<CrewTelemetryMetric,number|null>
+export interface CrewTelemetryZone {id:number;name:string;upper:number|null}
+export interface CrewTelemetryZones {basis:'ftp_history'|'ftp_current'|'lthr_current'|'hrmax_current';reference:number;bands:CrewTelemetryZone[]}
+export interface CrewRideTelemetry {activity_id:number;samples:CrewTelemetrySample[];zones?:Partial<Record<'power'|'heart_rate',CrewTelemetryZones>>}
+export async function fetchCrewRideTelemetry(activityId:number):Promise<CrewRideTelemetry>{
+ const response=await apiClient.get<CrewRideTelemetry>(`/crews/me/rides/${activityId}/telemetry`)
+ return response.data
+}
