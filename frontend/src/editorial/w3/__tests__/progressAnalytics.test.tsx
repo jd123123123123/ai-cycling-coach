@@ -26,11 +26,9 @@ it('does not manufacture a trend from the current value alone',()=>{
  expect(screen.queryByRole('img')).toBeNull()
  expect(screen.queryByRole('slider')).toBeNull()
 })
-it('opens the source ride for a period record',()=>{
- const ids:number[]=[]
- render(<ProgressRecords showDetails records={data.records} onRide={id=>ids.push(id)}/>)
- fireEvent.click(screen.getByRole('button',{name:/Fahrt vom/}))
- expect(ids).toEqual([42])
+it('keeps record details without a source ride footer',()=>{
+ render(<ProgressRecords showDetails records={data.records}/>)
+ expect(screen.queryByRole('button',{name:/Fahrt vom/})).toBeNull()
  expect(screen.getByText('−20 W zum Bestwert')).toBeTruthy()
 })
 

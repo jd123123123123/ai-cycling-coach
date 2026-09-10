@@ -2,8 +2,7 @@ import { smoothCurve } from './w3SmoothCurve'
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowUpRight, ChevronLeft, ChevronRight, Info } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Info } from 'lucide-react'
 import { fetchProgressExplorer, type ProgressExplorer, type ProgressPeriod, type ProgressMetric, type ProgressRecord } from '../../api/progressExplorer'
 import { T, FONT } from './w3tokens'
 import './w3progressAnalytics.css'
@@ -132,7 +131,7 @@ export function ProgressTrend({metric,start,end,kind,showDetails=false}:{showDet
  </div>
 }
 
-export function ProgressRecords({records,onRide,start,end,showDetails=false}:{showDetails?:boolean;records:ProgressRecord[];onRide?:(id:number)=>void;start?:string;end?:string}) {
+export function ProgressRecords({records,start,end,showDetails=false}:{showDetails?:boolean;records:ProgressRecord[];start?:string;end?:string}) {
  const [seconds,setSeconds]=useState(300)
  const selected=records.find(p=>p.seconds===seconds)??records[0]
  const activeSeconds=selected?.seconds??seconds
@@ -173,12 +172,12 @@ export function ProgressRecords({records,onRide,start,end,showDetails=false}:{sh
      {[5,60,300,3600].map(s=><text key={s} x={x(s)} y="258" textAnchor={s===5?'start':s===3600?'end':'middle'} fill={T.mid} fontSize="11">{dur(s)}</text>)}
    </svg>
    <div className="w3-progress-durations" aria-label="Rekorddauer">{records.map(p=><button type="button" key={p.seconds} aria-pressed={activeSeconds===p.seconds} onClick={()=>setSeconds(p.seconds)}>{dur(p.seconds)}</button>)}</div>
-   {selected&&<div className="w3-progress-record-detail">{showDetails&&<div><span>Bisheriger Bestwert</span><strong>{n(selected.all_time_watts,0)} W</strong></div>}{selected.activity_id&&onRide&&<button onClick={()=>onRide(selected.activity_id!)}>Fahrt vom {selected.date?dateLabel(selected.date):'gewählten Tag'} <ArrowUpRight size={14}/></button>}</div>}
+   {selected&&showDetails&&<div className="w3-progress-record-detail"><div><span>Bisheriger Bestwert</span><strong>{n(selected.all_time_watts,0)} W</strong></div></div>}
    {showDetails&&<div className="w3-progress-method"><p>Vorher: {previousRange??'gleich langer Zeitraum davor'}. Jetzt: {range??'gewählter Zeitraum'}. Verglichen wird die höchste mittlere Leistung über dieselbe Dauer.</p>{gap!=null&&<p>{gap===0?'Bestwert erreicht':`−${n(gap,0)} W zum Bestwert`}</p>}<p>Gestrichelt: vorher. Grün: jetzt. Gepunktet: bisheriger Bestwert. Fehlende Versuche bleiben offen und bedeuten keinen Fitnessverlust.</p></div>}
  </div>
 }
 
-export function W3ProgressAnalyticsView({data,period,onPeriod,onRide,referenceDate,onReferenceDate,today,mode:controlledMode,onMode,pending=false,error=false}:{mode?:'ftp'|'vo2'|'records';onMode?:(mode:'ftp'|'vo2'|'records')=>void;data?:ProgressExplorer;referenceDate?:string|null;onReferenceDate?:(value:string)=>void;today?:string;period:ProgressPeriod;onPeriod:(p:ProgressPeriod)=>void;onGoal?:()=>void;onRide?:(id:number)=>void;pending?:boolean;error?:boolean}) {
+export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onReferenceDate,today,mode:controlledMode,onMode,pending=false,error=false}:{mode?:'ftp'|'vo2'|'records';onMode?:(mode:'ftp'|'vo2'|'records')=>void;data?:ProgressExplorer;referenceDate?:string|null;onReferenceDate?:(value:string)=>void;today?:string;period:ProgressPeriod;onPeriod:(p:ProgressPeriod)=>void;onGoal?:()=>void;pending?:boolean;error?:boolean}) {
  const [localMode,setLocalMode]=useState<'ftp'|'vo2'|'records'>('ftp')
  const [info,setInfo]=useState(false)
  const mode=controlledMode??localMode
@@ -193,7 +192,7 @@ export function W3ProgressAnalyticsView({data,period,onPeriod,onRide,referenceDa
 
    <div className="w3-progress-range" aria-label="Ausgewählter Zeitraum">{data?.start?`${dateLabel(data.start)} – ${dateLabel(data.end)}`:period==='plan'?'Kein aktiver Plan':''}</div>
    {pending?<p className="w3-progress-empty" role="status">Verlauf wird geladen…</p>:error?<p className="w3-progress-empty" role="alert">Der Verlauf konnte nicht geladen werden. Öffne die Kachel erneut oder wähle einen anderen Zeitraum.</p>:data?.start?<>
-     {mode==='records'?<ProgressRecords key={`${period}-${data.start}`} records={data.records} showDetails={info} onRide={onRide} start={data.start} end={data.end}/>:<ProgressTrend key={`${mode}-${period}-${data.start}`} metric={data[mode]} showDetails={info} start={data.start} end={data.end} kind={mode}/>}
+     {mode==='records'?<ProgressRecords key={`${period}-${data.start}`} records={data.records} showDetails={info} start={data.start} end={data.end}/>:<ProgressTrend key={`${mode}-${period}-${data.start}`} metric={data[mode]} showDetails={info} start={data.start} end={data.end} kind={mode}/>}
      {info&&period==='plan'&&<p className="w3-progress-plan-note">{data.plan_note}</p>}
    </>:<p className="w3-progress-empty">Sobald dein Plan startet, kannst du hier deinen Fortschritt seit Planbeginn verfolgen.</p>}
  </section>
@@ -205,6 +204,5 @@ export default function W3ProgressAnalytics() {
  const {data,isPending,isError}=useProgressExplorer(period,referenceDate)
  const [athleteToday,setAthleteToday]=useState<string|undefined>()
  useEffect(()=>{if(data?.today)setAthleteToday(data.today)},[data?.today])
- const navigate=useNavigate()
- return <W3ProgressAnalyticsView data={data} period={period} today={data?.today??athleteToday} referenceDate={referenceDate} onReferenceDate={setReferenceDate} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} pending={isPending} error={isError} onGoal={()=>navigate('/e/w3-goal-set')} onRide={id=>navigate(`/e/w3-ride/${id}`)}/>
+ return <W3ProgressAnalyticsView data={data} period={period} today={data?.today??athleteToday} referenceDate={referenceDate} onReferenceDate={setReferenceDate} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} pending={isPending} error={isError}/>
 }
