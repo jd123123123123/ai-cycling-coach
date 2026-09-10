@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { W3TodayOverviewView, type OverviewData } from '../W3TodayOverview'
 import type { W3Vm } from '../W3TodayView'
 import W3TodayDock from '../W3TodayDock'
@@ -13,18 +13,18 @@ const vm = { weekDays: [{status:'today',rest:true,letter:'M'}], hasPlan:true, we
 const data: OverviewData = { form:{ctl:16.2,atl:1,tsb:15.2}, crew:null, crewState:'ready', ftp:240, ftpGoal:350 }
 
 describe('Today overview', () => {
-  it('keeps details off the quick view and opens only the requested section', () => {
+  it('keeps details off the quick view and opens only the requested section', async () => {
     render(<W3TodayOverviewView vm={vm} data={data} week={<p>Wocheninhalt</p>} form={<p>Forminhalt</p>} crew={<p>Crewinhalt</p>} goals={<p>Zielinhalt</p>} />)
     expect(screen.getAllByRole('button')).toHaveLength(5)
     expect(screen.queryByText('Forminhalt')).toBeNull()
     fireEvent.click(screen.getByRole('button',{name:/Deine Form/}))
     expect(screen.getByText('Forminhalt')).toBeTruthy()
     fireEvent.click(screen.getByRole('button',{name:/Deine Woche/}))
-    expect(screen.queryByText('Forminhalt')).toBeNull()
+    await waitFor(() => expect(screen.queryByText('Forminhalt')).toBeNull())
     expect(screen.getByText('Wocheninhalt')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button',{name:'Details schließen'}))
-    expect(screen.queryByText('Wocheninhalt')).toBeNull()
-    expect(document.activeElement).toBe(screen.getByRole('button',{name:/Deine Woche/}))
+    fireEvent.click(screen.getByRole('button',{name:'Deine Woche schließen'}))
+    await waitFor(() => expect(screen.queryByText('Wocheninhalt')).toBeNull())
+    expect(screen.getByRole('button',{name:'Deine Woche öffnen'}).getAttribute('aria-expanded')).toBe('false')
   })
   it('does not turn missing data into zero fitness or goal progress', () => {
     render(<W3TodayOverviewView vm={vm} data={{...data,form:null,ftp:null,ftpGoal:null,crewState:'error'}} week={null} form={null} crew={null} goals={null} />)

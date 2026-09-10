@@ -885,8 +885,8 @@ function AdjustButton({ onOpen }: { onOpen: () => void }) {
 /** THE card: week selector + selected day's training + selected day's weather.
  *  Controlled — `selected` lives in W3TodayView, so the whole card is one
  *  pure function of the day you tapped. */
-export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChip, loadLabel, day, session, weather, onAdapt }: {
-  days: W3DayFull[]; selected: number; onSelect: (i: number) => void
+export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChip, loadLabel, day, session, weather, onAdapt, embedded = false }: {
+  days: W3DayFull[]; selected: number; onSelect: (i: number) => void; embedded?: boolean
   blockLabel: string; doneChip: string | null; loadLabel: string
   day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt
 }) {
@@ -902,13 +902,13 @@ export function WeekTrainingCard({ days, selected, onSelect, blockLabel, doneChi
   // only section whose bottom gap did not match its neighbours — the eye reads
   // that inconsistency as a mistake long before it can name it.
   return (
-    <div style={band(26)}>
-      <div style={{ ...card(), padding: 18, gap: 14 }}>
+    <div style={embedded ? { display: 'flex', flexDirection: 'column' } : band(26)}>
+      <div style={{ ...card(), ...(embedded ? { background: 'transparent', border: 0, boxShadow: 'none', padding: 0 } : { padding: 18 }), gap: 16 }}>
 
         {/* header — the week, its block, and how much of it is done */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Deine Woche</span>
+            {!embedded && <span style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, color: T.ink }}>Deine Woche</span>}
             <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{blockLabel}</span>
           </div>
           <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>

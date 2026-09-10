@@ -1,17 +1,45 @@
+/* Compact W3 card: radius 20 / padding 14, one acid action. */
 .w3-today-content { position: relative; padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
-.w3-today-overview { display: grid; gap: 6px; padding: 0 16px; }
-.w3-overview-toggle { width: 100%; border: 0; background: transparent; padding: 6px 16px; display: flex; gap: 12px; align-items: center; text-align: left; font: inherit; cursor: pointer; min-height: 54px; }
-.w3-overview-copy { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
-.w3-overview-copy > span { overflow-wrap: anywhere; }
-.w3-overview-week { display: flex; justify-content: space-between; gap: 6px; width: 96px; flex: none; }
-.w3-overview-metrics { display: flex; gap: 10px; flex: none; }
-.w3-overview-detail { padding: 4px 0 8px; }
-.w3-overview-detail > [style] { padding-left: 16px !important; padding-right: 16px !important; }
-.w3-overview-close { display: flex; align-items: center; gap: 6px; margin: 0 auto; background: none; border: 0; font: inherit; font-size: 11px; min-height: 44px; padding: 8px 16px; cursor: pointer; }
-.w3-long-projection { margin: 12px 16px; font-size: 12px; }
+.w3-today-overview { display: grid; gap: 10px; padding: 0 20px; }
+.w3-overview-card { background: #16191f; border: 1px solid #ffffff12; border-radius: 20px; overflow: hidden; color: #fff; }
+.w3-overview-header { display: flex; align-items: center; gap: 12px; padding: 14px 14px 0; }
+.w3-overview-title { flex: 1; margin: 0; font-size: 20px; line-height: 1.1; font-weight: 700; letter-spacing: -0.5px; }
+.w3-overview-toggle { position: relative; width: 28px; height: 28px; flex: none; border: 0; border-radius: 50%; display: grid; place-items: center; background: #c8ff00; color: #0b0b0b; cursor: pointer; transition: background 180ms, color 180ms; }
+.w3-overview-toggle::before { content: ""; position: absolute; inset: -8px; border-radius: 50%; }
+.w3-overview-toggle:hover { background: #ddff66; color: #0b0b0b; }
+.w3-overview-toggle:focus-visible { outline: 2px solid #c8ff00; outline-offset: 3px; }
+.w3-overview-summary { display: flex; align-items: center; gap: 12px; padding: 4px 14px 14px; min-height: 36px; }
+.w3-overview-copy { min-width: 0; flex: 1; font-size: 12px; line-height: 1.4; font-weight: 500; color: #9ba0a6; }
+.w3-overview-week { display: flex; justify-content: space-between; gap: 6px; width: 110px; flex: none; }
+.w3-overview-metrics { display: flex; gap: 12px; flex: none; }
+.w3-overview-detail { padding: 14px; }
+.w3-overview-card[data-open=true] .w3-overview-header { padding-bottom: 0; }
+.w3-overview-detail > [style] { padding-left: 0 !important; padding-right: 0 !important; }
+.w3-long-projection { margin: 16px 0 0; font-size: 12px; }
 .w3-long-projection > summary { cursor: pointer; padding: 12px 0; }
 .w3-long-projection[open] > summary { margin-bottom: 12px; }
-.w3-overview-toggle:focus-visible, .w3-overview-close:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; border-radius: 24px; }
-@media (max-width: 359px) { .w3-overview-toggle { padding: 14px 12px; gap: 8px; } .w3-overview-metrics { gap: 6px; } .w3-overview-week { width: 78px; } }
+.w3-overview-workout { display: flex; align-items: flex-end; gap: 3px; width: 110px; height: 30px; flex: none; }
+@media (max-width:359px) { .w3-today-overview { padding: 0 16px; } .w3-overview-metrics { gap: 8px; } .w3-overview-week, .w3-overview-workout { width: 92px; } }
+@media (prefers-reduced-motion: reduce) { .w3-overview-toggle { transition: none; } }
 
-.w3-overview-workout { display: flex; align-items: flex-end; gap: 2px; width: 96px; height: 30px; flex: none; }
+/* The collapsed card carries the graphic, rather than reducing it to a thumbnail. */
+[data-today-card=week] .w3-overview-summary,
+[data-today-card=form] .w3-overview-summary,
+[data-today-card=goals] .w3-overview-summary { flex-wrap: wrap; gap: 8px; }
+[data-today-card=week] .w3-overview-copy,
+[data-today-card=goals] .w3-overview-copy { flex-basis: 100%; }
+[data-today-card=form] .w3-overview-copy { display: none; }
+[data-today-card=form] .w3-overview-copy:only-child { display: block; }
+.w3-overview-week { width: 100%; gap: 8px; }
+.w3-overview-day { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 9px; font-weight: 600; color: #9ba0a6; }
+.w3-overview-day[data-current=true] { color: #c8ff00; }
+.w3-overview-day-track { position: relative; display: block; width: 100%; height: 34px; }
+.w3-overview-day-plan, .w3-overview-day-done { position: absolute; bottom: 0; left: 20%; width: 60%; border-radius: 5px; }
+.w3-overview-day-plan { background: #565d69; }
+.w3-overview-day-done { background: #c8ff00; }
+.w3-overview-day[data-current=true] .w3-overview-day-track { border-bottom: 1px solid #c8ff00; }
+.w3-overview-metrics { width: 100%; justify-content: space-between; gap: 16px; padding-top: 4px; }
+.w3-overview-metrics > span { flex: 1; min-width: 0; }
+.w3-overview-spark { display: block; width: 100%; height: 24px; margin-top: 1px; overflow: visible; }
+.w3-overview-goal { width: 100%; display: flex; align-items: center; gap: 12px; }
+.w3-overview-goal-track { flex: 1; height: 8px; border-radius: 8px; background: #ffffff12; overflow: hidden; }

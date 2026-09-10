@@ -301,7 +301,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
           weather={vm.weather} onAdapt={onAdapt}
         /> : <W3TodayComposer readiness={vm.readiness} />}
         week={<>
-          {vm.hasPlan ? <WeekTrainingCard
+          {vm.hasPlan ? <WeekTrainingCard embedded
             days={vm.weekDays} selected={selDay} onSelect={setSelDay}
             blockLabel={vm.weekBlockLabel} doneChip={vm.weekDoneChip} loadLabel={vm.weekLoadLabel}
             day={selectedDay}
