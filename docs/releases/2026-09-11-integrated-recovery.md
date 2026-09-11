@@ -1,4 +1,4 @@
-# Integrated recovery — ready for review, not yet deployed
+# Integrated recovery — deployed 2026-09-11
 
 ## Sources
 
@@ -63,3 +63,25 @@ Validation: all 47 tests in `test_backdrop_unlock_flow.py`, `test_stage_unlock.p
 `test_backdrops_and_wear.py` and `test_stage_frame.py` pass. No production ride,
 reward or selected background was changed, and no paid image was generated.
 This fix is local and not yet deployed.
+
+## Production deployment
+
+User approved deployment after the 200 km simulation. Deployed only the Git
+archive of `201c600dca48ea7f0d71e2672b245efc42cb2a52`; untracked preview files and
+fixtures were excluded.
+
+- Railway deployment: `8b0fd0c1-5ef7-4eab-b14e-0fdda354ed81`, SUCCESS.
+- Verified previous active deployment at dispatch:
+  `aad15e8c-a95d-43dc-8c72-1dec2b9edfe0` (supersedes the earlier recorded snapshot).
+- `/healthz` returns HTTP 200 with `status: ok`; `/e/w3-today` returns HTTP 200.
+- Startup completed successfully, including the existing migration startup step.
+- Delivered entry `index-BBMS7Vne.js`, page `W3TodayPage-Uws35tqk.js`, view
+  `W3TodayView-BRwdIDqj.js`; view contains the restored Form, Woche, Fortschritt
+  and Planphase components.
+- Authenticated browser verification shows the original Standert Kreissäge and
+  rider avatar, compact expandable W3 cards, separate Unterwegs and Ziele.
+- No production simulation, artificial activity, or paid image generation.
+
+The local-only statements above describe the pre-approval state; the cache and
+framing fix is now included in this deployed release. Future backend or frontend
+deployments must integrate this commit rather than use the old source snapshot.
