@@ -36,3 +36,30 @@ The incoming routine-rides migration rr5e1b8c94d7 is retained; it is the single 
 There is no general need to change source or cache settings solely because local and Docker chunk hashes differ. Verify the served feature content. This incident involved divergent frontend source, not merely an unchanged asset hash.
 
 Preview correction: the initially displayed Claude scene contained a different bicycle and was unsuitable as a reference. It has been removed. No generated replacement bike or scene is included in the release.
+
+## 200 km unlock simulation
+
+The local simulation uses real catalogue evaluation, settlement's `_pay_gear`
+unlock path, persisted ownership queries and the Studio selection handler with
+an isolated in-memory SQLite database. Activity ingestion, Postgres RLS, weather,
+place lookup and paid image generation are outside this simulation. The historical
+fallback is empty, so successful selection proves the persisted reward is read.
+
+- A new 200 km ride on 2026-09-11 unlocks `coast_road` (Küstenstraße).
+- The actual threshold is 100 km in one ride. There is no separate 200 km reward.
+- Below 100 km stays locked; two 60 km rides are not combined.
+- Rides before the catalogue launch on 2026-09-10 do not unlock backgrounds.
+- Re-syncing the ride or completing another 200 km ride creates no duplicate
+  reward and does not queue another image. Another user cannot select it.
+- Studio selection persists, and the original stored bike asset stays unchanged.
+
+The first run passed 8 scenarios and exposed a ninth failure: the image warmer
+used an image URL suffix in its cache key, while Studio reads use the asset's
+timestamp. The warmer now uses the same timestamp and passes the same framing
+ratio as the normal Studio rendering path. A mocked render is subsequently read
+by the real Studio handler and reused without a second render call.
+
+Validation: all 47 tests in `test_backdrop_unlock_flow.py`, `test_stage_unlock.py`,
+`test_backdrops_and_wear.py` and `test_stage_frame.py` pass. No production ride,
+reward or selected background was changed, and no paid image was generated.
+This fix is local and not yet deployed.

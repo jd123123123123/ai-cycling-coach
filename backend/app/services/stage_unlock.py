@@ -105,7 +105,7 @@ async def _render_one(user_id: int, stage_id: str) -> None:
 
     # Imported here rather than at module scope: `cyclr_studio` pulls in the
     # image SDK, and ingestion must not pay for that import on every ride.
-    from app.services import bike_build, cyclr_studio, gear
+    from app.services import bike_build, cyclr_studio, gear, stage_frame
 
     async with async_session_maker() as db:
         asset = (await db.execute(
@@ -130,6 +130,8 @@ async def _render_one(user_id: int, stage_id: str) -> None:
         prompt = bike_build.edit_prompt(equipped, world=stage.prose)
         image = await cyclr_studio.edit_image(
             asset.image_url, prompt, key, aspect=cyclr_studio.STAGE_ASPECT,
+            frame_ratio=stage_frame.geometry_from_cutout(asset.image_url)
+            or stage_frame.RATIO_DEFAULT,
         )
         if not image:
             logger.info("stage warm produced no image for %s", stage_id)
@@ -146,4 +148,4 @@ async def _render_one(user_id: int, stage_id: str) -> None:
 
 def _stamp(asset: GarageAsset) -> str:
     """The asset's render identity, matching what `api/garage` keys on."""
-    return (asset.image_url or "")[-32:]
+    return (asset.updated_at or asset.created_at).isoformat()
