@@ -626,21 +626,10 @@ export default function W3TodayPage() {
       // render the model couldn't name — never a stand-in for a missing bike,
       // which stays `bikeImage: null` and gets the hero's empty state.
       bikeName: today?.bike_name ?? garage?.bike?.name ?? 'Dein Bike',
-      // THE CONFIGURED BIKE FIRST. `/garage/today` returns the machine wearing
-      // its equipped parts and standing in the stage the rider chose; the plain
-      // garage render is the fallback for a build that has never been composed,
-      // and it is the same bicycle either way — just on the bare floor.
-      bikeImage: today?.bike_image ?? garage?.bike?.image_base64 ?? null,
-      // Same for the face: the bust WEARING its helmet and glasses when one has
-      // been composed, the bare-headed collectible until then.
+      // Preserve the original bicycle and the approved cut-out framing.
+      bikeImage: garage?.bike?.image_base64 ?? null,
       riderImage: today?.rider_image ?? garage?.rider?.image_base64 ?? null,
-      // A composed render is one the Today endpoint returned that ISN'T the
-      // plain garage collectible — the machine wearing its parts, standing
-      // somewhere. It is a photograph of a place and needs the opposite
-      // treatment to a cut-out on a studio sweep; see `W3TodayStage.SCENE_ART`.
-      bikeInScene: Boolean(
-        today?.bike_image && today.bike_image !== garage?.bike?.image_base64,
-      ),
+      bikeInScene: false,
       stages: today?.stages,
       stage: today?.stage,
       onSelectStage: selectStage.mutate,

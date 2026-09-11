@@ -18,8 +18,14 @@ describe('heroVm · bikeInScene is a size switch', () => {
     expect(vm.bike).toBe('IMG_A')
   })
 
-  it('is TRUE only when Today composed something the garage does not have', () => {
-    expect(heroVm({ ...EMPTY, stage: stage('SCENE'), garage: garage('IMG_A') }).bikeInScene).toBe(true)
+  it('preserves the original bicycle when a generated scene exists', () => {
+    const vm = heroVm({ ...EMPTY, stage: stage('SCENE'), garage: garage('IMG_A') })
+    expect(vm.bikeInScene).toBe(false)
+    expect(vm.bike).toBe('IMG_A')
+  })
+
+  it('does not substitute a generated bike while the garage loads', () => {
+    expect(heroVm({ ...EMPTY, stage: stage('SCENE') }).bike).toBeNull()
   })
 
   it('is FALSE with no Today render at all', () => {

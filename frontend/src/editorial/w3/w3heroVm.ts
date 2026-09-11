@@ -54,36 +54,10 @@ export function heroVm(s: HeroSources): W3StageVm {
     // The bust wearing its helmet and glasses when one has been composed, the
     // bare-headed collectible until then.
     rider: s.stage?.rider_image ?? s.garage?.rider?.image_base64 ?? null,
-    // THE CONFIGURED BIKE FIRST: the machine wearing its equipped parts and
-    // standing in the stage the rider chose. The plain garage render is the
-    // fallback, and the claimed collectible the last resort — never a stock
-    // bike presented as theirs. The rider may explicitly put their BOUGHT
-    // collection bike on stage instead (goals.stage_bike = 'collection'):
-    // owned is owned, and a sink whose purchase changes nothing visible is a
-    // refund request.
-    bike: wantsCollection
-      ? collectible
-      : s.stage?.bike_image ?? s.garage?.bike?.image_base64 ?? collectible,
-    // Catalogue/build art is a white-ground square; the stage dissolves it
-    // with a multiply blend. The rider's own render is already a cut-out.
-    bikeStudioArt: wantsCollection
-      ? true
-      : s.stage?.bike_image == null && s.garage?.bike?.image_base64 == null && collectible != null,
-    // A COMPOSED render is one the Today endpoint returned that ISN'T the plain
-    // garage collectible.
-    //
-    // THIS IS A SIZE SWITCH, not a label. A scene reaches its own frame and is
-    // drawn full bleed; a studio cut-out stands on the floor line at its own
-    // scale with its shadows. `bike_image != null` looks like the same test and
-    // is not — every rider has a bike_image, so that version calls every
-    // machine a scene and blows it up to fill the stage.
-    // Forcing the collection bike also forces the STUDIO treatment: catalogue
-    // art and build renders are cut-outs (services/cutout), so they stand on
-    // the floor line with their shadows — the size switch must describe the
-    // art actually drawn, not the art skipped.
-    bikeInScene: wantsCollection
-      ? false
-      : Boolean(s.stage?.bike_image && s.stage.bike_image !== s.garage?.bike?.image_base64),
+    // Generated backdrop scenes must not replace the saved bicycle identity.
+    bike: wantsCollection ? collectible : s.garage?.bike?.image_base64 ?? collectible,
+    bikeStudioArt: wantsCollection || (s.garage?.bike?.image_base64 == null && collectible != null),
+    bikeInScene: false,
     bikeName: wantsCollection
       ? itemById(s.collection?.loadout.bike)?.name ?? 'Dein Bike'
       : s.stage?.bike_name ?? s.garage?.bike?.name ?? 'Dein Bike',
