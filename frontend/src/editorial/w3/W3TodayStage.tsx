@@ -177,6 +177,13 @@ const TYRE_X = ['19%', '81%'] as const
  * composed square and the stage is not: the interest is in the middle band
  * where the road and the bike are, and the sky is what can afford to go.
  */
+const SCENE_ART = {
+  width: '100%',
+  height: '100%',
+  objectFit: 'cover' as const,
+  display: 'block' as const,
+}
+
 export interface W3StageVm {
   handle: string
   /** True when `bike` is a COMPOSED render — the machine wearing its parts,
@@ -265,9 +272,6 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
 }) {
   const reduce = useReducedMotion()
   const theme = vm.theme ?? stageThemeById(null)
-  // The composed render, when there is one — the rider's machine already
-  // standing in its place. It becomes the room; see the plate layer below.
-  const sceneArt = vm.bikeInScene && vm.bike ? vm.bike : null
   const bikeSrc = useCutout(vm.bike, vm.bikeStudioArt === true)
 
   // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
@@ -294,29 +298,12 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
 
-      {/* ── A SCENE IS THE ROOM, NOT AN OBJECT IN IT ──────────────────────
-          A composed render already contains its own ground, its own horizon
-          and its own sky. Drawn into the MACHINE's box — which is what
-          happened before — it landed as a rectangle in the middle of the room
-          with the app's near-black plate above it and a hard seam between the
-          two: the rider's own summit, matted into a letterbox.
-
-          So a scene REPLACES the plate. It fills the stage, the bust and the
-          corner chips sit over it, and the machine block below draws nothing
-          because the machine is already in the picture. The procedural themes
-          keep the old path exactly: they are flat sets that a cut-out bike
-          stands on, and they still are.
-
-          `cover`, not `fill`: a photograph may be cropped to fit but must
-          never be stretched. `STAGE_ASPECT` renders these portrait so the crop
-          is a few percent rather than the 28% a square cost. */}
-      {sceneArt ? (
-        <img aria-hidden src={sceneArt} alt=""
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            objectFit: 'cover', pointerEvents: 'none',
-          }} />
-      ) : theme.css == null ? (
+      {/* The room itself. The studio is the rendered webp; every other theme
+          is a procedural plate — the same flat wall-meets-floor set, drawn as
+          a gradient with a duplicated stop so the horizon stays a LINE, pinned
+          to the same measured FLOOR on every screen. Motifs (a sun, stars, a
+          finish band) are flat positioned layers behind everything. */}
+      {theme.css == null ? (
         <img aria-hidden src={PLATE} alt=""
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -334,33 +321,6 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
         <div key={i} aria-hidden style={ex} />
       ))}
 
-      {/* ── THE NEAR GROUND, PAINTED OVER THE MACHINE ────────────────────
-          A cut-out bike composited onto a plate is always ON it: the plate is
-          one flat layer underneath, so a tyre can never disappear into grass
-          however the plate was rendered. Every scene we produced read as a
-          sticker on a landscape for exactly that reason.
-
-          This is the other half of the plate — its near ground, cut from the
-          SAME image so the light cannot disagree, with a feathered and
-          noise-displaced top edge so the join wanders like a grass line
-          instead of ruling a straight band across the wheels.
-
-          z-order is the whole feature: plate 0 · machine 1 · NEAR GROUND 2 ·
-          chrome 3. Chrome stays on top because a label may never be occluded
-          by the art it labels. `pointerEvents: none` so tapping the grass
-          still opens the garage.
-
-          Produced by `services/plate_layers.split`. */}
-      {theme.front ? (
-        <img aria-hidden src={theme.front} alt=""
-          style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            // `fill` for the same reason the plate uses it: the two layers must
-            // stretch identically or the near ground slides off its own plate.
-            objectFit: 'fill', zIndex: 2, pointerEvents: 'none',
-          }} />
-      ) : null}
-
       {/* ── the corner chips: real figures, floating on the floor ── */}
       {/* MEASURED AGAINST `W3TopBar`, not eyeballed: its row puts a 44px
           control at top 18, inset 20. The stage's chips sit on the same
@@ -369,7 +329,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           further out, which is exactly enough to read as "a different
           header". */}
       <div style={{
-        position: 'absolute', top: HEAD.top, left: HEAD.inset, zIndex: 3,
+        position: 'absolute', top: HEAD.top, left: HEAD.inset, zIndex: 2,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start',
       }}>
         {!compact && <DiscChip icon={<Star size={12} color={T.ink} fill={T.ink} />} value={vm.bonus ?? DASH} />}
@@ -388,7 +348,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
       </div>
 
       <div style={{
-        position: 'absolute', top: HEAD.top, right: HEAD.inset, zIndex: 3,
+        position: 'absolute', top: HEAD.top, right: HEAD.inset, zIndex: 2,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
       }}>
         {/* ── THE MENU, IN THE ONE CORNER IT IS ALWAYS IN ────────────────
@@ -428,9 +388,8 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           // "Umfangsblock · Woche 2 von 4" disappeared behind a top tube.
           //
           // The identity is a LABEL. A label may not be occluded by the art it
-          // labels, at any screen height — including by the stage's own front
-          // layer, which is why chrome sits at 3 and the near ground at 2.
-          zIndex: 3,
+          // labels, at any screen height.
+          zIndex: 2,
         }}>
 
         <div style={{ position: 'relative', width: AVATAR, height: AVATAR, display: 'grid', placeItems: 'center' }}>
@@ -554,10 +513,9 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           // The screen-blend and the radial mask stay for the studio render
           // ONLY because that art has a pale ground baked in and needs its
           // edges dissolved; the scene render already reaches its own frame.
-          // A SCENE DRAWS NOTHING HERE. The machine is already in the room —
-          // painting it a second time in this box put the same bicycle on
-          // screen twice, once as the world and once as an object in it.
-          vm.bikeInScene ? null : (
+          vm.bikeInScene ? (
+            <img src={vm.bike} alt={vm.bikeName} style={SCENE_ART} />
+          ) : (
             // THE BIKE AND ITS SHADOWS ARE ONE OBJECT, positioned together.
             // They were two independent percentages before, which is why they
             // never agreed: the art was centred in its own box while the shadow

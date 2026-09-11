@@ -51,25 +51,6 @@ export interface StageTheme {
   /** Flat positioned motifs (a sun disc, stars, a finish band). Every one
    *  sits BEHIND the bike and stays out of the top chips' corners. */
   extras?: CSSProperties[]
-
-  /**
-   * THE FRONT LAYER — the half of the stage that is drawn OVER the machine.
-   *
-   * The bike is a cut-out composited onto the plate as a sibling DOM layer, so
-   * everything in `css` is behind it by construction and no amount of prompt
-   * work can put a blade of grass in front of a tyre. That is the ceiling this
-   * field exists to lift: a transparent PNG of the SAME plate's near ground —
-   * grass, cobbles, scree — cut from the plate itself so the light matches, and
-   * painted above the bike so the wheels sit IN the material rather than on it.
-   *
-   * Null for the flat procedural sets, which have no near ground to speak of.
-   * See `services/plate_layers.py`, which produces it.
-   */
-  front?: string | null
-
-  /** Where the front layer's material begins, as a fraction of the stage. Only
-   *  meaningful with `front`; the contact shadow is drawn to meet it. */
-  frontTop?: number
   /** The swatch preview — a cheap one-gradient stand-in for the picker. */
   swatch: string
 }

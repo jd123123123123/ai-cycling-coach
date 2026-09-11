@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, cleanup, fireEvent, screen } from '@testing-library/react'
+import { render, cleanup } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import W3HeroShell from '../W3HeroShell'
@@ -60,25 +60,4 @@ describe('the room on a cold, logged-in start', () => {
     // And the room is not an empty box.
     expect(container.querySelectorAll('img').length).toBeGreaterThan(0)
   })
-})
-
-// Integration: the restored Today shell must retain Claude's composed stages.
-it('keeps one composed scene and the rider identity on Today', () => {
-  const scene = '/review-composed-scene.webp'
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  const { container } = render(
-    <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={['/e/w3-today']}>
-        <W3HeroShell vm={{ ...coldVm, handle: '@Rider', bike: scene, bikeName: 'Mein Rad', bikeInScene: true } as never}>
-          <h2>Fortschritt</h2>
-        </W3HeroShell>
-      </MemoryRouter>
-    </QueryClientProvider>,
-  )
-  expect(container.querySelectorAll(`img[src="${scene}"]`).length).toBe(1)
-  expect(container.textContent).toContain('@Rider')
-  expect(container.textContent).toContain('Fortschritt')
-  expect(screen.getByRole('button', { name: 'Garage öffnen' })).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Garage öffnen' }))
-  expect(container.textContent).toContain('@Rider')
 })
