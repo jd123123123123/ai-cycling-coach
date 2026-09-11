@@ -210,7 +210,7 @@ export default function W3TodayPage() {
   // blocks, so every day in the strip (not just today) gets its real session.
   const { data: week } = useCurrentWeek(0)
   const { data: profile } = useAthleteProfile()
-  const { data: todayWeather } = useTodayWeather()
+  const { data: todayWeather, locationState: weatherLocationState, requestLocation: requestWeatherLocation } = useTodayWeather()
   // The week's real activities — for a past day's ACTUAL duration / power / HR.
   const { data: weekActs } = useActivitiesRange(
     new Date(Date.now() - 8 * 86_400_000), new Date(),
@@ -704,6 +704,8 @@ export default function W3TodayPage() {
       // REAL weather from /weather/today (buildWeather) — today only. Without a
       // forecast there are no numbers at all, just the honest reason why.
       weatherForecast: todayWeather,
+      weatherLocationState,
+      requestWeatherLocation,
       weather: realWeather ?? {
         window: '—', temp: '—', feels: '—', short: null, verdict: null,
         meta: 'Wetter erscheint, sobald du eine Fahrt mit GPS geloggt hast — dann steht hier dein bestes Fenster für heute.',
@@ -739,7 +741,7 @@ export default function W3TodayPage() {
       })(),
     }
   }, [
-    model, user, streak, adaptive, week, ftp, todayWeather, weekActs, profile,
+    model, user, streak, adaptive, week, ftp, todayWeather, weatherLocationState, requestWeatherLocation, weekActs, profile,
     garage, garageLoading, wallet, chest,
     // Without these the memo never re-runs when the collection query lands, and
     // the hero would keep showing the empty state to a rider who owns a bike.

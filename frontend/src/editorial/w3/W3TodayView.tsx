@@ -148,6 +148,8 @@ export interface W3Vm {
   weather: W3Weather
   weatherForecast?: TodayWeather
   weatherNow?: Date
+  weatherLocationState?: 'idle' | 'locating' | 'loading' | 'error' | 'ready'
+  requestWeatherLocation?: () => void
 
   sessionDur: string | null
   sessionBlocks: W3Block[]
@@ -310,7 +312,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
       <W3ThresholdProposal />
       <W3RecoveryNudge />
       <W3TodayOverview vm={vm}
-        weather={<W3WeatherNudge forecast={vm.weatherForecast} now={vm.weatherNow} />}
+        weather={<W3WeatherNudge forecast={vm.weatherForecast} now={vm.weatherNow} locationState={vm.weatherLocationState} requestLocation={vm.requestWeatherLocation} />}
         selectedWeekDay={selDay} onSelectWeekDay={setSelDay}
         onOpenPlan={() => navigate('/e/w3-plan')}
         onPickGoal={intent => navigate(intent ? `/e/w3-goal-set?intent=${intent}` : '/e/w3-goal-set')}

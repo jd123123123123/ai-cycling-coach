@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import W3WeatherNudge, { upcomingWeather, windDirection } from '../W3WeatherNudge'
 import type { TodayWeather } from '../../../hooks/useTodayWeather'
@@ -7,6 +7,13 @@ const now = new Date('2026-09-11T10:20:00Z')
 const forecast: TodayWeather = { available:true, timezone:'Europe/Berlin', location:null, hours:[11,12,13].map(hour=>({time:`2026-09-11T${hour}:00`,temp_c:20,wind_kmh:12,wind_dir_deg:225,wind_gust_kmh:hour===13?28:21,precip_prob:hour===13?40:10,code:2,is_day:true})) }
 afterEach(cleanup)
 describe('Today weather', () => {
+  it('offers location permission instead of showing old ride weather', () => {
+    const request = vi.fn()
+    render(<W3WeatherNudge requestLocation={request} locationState="idle" now={now}/> )
+    fireEvent.click(screen.getByRole('button',{name:'Aktuellen Standort verwenden'}))
+    expect(request).toHaveBeenCalledOnce()
+    expect(screen.queryByText(/letzten GPS/)).toBeNull()
+  })
   it('is compact by default and exposes hourly rain only when expanded', () => {
     render(<W3WeatherNudge forecast={forecast} now={now}/> )
     expect(screen.getByRole('button',{name:'Wetter öffnen'}).getAttribute('aria-expanded')).toBe('false')

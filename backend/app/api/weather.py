@@ -7,6 +7,9 @@ missing piece (no GPS rides yet, upstream failure) returns
 ``{"available": false}`` and the Today-page nudge simply doesn't render.
 """
 from typing import Annotated
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from pydantic import BaseModel, Field, field_validator
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -52,6 +55,10 @@ async def get_today_weather(
     if loc is None:
         return _UNAVAILABLE
 
+    return await _forecast_at(loc, tz_name)
+
+
+async def _forecast_at(loc: tuple[float, float], tz_name: str) -> dict:
     body = await fetch_today_forecast(loc[0], loc[1], tz_name)
     if body is None:
         return _UNAVAILABLE
@@ -86,3 +93,29 @@ async def get_today_weather(
         "timezone": tz_name,
         "hours": hours,
     }
+
+
+class WeatherPosition(BaseModel):
+    lat: float = Field(ge=-90, le=90, allow_inf_nan=False)
+    lng: float = Field(ge=-180, le=180, allow_inf_nan=False)
+    timezone: str = Field(max_length=80)
+
+    @field_validator("timezone")
+    @classmethod
+    def valid_timezone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("Unknown timezone")
+        return value
+
+
+@router.post("/here", summary="Today's forecast at the device's current location")
+async def get_weather_here(
+    position: WeatherPosition,
+    user: Annotated[User, Depends(get_current_active_user)],
+) -> dict:
+    # Weather needs an area, not an exact GPS fix. Never store device positions.
+    loc = (round(position.lat, 2), round(position.lng, 2))
+    result = await _forecast_at(loc, position.timezone)
+    return {**result, "location_source": "device"}

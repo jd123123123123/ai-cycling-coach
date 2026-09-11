@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react'
-import { ArrowDown, ArrowUpRight, Cloud, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, Droplets, Moon, Sun, Wind } from 'lucide-react'
+import { ArrowDown, ArrowUpRight, Cloud, CloudFog, CloudLightning, CloudMoon, CloudRain, CloudSnow, CloudSun, Droplets, Moon, Sun, Wind, LocateFixed } from 'lucide-react'
 import type { TodayWeather, WeatherHour } from '../../hooks/useTodayWeather'
 import './w3weatherNudge.css'
 
@@ -39,7 +39,7 @@ function Condition({ hour, size = 24 }: { hour: WeatherHour; size?: number }) {
   </span>
 }
 
-export default function W3WeatherNudge({ forecast, now }: { forecast?: TodayWeather; now?: Date }) {
+export default function W3WeatherNudge({ forecast, now, locationState, requestLocation }: { forecast?: TodayWeather; now?: Date; locationState?: 'idle' | 'locating' | 'loading' | 'error' | 'ready'; requestLocation?: () => void }) {
   const [clock, setClock] = useState(() => new Date())
   const [selected, setSelected] = useState<string | null>(null)
   const [expanded, setExpanded] = useState(false)
@@ -50,9 +50,22 @@ export default function W3WeatherNudge({ forecast, now }: { forecast?: TodayWeat
     return () => window.clearInterval(timer)
   }, [now])
   const hours = upcomingWeather(forecast, now ?? clock)
-  if (!hours.length) return null
+  if (!hours.length) return requestLocation ? <section className="w3-overview-card w3-weather" data-today-card="weather" aria-label="Wetter">
+    <div className="w3-overview-header"><h2 className="w3-overview-title">Wetter</h2><LocateFixed size={18} aria-hidden/></div>
+    <div className="w3-weather-location"><button type="button" onClick={requestLocation} disabled={locationState === 'locating' || locationState === 'loading'}>{locationState === 'locating' ? 'Standort wird ermittelt…' : locationState === 'loading' ? 'Wetter wird geladen…' : locationState === 'ready' ? 'Wetter erneut laden' : 'Aktuellen Standort verwenden'}</button>
+      <p>{locationState === 'error' ? 'Standort nicht verfügbar. Prüfe die Freigabe im Browser.' : locationState === 'ready' ? 'Vorhersage derzeit nicht verfügbar.' : 'Für das Wetter hier bei dir.'}</p>
+    </div></section> : null
   const active = hours.find(h => h.time === selected) ?? hours[0]
   const direction = windDirection(active.wind_dir_deg)
+  const temperatures = hours.map(h => h.temp_c).filter((t): t is number => t != null && Number.isFinite(t))
+  const low = Math.min(...temperatures), span = Math.max(6, Math.max(...temperatures) - low)
+  const curveY = (h: WeatherHour) => h.temp_c == null || !Number.isFinite(h.temp_c) ? null : 48 - (h.temp_c - low) / span * 24
+  const curve = hours.reduce((path, h, i) => {
+    const y = curveY(h), previous = i > 0 ? curveY(hours[i-1]) : null
+    if (y == null) return path
+    const x = i*64+32
+    return path + (previous == null ? ` M ${x} ${y}` : ` C ${x-32} ${previous} ${x-32} ${y} ${x} ${y}`)
+  }, '')
   const activeLabel = active.time.slice(0, 13) === localHour(forecast?.timezone, now ?? clock) ? 'Jetzt' : `${Number(active.time.slice(11, 13))} Uhr`
   return <section className="w3-overview-card w3-weather" data-expanded={expanded} data-today-card="weather" aria-labelledby={`${uid}-title`}>
     <div className="w3-overview-header">
@@ -68,17 +81,23 @@ export default function W3WeatherNudge({ forecast, now }: { forecast?: TodayWeat
     <div className="w3-weather-expander" data-expanded={expanded} inert={!expanded} aria-hidden={!expanded} id={`${uid}-hours`}>
       <div className="w3-weather-expand-inner">
         <div className="w3-weather-hours" aria-label="Stündliche Wettervorhersage">
+          <div className="w3-weather-timeline" style={{width:hours.length*64}}>
+          <svg className="w3-weather-curve" width={hours.length*64} height="62" aria-hidden>
+            <path d={curve} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            {hours.map((h,i)=>curveY(h)!=null && <circle key={h.time} cx={i*64+32} cy={curveY(h)!} r={h.time===active.time?3:2} fill={h.time===active.time?'#c8ff00':'currentColor'} />)}
+          </svg>
           {hours.map(h => <button type="button" key={h.time} className="w3-weather-hour" aria-pressed={active.time === h.time}
             aria-label={`${h.time.slice(11, 16)} Uhr: ${rounded(h.temp_c)} Grad, Wind ${rounded(h.wind_kmh)} km/h${windDirection(h.wind_dir_deg) ? ` aus ${windDirection(h.wind_dir_deg)}` : ''}, Regenwahrscheinlichkeit ${rounded(h.precip_prob)} Prozent`}
             onClick={() => setSelected(h.time)}>
             <span className="w3-weather-time">{h.time.slice(0, 13) === localHour(forecast?.timezone, now ?? clock) ? 'Jetzt' : `${Number(h.time.slice(11, 13))} Uhr`}</span>
-            <Condition hour={h}/><span className="w3-weather-hour-temp">{rounded(h.temp_c)}°</span>
-            <span className="w3-weather-hour-rain"><Droplets size={11} aria-hidden/>{rounded(h.precip_prob)}%</span>
+            <Condition hour={h}/><span className="w3-weather-hour-temp"><span style={{top:(curveY(h) ?? 40)-27}}>{rounded(h.temp_c)}°</span></span>
+            <span className="w3-weather-hour-rain"><span className="w3-weather-rain-bar" aria-hidden><i style={{height:h.precip_prob==null?0:`${Math.max(0,Math.min(100,h.precip_prob))}%`}}/></span><span>{rounded(h.precip_prob)}%</span></span>
             <span className="w3-weather-hour-wind">{h.wind_dir_deg != null && <ArrowDown size={13} style={{transform:`rotate(${h.wind_dir_deg}deg)`}} aria-hidden/>}{rounded(h.wind_kmh)}</span>
           </button>)}
+          </div>
         </div>
-        <div className="w3-weather-detail" aria-live="polite"><span><Wind size={15} aria-hidden/>Böen <b>{rounded(active.wind_gust_kmh)} km/h</b></span><span>Wind in km/h</span></div>
-        <details className="w3-weather-source"><summary>Standort & Quelle</summary><p>Standort deiner letzten GPS-Fahrt. Pfeile zeigen die Strömungsrichtung. Vorhersage von <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p></details>
+        <div className="w3-weather-detail" aria-live="polite"><span><Wind size={15} aria-hidden/>Böen <b>{rounded(active.wind_gust_kmh)} km/h</b></span><span className="w3-weather-legend"><Droplets size={13} aria-hidden/> Regen · %</span></div>
+        <details className="w3-weather-source"><summary><LocateFixed size={12} aria-hidden/> Aktueller Standort</summary><p>Aktueller Gerätestandort, für die Vorhersage gerundet. Wind in km/h; Pfeile zeigen die Strömungsrichtung. Vorhersage von <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p></details>
       </div>
     </div>
   </section>

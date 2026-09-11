@@ -36,3 +36,30 @@ async def test_today_preserves_gusts_and_missing_readings(monkeypatch, gusts, da
     assert result["hours"][0]["wind_gust_kmh"] == expected_gust
     assert result["hours"][0]["is_day"] is expected_day
     assert result["hours"][0]["wind_kmh"] is None
+
+
+async def test_device_forecast_uses_rounded_position_without_reading_ride_history(monkeypatch):
+    fetch = AsyncMock(return_value={"hourly": {"time": ["2026-09-11T12:00"], "temperature_2m": [20]}})
+    old = AsyncMock(side_effect=AssertionError("Must not use a previous ride"))
+    monkeypatch.setattr(weather, "fetch_today_forecast", fetch)
+    monkeypatch.setattr(weather, "_last_ride_location", old)
+    result = await weather.get_weather_here(weather.WeatherPosition(lat=52.51234, lng=13.41234, timezone="Europe/Berlin"), SimpleNamespace(id=1))
+    fetch.assert_awaited_once_with(52.51, 13.41, "Europe/Berlin")
+    assert result["location_source"] == "device"
+    old.assert_not_awaited()
+
+
+@pytest.mark.parametrize("values", [{"lat": 91}, {"lng": -181}, {"lat": float("nan")}, {"timezone": "Invalid/Zone"}])
+def test_invalid_device_coordinates_are_rejected(values):
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError):
+        weather.WeatherPosition(**{"lat": 52, "lng": 13, "timezone": "Europe/Berlin", **values})
+
+
+async def test_device_endpoint_requires_authentication():
+    from fastapi import FastAPI
+    app = FastAPI()
+    app.include_router(weather.router)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/weather/here", json={"lat":52.5,"lng":13.4,"timezone":"Europe/Berlin"})
+    assert response.status_code in (401, 403)
