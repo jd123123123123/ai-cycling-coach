@@ -74,7 +74,7 @@ export default function W3WeatherNudge({ forecast, now, locationState, requestLo
       <button type="button" className="w3-overview-toggle" aria-label={`Wetter ${expanded ? 'schließen' : 'öffnen'}`} aria-expanded={expanded} aria-controls={`${uid}-hours`} onClick={() => setExpanded(!expanded)}><ArrowUpRight size={16} aria-hidden style={{transform:expanded?'rotate(180deg)':undefined,transition:'transform 200ms'}} /></button>
     </div>
     <div className="w3-weather-summary" aria-live="polite">
-      <div className="w3-weather-reading"><Condition hour={active} size={25}/><strong>{rounded(active.temp_c)}°</strong></div>
+      <div className="w3-weather-reading"><Condition hour={active} size={30}/><strong>{rounded(active.temp_c)}°</strong></div>
       <div className="w3-weather-reading" aria-label={`Wind ${rounded(active.wind_kmh)} Kilometer pro Stunde${direction ? ` aus ${direction}` : ''}`}><Wind size={19} aria-hidden/><strong>{rounded(active.wind_kmh)}</strong><span>km/h{direction && <small>aus {direction}</small>}</span></div>
       <div className="w3-weather-reading w3-weather-rain" aria-label={`Regenwahrscheinlichkeit ${rounded(active.precip_prob)} Prozent`}><Droplets size={18} aria-hidden/><strong>{rounded(active.precip_prob)}<span>%</span></strong></div>
     </div>
@@ -83,8 +83,8 @@ export default function W3WeatherNudge({ forecast, now, locationState, requestLo
         <div className="w3-weather-hours" aria-label="Stündliche Wettervorhersage">
           <div className="w3-weather-timeline" style={{width:hours.length*64}}>
           <svg className="w3-weather-curve" width={hours.length*64} height="62" aria-hidden>
-            <path d={curve} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            {hours.map((h,i)=>curveY(h)!=null && <circle key={h.time} cx={i*64+32} cy={curveY(h)!} r={h.time===active.time?3:2} fill={h.time===active.time?'#c8ff00':'currentColor'} />)}
+            <path d={curve} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+            {hours.map((h,i)=>curveY(h)!=null && <circle key={h.time} cx={i*64+32} cy={curveY(h)!} r={h.time===active.time?3:0} fill={h.time===active.time?'#c8ff00':'currentColor'} />)}
           </svg>
           {hours.map(h => <button type="button" key={h.time} className="w3-weather-hour" aria-pressed={active.time === h.time}
             aria-label={`${h.time.slice(11, 16)} Uhr: ${rounded(h.temp_c)} Grad, Wind ${rounded(h.wind_kmh)} km/h${windDirection(h.wind_dir_deg) ? ` aus ${windDirection(h.wind_dir_deg)}` : ''}, Regenwahrscheinlichkeit ${rounded(h.precip_prob)} Prozent`}
@@ -96,7 +96,7 @@ export default function W3WeatherNudge({ forecast, now, locationState, requestLo
           </button>)}
           </div>
         </div>
-        <div className="w3-weather-detail" aria-live="polite"><span><Wind size={15} aria-hidden/>Böen <b>{rounded(active.wind_gust_kmh)} km/h</b></span><span className="w3-weather-legend"><Droplets size={13} aria-hidden/> Regen · %</span></div>
+        <div className="w3-weather-detail" aria-live="polite"><span><Wind size={15} aria-hidden/>Böen <b>{rounded(active.wind_gust_kmh)} km/h</b></span><span className="w3-weather-legend"><Droplets size={13} aria-hidden/> Regen</span></div>
         <details className="w3-weather-source"><summary><LocateFixed size={12} aria-hidden/> Aktueller Standort</summary><p>Aktueller Gerätestandort, für die Vorhersage gerundet. Wind in km/h; Pfeile zeigen die Strömungsrichtung. Vorhersage von <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Open-Meteo</a>.</p></details>
       </div>
     </div>
