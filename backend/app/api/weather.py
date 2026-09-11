@@ -62,6 +62,8 @@ async def get_today_weather(
     precs = hourly.get("precipitation_probability") or []
     winds = hourly.get("wind_speed_10m") or []
     wdirs = hourly.get("wind_direction_10m") or []
+    gusts = hourly.get("wind_gusts_10m") or []
+    daylight = hourly.get("is_day") or []
     codes = hourly.get("weather_code") or []
     hours = [
         {
@@ -70,6 +72,8 @@ async def get_today_weather(
             "precip_prob": precs[i] if i < len(precs) else None,
             "wind_kmh": winds[i] if i < len(winds) else None,
             "wind_dir_deg": wdirs[i] if i < len(wdirs) else None,
+            "wind_gust_kmh": gusts[i] if i < len(gusts) else None,
+            "is_day": bool(daylight[i]) if i < len(daylight) and daylight[i] is not None else None,
             "code": codes[i] if i < len(codes) else None,
         }
         for i in range(len(times))

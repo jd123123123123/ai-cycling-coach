@@ -703,6 +703,7 @@ export default function W3TodayPage() {
 
       // REAL weather from /weather/today (buildWeather) — today only. Without a
       // forecast there are no numbers at all, just the honest reason why.
+      weatherForecast: todayWeather,
       weather: realWeather ?? {
         window: '—', temp: '—', feels: '—', short: null, verdict: null,
         meta: 'Wetter erscheint, sobald du eine Fahrt mit GPS geloggt hast — dann steht hier dein bestes Fenster für heute.',

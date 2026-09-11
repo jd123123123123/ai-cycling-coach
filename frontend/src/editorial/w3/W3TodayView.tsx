@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { TodayWeather } from '../../hooks/useTodayWeather'
+import W3WeatherNudge from './W3WeatherNudge'
 import { useNavigate } from 'react-router-dom'
 import { DayTraining, WeekTrainingCard, TodayWeatherCard, type W3DayFull, type W3Weather, type W3Block, type OnAdapt, type W3WeekGoal } from './W3Sections'
 import { T, FONT, DASH, band } from './w3tokens'
@@ -144,6 +146,8 @@ export interface W3Vm {
   hasPlan: boolean
 
   weather: W3Weather
+  weatherForecast?: TodayWeather
+  weatherNow?: Date
 
   sessionDur: string | null
   sessionBlocks: W3Block[]
@@ -306,6 +310,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
       <W3ThresholdProposal />
       <W3RecoveryNudge />
       <W3TodayOverview vm={vm}
+        weather={<W3WeatherNudge forecast={vm.weatherForecast} now={vm.weatherNow} />}
         selectedWeekDay={selDay} onSelectWeekDay={setSelDay}
         onOpenPlan={() => navigate('/e/w3-plan')}
         onPickGoal={intent => navigate(intent ? `/e/w3-goal-set?intent=${intent}` : '/e/w3-goal-set')}

@@ -7,6 +7,8 @@ export interface WeatherHour {
   precip_prob: number | null
   wind_kmh: number | null
   wind_dir_deg: number | null
+  wind_gust_kmh?: number | null
+  is_day?: boolean | null
   code: number | null // WMO weather code
 }
 

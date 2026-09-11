@@ -11,7 +11,7 @@ import W3ProgressCompact from './W3ProgressCompact'
 import type { W3Vm } from './W3TodayView'
 
 type Section = 'today' | 'week' | 'form' | 'crew' | 'progress' | 'goals' | 'rides'
-interface Sections { rides?:ReactNode; ridesSummary?:ReactNode; progress?:ReactNode; progressSummary?:ReactNode; goalSummary?:ReactNode; persistentForm?: (expanded:boolean) => ReactNode; selectedWeekDay?: number; onSelectWeekDay?: (index:number) => void; onOpenPlan?: () => void; onPickGoal?: (intent: 'ftp' | 'event' | 'hours' | null) => void; today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
+interface Sections { weather?: ReactNode; rides?:ReactNode; ridesSummary?:ReactNode; progress?:ReactNode; progressSummary?:ReactNode; goalSummary?:ReactNode; persistentForm?: (expanded:boolean) => ReactNode; selectedWeekDay?: number; onSelectWeekDay?: (index:number) => void; onOpenPlan?: () => void; onPickGoal?: (intent: 'ftp' | 'event' | 'hours' | null) => void; today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
 export interface OverviewData {
   form: FormPoint | null
   history?: FormPoint[]
@@ -34,7 +34,7 @@ function FormSpark({ points, metric, color }: { points: FormPoint[]; metric: 'ct
   </svg>
 }
 
-export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ridesSummary, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
+export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ridesSummary, weather, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
   const [open, setOpen] = useState<Section | null>(null)
   const [localWeekDay, setLocalWeekDay] = useState<number | null>(null)
   const selected = selectedWeekDay ?? localWeekDay ?? Math.max(0,vm.weekDays.findIndex(d=>d.status==='today'))
@@ -109,6 +109,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
       </div>
       </>}
     </section>
+    {key === 'today' && weather}
     {key === 'today' && <section data-today-card="plan" className="w3-overview-card" aria-label="Planphase">
       <div className="w3-overview-header">
         <h2 className="w3-overview-title">{vm.hasPlan ? 'Planphase' : 'Dein Plan'}</h2>
