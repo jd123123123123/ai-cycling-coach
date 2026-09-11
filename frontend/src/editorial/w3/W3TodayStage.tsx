@@ -177,13 +177,6 @@ const TYRE_X = ['19%', '81%'] as const
  * composed square and the stage is not: the interest is in the middle band
  * where the road and the bike are, and the sky is what can afford to go.
  */
-const SCENE_ART = {
-  width: '100%',
-  height: '100%',
-  objectFit: 'cover' as const,
-  display: 'block' as const,
-}
-
 export interface W3StageVm {
   handle: string
   /** True when `bike` is a COMPOSED render — the machine wearing its parts,
@@ -272,6 +265,10 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
 }) {
   const reduce = useReducedMotion()
   const theme = vm.theme ?? stageThemeById(null)
+  // A composed render already contains the rider's actual bike and its world.
+  // It must replace the procedural room rather than sit inside it as a second
+  // card; otherwise the same bike appears once in the scene and once below it.
+  const sceneArt = vm.bikeInScene && vm.bike ? vm.bike : null
   const bikeSrc = useCutout(vm.bike, vm.bikeStudioArt === true)
 
   // A RENDERED ROOM, NOT A GRADIENT. The floor was four stops of near-black,
@@ -298,12 +295,12 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
 
-      {/* The room itself. The studio is the rendered webp; every other theme
-          is a procedural plate — the same flat wall-meets-floor set, drawn as
-          a gradient with a duplicated stop so the horizon stays a LINE, pinned
-          to the same measured FLOOR on every screen. Motifs (a sun, stars, a
-          finish band) are flat positioned layers behind everything. */}
-      {theme.css == null ? (
+      {/* A composed scene is the room. Procedural themes keep the original
+          plate path for riders without a scene render. */}
+      {sceneArt ? (
+        <img aria-hidden src={sceneArt} alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', pointerEvents: 'none' }} />
+      ) : theme.css == null ? (
         <img aria-hidden src={PLATE} alt=""
           style={{
             position: 'absolute', inset: 0, width: '100%', height: '100%',
@@ -321,6 +318,11 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
         <div key={i} aria-hidden style={ex} />
       ))}
 
+      {theme.front && !sceneArt ? (
+        <img aria-hidden src={theme.front} alt=""
+          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'fill', zIndex: 2, pointerEvents: 'none' }} />
+      ) : null}
+
       {/* ── the corner chips: real figures, floating on the floor ── */}
       {/* MEASURED AGAINST `W3TopBar`, not eyeballed: its row puts a 44px
           control at top 18, inset 20. The stage's chips sit on the same
@@ -329,7 +331,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           further out, which is exactly enough to read as "a different
           header". */}
       <div style={{
-        position: 'absolute', top: HEAD.top, left: HEAD.inset, zIndex: 2,
+        position: 'absolute', top: HEAD.top, left: HEAD.inset, zIndex: 3,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start',
       }}>
         {!compact && <DiscChip icon={<Star size={12} color={T.ink} fill={T.ink} />} value={vm.bonus ?? DASH} />}
@@ -348,7 +350,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
       </div>
 
       <div style={{
-        position: 'absolute', top: HEAD.top, right: HEAD.inset, zIndex: 2,
+        position: 'absolute', top: HEAD.top, right: HEAD.inset, zIndex: 3,
         display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-end',
       }}>
         {/* ── THE MENU, IN THE ONE CORNER IT IS ALWAYS IN ────────────────
@@ -389,7 +391,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           //
           // The identity is a LABEL. A label may not be occluded by the art it
           // labels, at any screen height.
-          zIndex: 2,
+          zIndex: 3,
         }}>
 
         <div style={{ position: 'relative', width: AVATAR, height: AVATAR, display: 'grid', placeItems: 'center' }}>
@@ -513,9 +515,7 @@ export default function W3TodayStage({ vm, fullBleed = false, compact = false }:
           // The screen-blend and the radial mask stay for the studio render
           // ONLY because that art has a pale ground baked in and needs its
           // edges dissolved; the scene render already reaches its own frame.
-          vm.bikeInScene ? (
-            <img src={vm.bike} alt={vm.bikeName} style={SCENE_ART} />
-          ) : (
+          vm.bikeInScene ? null : (
             // THE BIKE AND ITS SHADOWS ARE ONE OBJECT, positioned together.
             // They were two independent percentages before, which is why they
             // never agreed: the art was centred in its own box while the shadow

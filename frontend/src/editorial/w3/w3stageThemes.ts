@@ -51,6 +51,10 @@ export interface StageTheme {
   /** Flat positioned motifs (a sun disc, stars, a finish band). Every one
    *  sits BEHIND the bike and stays out of the top chips' corners. */
   extras?: CSSProperties[]
+  /** Optional transparent near-ground layer, painted above a composed bike
+   *  so a rendered scene can feel grounded without changing the source image. */
+  front?: string | null
+  frontTop?: number
   /** The swatch preview — a cheap one-gradient stand-in for the picker. */
   swatch: string
 }
