@@ -124,7 +124,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
             {planOpen && vm.planPhaseSchedule?.length && vm.planWeekIndex!=null && vm.planWeekIndex>=0 && vm.planWeekIndex<vm.planPhaseSchedule.length ? <W3PlanPhaseRoad schedule={vm.planPhaseSchedule} index={vm.planWeekIndex} onOpenPlan={onOpenPlan}/> : null}
           </motion.div>
         </> : <>
-          <span className="w3-overview-plan-label">NOCH KEIN PLAN</span>
+          <div className="w3-overview-plan-empty"><span className="w3-overview-plan-label">NOCH KEIN PLAN</span><strong>Worauf fährst du hin?</strong><span>Wähle ein Ziel — der Coach baut deine erste Woche.</span></div>
           <div className="w3-overview-plan-choices">
             <button type="button" onClick={() => onPickGoal?.('ftp')}>FTP steigern</button>
             <button type="button" onClick={() => onPickGoal?.('event')}>Event</button>

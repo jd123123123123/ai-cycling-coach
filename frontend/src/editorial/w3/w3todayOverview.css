@@ -50,8 +50,11 @@
 .w3-overview-plan-link > span { display: flex; flex-direction: column; gap: 4px; }
 .w3-overview-plan-label { display: block; font-size: 9px; font-weight: 700; letter-spacing: 1px; color: #9ba0a6; }
 .w3-overview-plan-value { font-size: 13px; font-weight: 600; color: #fff; }
-.w3-overview-plan-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.w3-overview-plan-choices button { display: flex; align-items: center; gap: 6px; min-height: 36px; border: 1px solid #c8ff0030; border-radius: 100px; padding: 8px 12px; background: #c8ff000d; color: #c8ff00; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.w3-overview-plan-empty { display:flex; flex-direction:column; gap:4px; padding:4px 0 2px; }
+.w3-overview-plan-empty strong { font-size:18px; line-height:1.1; letter-spacing:-.35px; color:#fff; }
+.w3-overview-plan-empty > span:last-child { font-size:11px; line-height:1.35; color:#9ba0a6; }
+.w3-overview-plan-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.w3-overview-plan-choices button { display: flex; align-items: center; gap: 6px; min-height: 36px; border: 1px solid #c8ff0030; border-radius: 12px; padding: 8px 11px; background: #c8ff000d; color: #c8ff00; font: inherit; font-size: 12px; font-weight: 650; cursor: pointer; }
 .w3-overview-plan button:focus-visible { outline: 2px solid #c8ff00; outline-offset: 3px; }
 
 

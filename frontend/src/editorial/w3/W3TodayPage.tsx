@@ -16,6 +16,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { parseISO, fmtDEShort, DE_WD2 } from './w3plan'
 import { useTodayWeather } from '../../hooks/useTodayWeather'
+import { useAutoGarminSync } from '../../hooks/useAutoGarminSync'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { isPresent } from '../data/value'
 import { forecastRideRc, formatMultiplier, nextStreakTier, streakMultiplier } from '../../api/rewards'
@@ -189,6 +190,7 @@ function blocksFromIntervals(ivs: IntervalBlockOut[], ftp: number | null): W3Blo
 
 export default function W3TodayPage() {
   const navigate = useNavigate()
+  useAutoGarminSync()
   const { state } = useDayState()
   const model = useTodayModel(state)
   const { user } = useAuth()

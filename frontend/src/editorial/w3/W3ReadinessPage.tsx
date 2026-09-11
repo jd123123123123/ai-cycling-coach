@@ -10,6 +10,8 @@ import type { DailyMetric } from '../../api/dashboard'
 import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon, type SleepStage } from './W3ReadinessView'
 import { T } from './w3tokens'
 import W3ReadinessExplanation from './W3ReadinessExplanation'
+import { useAutoGarminSync } from '../../hooks/useAutoGarminSync'
+import { useReadinessDecision } from '../../hooks/useReadinessDecision'
 
 /**
  * W3 · READINESS, wired to real data. Route /e/w3-readiness.
@@ -35,11 +37,13 @@ const round = (v: number, d = 0) => { const p = 10 ** d; return Math.round(v * p
 
 export default function W3ReadinessPage() {
   const navigate = useNavigate()
+  useAutoGarminSync()
   const { data: snapshot } = useTodaySnapshot()
   const end = useMemo(() => new Date(), [])
   const start = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d }, [])
   const { data: metricsResp } = useDailyMetrics(start, end)
   const { data: adaptive } = useAdaptive()
+  const { data: decision } = useReadinessDecision()
   const { data: pmc } = usePMC(90)
 
   const vm = useMemo<W3ReadinessVm>(() => {
@@ -62,7 +66,8 @@ export default function W3ReadinessPage() {
     const todayKey = new Date().toISOString().slice(0, 10)
     const freshness = readinessFreshness(metrics, todayKey)
     const withhold = withholdReadiness({ gate: freshness.gate, trainedToday: false, sidelined: false })
-    const gated = canonicalReadiness(adaptive?.daily_decision?.readiness ?? null, withhold ? null : fallback)
+    const decisionScore = decision?.withheld ? null : (decision?.readiness_score ?? null)
+    const gated = canonicalReadiness(decisionScore != null ? { score: decisionScore, tier: decision?.readiness_tier ?? null } : (adaptive?.daily_decision?.readiness ?? null), withhold ? null : fallback)
     const { score, tier } = gated
     const rtier = tier ?? readinessTier(score)
     const TIER_DE: Record<string, string> = { peak: 'Spitzenform', ready: 'Bereit', caution: 'Vorsicht', rest: 'Ruhen' }
@@ -208,7 +213,7 @@ export default function W3ReadinessPage() {
     const vo2 = num(latest?.vo2max ?? null) != null ? `${Math.round(latest!.vo2max as number)}` : null
 
     return { explanation: <W3ReadinessExplanation report={adaptive?.daily_decision?.readiness} score={score} action={adaptive?.daily_decision?.verdict} />, score, word, tierLabel, guidanceTitle: guide.t, guidanceBody: guide.b, dateNote, trend, drivers, context, limiterNote, sleep, recovery, fitness, vo2 }
-  }, [metricsResp, snapshot, adaptive, pmc])
+  }, [metricsResp, snapshot, adaptive, pmc, decision])
 
   return <W3ReadinessView vm={vm} onBack={() => navigate(-1)} />
 }
