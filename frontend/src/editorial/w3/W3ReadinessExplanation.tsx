@@ -17,7 +17,11 @@ export default function W3ReadinessExplanation({ report, score, action }: { repo
   const [selected, setSelected] = useState<string | null>(null)
   const reduce = useReducedMotion()
   const panelId = useId()
-  const components = score != null && report?.score === score ? report.components ?? [] : []
+  // The adaptive brief and the live Today score can be a few points apart
+  // while a fresh Garmin sync is being folded in. Keep attribution when they
+  // are the same decision window; suppress it only when the values clearly
+  // belong to different decisions.
+  const components = score != null && report?.score != null && Math.abs(report.score - score) <= 5 ? report.components ?? [] : []
   const available = components.filter(c => c.score != null && Number.isFinite(c.score) && Number.isFinite(c.weight) && c.weight > 0)
   const weight = available.reduce((sum,c) => sum+c.weight,0)
   const groups = [
@@ -33,7 +37,7 @@ export default function W3ReadinessExplanation({ report, score, action }: { repo
   return <section className="w3-readiness-effects" style={vars} aria-label="Einflüsse auf deine Bereitschaft">
     <div className="w3-effects-heading"><h3>Deine Einflüsse</h3><button type="button" aria-label="Berechnung verstehen" aria-expanded={selected==='method'} aria-controls={panelId} onClick={()=>toggle('method')}><Info size={16}/></button></div>
     {available.length > 0 ? <div className="w3-effects-bubbles">{groups.filter(group => group.items.length > 0).map(group => <div key={group.label} aria-label={group.label} className="w3-effects-group">{group.items.map(c => <button key={c.name} type="button" className="w3-effect-bubble" style={{'--effect':group.color} as CSSProperties} aria-label={`${FACTORS[c.name]?.label ?? c.name}: ${group.label}`} aria-pressed={selected===c.name} aria-controls={panelId} onClick={()=>toggle(c.name)}>
-      <i className="w3-effect-dot" aria-hidden="true"/>{FACTORS[c.name]?.label ?? c.name}
+      <i className="w3-effect-dot" aria-hidden="true"/><span>{FACTORS[c.name]?.label ?? c.name}</span><small>{Math.round(c.score!)} · {Math.round(c.weight * 100)}%</small>
     </button>)}</div>)}</div> : <p className="w3-effects-empty">Noch keine aktuelle Aufschlüsselung.</p>}
     <AnimatePresence initial={false}>{showPanel && <motion.div key="explanation" id={panelId} className="w3-effect-panel" initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}} transition={{duration:reduce?0:.18}}>
       <div className="w3-effect-panel-inner">

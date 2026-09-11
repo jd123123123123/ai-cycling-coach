@@ -718,7 +718,7 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
         <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} compact />
         {isToday && (
           <>
-            <SessionLink label="Training ansehen" onOpen={() => navigate('/e/w3-session')} />
+            <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
             {showAdapt
               ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
               : <AdjustButton onOpen={() => setShowAdapt(true)} />}
@@ -837,7 +837,7 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
               <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
             </div>
           )}
-          <SessionLink label="Training ansehen" onOpen={() => navigate('/e/w3-session')} />
+          <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
           {showAdapt
             ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
             : <AdjustButton onOpen={() => setShowAdapt(true)} />}
@@ -853,7 +853,7 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
            owns one keeps a way into it. Past days keep planned-vs-done, which
            is their detail. ── */}
       {isFuture && day.title != null && (
-        <SessionLink label="Im Plan ansehen" onOpen={() => navigate('/e/w3-plan')} />
+        <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
       )}
     </motion.div>
   )

@@ -1,4 +1,5 @@
 import type { WeekResponse } from '../../api/weeks'
+import type { AthleteProfile } from '../../types/athlete'
 
 /**
  * DOES THIS RIDER HAVE A TRAINING PLAN — one rule, read by every screen that
@@ -39,4 +40,18 @@ export function hasPlanFromWeek(week: WeekResponse | null | undefined): boolean 
     (d) => d.category !== 'rest'
       && (d.target_tss != null || d.duration_seconds_target != null || d.template_id != null),
   )
+}
+
+/** A generated week is not a personal plan. The backend can return a
+ * periodisation-shaped fallback before the rider has chosen a goal; Today must
+ * keep that fallback out of the plan-phase card until there is an actual
+ * target or planning input to coach against. */
+export function hasPersonalPlan(profile: AthleteProfile | null | undefined): boolean {
+  const goals = profile?.goals
+  return Boolean(profile && (
+    profile.target_event_type || profile.target_event_date ||
+    profile.days_available || profile.weekly_hours_available ||
+    goals?.target_ftp || goals?.target_event_name || goals?.target_event_date ||
+    goals?.weekly_hours || goals?.days_per_week
+  ))
 }

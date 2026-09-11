@@ -11,7 +11,7 @@ import { itemById } from './w3shop'
 import { useChest, useWallet } from '../../hooks/useWallet'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
-import { hasPlanFromWeek } from './w3hasPlan'
+import { hasPersonalPlan, hasPlanFromWeek } from './w3hasPlan'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { parseISO, fmtDEShort, DE_WD2 } from './w3plan'
@@ -690,7 +690,7 @@ export default function W3TodayPage() {
       // test, so `weekPlanned` never fell below one. `hasPlan` was a constant
       // `true` wearing a condition, and `W3PickGoalCard` below could not render
       // for anybody. See the comment in `w3hasPlan.ts` for the evidence.
-      hasPlan: hasPlanFromWeek(week),
+      hasPlan: hasPlanFromWeek(week) && hasPersonalPlan(profile),
 
       // REAL weather from /weather/today (buildWeather) — today only. Without a
       // forecast there are no numbers at all, just the honest reason why.

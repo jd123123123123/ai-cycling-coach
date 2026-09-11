@@ -5,6 +5,7 @@
 .w3-effects-bubbles { display:flex; flex-wrap:wrap; gap:6px; }
 .w3-effects-group { display:contents; }
 .w3-effect-bubble { display:flex; align-items:center; gap:6px; border:1px solid var(--re-rule); padding:7px 10px; min-height:30px; border-radius:16px; font-family:inherit; font-size:11px; line-height:1.1; font-weight:600; color:var(--re-ink); background:transparent; cursor:pointer; transition:background .18s,border-color .18s; }
+.w3-effect-bubble small { color:var(--re-mid); font-size:9px; font-weight:650; font-variant-numeric:tabular-nums; }
 .w3-effect-bubble[aria-pressed=true] { border-color:var(--effect); background:color-mix(in srgb,var(--effect) 16%,var(--re-bg)); }
 .w3-effect-bubble:hover { background:color-mix(in srgb,var(--effect) 16%,var(--re-bg)); }
 .w3-readiness-effects button:focus-visible { outline:2px solid var(--re-acid); outline-offset:3px; }

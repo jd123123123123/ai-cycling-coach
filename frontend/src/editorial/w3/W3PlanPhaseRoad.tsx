@@ -24,6 +24,6 @@ export default function W3PlanPhaseRoad({ schedule, index, onOpenPlan }: { sched
       {current && <motion.g initial={false} animate={{ x: current.x, y: current.y }} transition={trans} pointerEvents="none"><circle r="31" fill={`url(#${uid}-marker-light)`} /><circle cy="2" r="15" fill="#0b100b" opacity=".65" /><circle r="14" fill="#c8ff00" stroke="#e9ff9c" strokeWidth="1" /><path d="M 0 -6 L 5 5 L 0 2 L -5 5 Z" fill="#1d2b0b" /></motion.g>}
     </svg>
     <div className="road-phases">{phases.map(phase => <div key={phase.start} className="road-phase" data-active={phase === activePhase}><span>{labels[phase.phase] ?? phase.phase}</span><i>{Array.from({ length: phase.weeks }, (_, i) => <b key={i} data-current={phase.start + i === week} data-past={phase.start + i < week} />)}</i></div>)}</div>
-    <div className="road-footer"><span>{remaining ? `Noch ${remaining} ${remaining === 1 ? 'Woche' : 'Wochen'}` : 'Letzte Woche'}</span>{onOpenPlan && <button onClick={onOpenPlan}>Plan ansehen <ArrowUpRight size={14} aria-hidden /></button>}</div>
+    <div className="road-footer">{remaining > 0 && <span>{`Noch ${remaining} ${remaining === 1 ? 'Woche' : 'Wochen'}`}</span>}{onOpenPlan && <button onClick={onOpenPlan}>Plan ansehen <ArrowUpRight size={14} aria-hidden /></button>}</div>
   </div>
 }

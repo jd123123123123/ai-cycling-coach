@@ -14,7 +14,7 @@ import {
   planDurSec, isSessionDay, planIF, planTargetWatts, blocksFromIntervals, enduranceEnvelope,
   displayPhase, phaseRail, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
 } from './w3plan'
-import { hasPlanFromWeek } from './w3hasPlan'
+import { hasPersonalPlan, hasPlanFromWeek } from './w3hasPlan'
 import { useStreak } from '../../hooks/useStreak'
 import { forecastRideRc, streakMultiplier, formatMultiplier } from '../../api/rewards'
 import W3Loading from './W3Loading'
@@ -71,7 +71,7 @@ export default function W3PlanPage() {
   // but for an athlete who has none it is a constructor, and firing it on mount
   // would give every visitor a plan they never asked for and delete the empty
   // state by visiting it. Gated on the same rule the render branches on.
-  const hasPlan = hasPlanFromWeek(week)
+  const hasPlan = hasPlanFromWeek(week) && hasPersonalPlan(profile)
   // A PLAN AND A GOAL ARE DIFFERENT THINGS, and only the PLAN decides which
   // shape this route takes. `w3hasPlan` exists precisely so Today and this page
   // cannot disagree about that — "two screens deciding the same thing from two

@@ -460,14 +460,17 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       unit: 'ms' as const,
       delta: hrvSignal?.delta ?? null,
       band: buildRangeBand(hrvSignal, hrvState),
-      // The morning-check's own real trailing series for this metric — present
-      // only on mornings the detector actually fired (it returns signals only
-      // when a metric is off baseline), so it is `null` far more often than
-      // not. No second HRV series exists to stand in for it: `/daily-metrics`
-      // exposes `hrv_status` (a different column from the snapshot's
-      // `hrv_overnight_avg`, which `DailyMetricRead` does not carry at all),
-      // and charting one against the other would be two quantities in one line.
-      series: hrvSignal?.series ?? null,
+      // The detector series is intentionally sparse: it only emits when HRV
+      // is outside the personal band. Today still needs a trend on ordinary
+      // mornings, so use the nightly values already fetched for this screen;
+      // the nightly mean is preferred, with the stored HRV status as a legacy
+      // fallback. This keeps the line in the same unit as the headline value.
+      series: (recentMetrics ?? [])
+        .slice()
+        .sort((a, b) => (a.date ?? a.recorded_at).localeCompare(b.date ?? b.recorded_at))
+        .map((m) => m.hrv_nightly_mean ?? m.hrv_status)
+        .filter((v): v is number => v != null && Number.isFinite(v))
+        .slice(-7),
     },
     wearableReason,
   )
