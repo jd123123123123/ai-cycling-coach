@@ -1,0 +1,152 @@
+[
+  {
+    "path": "backend/app/api/crew_chat.py",
+    "status": "merged",
+    "incoming_sha256": "9aed262665f4d0c283e0f8a07cb32a7c828add5c7cce22ff6ef15fafd9a58284"
+  },
+  {
+    "path": "backend/app/api/garage.py",
+    "status": "copied",
+    "incoming_sha256": "7b9b08c1c841a58b7668fd898c11eb1c81b01b6f71f2dc9a8108dbf8c280c0b5"
+  },
+  {
+    "path": "backend/app/api/routine_rides.py",
+    "status": "copied",
+    "incoming_sha256": "46fc93d8f2a490c3fc43b77fa83588d715782cd68e7688dee7522fdc70a00e9c"
+  },
+  {
+    "path": "backend/app/models/__init__.py",
+    "status": "copied",
+    "incoming_sha256": "b718209ee198112e83d858be820aff8fca1f8109ed5840d098fa1a6e299aff20"
+  },
+  {
+    "path": "backend/app/models/athlete_profile.py",
+    "status": "copied",
+    "incoming_sha256": "93bcbc03db9f0bc590fe47d99a496e42fa75940f024cd22b15f5b6f0f5e93e24"
+  },
+  {
+    "path": "backend/app/models/routine_override.py",
+    "status": "copied",
+    "incoming_sha256": "de1f1edeed800920d8ccbef742a1f4fe1482c91e2bd86fe3f74027968236a7d6"
+  },
+  {
+    "path": "backend/app/schemas/routine_rides.py",
+    "status": "copied",
+    "incoming_sha256": "ea2af77a1ee851f8d40f6acd5c1f9faba04fbe6cfef8d2d10c19028bed6c0f97"
+  },
+  {
+    "path": "backend/app/services/backdrops.py",
+    "status": "copied",
+    "incoming_sha256": "4f0909d93c63b9e281d1cfec10b0a957e0bcd8126ce9e3b8f02e182dde8daf3d"
+  },
+  {
+    "path": "backend/app/services/bike_build.py",
+    "status": "copied",
+    "incoming_sha256": "a59cbabfac150d927cbc931a2a0c7eb89339bbece59a2aef2e7bab570fa609bb"
+  },
+  {
+    "path": "backend/app/services/cutout.py",
+    "status": "copied",
+    "incoming_sha256": "faea27709a49b6fad33c671a568e96bcec7d924379b1bb95f242c2e30d49dda7"
+  },
+  {
+    "path": "backend/app/services/cyclr_studio.py",
+    "status": "copied",
+    "incoming_sha256": "067e39c7300842b77b1bdb5e1bd12b67c84f349153b5e1e8a8f2bc486c9d9aab"
+  },
+  {
+    "path": "backend/app/services/places.py",
+    "status": "copied",
+    "incoming_sha256": "bc1d89601a7b9ddc6a63748ae5d23a31d83802aa5ac19882bbad93fb5a56127b"
+  },
+  {
+    "path": "backend/app/services/plate_layers.py",
+    "status": "copied",
+    "incoming_sha256": "8ff1f2583f3567ef1939953b8a36b8f9a3d1177c5d53d1c47803557fb280dd59"
+  },
+  {
+    "path": "backend/app/services/ride_economy.py",
+    "status": "copied",
+    "incoming_sha256": "d8c2479e4fdb069aea59de0fdb8495eb72a447a4cf4a1453cbcc57fe207bd89c"
+  },
+  {
+    "path": "backend/app/services/routine_rides.py",
+    "status": "copied",
+    "incoming_sha256": "bd6d6714a16da37dd02b3d1875988d47044294afbe4af83110af87baf6957b74"
+  },
+  {
+    "path": "backend/app/services/stage_compositor.py",
+    "status": "copied",
+    "incoming_sha256": "c86df85c317836a8c3c7e8ea67091225ef7939eb8d4da585963681f0b04edadc"
+  },
+  {
+    "path": "backend/app/services/stage_frame.py",
+    "status": "copied",
+    "incoming_sha256": "2945ae2b73f6e755c37815eb65e039e37b3b220dacb606c1c7599c16facb1b35"
+  },
+  {
+    "path": "backend/app/services/stage_unlock.py",
+    "status": "copied",
+    "incoming_sha256": "2b95602511e2abe26259bdd5e7e619a1ae3612014a6dce7f62e702df99a34733"
+  },
+  {
+    "path": "backend/migrations/versions/rr5e1b8c94d7_routine_rides.py",
+    "status": "copied",
+    "incoming_sha256": "af1f79078dad4aa5f10f64ae3b2b9f043314983f2bba1b8c6ddd09525637be31"
+  },
+  {
+    "path": "backend/tests/api/test_routine_feed.py",
+    "status": "copied",
+    "incoming_sha256": "9405a514849bdae90da7d841935954c3cebea772eea5e9fc7b9b483db884e767"
+  },
+  {
+    "path": "backend/tests/api/test_routine_rides_api.py",
+    "status": "copied",
+    "incoming_sha256": "94ba856d71ba5c63f9241a92b090d386a468afb6e5ac6cc96ed3daebb25a95bd"
+  },
+  {
+    "path": "backend/tests/services/test_bike_build_no_additions.py",
+    "status": "copied",
+    "incoming_sha256": "115ee419cfa3a4145916e5c83f33ad37382948139fbbdf87fe7824bcf996a6a1"
+  },
+  {
+    "path": "backend/tests/services/test_cutout_alpha.py",
+    "status": "copied",
+    "incoming_sha256": "230d2e222bc06026ede88db41b53f04875edeaa9093a23622493e27bfb68dfcc"
+  },
+  {
+    "path": "backend/tests/services/test_plate_layers.py",
+    "status": "copied",
+    "incoming_sha256": "6cebf83ffc0814cd379e195d8faec1b3df03dc6d387182404e1c23d8b00f7e18"
+  },
+  {
+    "path": "backend/tests/services/test_routine_rides.py",
+    "status": "copied",
+    "incoming_sha256": "de3e40f423c0f46faf6762a14a662942d71abaf6b447d539ef28c2c324178f82"
+  },
+  {
+    "path": "backend/tests/services/test_stage_compositor.py",
+    "status": "copied",
+    "incoming_sha256": "ca66337983fa19446a37b6a50106ac5b6599772fa575d1407f064d2ea194bed8"
+  },
+  {
+    "path": "backend/tests/services/test_stage_cutoff.py",
+    "status": "copied",
+    "incoming_sha256": "5b13ec38f30c5cf78808c365c556c41e6d98cf32f3df813914cc1f0317d36d7c"
+  },
+  {
+    "path": "backend/tests/services/test_stage_frame.py",
+    "status": "copied",
+    "incoming_sha256": "e5e26d26818b324378abf496fb1e5f047bbaf708b9a67d98043859a7a4deae18"
+  },
+  {
+    "path": "backend/tests/services/test_stage_pixels.py",
+    "status": "copied",
+    "incoming_sha256": "684983964a8b91fe8ebf5c5b33f2ed7c94c19e780eff37c1eb215fdb8e959347"
+  },
+  {
+    "path": "backend/tests/services/test_stage_unlock.py",
+    "status": "copied",
+    "incoming_sha256": "df91dbd8a1691855c062106cd635e19f5e10f241e164e08b57cf2a7f96fc3fa4"
+  }
+]

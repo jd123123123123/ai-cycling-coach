@@ -27,10 +27,44 @@ and unlock rules are German and live alongside them.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from app.services.earn_modifiers import RideFacts
+
+
+#: Stages are earned from rides ridden ON OR AFTER this moment. Nothing before
+#: it unlocks anything, on either path.
+#:
+#: WHY A CUTOFF AT ALL, given a rider really did climb that pass last spring.
+#: Because the unlock is a MOMENT, not an inventory line. A rider with three
+#: seasons in the app would open it on their first sync and be handed forty
+#: stages at once — which is not forty rewards, it is one undifferentiated dump
+#: that teaches them the stages mean nothing. Everyone starts level, and the
+#: first one lands on its own.
+#:
+#: THE COST, STATED PLAINLY: a Ventoux climbed last year does not count, and the
+#: rider has to go back. That is a real loss and it is the deliberate trade.
+#:
+#: Kept as a UTC instant rather than a date so the boundary is unambiguous for
+#: a rider syncing across midnight in any timezone.
+STAGES_LIVE_FROM = datetime(2026, 9, 10, 0, 0, tzinfo=timezone.utc)
+
+
+def counts_for_stages(started_at: "datetime | None") -> bool:
+    """True when a ride is recent enough to open a stage.
+
+    A ride with no start time never counts: an unlock has to be attributable to
+    a real day, and `unlocked_by` promises the rider a date.
+    """
+    if started_at is None:
+        return False
+    when = started_at
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return when >= STAGES_LIVE_FROM
 
 
 @dataclass(frozen=True)

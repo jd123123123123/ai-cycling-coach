@@ -120,8 +120,271 @@ def describe(equipped: list[str]) -> list[str]:
     return [VISUALS[m.id] for m in em.catalogue() if m.id in worn]
 
 
+#: THE LIGHT IS THE REWARD — the craft, never the hour.
+#:
+#: A stage is not a place to document, it is a place a rider EARNED. Rendered in
+#: flat, even light it documents; the first Ventoux pass was accurate, correctly
+#: grounded and emotionally inert.
+#:
+#: WHAT THIS CLAUSE MAY NOT DO, and the first version did. It opened with
+#: "golden hour, twenty minutes before sunset, warm amber light" — and four of
+#: the stages already in the catalogue name their own hour and weather:
+#: `night_road` is "true night, lit only by a cold pool of light from a single
+#: street lamp", `rain_road` has "a flat grey sky pressing down", `winter_road`
+#: has "a low pale sun that gives light but no warmth", and `dawn_road` is
+#: sunrise rather than sunset. Handing the model both is handing it a
+#: contradiction, and Ventoux only looked right because its prose happens to
+#: name no hour at all.
+#:
+#: So the hour belongs to the STAGE and the craft belongs here. Every lever
+#: below works at any hour — that is the test a lever has to pass to be in this
+#: string:
+#:
+#:  · SEPARATION — a rim of the scene's own key light along the machine's upper
+#:    edges. Bright edge against dark ground is the visual grammar of triumph at
+#:    midnight as much as at sunset.
+#:  · A LONG SHADOW TOWARD CAMERA — shadows running at the viewer read as
+#:    arrival rather than as passing through, whatever is casting them.
+#:  · STEPPED RECESSION — awe tracks perceived vastness, and vastness is carried
+#:    by separated depth planes far more than by focal length.
+#:  · TRUE BLACKS AND RICH COLOUR — luminous, never milky. Applies to a grey
+#:    rainy sky as much as to a gold one.
+#:  · SPECULAR RICHNESS — highlights are what separate a desirable object from a
+#:    photograph of a bike.
+#:
+#: THE TWO CLAUSES THAT ARE NOT ABOUT BEAUTY, both bought with a failed pass:
+#:
+#:  · THE FILL. Key light alone underexposed the drive side and the rider's own
+#:    machine came back the darkest object in its own reward picture. A stage
+#:    that hides the bike defeats the point of the bike.
+#:  · THE LANDMARK. Chasing contrast and depth shrank the observatory tower into
+#:    a generic antenna. For a stage whose whole reward is "I was there", the
+#:    proof cannot be incidental.
+#: HOW HARD IT WAS, AS A PICTURE.
+#:
+#: The stage is a reward, and a reward ladder only works if the rungs are
+#: visibly apart. "Make it epic" applied to all fifty produces fifty maxed-out
+#: pictures, which is a flat ladder wearing a lot of drama — and a flat ladder
+#: cannot make anybody envious, because nothing in it is out of reach.
+#:
+#: So the discipline runs the other way: THE BOTTOM IS DELIBERATELY RESTRAINED.
+#: `Alltag` is charming and ordinary on purpose. It has to be, or `Legendär` has
+#: nowhere left to go.
+#:
+#: Four devices are RESERVED for the top and never spent below it, because each
+#: one is a step a lower tier cannot take:
+#:
+#:   · IMPOSSIBILITY — the lower tiers are places a rider could stand in. The
+#:     top tier is not: orbit, the abyss, an accretion disc. That single jump
+#:     does more than any amount of extra colour.
+#:   · AN EVENT — something is HAPPENING in the frame. Lava, lightning at the
+#:     moment of grounding, spindrift streaming. Lower tiers hold still.
+#:   · IMPOSSIBLE LIGHT — light no ordinary day produces: earthshine, aurora,
+#:     bioluminescence, a sun that refuses to set.
+#:   · VASTNESS — the horizon a lower tier cannot reach.
+#:
+#: The intensity is a property of the TIER, not of the scene, so a designer
+#: writing a new stage picks a rung and inherits its register rather than
+#: arguing about adjectives.
+TIER_INTENSITY: dict[str, str] = {
+    "alltag": (
+        " REGISTER — QUIET AND CHARMING, NOT SPECTACULAR. This is an ordinary place, rendered "
+        "beautifully: honest daylight, believable materials, nothing dramatic happening. It should "
+        "feel warm, familiar and a little bit lovely — the kind of picture somebody smiles at, not "
+        "one they gasp at. No extraordinary weather, no impossible light, no vast horizon. It is "
+        "the bottom of a ladder and it must look like it, or nothing above it can feel earned."
+    ),
+    "ernsthaft": (
+        " REGISTER — REAL PLACE, REAL WEATHER, PROPER LIGHT. Somewhere a committed rider actually "
+        "goes, at an hour worth photographing: directional light, weather with character, honest "
+        "atmosphere and depth. Striking, and entirely possible. Still no event, still nothing "
+        "impossible."
+    ),
+    "selten": (
+        " REGISTER — SPECTACULAR, AND SOMETHING IS HAPPENING. Somewhere astonishing that still "
+        "exists on this planet, caught at its most extreme moment: the eruption glowing, the storm "
+        "grounding, the aurora sheeting overhead. Deeply saturated, one colour nothing else in the "
+        "collection has. This has to stop a thumb scrolling past it."
+    ),
+    "legendaer": (
+        " REGISTER — IMPOSSIBLE, AND IT MUST LOOK IT. This is somewhere a human being cannot simply "
+        "go, and the picture must make that obvious in the first quarter-second: the scale is "
+        "overwhelming, the horizon is further than any horizon on Earth, the light is light that no "
+        "ordinary day produces. Physically extraordinary and absolutely beautiful. Somebody seeing "
+        "this on another rider's phone should immediately want to know what it costs to earn."
+    ),
+}
+
+
+def tier_clause(tier: str | None) -> str:
+    """The intensity register for one rung. Unknown or missing tier adds nothing
+    rather than guessing a rung — a stage with no tier is simply not laddered."""
+    return TIER_INTENSITY.get((tier or "").lower(), "")
+
+
+#: WHAT A STAGE MAY NOT CONTAIN.
+#:
+#: Caught on the first playful stage that was tried. The world was described
+#: only as "a child's bedroom from a 1990s animated film — sky-blue wall, flat
+#: white cartoon clouds, honey floorboards". The render came back with two
+#: real film posters on the wall, correctly branded and with the characters
+#: drawn accurately. Nobody asked for them: the association pulled them in.
+#:
+#: A stage is shipped to riders, screenshotted and shared. It cannot carry
+#: someone else's trademarks, characters or poster art, and the failure mode is
+#: not that the model refuses — it is that it obliges, convincingly, in the
+#: background of an otherwise good picture. So the guard is explicit and it
+#: rides along with every world.
+#:
+#: The AESTHETIC is not what is forbidden — flat cartoon clouds on a blue wall
+#: are a generic nursery, and a nursery is fine. What is forbidden is the
+#: specific: a named property, a recognisable character, a real logo.
+NO_IP = (
+    " ABSOLUTELY CRITICAL — NO THIRD-PARTY INTELLECTUAL PROPERTY ANYWHERE IN THE IMAGE: no film, "
+    "game or television characters, no movie posters, no album covers, no book jackets, no team "
+    "kit, no sponsor boards, no brand logos or wordmarks of any kind on any wall, screen, sign, "
+    "poster, packaging or vehicle. Walls, screens and signage are blank, abstract or bear only "
+    "invented, unreadable marks. The ONLY branding permitted anywhere is what is already printed "
+    "on the bicycle in the source image. If a surface would naturally carry a poster or a logo, "
+    "leave it empty."
+)
+
+#: THE HOUR. Prose arm only — with a plate, the photograph already decided.
+STAGE_HOUR = (
+    " KEEP THE HOUR AND THE WEATHER THE SETTING ABOVE DESCRIBES: if it names night, rain, frost or "
+    "first light, that is the hour, and nothing below may override it. Where the setting names no "
+    "particular hour, choose the most beautiful light that place can have."
+)
+
+#: THE CRAFT. Every arm, because none of it dictates an hour — it says how to
+#: light whatever hour is already there.
+#:
+#: THIS USED TO BE PROSE-ARM ONLY, AND THAT WAS THE BUG. The plate arm — the one
+#: that gives two riders the same world — was receiving no rim separation, no
+#: fill, no depth, no landmark rule and no composition at all. It was running
+#: naked, and every plate-based render looked flat next to a prose one for that
+#: reason alone. Compositing was never the problem.
+LIGHT_CRAFT = (
+    " THE LIGHT IS THE REWARD — this must feel like ARRIVING somewhere, not like documenting a "
+    "place. Within whatever hour the scene already has: the scene's own key light lays a bright rim "
+    "along the top tube, the saddle, the bars and the upper curve of both tyres so the bicycle "
+    "separates from its ground in a clear edge, and throws its shadow LONG across the ground toward "
+    "the camera. The distance recedes in several clearly separated planes so the depth reads as "
+    "enormous. A soft bloom on the brightest edges, rich specular highlights across the paint and "
+    "every polished component, deep saturated luminous colour with TRUE BLACKS — never milky. "
+    "THE BICYCLE MUST NOT FALL INTO SILHOUETTE: a large soft bounce from the camera side, in the "
+    "scene's own colour of light, fills its drive side so the frame colour, the decals, the "
+    "drivetrain and the hubs stay clearly legible and richly detailed while the rim light still "
+    "separates it. The machine is the brightest, most detailed and most desirable object in the "
+    "frame. "
+    "THE LANDMARK IS THE PROOF: whatever names this place is LARGE and PROMINENT, lit by the "
+    "scene's own light and standing clear of the bicycle's silhouette rather than hidden behind it."
+)
+
+#: WHERE THE MACHINE SITS. Every arm, and stated as measurements — written as
+#: prose ("a clear margin", "the lower middle") the model traded it away.
+STAGE_COMPOSITION = (
+    " COMPOSITION — THIS IMAGE IS A BACKGROUND WITH INTERFACE DRAWN OVER IT, and its left and right "
+    "edges will be cropped by about a fifth. Treat these four as measurements, not preferences: "
+    "(1) The bicycle spans NO MORE THAN 60% of the image width, centred horizontally, leaving at "
+    "least 20% of the width as empty ground and air beyond EACH wheel. "
+    "(2) The tyres meet the ground at about 72% of the image HEIGHT — low in the frame, near the "
+    "front of the scene, not floating in the middle of it. "
+    "(3) The top third of the frame, in a wide central column, is EMPTY SKY or empty distance: a "
+    "portrait is drawn over it, so no landmark, peak or tower may stand there. Put whatever names "
+    "the place to the LEFT or the RIGHT of that column. "
+    "(4) Nothing that matters sits within the outer eighth of the frame on either side."
+)
+
+#: Kept as a name because callers and tests refer to it: the prose arm's full set.
+REWARD_LIGHT = STAGE_HOUR + LIGHT_CRAFT + STAGE_COMPOSITION
+
+
+def tier_clause(tier: str | None) -> str:
+    """The intensity register for one rung. Unknown or missing tier adds nothing
+    rather than guessing a rung — a stage with no tier is simply not laddered."""
+    return TIER_INTENSITY.get((tier or "").lower(), "")
+
+
+#: WHAT A STAGE MAY NOT CONTAIN.
+#:
+#: Caught on the first playful stage that was tried. The world was described
+#: only as "a child's bedroom from a 1990s animated film — sky-blue wall, flat
+#: white cartoon clouds, honey floorboards". The render came back with two
+#: real film posters on the wall, correctly branded and with the characters
+#: drawn accurately. Nobody asked for them: the association pulled them in.
+#:
+#: A stage is shipped to riders, screenshotted and shared. It cannot carry
+#: someone else's trademarks, characters or poster art, and the failure mode is
+#: not that the model refuses — it is that it obliges, convincingly, in the
+#: background of an otherwise good picture. So the guard is explicit and it
+#: rides along with every world.
+#:
+#: The AESTHETIC is not what is forbidden — flat cartoon clouds on a blue wall
+#: are a generic nursery, and a nursery is fine. What is forbidden is the
+#: specific: a named property, a recognisable character, a real logo.
+NO_IP = (
+    " ABSOLUTELY CRITICAL — NO THIRD-PARTY INTELLECTUAL PROPERTY ANYWHERE IN THE IMAGE: no film, "
+    "game or television characters, no movie posters, no album covers, no book jackets, no team "
+    "kit, no sponsor boards, no brand logos or wordmarks of any kind on any wall, screen, sign, "
+    "poster, packaging or vehicle. Walls, screens and signage are blank, abstract or bear only "
+    "invented, unreadable marks. The ONLY branding permitted anywhere is what is already printed "
+    "on the bicycle in the source image. If a surface would naturally carry a poster or a logo, "
+    "leave it empty."
+)
+
+REWARD_LIGHT = (
+    " THE LIGHT IS THE REWARD — this image must feel like ARRIVING somewhere, not like documenting "
+    "a place. KEEP THE HOUR AND THE WEATHER THE SETTING ABOVE DESCRIBES: if it names night, rain, "
+    "frost or first light, that is the hour, and none of what follows may override it. Where the "
+    "setting names no particular hour, choose the most beautiful light that place can have. "
+    "Within that hour, light it like the best photograph ever taken of this machine: the scene's "
+    "own key light lays a bright rim along the top tube, the saddle, the bars and the upper curve "
+    "of both tyres so the bicycle separates from its ground in a clear edge, and throws its shadow "
+    "LONG across the ground toward the camera. The distance recedes in several clearly separated "
+    "planes, each one further and softer than the last, so the depth reads as enormous. Generous "
+    "sky above the bicycle, a soft bloom on the brightest edges, rich specular highlights across "
+    "the paint and every polished component. Deep saturated luminous colour with TRUE BLACKS — "
+    "luminous, never milky or washed out. "
+    "THE BICYCLE MUST NOT FALL INTO SILHOUETTE: a large soft bounce from the camera side, in the "
+    "scene's own colour of light, fills its drive side so the frame colour, the decals, the "
+    "drivetrain and the hubs stay clearly legible and richly detailed while the rim light still "
+    "separates it. The machine is the brightest, most detailed and most desirable object in the "
+    "frame. "
+    "THE LANDMARK IS THE PROOF: whatever names this place is LARGE and PROMINENT, lit by the "
+    "scene's own light and standing clear of the bicycle's silhouette rather than hidden behind "
+    "it. "
+    # COMPOSITION IS A CROP BUDGET, not a taste. The hero room draws a stage
+    # with `object-fit: cover`, so whatever the container's shape does not
+    # match gets cut — and it is cut from the sides, which is where the wheels
+    # are. Rendering portrait (`cyclr_studio.STAGE_ASPECT`) removes most of it;
+    # this margin absorbs the rest and every future surface's crop as well.
+    # COMPOSITION IS AN INTERFACE CONSTRAINT. This picture is not looked at on
+    # its own: it is the hero room, and the app draws over it — the rider's
+    # portrait and handle in a centred column across the top third, the
+    # readiness dock across the bottom fifth. A render that puts the landmark
+    # dead centre gives the rider a bust wearing an observatory tower, and one
+    # that centres the bicycle leaves a dead band of empty ground above the
+    # dock. Both were measured in the room, not imagined.
+    # NUMBERS, NOT ADJECTIVES. Written as prose — "a clear margin", "the lower
+    # middle" — the model traded these off against everything else in the
+    # string and produced a bigger, higher bicycle than the pass before. Layout
+    # constraints have to be stated as measurements or they lose the argument.
+    "COMPOSITION — THIS IMAGE IS A BACKGROUND WITH INTERFACE DRAWN OVER IT, and its left and right "
+    "edges will be cropped by about a fifth. Treat these four as measurements, not preferences: "
+    "(1) The bicycle spans NO MORE THAN 60% of the image width, centred horizontally, leaving at "
+    "least 20% of the width as empty ground and air beyond EACH wheel. "
+    "(2) The tyres meet the ground at about 72% of the image HEIGHT — low in the frame, near the "
+    "front of the scene, not floating in the middle of it. "
+    "(3) The top third of the frame, in a wide central column, is EMPTY SKY or empty distance: a "
+    "portrait is drawn over it, so no landmark, peak or tower may stand there. Put whatever names "
+    "the place to the LEFT or the RIGHT of that column. "
+    "(4) Nothing that matters sits within the outer eighth of the frame on either side."
+)
+
+
 def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False,
-                weather: str = "") -> str:
+                weather: str = "", tier: str | None = None) -> str:
     """The full instruction: this exact bicycle, wearing these parts, standing
     wherever the rider chose to stand it.
 
@@ -145,6 +408,25 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False,
         BIKE_CAMERA,
         GENERAL_STYLE,
         ISOLATED_BIKE_STYLE,
+    )
+
+    # ── THE STAGE MAY NOT FIT ACCESSORIES ─────────────────────────────────
+    # Measured on the Ventoux stage with a real rider's Standert: the model
+    # returned the bike with two bottle cages, two bottles, a frame bag and a
+    # top-tube bag, all in the frame's own accent colour. Every one of them
+    # plausible, none of them the rider's.
+    #
+    # The collectible is a RECORD OF WHAT THE RIDER OWNS — the whole reason the
+    # photograph is handed in rather than the description. A stage that quietly
+    # fits luggage turns that record into a fiction, and it does it in the most
+    # convincing way possible, which is what makes it worth an explicit clause.
+    # A stage changes where the machine STANDS and how it is LIT. Nothing else.
+    no_additions = (
+        " ABSOLUTELY CRITICAL — ADD NOTHING TO THE BICYCLE: no bottle cages, no water bottles, no "
+        "frame bag, no saddle bag, no top-tube bag, no lights, no computer, no pump, no mudguards, "
+        "no luggage and no accessory of any kind that is not already present in the source image. "
+        "Reproduce the machine exactly as given — same frame, same components, same decals — "
+        "adding nothing and removing nothing. Only the SETTING and the LIGHTING change."
     )
 
     changes = describe(equipped)
@@ -247,4 +529,21 @@ def edit_prompt(equipped: list[str], world: str = "", has_plate: bool = False,
         "sit in the existing dropouts, a new handlebar on the existing steerer, bags strapped to "
         "real mounting points. "
         f"{BIKE_CAMERA} {ground} {GENERAL_STYLE} {ISOLATED_BIKE_STYLE}"
+        # Only on the PROSE arm. With a plate, the photograph is the authority
+        # on light and relighting it to a different hour would break the match
+        # that arm exists to keep.
+        # THE CRAFT AND THE COMPOSITION GO TO BOTH ARMS. Only the HOUR is
+        # withheld from the plate arm, because the photograph already fixed it.
+        + (LIGHT_CRAFT + STAGE_COMPOSITION if world else "")
+        + (STAGE_HOUR if (world and not has_plate) else "")
+        # Rides along with EVERY stage, plate arm included: a photographed
+        # place can have a billboard in it just as easily as an imagined one.
+        + (NO_IP if world else "")
+        # The rung, last of all, so it colours everything above it. See
+        # `TIER_INTENSITY`: the ladder only works because the bottom is quiet.
+        + (tier_clause(tier) if world else "")
+        # LAST, so it is the final instruction the model reads, and only when
+        # nothing was deliberately equipped. A rider who BOUGHT a frame bag must
+        # still get it fitted — the clause forbids inventions, not purchases.
+        + (no_additions if not changes else "")
     )

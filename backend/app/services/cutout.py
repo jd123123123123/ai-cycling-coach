@@ -56,6 +56,24 @@ _session = None
 _lock = threading.Lock()
 
 
+#: Alpha knees for `_SOLIDIFY`. Below `_KNEE_LO` is background, above `_KNEE_HI`
+#: is machine; between them is the true anti-aliased silhouette.
+_KNEE_LO, _KNEE_HI = 0.06, 0.45
+
+
+def _solidify_lut() -> list[int]:
+    """A smoothstep alpha curve — see the note at its call site in `cut_out`."""
+    lut: list[int] = []
+    for v in range(256):
+        t = (v / 255 - _KNEE_LO) / (_KNEE_HI - _KNEE_LO)
+        t = 0.0 if t < 0 else 1.0 if t > 1 else t
+        lut.append(int(255 * (t * t * (3 - 2 * t))))
+    return lut
+
+
+_SOLIDIFY = _solidify_lut()
+
+
 def _get_session():
     global _session
     if _session is None:
@@ -128,6 +146,24 @@ def cut_out(data_url: str) -> str | None:
         # this whole pipeline has been chasing. Measuring at alpha > 24 finds
         # the machine instead of its halo.
         alpha = out.getchannel("A")
+
+        # ── SOLIDIFY THE INTERIOR ─────────────────────────────────────────
+        # rembg returns a soft matte: measured on a real stored bike only 0.5%
+        # of the cut-out was fully opaque, with 28% sitting at alpha 201–254 and
+        # 4% genuinely translucent. Against the near-black studio room that is
+        # invisible — a rim at alpha 230 over near-black looks identical to one
+        # at 255. Against a BRIGHT stage it is a ghost: the ground shows through
+        # the wheels and the whole machine reads as a transparency laid on the
+        # picture. The defect was always there and only became visible when
+        # stages stopped being dark.
+        #
+        # The curve lifts everything past a low knee to solid. The genuine
+        # silhouette feather crosses the whole range within a pixel or two, so a
+        # steeper ramp costs a slightly crisper edge and nothing else — and the
+        # bbox below still measures at alpha > 24, which this leaves untouched.
+        alpha = alpha.point(_SOLIDIFY)
+        out.putalpha(alpha)
+
         box = alpha.point(lambda v: 255 if v > 24 else 0).getbbox()
         if box:
             out = out.crop(box)

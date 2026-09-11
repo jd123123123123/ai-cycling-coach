@@ -447,6 +447,24 @@ DEFAULT_IMAGE_MODEL = "gemini-3.1-flash-image"
 #: `STORE_MAX_PX` and `_to_data_url`.
 RENDER_SIZE = getattr(settings, "IMAGE_SIZE", "") or "2K"
 
+#: The aspect a STAGE is rendered at.
+#:
+#: MEASURED TWICE, because the first measurement was of the wrong box. A scene
+#: is not drawn into the machine's slot — it IS the room, so it fills the whole
+#: stage, and the stage is the whole screen: 390x844 on a reference phone, a
+#: ratio of 0.46. Rendered 1:1 that costs 55% of the width; rendered 3:4 (which
+#: is what measuring the 390x544 area above the dock suggested) it still costs
+#: 38%, and on both test renders the crop landed exactly on the wheels.
+#:
+#: 9:16 is 0.5625 — the closest standard aspect to the room's own 0.46 — and
+#: brings the crop down to about 18%, which the composition clause in
+#: `bike_build.REWARD_LIGHT` is written to absorb by keeping the machine inside
+#: the middle two thirds.
+#:
+#: The isolated garage collectible stays 1:1. It is a product shot on a sweep,
+#: not a room, and nothing crops it.
+STAGE_ASPECT = "9:16"
+
 #: What we KEEP. These images are stored inline (garage_assets.image_url,
 #: ride_scenes) and ride in JSON on Today's critical path of a mobile-first app,
 #: where base64 adds a third again on top of the file size. A full 2K WebP is
@@ -456,6 +474,49 @@ RENDER_SIZE = getattr(settings, "IMAGE_SIZE", "") or "2K"
 #: the lettering properly, and a downscale of a correct render stays sharper
 #: than a 1K render of the same thing ever was.
 STORE_MAX_PX = 1536
+
+#: What we keep of a PORTRAIT render, measured on its WIDTH.
+#:
+#: THE BUG THIS FIXES, and it is a shape assumption that outlived its shape.
+#: `STORE_MAX_PX` was written when every render was square, and `thumbnail` fits
+#: an image INSIDE the box it is given — so a 1:1 render stored 1536 px wide and
+#: a 9:16 render stores 864. Measured, not reasoned: a 1152x2048 render came back
+#: from `_to_data_url` as 864x1536.
+#:
+#: 864 px is not enough, and unlike the collectible this one is not displayed at
+#: 252 px. A stage is the ROOM — `W3TodayStage` paints it full-bleed with
+#: `objectFit: cover` across the whole screen — so the number that matters is the
+#: device's own width: 390 pt at DPR 3 is 1170 px, and a 6.9" phone is 1290. At
+#: 864 the room is a 1.35x upscale of a photograph, which is precisely what it
+#: looked like.
+#:
+#: MEASURED, on a real Dolomites plate downscaled to each width and then painted
+#: back up to a 390 pt phone's 1170 device px, with mean gradient at display size
+#: as the sharpness proxy:
+#:
+#:   store   WebP q85   base64   upscale   sharpness
+#:     768     162 KB   216 KB     1.52x     4.93     ← visibly mushy: the
+#:     960     225 KB   299 KB     1.22x     5.44       gravel loses its
+#:    1080     268 KB   356 KB     1.08x     5.67       individual stones
+#:    1170     300 KB   399 KB     1.00x     5.91
+#:    1280     351 KB   467 KB     0.91x     5.91     ← no better than 1170
+#:
+#: 1080 takes 96% of the sharpness of a native-resolution stage for 76% of the
+#: payload, and 1080 → 1170 is an 8% upscale nobody can see. It is also the width
+#: `cutout.MAX_PX` already settled on for the share card, so the app has one
+#: number for "as wide as a phone ever needs" instead of two.
+#:
+#: THIS IS ABOUT STORAGE, NOT RENDERING, and the two do not want the same number.
+#: `RENDER_SIZE` stays 2K because `DEFAULT_IMAGE_MODEL`'s note is about type, not
+#: pixels: at 1K this model resolves a rider's frame decals at the same scale as
+#: the spokes and a Standert comes back reading "Stanlert". Downscaling a correct
+#: 2K render keeps the lettering right; rendering 1K never had it.
+STAGE_STORE_MAX_W = 1080
+
+#: Taller than this much of its width and an image is a room rather than a
+#: product shot. Deliberately not "h > w": a 1:1 render that comes back a few
+#: pixels tall is still a collectible.
+_PORTRAIT_RATIO = 1.15
 
 
 def _seed(s: str) -> int:
@@ -523,6 +584,7 @@ def _is_size_refusal(err: Exception) -> bool:
 
 async def _render(
     contents: list, seed_src: str, size: str, aspect: str = "1:1", *,
+    frame_ratio: float | None = None,
     model: str | None = None,
 ) -> str | None:
     """Ask the image model for one picture. Returns None rather than raising.
@@ -587,7 +649,7 @@ async def _render(
             for part in resp.candidates[0].content.parts:
                 data = getattr(part, "inline_data", None)
                 if data and data.data:
-                    return _to_data_url(data.data)
+                    return _to_data_url(data.data, frame_ratio=frame_ratio)
         except (AttributeError, IndexError, TypeError):
             # A response with no candidates at all — a safety refusal looks like
             # this. Not an error to raise on; there is simply no image.
@@ -609,7 +671,7 @@ async def _generate(
     return await _render([prompt], seed_src, size or RENDER_SIZE, aspect)
 
 
-def _to_data_url(png: bytes) -> str:
+def _to_data_url(png: bytes, frame_ratio: float | None = None) -> str:
     """Pack rendered bytes into a data URL, transcoding PNG → WebP first.
 
     These images are stored inline (garage_assets.image_url, ride_scenes) and
@@ -624,6 +686,16 @@ def _to_data_url(png: bytes) -> str:
     `STORE_MAX_PX` because no surface in the app displays more. Downscaling a
     correct 2K render is not the same as rendering 1K: the type stays right.
 
+    `frame_ratio` TURNS THE DOWNSCALE INTO A REFRAME, and this is the only place
+    it can happen. `services.stage_frame` puts the machine on a canonical box by
+    measuring its wheels and applying one similarity transform — and that
+    transform has to be composed with the resize rather than run after it,
+    because reframing needs source pixels to spend and by the time the image is
+    1080 px wide they are gone. Passed only by the stage paths, which know they
+    are rendering a room; every other caller gets exactly the resize it always
+    got. See `stage_frame` for the measurements — nine real stages landed their
+    contact line anywhere across a fifth of the frame height.
+
     Pillow is a hard dependency (requirements.txt), but a missing or broken
     encoder must never cost the rider the bike they just made — we fall back to
     the original PNG rather than failing the render.
@@ -634,7 +706,29 @@ def _to_data_url(png: bytes) -> str:
         from PIL import Image
 
         img = Image.open(io.BytesIO(png)).convert("RGB")
-        if max(img.size) > STORE_MAX_PX:
+        # A PORTRAIT IS CAPPED ON ITS WIDTH, EVERYTHING ELSE ON ITS LONG EDGE.
+        # See `STAGE_STORE_MAX_W`: a square box silently cost the room a quarter
+        # of its horizontal resolution the day stages went 9:16.
+        w, h = img.size
+        if h >= w * _PORTRAIT_RATIO:
+            tw = min(w, STAGE_STORE_MAX_W)
+            th = max(1, round(h * tw / w))
+            if frame_ratio:
+                from app.services import stage_frame
+
+                framed, info = stage_frame.normalise(img, (tw, th), ratio=frame_ratio)
+                # NEVER FATAL AND NEVER SILENT. A render whose wheels cannot be
+                # found is stored exactly as it would have been before this
+                # existed; it is logged because a stage that keeps declining has
+                # a composition problem upstream, not a detection one.
+                if info.get("ok"):
+                    log.info("stage reframed: %s", info)
+                else:
+                    log.info("stage not reframed (%s)", info.get("why"))
+                img = framed
+            elif w > STAGE_STORE_MAX_W:
+                img = img.resize((tw, th), Image.LANCZOS)
+        elif max(img.size) > STORE_MAX_PX:
             img.thumbnail((STORE_MAX_PX, STORE_MAX_PX), Image.LANCZOS)
         buf = io.BytesIO()
         img.save(buf, "WEBP", quality=85, method=6)
@@ -1478,7 +1572,9 @@ def _rider_compose_prompt() -> str:
 
 
 async def edit_image(
-    base_b64: str, prompt: str, seed_src: str, size: str = "", *, extra_b64: str | None = None,
+    base_b64: str, prompt: str, seed_src: str, size: str = "", *,
+    extra_b64: str | None = None, aspect: str = "1:1",
+    frame_ratio: float | None = None,
 ) -> str | None:
     """Image-conditioned edit: hand a picture back with an instruction.
 
@@ -1506,7 +1602,18 @@ async def edit_image(
     if extra_b64:
         contents.append(_img_part(extra_b64))
     contents.append(prompt)
-    return await _render(contents, seed_src, size)
+    # `size or RENDER_SIZE`, LIKE `_generate` HAS ALWAYS DONE. This read `size`
+    # alone, whose default is the empty string, so every caller that did not
+    # name a size got the provider's own default instead of the 2K this module
+    # renders at on purpose — and that is the whole EDIT path, which is the live
+    # stage: `garage.get_today_stage` and `stage_unlock` both call this with an
+    # aspect and no size. Measured on a real 9:16 call, the result came back
+    # 768x1376. The room is painted about 1170 px wide, so the rider was looking
+    # at a 1.52x upscale; and per `DEFAULT_IMAGE_MODEL`, 1K is also the
+    # resolution at which this model spells a Standert "Stanlert". A size the
+    # model cannot do is still safe to ask for — `_render` retries at 1K.
+    return await _render(contents, seed_src, size or RENDER_SIZE, aspect,
+                         frame_ratio=frame_ratio)
 
 
 def _img_part(photo_b64: str):

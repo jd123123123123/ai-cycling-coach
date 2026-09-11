@@ -32,6 +32,7 @@ from app.models.garage import RiderBackdrop
 from app.models.rewards import REASON_EDDINGTON, REASON_GEAR_BONUS
 from app.services import (
     backdrops,
+    stage_unlock,
     bike_wear,
     eddington,
     gear,
@@ -148,7 +149,15 @@ async def _pay_gear(
     # a rider must not lose the RideCoin their ride earned because a backdrop
     # failed to unlock. See `services.backdrops` and `models.garage.RiderBackdrop`.
     try:
-        await _open_backdrops(db, user_id, activity, facts)
+        # THE RETURN VALUE USED TO BE DISCARDED, and that was the whole defect:
+        # the rows were written, the stage really was earned, and nothing
+        # announced it — a rider found out by noticing an extra swatch in the
+        # picker weeks later. It is captured now and handed to `stage_unlock`,
+        # which starts rendering their bike into the new place so the unlock
+        # screen has a picture rather than a spinner.
+        opened = await _open_backdrops(db, user_id, activity, facts)
+        if opened:
+            stage_unlock.warm(user_id, opened)
     except Exception:
         logger.info("a backdrop unlock failed (non-fatal)", exc_info=True)
     try:
@@ -187,6 +196,11 @@ async def _open_backdrops(
     permanent by construction rather than by policy — there is no code path that
     deletes one.
     """
+    # ONLY RIDES FROM THE LAUNCH ONWARD. A backfill or a re-sync of three
+    # seasons of history would otherwise hand a rider forty stages at once,
+    # which is not forty rewards — see `backdrops.STAGES_LIVE_FROM`.
+    if not backdrops.counts_for_stages(activity.started_at):
+        return []
     earned = backdrops.earned_by(facts)
     if not earned:
         return []

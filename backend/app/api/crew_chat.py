@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_active_user, get_db_for_user
 from app.models.activity import Activity
+from app.models.athlete_profile import AthleteProfile
 from app.models.ride_photo import RidePhoto
 from app.services.crew_records import records_for_rides
 from app.services.ride_context import context_for_rides
@@ -46,6 +47,7 @@ from app.models.crew_social import CrewMessage
 from app.models.user import User
 from app.services.crew_score import display_handle
 from app.services.crew_social import reaction_summaries, require_membership
+from app.services.routine_rides import RoutineVerdict, verdicts_for_rides
 
 router = APIRouter(prefix="/crews/me", tags=["crew-social"])
 
@@ -201,6 +203,19 @@ class RideRead(BaseModel):
     #: ride carries no usable GPS track (indoor, trainer, a watch with GPS off),
     #: and the card then draws no map rather than inventing one.
     route: list[list[float]] | None = None
+    #: Part of a repeating pattern of the rider's own — the twice-daily commute.
+    #: Only ever True when the CALLER has "Routinefahrten ausblenden" on, since
+    #: that is the only case in which the detector runs at all; with the switch
+    #: off the feed behaves exactly as it did before this field existed.
+    #: "Routine" means not newsworthy. It never means the ride stopped counting:
+    #: TSS, CTL/ATL, weekly totals, streaks and Eddington all read `activities`
+    #: and know nothing about it.
+    is_routine: bool = False
+    #: Why, in plain German — "5 fast gleiche Fahrten in den letzten 60 Tagen:
+    #: 13,1 km, Start gegen 04:55 Uhr, werktags." Null when the detector did not
+    #: run. Present on the rides that survive when `include_routine=true`, so a
+    #: card can explain a chip instead of asserting one.
+    routine_reason: str | None = None
 
 
 class CommentSend(BaseModel):
@@ -411,10 +426,22 @@ async def list_crew_rides(
     # German-only UI, so the record label is German by default rather than by
     # a parameter every caller would have to remember to pass.
     lang: str = "de",
+    # "Show them anyway" for one request, without touching the stored switch:
+    # the routine rides come back marked (`is_routine`) instead of dropped, so
+    # a screen can offer "Routinefahrten einblenden" as a view, not a setting.
+    include_routine: bool = False,
 ) -> list[RideRead]:
     """Recent cycling activities across ALL of the caller's crew (newest first),
     each with author handle + a 'ride' reaction summary. Empty when not in a
-    crew. Only cycling/ride sports are included."""
+    crew. Only cycling/ride sports are included.
+
+    THE VIEWER'S PREFERENCE, AND ONLY THE VIEWER'S. When the CALLER has
+    `hide_routine_rides` on, rides that belong to a repeating pattern of their
+    own rider's making — the twice-daily commute — are left out of THIS
+    response. No other member's setting affects this feed, and this setting
+    affects no other member's feed. Default off: with the switch untouched the
+    detector never runs and this endpoint answers exactly what it did before.
+    """
     mem = (
         await db.execute(
             select(CrewMembership).where(CrewMembership.user_id == current_user.id)
@@ -425,6 +452,20 @@ async def list_crew_rides(
 
     limit = max(1, min(100, limit))
 
+    viewer_profile = (
+        await db.execute(
+            select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+        )
+    ).scalar_one_or_none()
+    hide_routine = bool(
+        viewer_profile is not None
+        and getattr(viewer_profile, "hide_routine_rides", False)
+    )
+
+    # Over-fetch only when rides may be dropped, so a page whose author commutes
+    # daily still fills up. Capped, because the feed is a page and not a crawl.
+    fetch_n = min(100, limit * 4) if hide_routine and not include_routine else limit
+
     stmt = (
         select(Activity, User)
         .join(CrewMembership, CrewMembership.user_id == Activity.user_id)
@@ -434,9 +475,30 @@ async def list_crew_rides(
             func.lower(Activity.sport).in_(CYCLING_SPORTS),
         )
         .order_by(Activity.started_at.desc())
-        .limit(limit)
+        .limit(fetch_n)
     )
     rows = list((await db.execute(stmt)).all())
+
+    # ── Routine detection, and the one place a ride is dropped ──────────
+    # Runs only for a viewer who asked for it, so the default path costs no
+    # extra query. `verdicts_for_rides` MARKS; it never filters — see
+    # services/routine_rides.py. The filtering is these four lines and nowhere
+    # else in the backend.
+    routine: dict[int, RoutineVerdict] = {}
+    if hide_routine:
+        routine = await verdicts_for_rides(
+            db,
+            user_ids=sorted({act.user_id for act, _ in rows}),
+            activity_ids=[act.id for act, _ in rows],
+            sports=CYCLING_SPORTS,
+        )
+        if not include_routine:
+            rows = [
+                (act, user)
+                for act, user in rows
+                if not (act.id in routine and routine[act.id].is_routine)
+            ]
+        rows = rows[:limit]
 
     ride_ids = [a.id for a, _ in rows]
 
@@ -502,6 +564,12 @@ async def list_crew_rides(
                 record=records.get(act.id),
                 context=contexts.get(act.id),
                 route=routes.get(act.id),
+                is_routine=bool(
+                    act.id in routine and routine[act.id].is_routine
+                ),
+                routine_reason=(
+                    routine[act.id].reason if act.id in routine else None
+                ),
             )
         )
     return out

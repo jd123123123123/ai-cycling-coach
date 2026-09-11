@@ -147,7 +147,13 @@ def plate_prompt(place: Place) -> str:
         "LIGHT: cinematic and directional, with a clear key, real shadows across the terrain and a "
         "rich falloff into near-black at the frame edges.\n"
         "RENDER: ray-traced global illumination, physically-based materials, real optical depth of "
-        "field, every plant and rock modelled as genuine geometry. Square 1:1 frame."
+        "field, every plant and rock modelled as genuine geometry.\n"
+        # THE FRAME IS STATED TWICE, AND IT USED TO DISAGREE WITH ITSELF. This
+        # line read "Square 1:1 frame" while the scene that composites the plate
+        # renders 9:16 — so the model was asked for a square composition and the
+        # result was then used as the background of a portrait frame, which it
+        # has to extend to fill. Detail rendered, paid for, and thrown away.
+        "FRAME: a TALL VERTICAL 9:16 portrait frame, composed for the full height."
     )
 
 
@@ -336,7 +342,13 @@ async def ensure_plate(db: AsyncSession, place: Place) -> str | None:
     try:
         # Seeded on the SLUG, not the prose: two riders discovering the same
         # place from different rides must not produce two different mountains.
-        image = await cyclr_studio._generate(plate_prompt(place), place.slug)
+        # PORTRAIT, LIKE THE SCENE IT BECOMES THE BACKGROUND OF.
+        # §2 of `docs/w3-stage-rendering.md` records square plates as a fixed
+        # bug and `STAGE_ASPECT` as the fix, but this call — the only one that
+        # makes a plate — kept `_generate`'s 1:1 default and never received it.
+        image = await cyclr_studio._generate(
+            plate_prompt(place), place.slug, aspect=cyclr_studio.STAGE_ASPECT,
+        )
     except Exception:
         return None
     if not image:

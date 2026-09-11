@@ -24,6 +24,7 @@ from app.models.activity_stream import ActivityStream  # noqa: F401
 from app.models.engine_decision import EngineDecision  # noqa: F401
 from app.models.plan_adaptation import PlanAdaptation  # noqa: F401
 from app.models.ride_feedback import RideFeedback  # noqa: F401
+from app.models.routine_override import RideRoutineOverride  # noqa: F401
 from app.models.custom_workout import CustomWorkout  # noqa: F401
 from app.models.rewards import Wallet, PointsLedger  # noqa: F401
 from app.models.challenge import ChallengeEnrollment  # noqa: F401
@@ -48,7 +49,7 @@ __all__ = [
     "UserDashboard", "UserTabLayout", "PeriodReportCache", "CoachRecommendation", "MesocyclePlan",
     "Crew", "CrewMembership", "CrewInvite", "CrewNudge", "CrewChallenge",
     "CrewEvent", "CrewEventAttendee", "CrewMessage", "CrewReaction", "ActivityStream",
-    "RideFeedback", "CustomWorkout",
+    "RideFeedback", "RideRoutineOverride", "CustomWorkout",
     "StrengthRoutine", "RoutineExercise", "StrengthSession", "StrengthSetLog",
     "Wallet", "PointsLedger", "ChallengeEnrollment", "Referral",
     "DayScene", "GarageAsset", "RideScene",

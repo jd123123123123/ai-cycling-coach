@@ -54,6 +54,7 @@ from app.services import (
     bike_wear,
     maintenance_forecast,
     cutout,
+    stage_unlock,
     cyclr_studio,
     gear,
     places,
@@ -65,6 +66,7 @@ from app.services import (
     weather_client,
     rider_wear,
     service_proof,
+    stage_frame,
     stages,
     workshop,
 )
@@ -670,6 +672,15 @@ async def render_today_stage(
                 bike.image_url,
                 bike_build.edit_prompt(equipped, world=stage.prose),
                 key,
+                # PORTRAIT, because the hero room crops a square by 28% of its
+                # width — see `cyclr_studio.STAGE_ASPECT`.
+                aspect=cyclr_studio.STAGE_ASPECT,
+                # AND FRAMED, so the machine does not move between stages. The
+                # ratio is read from this rider's own cut-out rather than
+                # assumed: see `services.stage_frame`, where three production
+                # bikes measured 2.885, 2.891 and 3.007.
+                frame_ratio=stage_frame.geometry_from_cutout(bike.image_url)
+                or stage_frame.RATIO_DEFAULT,
             )
             if image:
                 await _store_render(db, key, image)
@@ -1473,14 +1484,22 @@ async def _cheap_history_facts(db: AsyncSession, user_id: int) -> list[em.RideFa
     facts are already paid for. Rule 4 of the modifier catalogue, applied to
     unlocks: a fact we do not have never fires.
 
-    The whole history, not a window: a stage is earned once and kept, and a pass
-    climbed last spring should not close again because time passed.
+    The whole history SINCE THE LAUNCH, not a window: a stage is earned once and
+    kept, so a pass climbed the week after launch must not close again because
+    time passed — but a pass climbed the year before it never opens at all.
     """
     rows = (await db.execute(
         select(
             Activity.id, Activity.distance_meters, Activity.elevation_gain_m,
             Activity.duration_seconds, Activity.started_at, Activity.tss, Activity.raw_data,
-        ).where(Activity.user_id == user_id)
+        ).where(
+            Activity.user_id == user_id,
+            # THE SAME CUTOFF THE INGESTION PATH KEEPS. Without it this arm
+            # quietly re-opens everything a rider's history proves the moment
+            # they tap the picker, and the launch gate would only look like it
+            # worked. See `backdrops.STAGES_LIVE_FROM`.
+            Activity.started_at >= backdrops.STAGES_LIVE_FROM,
+        )
     )).all()
 
     out: list[em.RideFacts] = []
@@ -2051,7 +2070,14 @@ async def render_scene(
     # its own known failures; this catches everything else and says the same
     # honest thing the missing-model case says.
     try:
-        image = await cyclr_studio.edit_image(bike.image_url, prompt, key)
+        image = await cyclr_studio.edit_image(
+            bike.image_url, prompt, key,
+            # Framed on the same canonical box as every other stage, so a
+            # rider's rides and their stages read as one collection rather than
+            # as a set of differently-cropped photographs.
+            frame_ratio=stage_frame.geometry_from_cutout(bike.image_url)
+            or stage_frame.RATIO_DEFAULT,
+        )
     except Exception:
         logger.exception("ride scene compose failed for activity_id=%s", activity_id)
         image = None
@@ -2067,3 +2093,121 @@ async def render_scene(
 
     return SceneOut(activity_id=activity_id, image_base64=image,
                     training_context=ctx, prompt=prompt, status=render_status)
+
+# ── the stage gallery, and what a ride opened ───────────────────────────────
+
+class GalleryStageOut(BaseModel):
+    """One stage in the rider's collection."""
+
+    id: str
+    name_de: str
+    #: What it took, in the rider's own language. "" for the starters.
+    unlock_de: str
+    owned: bool
+    #: The rider's own bike standing in it, when that render exists yet. Null
+    #: while it is still warming, or for a stage they have not earned — never a
+    #: stand-in from someone else's garage.
+    image: str | None
+    #: When they earned it, and the ride that did it. Null for a starter and for
+    #: anything granted by the live history check rather than at ingestion.
+    unlocked_at: datetime | None
+    activity_id: int | None
+
+
+class GalleryOut(BaseModel):
+    stages: list[GalleryStageOut]
+    owned_count: int
+    total_count: int
+
+
+@router.get("/gallery", response_model=GalleryOut, summary="Every stage, earned and not")
+async def get_gallery(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> GalleryOut:
+    """The rider's stage collection — owned ones with their own picture in them.
+
+    LOCKED STAGES ARE LISTED, and that is deliberate: a collection you cannot
+    see the shape of is not a collection, and the unlock sentence is the whole
+    invitation ("1 000 hm an einem Tag"). What a locked row never carries is a
+    PICTURE, because the only honest picture of an unearned stage would be
+    somebody else's bike standing in it.
+    """
+    owned_ids = set(await _unlocked_backdrops(db, current_user.id))
+
+    rows = (await db.execute(
+        select(RiderBackdrop).where(RiderBackdrop.user_id == current_user.id)
+    )).scalars().all()
+    meta = {r.backdrop: r for r in rows}
+
+    asset = (await db.execute(
+        select(GarageAsset).where(
+            GarageAsset.user_id == current_user.id, GarageAsset.kind == "bike",
+        )
+    )).scalar_one_or_none()
+    equipped = await gear.equipped_ids(db, current_user.id)
+
+    keys: dict[str, str] = {}
+    if asset is not None and asset.image_url:
+        stamp = (asset.image_url or "")[-32:]
+        for sid in owned_ids:
+            keys[sid] = bike_build.build_key(asset.id, stamp, equipped, backdrop=sid)
+
+    images: dict[str, str] = {}
+    if keys:
+        found = (await db.execute(
+            select(BikeRender).where(BikeRender.build_key.in_(list(keys.values())))
+        )).scalars().all()
+        by_key = {r.build_key: r for r in found if r.image}
+        for sid, k in keys.items():
+            row = by_key.get(k)
+            if row is not None:
+                images[sid] = row.image
+
+    stages = [
+        GalleryStageOut(
+            id=b.id,
+            name_de=b.name_de,
+            unlock_de=b.unlock_de,
+            owned=b.id in owned_ids,
+            image=images.get(b.id),
+            unlocked_at=getattr(meta.get(b.id), "unlocked_at", None),
+            activity_id=getattr(meta.get(b.id), "activity_id", None),
+        )
+        for b in backdrops.CATALOGUE.values()
+    ]
+    return GalleryOut(
+        stages=stages,
+        owned_count=sum(1 for s in stages if s.owned),
+        total_count=len(stages),
+    )
+
+
+class RideUnlockOut(BaseModel):
+    stages: list[GalleryStageOut]
+
+
+@router.get(
+    "/gallery/unlocked-by/{activity_id}",
+    response_model=RideUnlockOut,
+    summary="What this ride opened",
+)
+async def get_unlocked_by(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> RideUnlockOut:
+    """The unlock screen's question, asked of the permanent record.
+
+    Derived rather than flagged: a `seen` column would be cleared by a re-sync
+    and would need a migration, and another worktree currently has one in
+    flight — a second alembic head on this line takes the API down on boot.
+    Asking "what did ride 4711 open" answers the same thing forever, and the
+    client decides once whether it has already celebrated it.
+    """
+    ids = await stage_unlock.unlocked_by(db, current_user.id, activity_id)
+    if not ids:
+        return RideUnlockOut(stages=[])
+    gallery = await get_gallery(current_user, db)
+    by_id = {s.id: s for s in gallery.stages}
+    return RideUnlockOut(stages=[by_id[i] for i in ids if i in by_id])

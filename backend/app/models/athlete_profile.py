@@ -78,6 +78,23 @@ class AthleteProfile(Base):
         Boolean, nullable=False, server_default="true", default=True
     )
 
+    # hide_routine_rides — V3 Settings toggle: when True, rides the routine
+    #   detector recognises as part of a repeating pattern (the twice-daily
+    #   commute) are left out of the crew feed THIS athlete sees. It is the
+    #   VIEWER's preference and it changes nobody else's feed.
+    #
+    #   Default OFF, deliberately: a new feature must not silently remove posts
+    #   somebody was already seeing. The rider turns it on after the preview
+    #   endpoint has shown them exactly what would disappear.
+    #
+    #   Hiding is never deleting — see services/routine_rides.py. A hidden
+    #   commute still counts for TSS, CTL/ATL, weekly totals, streaks and
+    #   Eddington, all of which read `activities` and know nothing about this
+    #   column.
+    hide_routine_rides: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
+
     # detail_level — 'guide' | 'numbers' | 'pro'. The onboarding depth selector
     #   ("Begleite mich" / "Zeig Zahlen" / "Voll Pro") persisted server-side so
     #   the choice follows the athlete across devices (Settings "Detailgrad"
