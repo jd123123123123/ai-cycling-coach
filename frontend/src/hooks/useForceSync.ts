@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { forceGarminSync, type GarminSyncResponse } from '../api/garmin'
 import { COACH_BRIEF_KEY_ROOT } from './useCoachBrief'
 import { WEEK_CURRENT_KEY_ROOT } from './useCurrentWeek'
+import { MORNING_HEALTH_KEY } from './useMorningHealthCheck'
 
 /**
  * Mutation wrapper around POST /garmin/sync.
@@ -32,6 +33,7 @@ export function useForceSync() {
       qc.invalidateQueries({ queryKey: ['intraday'] })
       qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
       qc.invalidateQueries({ queryKey: ['readiness', 'decision'] })
+      qc.invalidateQueries({ queryKey: MORNING_HEALTH_KEY })
       // ── AND THE KEYS TODAY ACTUALLY READS ──────────────────────────────
       // The list above is the legacy dashboard's, and this hook was written
       // for it. Put the button on Today and it would have refreshed every

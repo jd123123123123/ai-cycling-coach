@@ -1,5 +1,9 @@
 import { Activity, AlertTriangle } from 'lucide-react'
+import { useMemo } from 'react'
 import { useMorningHealthCheck } from '../../hooks/useMorningHealthCheck'
+import type { MorningHealthSignal } from '../../api/health'
+import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import { useTodaySnapshot } from '../../hooks/useTodaySnapshot'
 import { useLocale } from '../../contexts/LocaleContext'
 import { T, FONT } from './w3tokens'
 
@@ -74,14 +78,46 @@ export default function W3RecoveryNudge() {
   const { locale } = useLocale()
   const de = locale === 'de'
   const { data } = useMorningHealthCheck()
+  const { data: snapshot } = useTodaySnapshot()
+  const end = useMemo(() => new Date(), [])
+  const start = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 7); return d }, [])
+  const { data: metrics } = useDailyMetrics(start, end)
 
-  if (!data || data.level === 'none' || !data.polarity || !data.signals?.length) return null
+  // The detector intentionally returns `none` on a normal morning. Keep the
+  // nudge useful there too by building a quiet green check from the same live
+  // values, without inventing a score or turning a missing measurement into a
+  // reassuring claim.
+  const normalSignals = useMemo(() => {
+    if (data?.level !== 'none') return []
+    const rows = (metrics?.metrics ?? []).filter(m => m.date != null).sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))
+    const latest = rows.at(-1)
+    const prior = rows.slice(0, -1)
+    const average = (values: (number | null | undefined)[]) => { const present = values.filter((v): v is number => v != null && Number.isFinite(v)); return present.length ? present.reduce((a, b) => a + b, 0) / present.length : null }
+    const make = (metric: MorningHealthSignal['metric'], value: number | null | undefined, values: (number | null | undefined)[], unit: string): MorningHealthSignal | null => {
+      if (value == null) return null
+      const series = values.filter((v): v is number => v != null && Number.isFinite(v)).slice(-7)
+      const baseline = average(values)
+      const delta = baseline == null ? null : value - baseline
+      return { metric, value, baseline, direction: delta != null && delta < 0 ? 'down' : 'up', delta, unit, severity: 'mild', series, triggered: false }
+    }
+    return [
+      make('hrv', snapshot?.hrv_overnight_avg ?? latest?.hrv_nightly_mean ?? latest?.hrv_status, [...prior.map(m => m.hrv_nightly_mean ?? m.hrv_status)], 'ms'),
+      make('resting_hr', latest?.resting_hr, prior.map(m => m.resting_hr), 'bpm'),
+      make('sleep_score', latest?.sleep_score, prior.map(m => m.sleep_score), '%'),
+    ].filter((x): x is MorningHealthSignal => x != null)
+  }, [data, metrics, snapshot])
 
-  const warning = data.polarity === 'warning'
+  const normal = (!data || data.level === 'none' || !data.polarity || !data.signals?.length) && normalSignals.length > 0
+  if (!normal && (!data || data.level === 'none' || !data.polarity || !data.signals?.length)) return null
+
+  const warning = !normal && data!.polarity === 'warning'
   const accent = warning ? T.warn : T.training
   const eyebrow = warning
     ? (de ? 'GESUNDHEITS-FRÜHWARNUNG' : 'HEALTH EARLY-WARNING')
-    : (de ? 'ERHOLUNGSSIGNAL' : 'RECOVERY SIGNAL')
+    : normal ? (de ? 'MORGENCHECK' : 'MORNING CHECK') : (de ? 'ERHOLUNGSSIGNAL' : 'RECOVERY SIGNAL')
+  const signals = normal ? normalSignals : data!.signals
+  const headline = normal ? (de ? 'Deine Werte liegen im persönlichen Bereich.' : 'Your values are in your personal range.') : data!.headline
+  const recommendation = normal ? (de ? 'Guter Ausgangspunkt für heute. Prüfe trotzdem, wie sich dein Körper beim Einrollen anfühlt.' : 'A good starting point today. Still check how your body feels during the warm-up.') : data!.recommendation
 
   return (
     <div style={{ ...band(26), gap: 12 }}>
@@ -93,7 +129,7 @@ export default function W3RecoveryNudge() {
           </span>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.4, textTransform: 'uppercase', color: accent }}>{eyebrow}</span>
-            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{data.headline}</span>
+            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>{headline}</span>
           </div>
         </div>
 
@@ -107,7 +143,7 @@ export default function W3RecoveryNudge() {
               the card. Sorted so the markers that earned the warning are the
               ones the rider sees, and the calm ones fill whatever room is
               left. */}
-          {[...data.signals]
+          {[...signals]
             .sort((a, b) => Number(b.triggered ?? false) - Number(a.triggered ?? false))
             .slice(0, 3).map((s) => {
             const label = (METRIC_LABEL[s.metric]?.[de ? 'de' : 'en']) ?? s.metric
@@ -130,8 +166,8 @@ export default function W3RecoveryNudge() {
         </div>
 
         {/* Body */}
-        {data.recommendation && (
-          <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>{data.recommendation}</span>
+        {recommendation && (
+          <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>{recommendation}</span>
         )}
       </div>
     </div>
