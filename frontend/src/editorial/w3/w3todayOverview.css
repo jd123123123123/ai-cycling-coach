@@ -73,22 +73,21 @@
 .w3-overview-card[data-today-card=progress] .w3-overview-summary { display:block; }
 .w3-overview-card[data-today-card=progress] .w3-overview-copy:empty { display:none; }
 
-.w3-phase-context { margin-top:8px; color:#9ba0a6; }
-.w3-phase-context summary { display:flex; align-items:center; justify-content:space-between; min-height:38px; gap:12px; cursor:pointer; list-style:none; font-size:12px; }
+
+.w3-phase-context { margin-top:10px; color:#9ba0a6; }
+.w3-phase-context summary { display:flex; align-items:center; justify-content:space-between; min-height:48px; gap:12px; cursor:pointer; list-style:none; font-size:12px; }
 .w3-phase-context summary::-webkit-details-marker { display:none; }
 .w3-phase-context summary:focus-visible { outline:2px solid #c8ff00; outline-offset:3px; border-radius:4px; }
-.w3-phase-position { display:flex; align-items:center; gap:7px; font-variant-numeric:tabular-nums; }
-.w3-phase-position>b { font-size:30px; line-height:1; letter-spacing:-1.3px; font-weight:600; color:#f4f5ef; }
-.w3-phase-position>span { font-size:13px; line-height:1.15; }
-.w3-phase-position small { display:block; font-size:10px; margin-top:2px; }
+.w3-phase-position { display:flex; flex-direction:column; gap:4px; }
+.w3-phase-position>b { font-size:28px; line-height:1; letter-spacing:-1px; font-weight:550; color:#f4f5ef; }
+.w3-phase-position>span { font-size:12px; color:#a7aca4; }
 .w3-phase-explanation { font-size:12px; padding:8px 0 2px; line-height:1.5; }
-.w3-phase-rail { display:grid; gap:5px; margin-top:10px; overflow-x:auto; scrollbar-width:thin; padding:3px 0 5px; }
-.w3-phase-step { position:relative; min-width:0; border-radius:12px; background:linear-gradient(165deg,#ffffff09,#ffffff02 72%); box-shadow:inset 0 1px 0 #ffffff0c,inset 0 -1px 0 #00000040; overflow:hidden; }
-.w3-phase-heading { display:flex; align-items:center; justify-content:center; height:29px; color:#a4a9af; font-size:10px; font-weight:500; white-space:nowrap; letter-spacing:-.2px; }
-.w3-phase-step[data-active=true] { background:linear-gradient(150deg,#c8ff002b,#c8ff0008 68%); box-shadow:inset 0 1px 0 #deff8360,inset 0 0 0 1px #c8ff001c; }
-.w3-phase-step[data-active=true] .w3-phase-heading { color:var(--phase-current); font-weight:600; }
-.w3-phase-weeks { display:grid; gap:3px; padding:3px; background:#07090b38; box-shadow:inset 0 1px 3px #00000026; border-radius:10px; }
-.w3-phase-week { position:relative; height:27px; display:grid; place-items:center; border-radius:8px; background:#ffffff03; color:#92989f; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums; }
-.w3-phase-week[data-past=true] { color:#bec8aa; background:#c8ff0008; }
-.w3-phase-week[data-current=true] { background:linear-gradient(155deg,#e3ff87,var(--phase-current) 70%); color:var(--phase-current-ink); box-shadow:inset 0 1px 0 #f4ffcd,0 2px 5px #00000040; font-weight:750; }
-.w3-phase-week[data-current=true]::after { content:''; position:absolute; bottom:3px; width:8px; height:2px; border-radius:2px; background:#26370070; }
+.w3-phase-rail { display:grid; gap:6px; margin-top:18px; overflow-x:auto; scrollbar-width:thin; padding:0 0 2px; }
+.w3-phase-step { position:relative; min-width:0; display:flex; flex-direction:column; }
+.w3-phase-heading { order:2; display:flex; align-items:center; justify-content:center; height:25px; color:#8e959d; font-size:10px; font-weight:500; white-space:nowrap; letter-spacing:-.2px; border-top:2px solid #ffffff0b; margin-top:5px; }
+.w3-phase-step[data-active=true] .w3-phase-heading { color:var(--phase-current); border-color:var(--phase-current); }
+.w3-phase-weeks { display:grid; gap:3px; }
+.w3-phase-week { position:relative; height:31px; display:grid; place-items:center; border-radius:5px; background:repeating-linear-gradient(115deg,transparent 0 4px,#ffffff04 4px 5px),#ffffff05; color:#858c94; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums; }
+.w3-phase-week[data-past=true] { color:#d2d9c6; background:#c8ff0018; }
+.w3-phase-week[data-current=true] { background:var(--phase-current); color:var(--phase-current-ink); font-weight:750; box-shadow:inset 0 1px 0 #efffb3; }
+.w3-phase-week[data-current=true]::after { content:''; position:absolute; bottom:3px; width:3px; height:3px; border-radius:50%; background:currentColor; }

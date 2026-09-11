@@ -16,8 +16,8 @@ export default function W3PlanPhaseProgress({schedule,index,fallback}:{schedule?
  const remaining=schedule.length-index-1
  return <>
   <details className="w3-phase-context">
-   <summary><span className="w3-phase-position"><b>{String(index+1).padStart(2,'0')}</b><span>/ {String(schedule.length).padStart(2,'0')}<small>Wochen</small></span></span><span>{remaining ? `Noch ${remaining} ${remaining===1?'Woche':'Wochen'}` : 'Letzte Woche'}</span></summary>
-   <div className="w3-phase-explanation">{LABELS[active.phase]??active.phase} · <span>Woche {index-active.start+1} von {active.weeks}</span></div>
+   <summary><span className="w3-phase-position"><b>{LABELS[active.phase]??active.phase}</b><span>Woche {index-active.start+1} von {active.weeks}</span></span><span>{remaining ? `Noch ${remaining} ${remaining===1?'Woche':'Wochen'}` : 'Letzte Woche'}</span></summary>
+   <div className="w3-phase-explanation">Planwoche {index+1} von {schedule.length}</div>
   </details>
   <div className="w3-phase-rail" style={{gridTemplateColumns:`repeat(${schedule.length},minmax(${schedule.length>8?40:0}px,1fr))`,'--phase-current':T.acid,'--phase-current-ink':T.heroInk} as CSSProperties} aria-label="Phasen des Trainingsplans">{groups.map(group=><div key={group.start} className="w3-phase-step" style={{gridColumn:`span ${group.weeks}`}} data-active={group===active} data-past={group.start<active.start}>
    <div className="w3-phase-heading">{LABELS[group.phase]??group.phase}</div>
