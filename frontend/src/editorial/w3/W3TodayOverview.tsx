@@ -7,6 +7,7 @@ import { useW3FormData } from './useW3FormData'
 import { validFormPoint, type FormPoint } from './w3TrainingImpact'
 import { T, FONT, EASE } from './w3tokens'
 import W3PlanPhaseProgress from './W3PlanPhaseProgress'
+import W3PlanPhaseRoad from './W3PlanPhaseRoad'
 import W3ProgressCompact from './W3ProgressCompact'
 import type { W3Vm } from './W3TodayView'
 
@@ -36,6 +37,7 @@ function FormSpark({ points, metric, color }: { points: FormPoint[]; metric: 'ct
 
 export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ridesSummary, weather, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
   const [open, setOpen] = useState<Section | null>(null)
+  const [planOpen,setPlanOpen]=useState(false)
   const [localWeekDay, setLocalWeekDay] = useState<number | null>(null)
   const selected = selectedWeekDay ?? localWeekDay ?? Math.max(0,vm.weekDays.findIndex(d=>d.status==='today'))
   const uid = useId()
@@ -113,11 +115,14 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
     {key === 'today' && <section data-today-card="plan" className="w3-overview-card" aria-label="Planphase">
       <div className="w3-overview-header">
         <h2 className="w3-overview-title">{vm.hasPlan ? 'Planphase' : 'Dein Plan'}</h2>
-        <button type="button" className="w3-overview-toggle" aria-label={vm.hasPlan ? 'Plan ansehen' : 'Plan setzen'} onClick={() => vm.hasPlan ? onOpenPlan?.() : onPickGoal?.(null)}><ArrowUpRight size={16} aria-hidden /></button>
+        <button type="button" className="w3-overview-toggle" aria-expanded={vm.hasPlan?planOpen:undefined} aria-label={vm.hasPlan ? (planOpen?'Planphase schließen':'Planphase öffnen') : 'Plan setzen'} onClick={() => vm.hasPlan ? setPlanOpen(!planOpen) : onPickGoal?.(null)}><motion.span animate={{rotate:planOpen?90:0}} transition={{duration:reduce?0:.25}} style={{display:'flex'}}><ArrowUpRight size={16} aria-hidden /></motion.span></button>
       </div>
       <div className="w3-overview-plan">
         {vm.hasPlan ? <>
           <W3PlanPhaseProgress schedule={vm.planPhaseSchedule} index={vm.planWeekIndex} fallback={vm.planPhase} />
+          <motion.div initial={false} animate={{height:planOpen?'auto':0,opacity:planOpen?1:0}} transition={{duration:reduce?0:.32,ease:EASE}} style={{overflow:'hidden'}} inert={!planOpen} aria-hidden={!planOpen}>
+            {planOpen && vm.planPhaseSchedule?.length && vm.planWeekIndex!=null && vm.planWeekIndex>=0 && vm.planWeekIndex<vm.planPhaseSchedule.length ? <W3PlanPhaseRoad schedule={vm.planPhaseSchedule} index={vm.planWeekIndex} onOpenPlan={onOpenPlan}/> : null}
+          </motion.div>
         </> : <>
           <span className="w3-overview-plan-label">NOCH KEIN PLAN</span>
           <div className="w3-overview-plan-choices">

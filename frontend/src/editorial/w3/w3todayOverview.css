@@ -75,16 +75,14 @@
 
 
 
-.w3-phase-rail { display:grid; gap:5px; margin-top:15px; overflow-x:auto; scrollbar-width:thin; --phase-current:#c8ff00; }
-.w3-phase-step { min-width:0; position:relative; padding:0; background:#ffffff04; border-radius:11px; overflow:hidden; }
-.w3-phase-step[data-active=true] { background:#c8ff0010; }
-.w3-phase-heading { height:30px; display:flex; justify-content:center; align-items:center; color:#b0b5bc; font-size:10px; font-weight:550; white-space:nowrap; }
-.w3-phase-step[data-active=true] .w3-phase-heading { color:var(--phase-current); font-weight:650; }
-.w3-phase-weeks { display:grid; gap:3px; padding:0 3px 3px; }
-.w3-phase-week { height:48px; position:relative; display:flex; align-items:flex-end; justify-content:center; padding-bottom:7px; border-radius:3px 3px 8px 8px; color:#979da5; font-size:11px; font-weight:500; font-variant-numeric:tabular-nums; background:repeating-linear-gradient(0deg,#ffffff06 0 1px,transparent 1px 6px); box-sizing:border-box; }
-.w3-phase-week[data-past=true] { background:#c8ff0024; color:#d1e89b; }
-.w3-phase-week[data-current=true] { background:var(--phase-current); color:var(--phase-current-ink); font-weight:750; }
-.w3-phase-week[data-current=true]::before { content:''; position:absolute; top:8px; width:5px; height:5px; border-radius:50%; background:currentColor; }
+.w3-phase-rail { display:grid; gap:10px; margin-top:12px; overflow-x:auto; scrollbar-width:thin; --phase-current:#c8ff00; }
+.w3-phase-step { min-width:0; }
+.w3-phase-heading { height:22px; display:flex; align-items:center; color:#94a095; font-size:11px; font-weight:500; white-space:nowrap; }
+.w3-phase-step[data-active=true] .w3-phase-heading { color:var(--phase-current); }
+.w3-phase-weeks { display:grid; gap:3px; margin-top:6px; }
+.w3-phase-week { height:4px; overflow:hidden; border-radius:4px; background:#ffffff15; font-size:0; color:transparent; }
+.w3-phase-week[data-past=true] { background:#728757; }
+.w3-phase-week[data-current=true] { background:var(--phase-current); }
 .w3-phase-context { margin-top:12px; color:#9ba0a6; font-size:11px; }
 .w3-phase-context summary { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:24px; cursor:pointer; list-style:none; }
 .w3-phase-context summary>span:first-child { color:#e0e3dc; }
