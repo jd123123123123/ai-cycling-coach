@@ -304,6 +304,10 @@ export function useMorningBriefing(): MorningBriefing {
     const score = isPresent(model.readiness) ? model.readiness.value : null
     const recovery = isPresent(model.recovery) ? model.recovery.value : null
 
+    const sleepV = isPresent(model.sleep) ? model.sleep.value : null
+    const hrvV = isPresent(model.hrv) ? model.hrv.value : null
+    const rhrV = isPresent(model.restingHr) ? model.restingHr.value : null
+
     let why: string | null
     if (!planned) {
       why = 'Stell dir in wenigen Klicks einen Plan zusammen.'
@@ -316,7 +320,9 @@ export function useMorningBriefing(): MorningBriefing {
         ? `${model.readinessGateHeadline} — der Plan gilt trotzdem.`
         : 'Deine Uhr hat länger nicht synchronisiert — der Plan gilt trotzdem.'
     } else if (gate === 'pending') {
-      why = 'Die Nacht-Werte stehen noch aus. Der Plan gilt trotzdem.'
+      why = sleepV || hrvV || rhrV
+        ? 'Messwerte vorhanden. Die Bereitschaft ist noch nicht verfügbar.'
+        : 'Die Nacht-Werte stehen noch aus.'
     } else if (recovery && recovery.hoursRemaining > 0) {
       why = `Noch ${Math.round(recovery.hoursRemaining)} h Erholung bis ${recovery.clearAtLabel}.`
     } else {
@@ -343,9 +349,6 @@ export function useMorningBriefing(): MorningBriefing {
 
     const days = isPresent(model.streakDays) ? model.streakDays.value : 0
 
-    const sleepV = isPresent(model.sleep) ? model.sleep.value : null
-    const hrvV = isPresent(model.hrv) ? model.hrv.value : null
-    const rhrV = isPresent(model.restingHr) ? model.restingHr.value : null
 
     // ── the verdict, and the contributors behind it ──────────────────────
     // A rider reads the WORD before the figure. This app's own Today dock puts
@@ -399,7 +402,7 @@ export function useMorningBriefing(): MorningBriefing {
         key: 'sleep', label: 'Schlaf',
         value: `${Math.floor(sleepV.totalS / 3600)}:${String(Math.round((sleepV.totalS % 3600) / 60)).padStart(2, '0')} h`,
         sentence: hrs >= 7 && hrs <= 9 ? 'Volle Nacht'
-          : hrs > 9 ? 'Länger als sonst'
+          : hrs > 9 ? 'Über 9 Stunden'
           : hrs >= 6 ? 'Etwas kurz'
           : 'Zu kurz',
         at: clamp01(hrs / 10), band: { lo: 0.7, hi: 0.9 }, bandLabel: '7–9 h',
@@ -444,7 +447,7 @@ export function useMorningBriefing(): MorningBriefing {
       const sp = ownSpectrum(hrvV.value, hrvV.band)
       contributors.push({
         key: 'hrv', label: 'HRV', value: `${Math.round(hrvV.value)} ${hrvV.unit}`,
-        sentence: hrvV.band?.position === 'above' ? 'HRV über deinem Bereich'
+        sentence: !hrvV.band ? 'HRV: persönlicher Vergleich noch offen' : hrvV.band?.position === 'above' ? 'HRV über deinem Bereich'
           : hrvV.band?.position === 'below' ? 'HRV unter deinem Bereich'
           : 'HRV in deinem Bereich',
         at: sp.at, band: sp.band,
@@ -467,7 +470,7 @@ export function useMorningBriefing(): MorningBriefing {
         key: 'rhr', label: 'Ruhepuls', value: `${Math.round(rhrV.value)} ${rhrV.unit}`,
         // Under the band is the GOOD side here, and a marker on the left says
         // nothing about that on its own.
-        sentence: rhrV.band?.position === 'below' ? 'Ruhepuls niedriger — erholt'
+        sentence: !rhrV.band ? 'Ruhepuls: persönlicher Vergleich noch offen' : rhrV.band?.position === 'below' ? 'Ruhepuls unter deinem persönlichen Bereich'
           : rhrV.band?.position === 'above' ? 'Ruhepuls über deinem Bereich'
           : 'Ruhepuls in deinem Bereich',
         at: sp.at, band: sp.band,

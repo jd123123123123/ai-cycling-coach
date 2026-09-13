@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 import { T } from './w3tokens'
 import W3NavMenu from './W3NavMenu'
 import W3RiderAvatar from './W3RiderAvatar'
@@ -45,10 +45,14 @@ const PROFILE_ROUTE = '/e/w3-biker'
  * the gear to look like it moves when the rider changes screens.
  */
 export const HEAD = { top: 18, inset: 20, control: 44 } as const
-export default function W3TopBar({ title, onBack, extra }: { title?: string; onBack?: () => void; extra?: ReactNode }) {
+export default function W3TopBar({ title, onBack, onClose, extra }: { title?: string; onBack?: () => void; onClose?: () => void; extra?: ReactNode }) {
   const nav = useNavigate()
   const { pathname } = useLocation()
   const onProfile = pathname === PROFILE_ROUTE || pathname.startsWith(`${PROFILE_ROUTE}/`)
+  if (onClose) return <header data-w3-topbar className="w3-topbar" style={{ flexShrink: 0, minWidth: 0, padding: `0 ${HEAD.inset}px`, height: 56, display: 'flex', alignItems: 'center', gap: 10 }}>
+    <span className="w3-topbar-title" title={title} style={{ flex: 1, minWidth: 0, color: T.ink, fontSize: 15, fontWeight: 650, letterSpacing: '-0.25px', lineHeight: '18px', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}>{title}</span>
+    <button type="button" className="w3-topbar-control" onClick={onClose} aria-label="Schließen" style={{ width: 44, height: 44, minWidth: 44, flex: 'none', borderRadius: 100, border: 0, padding: 0, background: T.heroChip, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={20} color={T.ink}/></button>
+  </header>
   return (
     <div style={{ padding: `0 ${HEAD.inset}px`, height: HEAD.top * 2 + HEAD.control - 24, display: 'flex', alignItems: 'center', gap: 10 }}>
       {onBack
