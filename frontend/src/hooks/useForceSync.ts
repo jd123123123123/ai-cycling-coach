@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { forceGarminSync, type GarminSyncResponse } from '../api/garmin'
 import { COACH_BRIEF_KEY_ROOT } from './useCoachBrief'
 import { WEEK_CURRENT_KEY_ROOT } from './useCurrentWeek'
@@ -21,17 +21,16 @@ import { MORNING_HEALTH_KEY } from './useMorningHealthCheck'
  * because the SyncButton could wire it separately, but including it keeps
  * the signal single-source.
  */
-export function useForceSync() {
-  const qc = useQueryClient()
-  return useMutation<GarminSyncResponse>({
-    mutationFn: forceGarminSync,
-    onSuccess: () => {
+export const GARMIN_SYNC_KEY = ['garmin', 'sync'] as const
+
+/** Also used when the scheduler or another device finishes a sync. */
+export function invalidateGarminData(qc: QueryClient, includeStatus = true) {
       qc.invalidateQueries({ queryKey: ['daily-metrics'] })
       qc.invalidateQueries({ queryKey: ['activities'] })
       qc.invalidateQueries({ queryKey: ['pmc'] })
       qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
       qc.invalidateQueries({ queryKey: ['intraday'] })
-      qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
+      if (includeStatus) qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
       qc.invalidateQueries({ queryKey: ['readiness', 'decision'] })
       qc.invalidateQueries({ queryKey: MORNING_HEALTH_KEY })
       // ── AND THE KEYS TODAY ACTUALLY READS ──────────────────────────────
@@ -50,6 +49,15 @@ export function useForceSync() {
       qc.invalidateQueries({ queryKey: ['athlete', 'streak'] })
       qc.invalidateQueries({ queryKey: ['rewards'] })
       qc.invalidateQueries({ queryKey: ['coach', 'adaptive'] })
+}
+
+export function useForceSync() {
+  const qc = useQueryClient()
+  return useMutation<GarminSyncResponse>({
+    mutationKey: GARMIN_SYNC_KEY,
+    mutationFn: forceGarminSync,
+    onSuccess: () => {
+      invalidateGarminData(qc)
     },
   })
 }

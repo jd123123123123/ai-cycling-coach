@@ -10,7 +10,6 @@ import type { DailyMetric } from '../../api/dashboard'
 import W3ReadinessView, { type W3ReadinessVm, type DriverVm, type DriverIcon, type SleepStage } from './W3ReadinessView'
 import { T } from './w3tokens'
 import W3ReadinessExplanation from './W3ReadinessExplanation'
-import { useAutoGarminSync } from '../../hooks/useAutoGarminSync'
 import { useReadinessDecision } from '../../hooks/useReadinessDecision'
 
 /**
@@ -37,7 +36,6 @@ const round = (v: number, d = 0) => { const p = 10 ** d; return Math.round(v * p
 
 export default function W3ReadinessPage() {
   const navigate = useNavigate()
-  useAutoGarminSync()
   const { data: snapshot } = useTodaySnapshot()
   const end = useMemo(() => new Date(), [])
   const start = useMemo(() => { const d = new Date(); d.setDate(d.getDate() - 30); return d }, [])

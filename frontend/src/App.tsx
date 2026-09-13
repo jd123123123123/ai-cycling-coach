@@ -1,6 +1,7 @@
 import { Suspense, type ReactElement } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import AutoGarminSync from './components/AutoGarminSync'
 import { LocaleProvider } from './contexts/LocaleContext'
 import { CelebrationProvider } from './contexts/CelebrationContext'
 import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
@@ -279,6 +280,7 @@ function AppRoutes() {
   const location = useLocation()
   return (
     <>
+    <AutoGarminSync />
     <W3RideCelebrationWatcher />
     <W3MorningGate />
     <W3SetupGate />

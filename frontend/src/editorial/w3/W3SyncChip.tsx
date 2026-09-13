@@ -1,7 +1,8 @@
 import { RefreshCw } from 'lucide-react'
 import { motion, useReducedMotion } from 'motion/react'
 import { useGarminStatus } from '../../hooks/useGarminStatus'
-import { useForceSync } from '../../hooks/useForceSync'
+import { useIsMutating } from '@tanstack/react-query'
+import { GARMIN_SYNC_KEY, useForceSync } from '../../hooks/useForceSync'
 import { T } from './w3tokens'
 
 /**
@@ -40,11 +41,12 @@ export default function W3SyncChip({ size = 44, iconSize = 20 }: {
 }) {
   const { data: status, dataUpdatedAt } = useGarminStatus()
   const sync = useForceSync()
+  const activeSyncs = useIsMutating({ mutationKey: GARMIN_SYNC_KEY })
   const reduce = useReducedMotion()
 
   // Two ways to be busy, and they should look identical: this tab asked for a
   // sync, or the server says one is running for other reasons.
-  const busy = sync.isPending || status?.sync_status === 'syncing'
+  const busy = activeSyncs > 0 || sync.isPending || status?.sync_status === 'syncing'
 
   /**
    * BROKEN AND EMPTY LOOK THE SAME, AND THEY ARE NOT.
