@@ -52,6 +52,19 @@ describe('morning journeys',()=>{
   expect(initial).toContain('21–23°');expect(initial).toContain('30%');expect(initial).toContain('9 km/h')
   fireEvent.click(screen.getByRole('button',{name:'Wetter und Fahrzeit im Detail'}));fireEvent.click(screen.getByRole('button',{name:'11Uhr'}));fireEvent.click(screen.getByRole('button',{name:'Zurück zum Morgen'}));expect(screen.getByRole('button',{name:'Wetter und Fahrzeit im Detail'}).textContent).toBe(initial)
  })
+ it('uses the forecast condition rather than rain probability, and follows the selected hour',()=>{
+  const window={...fixture.window!,hours:[{...fixture.window!.hours[0],code:0,isDay:true,rain:80},{...fixture.window!.hours[1],code:63,isDay:true,rain:20}]}
+  draw({...fixture,window});expect(screen.getByRole('img',{name:/Klarer Himmel · Vorhersage/})).toBeTruthy()
+  fireEvent.click(screen.getByRole('button',{name:'Wetter und Fahrzeit im Detail'}));fireEvent.click(screen.getByRole('button',{name:'11Uhr'}));expect(screen.getByRole('heading',{name:'Regen erwartet'})).toBeTruthy()
+  fireEvent.click(screen.getByRole('button',{name:'Zurück zum Morgen'}));expect(screen.getByRole('img',{name:/Klarer Himmel · Vorhersage/})).toBeTruthy()
+ })
+ it('leaves the sky unknown when no condition code is supplied',()=>{
+  draw();expect(screen.getByRole('img',{name:/Wetterlage offen · Vorhersage/})).toBeTruthy()
+  expect(screen.queryByRole('img',{name:/Klarer Himmel/})).toBeNull()
+ })
+ it('pauses weather together with the photograph',()=>{
+  draw();fireEvent.click(screen.getByRole('button',{name:'Animation pausieren'}));expect(screen.getByRole('img',{name:/Wetterlage offen · Vorhersage/}).getAttribute('data-paused')).toBe('true')
+ })
  it('closes details first with Escape and preserves today and dismissal',()=>{
   const close=vi.fn(),today=vi.fn();draw(fixture,close,today);fireEvent.click(screen.getByRole('button',{name:'Ort und Bildnachweis'}));fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});expect(close).not.toHaveBeenCalled();expect(screen.getByRole('button',{name:'Nacht und Bereitschaft im Detail'})).toBeTruthy();fireEvent.click(screen.getByRole('button',{name:'Mein Tag'}));expect(today).toHaveBeenCalledOnce();fireEvent.keyDown(screen.getByRole('dialog'),{key:'Escape'});expect(close).toHaveBeenCalledOnce()
  })

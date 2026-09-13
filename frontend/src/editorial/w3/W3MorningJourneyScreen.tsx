@@ -9,6 +9,7 @@ import type { Contributor, MorningBriefing } from './useMorningBriefing'
 import './w3morning-journeys.css'
 import './w3morning-editorial.css'
 import './w3.css'
+import W3MorningWeatherScene, { weatherSceneLabel } from './W3MorningWeatherScene'
 
 const SELECTED_PLACE = 'ridr.morning.selected-place.v1'
 const clamp = (n: number) => Math.max(0, Math.min(1, n))
@@ -66,6 +67,8 @@ export default function W3MorningJourneys({ briefing: b, onClose, onToday, prima
   const windowRain = rains ? `${Math.round(Math.max(...rains))}%` : '—'
   const windowWind = winds ? `${Math.round(Math.max(...winds))} km/h` : '—'
   const weather = hours.find(h => h.hour === hour) ?? hours.find(h => h.hour === b.window?.bestFrom) ?? hours[0]
+  const forecastStart = windowHours[0] ?? weather
+  const weatherPaused = !!reduced || paused || hidden
   const rest = b.tone === 'rest'
   const selectedBlock = b.blocks[Math.min(blockIndex, b.blocks.length - 1)]
   const selectPlace = (next: number) => {
@@ -143,7 +146,10 @@ export default function W3MorningJourneys({ briefing: b, onClose, onToday, prima
           </section>
           <section className="mo-training" aria-label="Dein heutiger Plan">
             <button className="mo-workout" onClick={()=>setView('day')} aria-label={`${b.headline}${b.headlineMeta?`, ${b.headlineMeta}`:''}. Training im Detail`}><div className="mo-training-heading"><div><span>{rest || b.tone === 'unknown' ? 'Heute' : 'Heute im Plan'}</span><h2>{b.headline}</h2></div><ArrowRight size={21}/></div><div className="mo-workout-shape"><MiniWorkout briefing={b}/><strong>{b.headlineMeta ?? (rest?'Pause':'Offen')}</strong></div></button>
-            {!rest && weather && <button className="mo-weather" onClick={()=>setView('day')} aria-label="Wetter und Fahrzeit im Detail" title="Temperaturspanne, höchste Regenwahrscheinlichkeit und stärkster Wind im Fahrfenster"><span><CloudSun size={18}/>{b.window?.label.replaceAll(':00','') ?? 'Wetter'} Uhr</span><div><span>{windowTemp}</span><span><Droplets size={14}/>{windowRain}</span><span><Wind size={15}/>{windowWind}</span></div></button>}
+            {!rest && weather && <button className="mw-window" onClick={()=>setView('day')} aria-label="Wetter und Fahrzeit im Detail" title="Bild: Vorhersage zum Start. Werte: Temperaturspanne, höchste Niederschlagswahrscheinlichkeit und stärkster Wind im Fahrfenster.">
+              <W3MorningWeatherScene code={forecastStart?.code} isDay={forecastStart?.isDay} wind={forecastStart?.wind} paused={weatherPaused}/>
+              <div className="mw-window-copy"><div><strong>{b.window?.label.replaceAll(':00','') ?? 'Wetter'} Uhr</strong><span>{windowTemp}</span></div><div><span><Droplets size={13}/>{windowRain}</span><span><Wind size={14}/>{windowWind}</span></div></div>
+            </button>}
             {rest && <p className="mo-rest-line">Heute gehört die Zeit dir.</p>}
           </section>
           <button ref={primaryRef} className="mj-today mo-today" onClick={onToday}>Mein Tag<ArrowRight size={22}/></button>
@@ -165,7 +171,7 @@ export default function W3MorningJourneys({ briefing: b, onClose, onToday, prima
         <div className="mj-detail-lead"><span>{rest ? 'Heute ist Ruhetag' : 'Deine geplante Einheit'}</span><h1>{b.headline}</h1><strong>{b.headlineMeta}</strong></div>
         {!rest && b.blocks.length > 0 ? <section className="mj-workout-detail"><div>{b.blocks.map((block, i) => <button key={i} onClick={() => setBlockIndex(i)} aria-pressed={i === blockIndex} aria-label={`${block.label}, ${block.minutes} Minuten${block.watts != null ? `, ${block.watts} Watt` : ''}`} style={{ flex: Math.max(1, block.minutes) }}><i style={{ height: `${block.watts == null ? 10 : Math.max(15, block.watts / Math.max(1, ...b.blocks.map(s => s.watts ?? 0)) * 100)}%`, background: i === blockIndex ? T.acid : T.mid }}/></button>)}</div><p aria-live="polite"><span>{selectedBlock?.label}</span><strong>{selectedBlock?.minutes} min{selectedBlock?.watts != null ? ` · ${selectedBlock.watts} W` : ''}</strong></p></section> : <div className="mj-rest"><Moon size={56} strokeWidth={1}/><p>{rest ? 'Die Berge laufen nicht weg.' : 'Deine Einheit ist noch nicht verfügbar.'}</p></div>}
         {b.why && <p className="mj-detail-copy">{b.why}</p>}
-        {!rest && weather && <section className="mj-day-weather"><div><CloudSun size={20}/><h2>{b.window?.label ?? 'Dein Wetter'}</h2></div><div className="mj-hours" role="group" aria-label="Wetterstunde">{hours.map(h => <button key={h.hour} onClick={() => setHour(h.hour)} aria-pressed={h.hour === weather.hour}>{h.hour}<span>Uhr</span></button>)}</div><div className="mj-weather-values"><span><CloudSun size={20}/><strong>{weather.temp == null ? '—' : `${Math.round(weather.temp)}°`}</strong>Temperatur</span><span><Droplets size={20}/><strong>{weather.rain == null ? '—' : `${Math.round(weather.rain)}%`}</strong>Regen</span><span><Wind size={20}/><strong>{weather.wind == null ? '—' : Math.round(weather.wind)}</strong>km/h {weather.dir}</span></div></section>}
+        {!rest && weather && <section className="mj-day-weather"><div className="mw-detail-sky"><W3MorningWeatherScene code={weather.code} isDay={weather.isDay} wind={weather.wind} paused={weatherPaused}/><div><span>Vorhersage · {weather.hour} Uhr</span><h2>{weatherSceneLabel(weather.code, weather.isDay)}</h2></div></div><div className="mj-hours" role="group" aria-label="Wetterstunde">{hours.map(h => <button key={h.hour} onClick={() => setHour(h.hour)} aria-pressed={h.hour === weather.hour}>{h.hour}<span>Uhr</span></button>)}</div><div className="mj-weather-values"><span><CloudSun size={20}/><strong>{weather.temp == null ? '—' : `${Math.round(weather.temp)}°`}</strong>Temperatur</span><span><Droplets size={20}/><strong>{weather.rain == null ? '—' : `${Math.round(weather.rain)}%`}</strong>Regen</span><span><Wind size={20}/><strong>{weather.wind == null ? '—' : Math.round(weather.wind)}</strong>km/h {weather.dir}</span></div></section>}
         <button className="mj-today" onClick={onToday}>Mein Tag<ArrowRight size={22}/></button>
       </div>}
     </div>}

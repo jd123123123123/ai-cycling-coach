@@ -160,6 +160,8 @@ export interface W3WeatherHour {
   q: number | null      // 0–1 ride quality
   temp: number | null   // °C
   rain: number | null   // precipitation probability, %
+  code?: number | null // WMO forecast condition; absent stays unknown
+  isDay?: boolean | null
   wind: number | null   // km/h
   dir: string | null    // 'SW'
   rideable: boolean     // inside the 07–21 daylight riding window

@@ -161,7 +161,7 @@ export interface MorningBriefing {
     label: string
     detail: string
     verdict: string | null
-    hours: { hour: number; q: number | null; rideable: boolean; rain: number | null; wind: number | null; dir: string | null; temp: number | null }[]
+    hours: { code?: number | null; isDay?: boolean | null; hour: number; q: number | null; rideable: boolean; rain: number | null; wind: number | null; dir: string | null; temp: number | null }[]
     /** Null when the forecast had no scoreable hours to bracket — the strip
      *  still draws, nothing is highlighted, and no window is invented. */
     bestFrom: number | null
@@ -340,7 +340,7 @@ export function useMorningBriefing(): MorningBriefing {
           verdict: w.verdict,
           hours: w.hours.map((h) => ({
             hour: h.hour, q: h.q, rideable: h.rideable,
-            rain: h.rain, wind: h.wind, dir: h.dir, temp: h.temp,
+            rain: h.rain, wind: h.wind, dir: h.dir, temp: h.temp, code: h.code, isDay: h.isDay,
           })),
           bestFrom: w.bestFrom,
           bestTo: w.bestTo,

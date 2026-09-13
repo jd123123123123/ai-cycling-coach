@@ -48,6 +48,7 @@ export function buildWeather(tw: TodayWeather | undefined): W3Weather | null {
       hour,
       q: hasReading(h) ? hourQuality(h) : null,
       temp: h.temp_c, rain: h.precip_prob, wind: h.wind_kmh,
+      code: h.code, isDay: h.is_day,
       dir: h.wind_dir_deg != null ? DIRS[Math.round(h.wind_dir_deg / 45) % 8] : null,
       rideable: hour >= 7 && hour <= 21,
     })
