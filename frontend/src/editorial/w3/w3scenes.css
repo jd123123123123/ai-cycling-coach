@@ -133,15 +133,14 @@
 .w3-legendary-atmosphere{position:absolute;inset:0;overflow:hidden;pointer-events:none;isolation:isolate;mask-image:linear-gradient(#000 0%,#000 36%,transparent 60%)}
 .w3-legendary-light{position:absolute;inset:-30% -65%;background:linear-gradient(113deg,transparent 38%,#ffe8b40a 43%,#ffe7b333 49%,#fff5d90a 55%,transparent 60%);mix-blend-mode:screen;animation:legendary-sunlight 9s ease-in-out infinite;will-change:transform,opacity}
 .w3-legendary-light.second{animation-delay:-4.5s;animation-duration:13s;opacity:.4}
-.w3-legendary-dust{position:absolute;left:var(--dx);top:var(--dy);width:2px;height:2px;border-radius:50%;background:#fff4ce;box-shadow:0 0 8px 2px #ffe7ad33;animation:legendary-dust 7s var(--delay) ease-in-out infinite}
-.w3-legendary-dust.d0{--dx:18%;--dy:28%;--delay:-1s}.w3-legendary-dust.d1{--dx:74%;--dy:32%;--delay:-4s}.w3-legendary-dust.d2{--dx:42%;--dy:42%;--delay:-2s}.w3-legendary-dust.d3{--dx:83%;--dy:20%;--delay:-6s}.w3-legendary-dust.d4{--dx:32%;--dy:15%;--delay:-3s}.w3-legendary-dust.d5{--dx:60%;--dy:36%;--delay:-5s}.w3-legendary-dust.d6{--dx:8%;--dy:48%;--delay:-.5s}
+
+
 .w3-scene-dialog.tier-legendaer:not(.is-sealed)::after,.w3-scene-dialog.tier-mythisch:not(.is-sealed)::after{content:'';position:absolute;inset:0;z-index:5;pointer-events:none;border:1px solid rgb(var(--rarity-rgb)/.5);border-radius:inherit;box-shadow:inset 0 0 18px rgb(var(--rarity-rgb)/.12);animation:legendary-edge 5s ease-in-out infinite}
 .w3-collectible.is-earned.tier-legendaer .w3-collectible-glint,.w3-collectible.is-earned.tier-mythisch .w3-collectible-glint{animation:collectible-light 7s ease-in-out infinite}
 .w3-scene-unsealed.is-developing{animation:none}
 .w3-scene-unsealed.is-developing>.w3-scene-portrait{animation:scene-card-turn 2.5s cubic-bezier(.16,.7,.2,1) both}
 .w3-reward-kicker{font-size:11px;letter-spacing:.15px}.w3-reward-milestone>span:first-child{color:#d3d5cb}
 @keyframes legendary-sunlight{0%,100%{transform:translateX(-15%) rotate(-4deg);opacity:.25}50%{transform:translateX(14%) rotate(4deg);opacity:.85}}
-@keyframes legendary-dust{0%,100%{transform:translate(0,12px);opacity:0}25%{opacity:.75}75%{opacity:.4}90%{transform:translate(12px,-35px);opacity:0}}
 @keyframes legendary-edge{0%,100%{border-color:rgb(var(--rarity-rgb)/.22);box-shadow:inset 0 0 8px rgb(var(--rarity-rgb)/.05)}50%{border-color:rgb(var(--rarity-rgb)/.65);box-shadow:inset 0 0 20px rgb(var(--rarity-rgb)/.16)}}
 /* A mobile reward uses the screen, rather than a portrait inside another portrait. */
 @media(max-width:600px){
