@@ -43,38 +43,42 @@ async def run_all_user_syncs() -> None:
     synced = 0
     failed = 0
 
+    # Keep scalar IDs outside the unit of work. A rollback expires ORM fields
+    # even with expire_on_commit=False, including fields used by logging.
+    now = datetime.now(timezone.utc)
     async with async_session_maker() as db:
-        # A rider Garmin has told us to leave alone is skipped in the QUERY, not
-        # by disabling them. `backoff_until` expires on its own, so the sync
-        # comes back without anybody reconnecting an account — which is the
-        # whole difference between this and the flag that switched everyone off.
-        now = datetime.now(timezone.utc)
         result = await db.execute(
-            select(GarminCredential).where(
-                GarminCredential.sync_enabled == True,  # noqa: E712 — SQLAlchemy requires == True
-                or_(
-                    GarminCredential.backoff_until.is_(None),
-                    GarminCredential.backoff_until <= now,
-                ),
+            select(GarminCredential.user_id).where(
+                GarminCredential.sync_enabled == True,  # noqa: E712
+                or_(GarminCredential.backoff_until.is_(None),
+                    GarminCredential.backoff_until <= now),
             )
         )
-        credentials = result.scalars().all()
-        logger.info("Found %d users with Garmin sync enabled", len(credentials))
+        user_ids = list(result.scalars().all())
+    logger.info("Found %d users with Garmin sync enabled", len(user_ids))
 
-        for cred in credentials:
-            try:
+    for user_id in user_ids:
+        try:
+            # One broken account/transaction must not expire or poison the
+            # next rider's session. Recheck availability after waiting in line.
+            async with async_session_maker() as db:
+                cred = (await db.execute(
+                    select(GarminCredential).where(
+                        GarminCredential.user_id == user_id,
+                        GarminCredential.sync_enabled == True,  # noqa: E712
+                        or_(GarminCredential.backoff_until.is_(None),
+                            GarminCredential.backoff_until <= datetime.now(timezone.utc)),
+                    )
+                )).scalar_one_or_none()
+                if cred is None:
+                    continue
                 stats = await sync_user_garmin(db, cred)
                 synced += 1
-                logger.info(
-                    "Synced user %d: %d activities, %d metric days",
-                    cred.user_id,
-                    stats["activities_synced"],
-                    stats["metrics_days"],
-                )
-            except Exception as e:
-                failed += 1
-                logger.error("Sync failed for user %d: %s", cred.user_id, e)
-                # Continue with other users — one failure must not stop all syncs
+                logger.info("Synced user %d: %d activities, %d metric days",
+                            user_id, stats["activities_synced"], stats["metrics_days"])
+        except Exception:
+            failed += 1
+            logger.exception("Sync failed for user %d — continuing", user_id)
 
     logger.info("Scheduled sync complete: %d succeeded, %d failed", synced, failed)
 

@@ -60,9 +60,11 @@ async def connect_garmin(
     db: AsyncSession = Depends(get_db_for_user),
 ) -> GarminSyncResponse:
     """Connect a Garmin account and trigger initial sync."""
+    user_id = current_user.id
+
     # Check for existing credential
     existing = await db.execute(
-        select(GarminCredential).where(GarminCredential.user_id == current_user.id)
+        select(GarminCredential).where(GarminCredential.user_id == user_id)
     )
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(
@@ -72,7 +74,7 @@ async def connect_garmin(
 
     # Create and persist the credential record
     credential = GarminCredential(
-        user_id=current_user.id,
+        user_id=user_id,
         encrypted_email=body.email,
         encrypted_password=body.password,
         sync_enabled=True,
@@ -85,7 +87,7 @@ async def connect_garmin(
     # Set per-user token store path and create the directory.
     # Root is configurable via GARMIN_TOKEN_STORE_ROOT (defaults to /data/garmin_tokens for
     # Docker; override to a writable path when running natively).
-    token_store_path = os.path.join(settings.GARMIN_TOKEN_STORE_ROOT, str(current_user.id))
+    token_store_path = os.path.join(settings.GARMIN_TOKEN_STORE_ROOT, str(user_id))
     os.makedirs(token_store_path, exist_ok=True)
     credential.token_store_path = token_store_path
     await db.commit()
@@ -96,7 +98,7 @@ async def connect_garmin(
         sync_result = await sync_user_garmin(db, credential)
         logger.info(
             "Initial Garmin sync complete for user_id=%s: %s",
-            current_user.id,
+            user_id,
             sync_result,
         )
         return GarminSyncResponse(
@@ -109,7 +111,7 @@ async def connect_garmin(
         # Rate-limited — roll back credential (not a bad-creds problem)
         logger.warning(
             "Garmin rate limit hit during connect for user_id=%s — removing credential",
-            current_user.id,
+            user_id,
         )
         await db.delete(credential)
         await db.commit()
@@ -124,7 +126,7 @@ async def connect_garmin(
         # Bad credentials — roll back the credential entirely
         logger.warning(
             "Garmin auth failed during initial connect for user_id=%s — removing credential",
-            current_user.id,
+            user_id,
         )
         await db.delete(credential)
         await db.commit()
@@ -136,7 +138,7 @@ async def connect_garmin(
         # Sync error — keep credential but mark as error; hourly scheduler will retry
         logger.exception(
             "Initial sync failed for user_id=%s (credential kept): %s",
-            current_user.id,
+            user_id,
             exc,
         )
         credential.sync_status = "error"
@@ -240,8 +242,10 @@ async def trigger_garmin_sync(
     db: AsyncSession = Depends(get_db_for_user),
 ) -> GarminSyncResponse:
     """Trigger a manual incremental Garmin sync."""
+    user_id = current_user.id
+
     result = await db.execute(
-        select(GarminCredential).where(GarminCredential.user_id == current_user.id)
+        select(GarminCredential).where(GarminCredential.user_id == user_id)
     )
     credential = result.scalar_one_or_none()
 
@@ -265,7 +269,7 @@ async def trigger_garmin_sync(
         sync_result = await sync_user_garmin(db, credential)
         logger.info(
             "Manual sync complete for user_id=%s: %s",
-            current_user.id,
+            user_id,
             sync_result,
         )
         return GarminSyncResponse(
@@ -277,7 +281,7 @@ async def trigger_garmin_sync(
     except GarminAuthError:
         logger.warning(
             "Garmin auth error during manual sync for user_id=%s",
-            current_user.id,
+            user_id,
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -286,7 +290,7 @@ async def trigger_garmin_sync(
     except Exception as exc:
         logger.exception(
             "Manual sync failed for user_id=%s: %s",
-            current_user.id,
+            user_id,
             exc,
         )
         raise HTTPException(

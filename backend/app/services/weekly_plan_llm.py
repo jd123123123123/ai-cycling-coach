@@ -29,6 +29,7 @@ testable without a key.
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from app.config import settings
@@ -46,6 +47,12 @@ from app.services.workout_templates import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Billing failures are account-wide. Keep the deterministic plan available
+# without repeating an impossible paid request on every dashboard refresh.
+_quota_retry_at = 0.0
+_QUOTA_RETRY_SECONDS = 15 * 60
+
 
 # Per-day duration may drift ±20% from the skeleton before we clamp it.
 _DURATION_TOLERANCE = 0.20
@@ -272,8 +279,12 @@ async def personalize_week(
     NEVER raises: every failure path returns None so the /weeks response can
     always fall back safely.
     """
+    global _quota_retry_at
     if not settings.ANTHROPIC_API_KEY:
         logger.info("ANTHROPIC_API_KEY not set — weekly plan stays deterministic")
+        return None
+
+    if time.monotonic() < _quota_retry_at:
         return None
 
     ftp = int((snapshot.get("athlete", {}) or {}).get("ftp") or 0)
@@ -317,6 +328,10 @@ async def personalize_week(
         enforced["model_used"] = settings.COACH_MODEL
         return enforced
     except Exception as exc:  # never break the /weeks response
+        if getattr(exc, "status_code", None) == 400 and "credit balance" in str(exc).lower():
+            _quota_retry_at = time.monotonic() + _QUOTA_RETRY_SECONDS
+            logger.warning("Weekly plan stays deterministic: Anthropic credit unavailable; retry in 15 minutes")
+            return None
         logger.exception("weekly plan personalization failed, falling back: %s", exc)
         return None
 

@@ -33,7 +33,7 @@ import logging
 from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, inspect, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.activity import Activity
@@ -506,12 +506,19 @@ async def backfill_missing_streams(
 
     stored = 0
     for activity in candidates:
+        # A previous ride may have rolled back the session. Refresh through
+        # the async API before reading any expired mapped attributes.
+        for row in (activity, profile):
+            state = inspect(row, raiseerr=False) if row is not None else None
+            if state is not None and state.expired:
+                await db.refresh(row)
+        activity_id = activity.id
         try:
             garmin_id = int(activity.external_id)
         except (TypeError, ValueError):
             # A cycling row marked source=garmin whose external_id is not an
             # activity id cannot be fetched at all — drop it from the queue.
-            _STREAMS_UNAVAILABLE.add(activity.id)
+            _STREAMS_UNAVAILABLE.add(activity_id)
             continue
         try:
             if await _fetch_and_store_streams(
@@ -519,7 +526,7 @@ async def backfill_missing_streams(
             ):
                 stored += 1
             else:
-                _STREAMS_UNAVAILABLE.add(activity.id)
+                _STREAMS_UNAVAILABLE.add(activity_id)
         except (GarminRateLimitError, GarminTransientError):
             # Being throttled is a fact about the next quarter hour. Stop the
             # pass; the rides already stored are committed, the rest are still
@@ -536,7 +543,7 @@ async def backfill_missing_streams(
             # on. The ride is queued out for this process: whatever failed on
             # this payload will fail on it again in thirty seconds.
             await db.rollback()
-            _STREAMS_UNAVAILABLE.add(activity.id)
+            _STREAMS_UNAVAILABLE.add(activity_id)
             logger.warning(
                 "Stream backfill failed for garmin activity %s (non-fatal): %s",
                 garmin_id, exc,
@@ -1078,6 +1085,7 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         # every account in production: throttling, and a network that dropped,
         # are facts about the next quarter of an hour — not about the credential.
         await db.rollback()
+        await db.refresh(credential)
         credential.sync_status = (
             "rate_limited" if isinstance(exc, GarminRateLimitError) else "unavailable"
         )
@@ -1096,6 +1104,7 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         # rider was off — reading `auth_failures = 0`, because the rollback had
         # just discarded the increment.
         await db.rollback()
+        await db.refresh(credential)
         _record_auth_failure(credential, datetime.now(timezone.utc))
         await db.commit()
         raise
@@ -1106,6 +1115,7 @@ async def sync_user_garmin(db: AsyncSession, credential: GarminCredential) -> di
         )
         # See note above: roll the poisoned session back before resetting status.
         await db.rollback()
+        await db.refresh(credential)
         credential.sync_status = "error"
         await db.commit()
         raise
