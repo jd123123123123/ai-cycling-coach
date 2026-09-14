@@ -1,5 +1,4 @@
 import { motion, useReducedMotion } from 'motion/react'
-import { ChevronRight, Trophy } from 'lucide-react'
 import { T, FONT, EASE } from './w3tokens'
 import { TNUM } from './w3surfaces'
 
@@ -61,28 +60,6 @@ export interface W3RiderHighlightsProps {
   onCreateRider?: () => void
 }
 
-//: The bento's tints, in the order the cards are laid out. Acid leads because
-//: the first record is the one the rider is proudest of.
-/**
- * WHAT EACH RECORD IS, AS A MARK — not as the card it is printed on.
- *
- * These four were the card BACKGROUNDS: an acid slab, then lavender, mint and
- * peach. They are the only pastel surfaces anywhere in this app, which is
- * exactly why the profile stopped looking like the rest of it — a near-black
- * product with one accent, interrupted by four bright rectangles.
- *
- * The bento itself was right: mixed sizes, the number enormous, the ride's own
- * name under it. Only the surfaces were wrong. So the tints keep their job of
- * telling the four records apart, at the size a mark needs rather than the size
- * a wall needs, and the cards go back to the lit-not-framed dark the rest of
- * the app is built from.
- *
- * The first record keeps the acid FILL: one headline on the page, and it is the
- * furthest a rider has ever gone. Making all four shout is what made none of
- * them read.
- */
-const RECORD_MARK = [T.acid, T.tintLilac, T.tintMint, T.tintPeach]
-
 function Ring({ pct, size = 62, label }: { pct: number; size?: number; label: string }) {
   const r = (size - 10) / 2
   const c = 2 * Math.PI * r
@@ -115,7 +92,6 @@ function Ring({ pct, size = 62, label }: { pct: number; size?: number; label: st
 
 export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
   const reduce = useReducedMotion()
-  const shown = p.records.slice(0, 4)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', fontFamily: FONT }}>
@@ -237,119 +213,6 @@ export default function W3RiderHighlights(p: W3RiderHighlightsProps) {
         </div>
       </div>
 
-      {/* ── THE RECORDS, AS A BENTO ─────────────────────────────────────
-          Mixed sizes on purpose: the first record gets a full-width card
-          because it is the one a rider says out loud, and the rest pair off.
-          A record with no ride behind it is not drawn at all. */}
-      {shown.length > 0 && (
-        <div style={{ padding: '14px 20px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: 1.2, color: T.quiet }}>
-            DEINE BESTEN
-          </span>
-          {shown.map((r, i) => {
-            // THE LEAD STANDS ALONE, THEN THEY PAIR OFF. The first version
-            // skipped every odd index outright, so the SECOND record — the
-            // highest climb — was silently dropped from the page. Rows now
-            // start after the lead and each renders itself and its neighbour.
-            const lead = i === 0
-            if (!lead && (i - 1) % 2 !== 0) return null
-            const pair = !lead ? shown[i + 1] : null
-            // The first record is the headline: one filled surface, and it is
-            // the furthest this rider has ever gone.
-            const card = (rec: HighlightRecord, idx: number, wide: boolean) => {
-              const hero = idx === 0
-              return (
-              <motion.button
-                key={rec.key}
-                type="button"
-                onClick={() => p.onRecord?.(rec.key)}
-                initial={reduce ? false : { opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.45, ease: EASE, delay: 0.06 * idx }}
-                style={{
-                  flex: 1, minWidth: 0, border: 0, cursor: 'pointer', textAlign: 'left',
-                  padding: wide ? '18px 22px 20px' : '16px 18px 18px', borderRadius: 30,
-                  // The headline record is the one filled surface on the page.
-                  background: hero ? T.acid : T.surface, fontFamily: FONT,
-                  display: 'flex', flexDirection: 'column', gap: wide ? 6 : 4,
-                }}>
-                {/* The mark: what used to be the whole card, at the size a mark
-                    needs. It is what still tells a climb from a long day. */}
-                {!hero && (
-                  <span style={{
-                    width: 26, height: 3, borderRadius: 100, marginBottom: 5,
-                    background: RECORD_MARK[idx] ?? T.d3,
-                  }} />
-                )}
-                <span style={{
-                  fontSize: 8.5, fontWeight: 800, letterSpacing: 1.2,
-                  color: hero ? 'rgba(19,19,21,0.55)' : T.quiet,
-                }}>{rec.label}</span>
-                <span style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
-                  <span style={{
-                    fontSize: wide ? 54 : 34, fontWeight: 800,
-                    letterSpacing: wide ? -2.4 : -1.4, lineHeight: 0.9,
-                    color: hero ? T.tintInk : T.ink, ...TNUM,
-                  }}>{rec.value}</span>
-                  <span style={{
-                    fontSize: wide ? 17 : 13, fontWeight: 700,
-                    color: hero ? 'rgba(19,19,21,0.55)' : T.mid,
-                  }}>
-                    {rec.unit}
-                  </span>
-                </span>
-                {rec.ride && (
-                  <span style={{
-                    fontSize: 11, fontWeight: 600,
-                    color: hero ? 'rgba(19,19,21,0.62)' : T.quiet,
-                    whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                  }}>{rec.ride}{rec.when ? ` · ${rec.when}` : ''}</span>
-                )}
-              </motion.button>
-            )}
-            if (lead) return card(r, 0, true)
-            return (
-              <div key={r.key} style={{ display: 'flex', gap: 10 }}>
-                {card(r, i, false)}
-                {pair && card(pair, i + 1, false)}
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* ── ACHIEVEMENTS ──────────────────────────────────────────────────
-          Withheld entirely until the counts resolve, rather than rendering
-          "0 von 0 Erfolgen" from a `?? 0` fallback. */}
-      {p.badges && (
-      <div style={{ padding: '18px 20px 30px' }}>
-        <button
-          type="button" onClick={p.onAllBadges}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 14, width: '100%',
-            padding: 16, borderRadius: 26, border: 0, cursor: 'pointer',
-            background: T.surface, fontFamily: FONT, textAlign: 'left',
-          }}>
-          <span style={{
-            width: 44, height: 44, flex: 'none', borderRadius: 15, background: T.acidDim,
-            display: 'grid', placeItems: 'center',
-          }}>
-            <Trophy size={21} color={T.acid} />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <span style={{ fontSize: 15, fontWeight: 700, color: T.ink }}>
-              {p.badges.unlocked} von {p.badges.total} Erfolgen
-            </span>
-            <span style={{
-              fontSize: 11.5, fontWeight: 600, color: T.quiet,
-              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-            }}>
-              {p.badges.latest ? `Zuletzt: ${p.badges.latest}` : 'Der erste wartet auf dich'}
-            </span>
-          </span>
-          <ChevronRight size={18} color={T.mid} style={{ flex: 'none' }} />
-        </button>
-      </div>)}
     </div>
   )
 }

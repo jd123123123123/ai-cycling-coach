@@ -487,7 +487,7 @@ select:focus-visible {
    chrome). These rules make it feel native: no rubber-band white flash, no
    tap-highlight or long-press callout on controls, and top padding for the
    status-bar safe area under a black-translucent status bar. */
-html { -webkit-text-size-adjust: 100%; }
+html { -webkit-text-size-adjust: 100%; --w3-header-safe-top: env(safe-area-inset-top, 0px); }
 body {
   overscroll-behavior-y: none;
   background: var(--color-paper, #0A0C0F);
@@ -499,7 +499,7 @@ a, button, [role="button"], [role="tab"] {
 }
 @media (display-mode: standalone) {
   /* Reclaim the notch/status-bar area the black-translucent bar draws over. */
-  body { padding-top: env(safe-area-inset-top); }
+  body { padding-top: env(safe-area-inset-top); --w3-header-safe-top: 0px; }
 }
 
 /* ── The one loading treatment (components/AppLoading.tsx) ─────────────────

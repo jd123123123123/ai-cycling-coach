@@ -6,6 +6,7 @@ import W3TodayStage, { STAGE_PLATE, type W3StageVm } from './W3TodayStage'
 import { stageThemeById } from './w3stageThemes'
 import { useGroundColour } from './useGroundColour'
 import W3StatusBar from './W3StatusBar'
+import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
 import { T, FONT, EASE } from './w3tokens'
 import './w3.css'
@@ -101,6 +102,7 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
   // The machine is the door to its own garage — from every room screen, and
   // not from the garage itself, where the tap would be a loop.
   const compact = pathname === '/e/w3-today'
+  const archive = pathname === '/e/w3-rides'
   const onGarage = pathname.startsWith('/e/w3-garage') ? undefined : () => nav('/e/w3-garage')
 
   return (
@@ -110,22 +112,25 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
           <div style={{
             position: 'relative',
-            height: compact ? 'auto' : 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+            height: compact || archive ? 'auto' : 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
             display: 'flex', flexDirection: 'column',
             background: ground ?? T.heroBg,
           }}>
             {!compact && <W3StatusBar />}
+            {archive && <W3TopBar title="Fahrten" />}
 
             {/* MOUNTED ONCE. No key on this — a key here would be the whole
                 point thrown away, because React would unmount the stage and the
                 bike would flash on every navigation. */}
-            <W3TodayStage fullBleed={!compact} compact={compact} vm={{ ...vm, onTapBike: onGarage }} />
+            <div data-w3-persistent-stage style={{ display: archive ? 'none' : 'contents' }}>
+              <W3TodayStage fullBleed={!compact} compact={compact} vm={{ ...vm, onTapBike: onGarage }} />
+            </div>
 
             <div style={{
               position: 'relative', zIndex: 2, marginTop: 'auto',
               // The bike stands on a floor line at 76 % of the stage; a panel
               // starting higher cuts across the machine beside it.
-              padding: compact ? '0 16px 8px' : '10px 16px 18px', flex: 'none',
+              padding: compact || archive ? '0 16px 8px' : '10px 16px 18px', flex: 'none',
             }}
               // The landing site for whatever the current screen portals in.
               ref={setHost} />

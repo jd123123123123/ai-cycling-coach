@@ -21,7 +21,8 @@ const read = (rel: string) => readFileSync(path.resolve(__dirname, rel), 'utf8')
 
 describe('the header is one system', () => {
   it('the geometry has a single definition', () => {
-    expect(HEAD.top).toBe(18)
+    expect(HEAD.top).toBe('calc(var(--w3-header-safe-top, env(safe-area-inset-top, 0px)) + 6px)')
+    expect(HEAD.row).toBe(56)
     expect(HEAD.inset).toBe(20)
     expect(HEAD.control).toBe(44)
   })
@@ -58,6 +59,6 @@ describe('the header is one system', () => {
       const src = read(f)
       if (/<W3TopBar\s*\/>/.test(src)) offenders.push(f)
     }
-    expect(offenders).toEqual(['../W3RidesView.tsx'])   // non-shell branch only
+    expect(offenders).toEqual([])
   })
 })

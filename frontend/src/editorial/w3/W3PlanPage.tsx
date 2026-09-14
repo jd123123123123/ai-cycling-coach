@@ -435,6 +435,7 @@ export default function W3PlanPage() {
   const state = plan?.status === 'ended' ? 'ended' : plan?.status === 'empty' || !hasPlan ? 'empty' : params.get('created') === '1' ? 'created' : 'active'
   return <W3PlanExperience
     vm={vm} state={state} userId={profile?.user_id} planEnd={plan?.plan_end_date} goalDate={plan?.goal_date}
+    priorPlanCompleted={params.get('prior') === 'completed'} priorPlanEnd={params.get('prior_end')}
     onRebuild={onRebuild} onOpenSession={iso => navigate(`/e/w3-session/${iso}`)}
     onCreatedDone={() => setParams({}, {replace:true})}
     weekOffset={weekOffset} onWeekOffset={setWeekOffset} loading={weekFetching}

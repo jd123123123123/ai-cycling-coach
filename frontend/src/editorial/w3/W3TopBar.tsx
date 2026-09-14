@@ -39,22 +39,24 @@ const PROFILE_ROUTE = '/e/w3-biker'
 
 /**
  * WHERE A HEADER CONTROL SITS — one definition, imported by anything that
- * draws one. The hero room has no top bar (its stage is the header), so
+ * draws one. The normal row is44px controls plus6px above/below.
+ * The safe-area variable excludes the inset already owned by standalone body.
+ * The hero room has no top bar (its stage is the header), so
  * `W3TodayStage` positions its chip columns from these exact numbers; without
  * a shared source the two drifted 10px apart, which is precisely enough for
  * the gear to look like it moves when the rider changes screens.
  */
-export const HEAD = { top: 18, inset: 20, control: 44 } as const
+export const HEAD = { top: 'calc(var(--w3-header-safe-top, env(safe-area-inset-top, 0px)) + 6px)', inset: 20, control: 44, row: 56 } as const
 export default function W3TopBar({ title, onBack, onClose, extra }: { title?: string; onBack?: () => void; onClose?: () => void; extra?: ReactNode }) {
   const nav = useNavigate()
   const { pathname } = useLocation()
   const onProfile = pathname === PROFILE_ROUTE || pathname.startsWith(`${PROFILE_ROUTE}/`)
-  if (onClose) return <header data-w3-topbar className="w3-topbar" style={{ flexShrink: 0, minWidth: 0, padding: `0 ${HEAD.inset}px`, height: 56, display: 'flex', alignItems: 'center', gap: 10 }}>
+  if (onClose) return <header data-w3-topbar className="w3-topbar" style={{ flexShrink: 0, minWidth: 0, padding: `0 ${HEAD.inset}px`, height: HEAD.row, display: 'flex', alignItems: 'center', gap: 10 }}>
     <span className="w3-topbar-title" title={title} style={{ flex: 1, minWidth: 0, color: T.ink, fontSize: 15, fontWeight: 650, letterSpacing: '-0.25px', lineHeight: '18px', display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2, overflow: 'hidden' }}>{title}</span>
     <button type="button" className="w3-topbar-control" onClick={onClose} aria-label="Schließen" style={{ width: 44, height: 44, minWidth: 44, flex: 'none', borderRadius: 100, border: 0, padding: 0, background: T.heroChip, display: 'grid', placeItems: 'center', cursor: 'pointer' }}><X size={20} color={T.ink}/></button>
   </header>
   return (
-    <div style={{ padding: `0 ${HEAD.inset}px`, height: HEAD.top * 2 + HEAD.control - 24, display: 'flex', alignItems: 'center', gap: 10 }}>
+    <header data-w3-topbar className="w3-topbar" style={{ flexShrink: 0, minWidth: 0, padding: `0 ${HEAD.inset}px`, height: HEAD.row, display: 'flex', alignItems: 'center', gap: 10 }}>
       {onBack
         ? <button type="button" onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: T.heroChip, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none' }}><ArrowLeft size={18} color={T.ink} /></button>
         : <div style={{ width: 44, flex: 'none' }} />}
@@ -69,6 +71,6 @@ export default function W3TopBar({ title, onBack, onClose, extra }: { title?: st
         )}
         <W3NavMenu />
       </div>
-    </div>
+    </header>
   )
 }
