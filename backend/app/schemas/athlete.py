@@ -77,6 +77,7 @@ class TrainingGoals(BaseModel):
     custom_goal: CustomGoalInput | None = None
     custom_goal_recommendation: dict | None = None
     custom_goal_started: str | None = None
+    custom_goal_block_end_date: str | None = None
     training_model: Literal["pyramidal", "polarized", "sweetspot"] | None = None
     target_ftp: int | None = None
     target_event_name: str | None = None

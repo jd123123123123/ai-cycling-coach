@@ -8,6 +8,7 @@ export interface W3PlanIntroProps {
   userId: string | number
   /** Open the walkthrough again, including after it has been dismissed. */
   force?: boolean
+  autoShow?: boolean
   onClose?: () => void
 }
 
@@ -45,7 +46,7 @@ function IntroVisual({ step }: { step: number }) {
 }
 
 /** A small animated walkthrough, shown once per rider and feature version. */
-export default function W3PlanIntro({ userId, force = false, onClose }: W3PlanIntroProps) {
+export default function W3PlanIntro({ userId, force = false, autoShow = true, onClose }: W3PlanIntroProps) {
   const dialog = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const descriptionId = useId()
@@ -57,7 +58,7 @@ export default function W3PlanIntro({ userId, force = false, onClose }: W3PlanIn
     if (userId === '' || userId == null) return
     let seen = false
     try { seen = localStorage.getItem(storageKey) === 'seen' } catch { /* Private mode may disable storage. */ }
-    if (!force && seen) return
+    if (!force && (seen || !autoShow)) return
     setStep(0)
     setOpen(true)
     const element = dialog.current
@@ -67,7 +68,7 @@ export default function W3PlanIntro({ userId, force = false, onClose }: W3PlanIn
       element?.close()
       previousFocus?.focus({ preventScroll: true })
     }
-  }, [storageKey, force, userId])
+  }, [storageKey, force, userId, autoShow])
 
   useEffect(() => {
     if (!open) return
@@ -84,7 +85,7 @@ export default function W3PlanIntro({ userId, force = false, onClose }: W3PlanIn
   }
 
   const colors = {
-    '--intro-bg': T.heroBg, '--intro-panel': T.heroDock, '--intro-ink': T.ink,
+    '--intro-bg': T.bg, '--intro-panel': T.heroDock, '--intro-ink': T.ink,
     '--intro-mid': T.mid, '--intro-acid': T.acid, '--intro-on-acid': '#0B0B0B',
     '--intro-stroke': T.stroke, '--intro-off': T.heroOff, '--intro-font': FONT,
   } as CSSProperties

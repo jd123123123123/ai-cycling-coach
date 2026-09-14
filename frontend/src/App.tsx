@@ -8,6 +8,7 @@ import W3RideCelebrationWatcher from './editorial/w3/W3RideCelebrationWatcher'
 import W3SetupGate from './editorial/w3/W3SetupGate'
 import W3MorningGate from './editorial/w3/W3MorningGate'
 import W3SceneAnnouncement from './editorial/w3/W3SceneAnnouncement'
+import W3PlanInvitation from './editorial/w3/W3PlanInvitation'
 import W3WeekReviewGate from './editorial/w3/W3WeekReviewGate'
 import ProtectedRoute from './components/ProtectedRoute'
 import W3Guard from './editorial/w3/W3Guard'
@@ -286,6 +287,7 @@ function AppRoutes() {
     <W3SetupGate />
     <W3WeekReviewGate />
     <W3SceneAnnouncement />
+    <W3PlanInvitation />
     <Suspense fallback={<AppLoading />}>
       <PageTransition routeKey={roomKey(location.pathname)}>
         <Routes location={location}>

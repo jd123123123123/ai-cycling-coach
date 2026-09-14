@@ -19,3 +19,15 @@ describe('saved plan intake',()=>{
  })
  it('never invents course numbers for presets',()=>{const p=makeGoalInput(EMPTY_BRIEF,'vo2',4,[true]);expect(p.distance_km).toBeUndefined();expect(p.target_date).toBeUndefined();expect(p.intent).toBe('faster')})
 })
+
+describe('focus combinations without an event',()=>{
+ const mount=()=>render(<QueryClientProvider client={new QueryClient()}><MemoryRouter><Composer focus="choose" hours={6} days={[true,false,true,false,true,false,false]} onClose={vi.fn()}/></MemoryRouter></QueryClientProvider>)
+ it('opens focus selection rather than an event form',()=>{mount();expect(screen.getByRole('heading',{name:'Was möchtest du verbessern?'})).toBeTruthy();expect(screen.queryByRole('textbox',{name:/Name deines Vorhabens/})).toBeNull();expect((screen.getByRole('button',{name:'Meine Trainingszeit'}) as HTMLButtonElement).disabled).toBe(true)})
+ it('sends both selected focuses with no invented date or course',async()=>{
+  vi.mocked(previewPlanGoal).mockRejectedValue(new Error('offline'))
+  mount();fireEvent.click(screen.getByRole('button',{name:/Ausdauer Länger/}));fireEvent.click(screen.getByRole('button',{name:/VO₂max Intensive/}));fireEvent.click(screen.getByRole('button',{name:'Meine Trainingszeit'}));fireEvent.click(screen.getByRole('button',{name:'Planvorschau'}));
+  await waitFor(()=>expect(previewPlanGoal).toHaveBeenCalledOnce());const input=vi.mocked(previewPlanGoal).mock.calls[0][0];expect(input.focuses).toEqual(['endurance','vo2']);expect(input.target_date).toBeUndefined();expect(input.distance_km).toBeUndefined();expect(applyPlanGoal).not.toHaveBeenCalled()
+ })
+ it('preserves selected focuses when returning from training availability',()=>{mount();fireEvent.click(screen.getByRole('button',{name:/FTP Mehr/}));fireEvent.click(screen.getByRole('button',{name:'Meine Trainingszeit'}));fireEvent.click(screen.getByRole('button',{name:'Zurück'}));expect(screen.getByRole('button',{name:/FTP Mehr/}).getAttribute('aria-pressed')).toBe('true')})
+ it('offers an event only through the explicit event action',()=>{mount();fireEvent.click(screen.getByRole('button',{name:'Für ein Event trainieren'}));expect(screen.getByRole('heading',{name:'Wofür fährst du?'})).toBeTruthy();expect((screen.getByRole('button',{name:'Meine Trainingszeit'}) as HTMLButtonElement).disabled).toBe(true)})
+})

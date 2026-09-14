@@ -434,10 +434,11 @@ export default function W3PlanPage() {
   }
   const state = plan?.status === 'ended' ? 'ended' : plan?.status === 'empty' || !hasPlan ? 'empty' : params.get('created') === '1' ? 'created' : 'active'
   return <W3PlanExperience
-    vm={vm} state={state} userId={profile?.user_id} planEnd={plan?.plan_end_date} goalDate={plan?.goal_date}
+    vm={vm} state={state} userId={profile?.user_id} planEnd={plan?.plan_end_date} planStart={plan?.plan_start_date} initialCompose={params.get('choose')==='1'} goalDate={plan?.goal_date}
     priorPlanCompleted={params.get('prior') === 'completed'} priorPlanEnd={params.get('prior_end')}
     onRebuild={onRebuild} onOpenSession={iso => navigate(`/e/w3-session/${iso}`)}
     onCreatedDone={() => setParams({}, {replace:true})}
+    onComposeClose={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete('choose'); return next }, {replace:true})}
     weekOffset={weekOffset} onWeekOffset={setWeekOffset} loading={weekFetching}
   />
 }

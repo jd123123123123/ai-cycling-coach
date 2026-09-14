@@ -164,6 +164,7 @@ export async function buildPlan(
 
 export interface CurrentPlanResponse {
   goal_name?:string|null; goal_date?:string|null; goal_start?:string|null;
+  block_end_date?:string|null; has_event?:boolean; focuses?:('endurance'|'threshold'|'vo2')[];
   plan_start_date: string | null
   plan_end_date: string | null
   phase: string | null

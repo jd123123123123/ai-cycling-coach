@@ -3,11 +3,14 @@ from datetime import date
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+TrainingFocus = Literal["endurance", "threshold", "vo2"]
+
 
 class CustomGoalInput(BaseModel):
     model_config = ConfigDict(extra="forbid", allow_inf_nan=False)
     target_date: date | None = None
     focus: Literal["auto", "endurance", "threshold", "vo2"] = "auto"
+    focuses: list[TrainingFocus] | None = Field(default=None, min_length=1, max_length=3)
     duration_hours: float | None = Field(default=None, ge=0.5, le=36)
     distance_km: float | None = Field(default=None, ge=5, le=1200)
     ascent_m: float | None = Field(default=None, ge=0, le=20000)
@@ -19,6 +22,11 @@ class CustomGoalInput(BaseModel):
 
     @model_validator(mode="after")
     def require_course_demand(self):
+        if self.focuses is not None:
+            self.focuses = list(dict.fromkeys(self.focuses))
+            self.focus = self.focuses[0]
+        elif self.focus != "auto":
+            self.focuses = [self.focus]
         if self.focus == "auto" and self.target_date is None:
             raise ValueError("Choose an event date")
         if self.focus == "auto" and self.duration_hours is None and self.distance_km is None:
@@ -34,12 +42,15 @@ class CustomGoalInput(BaseModel):
 
 class CustomGoalPreview(BaseModel):
     goal: CustomGoalInput
-    focus: Literal["endurance", "threshold", "vo2"]
+    focus: TrainingFocus
+    focuses: list[TrainingFocus]
+    has_event: bool
+    block_end_date: date
     focus_label: str
     rationale: str
     program: Literal["endurance_200k", "ftp_builder", "vo2_builder"]
-    event_type: Literal["audax", "fondo", "race"]
-    event_duration_hours: float
+    event_type: Literal["audax", "fondo", "race"] | None
+    event_duration_hours: float | None
     duration_estimated: bool
     long_ride_target_minutes: int
     weeks_remaining: int

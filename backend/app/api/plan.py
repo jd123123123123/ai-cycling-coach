@@ -16,7 +16,7 @@ from datetime import date
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -132,6 +132,9 @@ class CurrentPlanResponse(BaseModel):
     goal_name: str | None = None
     goal_date: str | None = None
     goal_start: str | None = None
+    block_end_date: str | None = None
+    has_event: bool = False
+    focuses: list[Literal["endurance", "threshold", "vo2"]] = Field(default_factory=list)
     status: Literal["empty", "active", "ended"] = "empty"
 
 
@@ -146,6 +149,23 @@ async def current_plan(
 
     profile = await _load_profile(db, user.id)
     set_athlete_tz_from_profile(profile)
+    from app.services.mesocycle_generator import _custom_focuses
+    goals = profile.goals if isinstance(profile.goals, dict) else {}
+    custom = goals.get("custom_goal")
+    recommendation = goals.get("custom_goal_recommendation")
+    recommendation = recommendation if isinstance(recommendation, dict) else {}
+    focuses = _custom_focuses(custom) if isinstance(custom, dict) else []
+    # Persisted input, not an incidental automatically generated mesocycle,
+    # establishes the rider's explicit no-date plan choice.
+    has_focus_plan = bool(focuses) and custom.get("target_date") is None
+    goal_meta = dict(
+        goal_name=goals.get("target_event_name") or recommendation.get("focus_label"),
+        goal_date=profile.target_event_date.isoformat() if profile.target_event_date else None,
+        goal_start=goals.get("custom_goal_started"),
+        block_end_date=goals.get("custom_goal_block_end_date") or recommendation.get("block_end_date"),
+        has_event=profile.target_event_date is not None,
+        focuses=focuses,
+    )
     # A mesocycle is a block, not the entire ongoing fitness plan. A passed
     # event refers to its own block, not maintenance auto-generated afterwards.
     ended = bool(profile.target_event_date and profile.target_event_date < today_local())
@@ -160,16 +180,16 @@ async def current_plan(
         # remains real evidence of an ended goal, but its start is unknown.
         if ended:
             return CurrentPlanResponse(status="ended", plan_end_date=profile.target_event_date.isoformat(),
-                goal_date=profile.target_event_date.isoformat(),
-                goal_name=(profile.goals or {}).get('target_event_name'))
+                **goal_meta)
+        if has_focus_plan:
+            return CurrentPlanResponse(status="active", planned_hours=profile.weekly_hours_available,
+                **goal_meta)
         return CurrentPlanResponse()
     return CurrentPlanResponse(
         plan_start_date=plan.plan_start_date.isoformat(),
         plan_end_date=(min(plan.plan_end_date, profile.target_event_date) if ended else plan.plan_end_date).isoformat(),
         phase=plan.phase, weekly_tss_targets=plan.weekly_tss_targets,
-        goal_name=(profile.goals or {}).get('target_event_name') or ((profile.goals or {}).get('custom_goal_recommendation') or {}).get('focus_label'),
-        goal_date=profile.target_event_date.isoformat() if profile.target_event_date else None,
-        goal_start=(profile.goals or {}).get('custom_goal_started'),
+        **goal_meta,
         planned_hours=profile.weekly_hours_available,
         status="ended" if ended else "active",
     )

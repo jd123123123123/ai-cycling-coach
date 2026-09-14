@@ -773,6 +773,36 @@ def _plan_week_runs(
     return entries
 
 
+def _custom_focuses(custom: dict) -> list[str]:
+    """Read validated choices, with a safe fallback for historical single focus."""
+    raw = custom.get("focuses")
+    valid = {"endurance", "threshold", "vo2"}
+    if isinstance(raw, list) and raw and all(isinstance(f, str) and f in valid for f in raw):
+        return list(dict.fromkeys(raw))
+    legacy = custom.get("focus")
+    return [legacy] if isinstance(legacy, str) and legacy in valid else []
+
+
+def _custom_quality_type(session_type: str, focuses: list[str], hard_placed: int, week_start: date) -> str:
+    """Share existing quality slots; never turn an easy day into a hard day.
+
+    An endurance combination keeps one quality touch for a single hard focus,
+    or at most two when both hard focuses are selected. The two hard families
+    rotate their first turn weekly so limited availability/age rails do not
+    permanently exclude one. Availability, age, recovery and load guards still
+    run after this choice and may reduce the actual number of sessions.
+    """
+    if session_type not in _HARD_TYPES or not focuses:
+        return session_type
+    quality = [f for f in ("vo2", "threshold") if f in focuses]
+    if not quality:
+        return "tempo" if hard_placed == 0 else "endurance"
+    limit = 1 if "endurance" in focuses and len(quality) == 1 else 2
+    if hard_placed >= limit:
+        return "endurance"
+    return quality[(week_start.toordinal() // 7 + hard_placed) % len(quality)]
+
+
 def build_week_drafts(
     athlete: "AthleteProfile",
     week_start: date,
@@ -826,6 +856,13 @@ def build_week_drafts(
     from app.services.program_builder import active_program, program_day, program_week_index
 
     custom = (getattr(athlete, "goals", None) or {}).get("custom_goal_recommendation") or {}
+    custom = custom if isinstance(custom, dict) else {}
+    focuses = _custom_focuses(custom)
+    focus_block = bool(focuses) and custom.get("has_event") is False
+    if focus_block or len(focuses) > 1:
+        # Generate the ordinary phase slots first; a single model bias must
+        # not erase the other selected focus before the shared-slot policy.
+        training_model = "pyramidal"
     prog = None if custom else active_program(getattr(athlete, "goals", None))
     prog_id = prog[0] if prog else None
     prog_week = program_week_index(prog[1], week_start) if prog else 0
@@ -1027,6 +1064,8 @@ def build_week_drafts(
             training_model=training_model,
             is_recovery_week=(block_position == "recovery"),
         )
+        if (focus_block or len(focuses) > 1) and block_position != "recovery" and phase not in ("race", "taper"):
+            session_type = _custom_quality_type(session_type, focuses, hard_placed, week_start)
 
         # hard_day_blackouts are a hard guarantee: if a hard session would
         # still land on a blacked-out day (e.g. no easy day was available to
@@ -1095,7 +1134,10 @@ def build_week_drafts(
                 "threshold": {"sweet_spot": "sweet_spot_2x20", "threshold": "threshold_2x15"},
                 "endurance": {},
             }
-            preferred_id = focus_templates.get(custom.get("focus"), {}).get(session_type)
+            for focus in focuses:
+                preferred_id = focus_templates.get(focus, {}).get(session_type)
+                if preferred_id is not None:
+                    break
         # The Saturday-role climbing keystone (z2_climbing_long, 3h) needs the
         # long-day window or it silently never fits a time-crunched athlete.
         if vdow == 5 and preferred_id == "z2_climbing_long":
@@ -1358,16 +1400,17 @@ def _fitness_builder_phase(ctl: float) -> Phase:
     return "build1"
 
 
-def fitness_builder_progression(ctl: float, weekly_hours: float | None) -> dict:
+def fitness_builder_progression(ctl: float, weekly_hours: float | None, horizon_weeks: int = 12) -> dict:
     """Progression horizon for the no-event path — the honest replacement for
     the '— Wochen übrig' dash: a rolling 12-week fitness block with a
     deterministic CTL target derived from the Friel-capped ramp."""
     # ~8%/wk load ramp sustained over 12 weeks moves CTL by roughly a third,
     # bounded so low-CTL starters see a meaningful but honest number.
-    target_ctl = round(min(ctl + 15.0, max(ctl * 1.30, ctl + 6.0)), 1)
+    twelve_week_target = min(ctl + 15.0, max(ctl * 1.30, ctl + 6.0))
+    target_ctl = round(ctl + (twelve_week_target - ctl) * horizon_weeks / 12, 1)
     return {
         "mode": "fitness_builder",
-        "horizon_weeks": 12,
+        "horizon_weeks": horizon_weeks,
         "start_ctl": round(ctl, 1),
         "target_ctl": target_ctl,
     }
@@ -1574,6 +1617,14 @@ async def generate_mesocycle(
         evidence["progression"] = fitness_builder_progression(
             ctl_for_ramp, declared_hours
         )
+        custom = (getattr(athlete, "goals", None) or {}).get("custom_goal_recommendation")
+        if isinstance(custom, dict) and custom.get("has_event") is False and _custom_focuses(custom):
+            # An eight-week training block is not an invented target event.
+            evidence["progression"] = fitness_builder_progression(ctl_for_ramp, declared_hours, horizon_weeks=8)
+            evidence["progression"].update(
+                block_end_date=custom.get("block_end_date"),
+                focuses=_custom_focuses(custom),
+            )
 
     # ── 9. Create MesocyclePlan ─────────────────────────────────────────────
     meso = MesocyclePlan(

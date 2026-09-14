@@ -9,9 +9,9 @@ from app.dependencies import get_current_active_user, get_current_user, get_db_f
 
 @pytest.fixture
 def endpoint():
-    def make(plan=None, target=None):
+    def make(plan=None, target=None, goals=None):
         user=SimpleNamespace(id=71,is_active=True)
-        profile=SimpleNamespace(user_id=71,timezone='Europe/Berlin',target_event_date=target,weekly_hours_available=6, goals={})
+        profile=SimpleNamespace(user_id=71,timezone='Europe/Berlin',target_event_date=target,weekly_hours_available=6, goals=goals or {})
         db=AsyncMock()
         statements=[]
         async def execute(stmt):
@@ -74,3 +74,26 @@ def test_ended_goal_survives_historical_block_removal(endpoint):
     assert body['plan_start_date'] is None
     assert body['weekly_tss_targets'] is None
     db.commit.assert_not_called()
+
+
+def test_no_date_custom_plan_is_saved_even_when_block_rows_absent(endpoint):
+    client, db, _ = endpoint(None, None, {
+        'custom_goal': {'focus': 'vo2', 'focuses': ['vo2', 'endurance'], 'target_date': None},
+        'custom_goal_recommendation': {'focus_label': 'VO₂max + Ausdauer'},
+        'custom_goal_started': '2026-09-14',
+        'custom_goal_block_end_date': '2026-11-09',
+    })
+    body = client.get('/plan/current').json()
+    assert body['status'] == 'active'
+    assert body['goal_date'] is None and body['has_event'] is False
+    assert body['focuses'] == ['vo2', 'endurance']
+    assert body['block_end_date'] == '2026-11-09'
+    assert body['goal_name'] == 'VO₂max + Ausdauer'
+    assert body['plan_start_date'] is None
+    assert body['weekly_tss_targets'] is None
+    db.commit.assert_not_called(); db.flush.assert_not_called()
+
+
+def test_unknown_custom_focus_does_not_fabricate_personal_plan(endpoint):
+    client, _, _ = endpoint(None, None, {'custom_goal': {'focuses': ['unsupported'], 'target_date': None}})
+    assert client.get('/plan/current').json()['status'] == 'empty'

@@ -25,14 +25,18 @@ function GoalArt({goal}:{goal:string}){
  const bars=goal==='ftp'?[35,50,70,46,88,113,76,134,152]:goal==='vo2'?[32,47,82,117,89,141,166,111,70]:[64,75,81,85,86,85,83,80,76]
  return <svg viewBox="0 0 340 210" aria-hidden="true"><defs><linearGradient id={id} x2=".8" y2="1"><stop stopColor={T.acidLite}/><stop offset=".35" stopColor={T.acid}/><stop offset="1" stopColor={T.acidDeep}/></linearGradient></defs><ellipse cx="205" cy="187" rx="125" ry="15" fill={T.bg}/>{bars.map((h,i)=><motion.g key={i} initial={false} animate={{y:183-h}} transition={{duration:reduced?0:.45,delay:reduced?0:i*.025}}><rect x={50+i*28} width="20" height={h} rx="7" fill={i<2?T.surface2:`url(#${id})`}/><rect x={52+i*28} y="2" width="16" height="4" rx="2" fill={T.ink} opacity={i<2?.05:.45}/></motion.g>)}</svg>
 }
-export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSession,onCreatedDone,weekOffset,onWeekOffset,planEnd,goalDate,priorPlanCompleted=false,priorPlanEnd=null,loading=false}:{vm:W3PlanVm;state:State;userId?:number;onRebuild:W3PlanActions['onRebuild'];onOpenSession:(iso:string)=>void;onCreatedDone:()=>void;planEnd?:string|null;goalDate?:string|null;priorPlanCompleted?:boolean;priorPlanEnd?:string|null;weekOffset:number;onWeekOffset:(offset:number)=>void;loading?:boolean}){
+export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSession,onCreatedDone,weekOffset,onWeekOffset,planEnd,planStart,goalDate,initialCompose=false,onComposeClose,priorPlanCompleted=false,priorPlanEnd=null,loading=false}:{vm:W3PlanVm;state:State;userId?:number;onRebuild:W3PlanActions['onRebuild'];onOpenSession:(iso:string)=>void;onCreatedDone:()=>void;planEnd?:string|null;planStart?:string|null;initialCompose?:boolean;onComposeClose?:()=>void;priorPlanCompleted?:boolean;priorPlanEnd?:string|null;goalDate?:string|null;weekOffset:number;onWeekOffset:(offset:number)=>void;loading?:boolean}){
  const nav=useNavigate(),reduced=useReducedMotion()
  const [view,setView]=useState<'plan'|'profile'>('plan'),[goal,setGoal]=useState('ftp'),[day,setDay]=useState(0),[sheet,setSheet]=useState<'adjust'|'adaptation'|'why'|'profile'|null>(null),[intro,setIntro]=useState(false)
- const [compose,setCompose]=useState<GoalFocus|null>(null)
+ const [compose,setCompose]=useState<GoalFocus|'choose'|null>(initialCompose?'choose':null)
+ const [skipAutoIntro,setSkipAutoIntro]=useState(initialCompose)
+ // The invitation can change only the query string while this page is mounted.
+ useEffect(()=>{if(initialCompose){setSkipAutoIntro(true);setCompose('choose')}},[initialCompose])
+ const missingPlanHistory=state==='ended'&&!planStart
  const {data:adaptations}=usePlanAdaptations(14,8)
  const latest=adaptations?.adaptations[0]
  const [referenceDate,setReferenceDate]=useState<string|null>(null)
- const [period,setPeriod]=useState<import('../../api/progressExplorer').ProgressPeriod>('plan')
+ const [period,setPeriod]=useState<import('../../api/progressExplorer').ProgressPeriod>(missingPlanHistory?'month':'plan')
  const results=useProgressExplorer(period,referenceDate,period==='plan'&&(state==='ended'||priorPlanCompleted)?(priorPlanCompleted?priorPlanEnd:planEnd):undefined)
  const sessions=vm.daySessions??[]
  const identity=sessions.map(s=>s.dateISO).join(',')
@@ -55,14 +59,15 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <p className="w3-plan-empty-note">Noch kein abgeschlossener Plan. Lege jetzt deinen Fokus fest — dann zeigt dir RIDR, warum jede Einheit dort steht.</p>
  <section className="w3-plan-goal-art"><div><span>{goal==='ftp'?'FTP aufbauen':goal==='vo2'?'VO₂max aufbauen':'Ausdauer aufbauen'}</span><h2>{goal==='ftp'?<>Länger<br/>schnell fahren.</>:goal==='vo2'?<>Mehr Luft.<br/>Mehr Möglichkeiten.</>:<>Weiter als<br/>letztes Mal.</>}</h2></div><GoalArt goal={goal}/></section>
  <div className="w3-plan-goals">{[['ftp','FTP'],['hours','Ausdauer'],['vo2','VO₂max']].map(([key,label])=><button key={key} aria-pressed={goal===key} onClick={()=>setGoal(key)}>{label}{goal===key&&<Check size={15}/>}</button>)}</div>
- <button className="w3-plan-link" onClick={()=>setCompose('auto')}><Flag size={22}/><span><strong>Dein eigenes Vorhaben</strong><span>Ziel und Datum wählen</span></span><ArrowUpRight size={20}/></button>
+ <button className="w3-plan-link" onClick={()=>setCompose('choose')}><Flag size={22}/><span><strong>Mehrere Schwerpunkte kombinieren</strong><span>Oder für ein Event trainieren</span></span><ArrowUpRight size={20}/></button>
  <button className="w3-plan-link" onClick={()=>nav('/plan/import')}><Upload size={22}/><span><strong>Du hast schon einen Plan?</strong><span>Trainingsplan importieren</span></span><ArrowUpRight size={20}/></button>
  <button className="w3-plan-primary" onClick={()=>setCompose(goal==='ftp'?'threshold':goal==='vo2'?'vo2':'endurance')}>Meinen Plan erstellen<ArrowRight size={20}/></button>
  </>:view==='profile'||state==='ended'?<>
- <div className="w3-plan-opening"><h1>{state==='ended'?<>Das hast du<br/>bewegt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{title}</p></div>
+ <div className="w3-plan-opening"><h1>{missingPlanHistory?<>Dein nächster<br/>Schritt.</>:state==='ended'?<>Das hast du<br/>bewegt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{missingPlanHistory?'Dein bisheriger Plan ist beendet. Wähle, was du als Nächstes verbessern möchtest.':title}</p></div>
+ {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Meinen nächsten Plan erstellen<ArrowRight size={20}/></button>}
  <button className="w3-plan-link slim" onClick={()=>setSheet('profile')}><span><strong>Leistungsprofil vergleichen</strong></span><ArrowUpRight size={18}/></button>
- <W3ProgressAnalyticsView emptyMessage={state==='ended'?'Der frühere Planbeginn ist nicht gespeichert. Wähle Woche, Monat oder Jahr für deinen Verlauf.':undefined} data={results.data} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={results.isPending} error={results.isError}/>
- {state==='ended'&&<button className="w3-plan-primary" onClick={()=>setCompose('auto')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
+ <W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={results.data} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={results.isPending} error={results.isError}/>
+ {state==='ended'&&!missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  </>:<>
  <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1><p>{state==='created'?'Gespeichert · bereit für deine erste Einheit':`${vm.block?.phase??'Training'} · ${vm.planWeekLabel}${goalDate?' · Ziel '+new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'}):''}`}</p></div><div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div></header>
  {state==='active'&&<section className="w3-plan-session" aria-busy={loading}>
@@ -90,6 +95,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  {sheet==='adjust'&&<PlanAdjustSheet vm={vm} onClose={()=>setSheet(null)} onRebuild={onRebuild}/>}
  {sheet==='adaptation'&&<PlanDialog title="Was sich verändert hat" onClose={()=>setSheet(null)}><div className="w3-plan-change-list">{adaptations?.adaptations.map(a=><article key={a.id}><time>{new Date(a.created_at).toLocaleDateString('de-DE',{day:'numeric',month:'short'})}</time><p>{a.message_de}</p></article>)}</div></PlanDialog>}
  {sheet==='why'&&<PlanDialog title={hasWorkout?'Warum diese Einheit?':'Deine Woche'} onClose={()=>setSheet(null)}><p>{selected?.rationale??vm.weekWhy??'Zwischen den Belastungen steht Zeit für Erholung. Deine nächste Einheit siehst du in der Wochenübersicht.'}</p><button className="w3-plan-link" onClick={()=>nav('/e/w3-goal')}>Dein Ziel ansehen<ArrowUpRight size={18}/></button></PlanDialog>}
- {compose&&<W3PlanGoalComposer focus={compose} hours={vm.adjustHours} days={vm.adjustDays} previousPlanEnd={state==='ended'?planEnd:null} onClose={()=>setCompose(null)}/>} {userId!=null&&<W3PlanIntro userId={userId} force={intro} onClose={()=>setIntro(false)}/>}
+ {compose&&<W3PlanGoalComposer focus={compose} hours={vm.adjustHours} days={vm.adjustDays} previousPlanEnd={state==='ended'?planEnd:null} onClose={()=>{setCompose(null);onComposeClose?.()}}/>}
+ {userId!=null&&<W3PlanIntro userId={userId} autoShow={!skipAutoIntro} force={intro} onClose={()=>setIntro(false)}/>}
  </div>
 }

@@ -1519,3 +1519,25 @@ class TestHoursNoteMatchesMaterializedWeek:
         )
         # The note only fires when the start is genuinely below the ask.
         assert materialized < 0.8 * 10.0
+
+
+@pytest.mark.asyncio
+async def test_explicit_focus_block_has_no_event_or_taper_and_keeps_eight_week_evidence():
+    from app.schemas.plan_goal import CustomGoalInput
+    from app.services.plan_goal import apply_goal_to_profile, preview_goal
+    today = date.today()
+    athlete = _athlete(weekly_hours=8)
+    athlete.goals = {}
+    athlete.days_available = None
+    preview = preview_goal(CustomGoalInput(focuses=['endurance', 'vo2'], weekly_hours=8), today)
+    apply_goal_to_profile(athlete, preview, today)
+    # Close to the internal block end must not become a race/taper phase.
+    plan = await generate_mesocycle(_mock_db(athlete), 1,
+        plan_start_date=_next_monday(today + timedelta(weeks=7)), current_ctl=50)
+    assert plan.target_event_date is None
+    assert plan.target_event_type is None
+    assert plan.phase == 'base2'
+    assert plan.evidence['days_to_goal'] is None
+    assert plan.evidence['progression']['horizon_weeks'] == 8
+    assert plan.evidence['progression']['block_end_date'] == (today + timedelta(weeks=8)).isoformat()
+    assert plan.evidence['progression']['focuses'] == ['endurance', 'vo2']

@@ -177,7 +177,7 @@ export function ProgressRecords({records,start,end,showDetails=false}:{showDetai
  </div>
 }
 
-export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onReferenceDate,today,mode:controlledMode,onMode,pending=false,error=false,emptyMessage}:{emptyMessage?:string;mode?:'ftp'|'vo2'|'records';onMode?:(mode:'ftp'|'vo2'|'records')=>void;data?:ProgressExplorer;referenceDate?:string|null;onReferenceDate?:(value:string)=>void;today?:string;period:ProgressPeriod;onPeriod:(p:ProgressPeriod)=>void;onGoal?:()=>void;pending?:boolean;error?:boolean}) {
+export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onReferenceDate,today,mode:controlledMode,onMode,pending=false,error=false,emptyMessage,availablePeriods}:{availablePeriods?:ProgressPeriod[];emptyMessage?:string;mode?:'ftp'|'vo2'|'records';onMode?:(mode:'ftp'|'vo2'|'records')=>void;data?:ProgressExplorer;referenceDate?:string|null;onReferenceDate?:(value:string)=>void;today?:string;period:ProgressPeriod;onPeriod:(p:ProgressPeriod)=>void;onGoal?:()=>void;pending?:boolean;error?:boolean}) {
  const [localMode,setLocalMode]=useState<'ftp'|'vo2'|'records'>('ftp')
  const [info,setInfo]=useState(false)
  const mode=controlledMode??localMode
@@ -187,7 +187,7 @@ export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onRe
  return <section className="w3-progress-analytics" style={vars} aria-label="Fortschrittsanalyse">
    <div className="w3-progress-toolbar"><div className="w3-progress-modes" aria-label="Kennzahl">{([['ftp','FTP'],['vo2','VO₂max'],['records','Rekorde']] as const).map(([key,label])=><button key={key} type="button" aria-pressed={mode===key} onClick={()=>setMode(key)}>{label}{mode===key&&<motion.span className="w3-progress-selection" layoutId={`${selectionId}-metric`} transition={{duration:reduceMotion?0:.22}}/>}</button>)}</div>
    <button className="w3-progress-info-button" aria-label="Daten und Vergleich erklären" aria-expanded={info} onClick={()=>setInfo(v=>!v)}><Info size={17}/></button></div>
-   <div className="w3-progress-periods" aria-label="Zeitraum">{PERIODS.map(([key,label])=><button type="button" key={key} aria-pressed={period===key} onClick={()=>onPeriod(key)}>{label}{period===key&&<motion.span className="w3-period-selection" layoutId={`${selectionId}-period`} transition={{duration:reduceMotion?0:.22}}/>}</button>)}</div>
+   <div className="w3-progress-periods" aria-label="Zeitraum">{PERIODS.filter(([key])=>!availablePeriods||availablePeriods.includes(key)).map(([key,label])=><button type="button" key={key} aria-pressed={period===key} onClick={()=>onPeriod(key)}>{label}{period===key&&<motion.span className="w3-period-selection" layoutId={`${selectionId}-period`} transition={{duration:reduceMotion?0:.22}}/>}</button>)}</div>
    {period!=='plan'&&onReferenceDate&&<ProgressCalendarSelector period={period} today={today??data?.today??data?.end??iso(new Date())} referenceDate={referenceDate} onSelect={onReferenceDate}/>}
 
    <div className="w3-progress-range" aria-label="Ausgewählter Zeitraum">{data?.start?`${dateLabel(data.start)} – ${dateLabel(data.end)}`:period==='plan'?'Kein aktiver Plan':''}</div>
