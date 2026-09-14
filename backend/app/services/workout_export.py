@@ -323,7 +323,10 @@ def to_fit(
         step.workout_step_name = block.name[:15]
         step.intensity = intensity
         step.duration_type = WorkoutStepDuration.TIME
-        step.duration_time = float(block.duration_s) * 1000.0  # ms
+        # FIT field 2 is uint32 milliseconds. Write encoded units explicitly:
+        # fit-tool 0.9.15/0.9.16 differ in subfield scaling, so round-tripping
+        # through the same library can hide a 1000x duration error.
+        step.get_field(2).set_encoded_value(0, int(block.duration_s) * 1000)
 
         if block.watts_low <= 0 and block.watts_high <= 0:
             step.target_type = WorkoutStepTarget.OPEN
@@ -333,7 +336,15 @@ def to_fit(
             step.custom_target_power_high = _watts_to_fit_power(block.watts_high)
 
         # Cadence aliases share FIT fields 6/7 with power; assigning them here
-        # overwrites the watt targets. Keep the primary power prescription.
+        # overwrites the watt targets. Use the actual secondary target fields
+        # when supported, otherwise preserve cadence as a step note.
+        if block.cadence_low is not None and block.cadence_high is not None:
+            if hasattr(step, "secondary_target_type"):
+                step.secondary_target_type = WorkoutStepTarget.CADENCE
+                step.secondary_custom_target_cadence_low = int(block.cadence_low)
+                step.secondary_custom_target_cadence_high = int(block.cadence_high)
+            else:
+                step.notes = f"Cadence {block.cadence_low}-{block.cadence_high} rpm"
 
         builder.add(step)
 

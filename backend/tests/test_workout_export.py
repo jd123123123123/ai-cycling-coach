@@ -172,7 +172,7 @@ class TestFit:
         assert sst.message.custom_target_power_low == 1216
         assert sst.message.custom_target_power_high == 1216
         # Sanity-check ms encoding too: 20min = 1_200_000ms
-        assert sst.message.duration_time == 1_200_000
+        assert sst.message.get_field(2).encoded_values[0] == 1_200_000
 
 
 class TestBlocksFromDicts:

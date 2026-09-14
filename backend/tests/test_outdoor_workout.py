@@ -45,7 +45,7 @@ def test_fit_adds_only_one_open_step():
     assert len(steps)==9
     assert [s.message_index for s in steps]==list(range(9))
     assert sum(s.duration_type==WorkoutStepDuration.OPEN.value for s in steps)==1
-    assert sum((s.duration_time or 0) for s in steps)==1800*1000
+    assert sum((s.get_field(2).encoded_values[0] if s.get_field(2).is_valid() else 0) for s in steps)==1800*1000
 
 
 def test_route_gaps_and_unbounded_distance_refused():
