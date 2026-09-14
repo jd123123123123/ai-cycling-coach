@@ -315,6 +315,7 @@ def summarize_route(group: list[dict]) -> dict:
     newest = group[0]  # most-recent-first ordering preserved from the query
     return {
         "name": _representative_name(group),
+        "activity_id": newest.get("activity_id"),
         "times_ridden": len(group),
         "distance_km": round(median(r["distance_m"] for r in group) / 1000.0, 1),
         "elevation_m": round(median(gains)) if gains else None,

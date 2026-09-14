@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, Share2, ArrowRight, Download, Clock, Flame, Zap, Gauge, Target, Activity, Home, MapPin } from 'lucide-react'
+import { ArrowLeft, Share2, ArrowRight, Download, Clock, Flame, Zap, Gauge, Target, Activity , MapPin } from 'lucide-react'
 import { T, FONT, grow, Kicker, band, card, DASH } from './w3tokens'
 import './w3.css'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
+import W3OutdoorWorkout from './W3OutdoorWorkout'
 
 /**
  * W3 · 06 SESSION DETAIL — pure function of `vm`; `W3SessionPage` builds the
@@ -84,6 +85,7 @@ export interface W3SessionVm {
 const ICONS: Record<StatIcon, typeof Clock> = { clock: Clock, flame: Flame, zap: Zap, gauge: Gauge, target: Target, activity: Activity }
 
 export interface W3SessionActions {
+  workoutDate?: string
   onBack?: () => void
   onShare?: () => void
   onExport?: () => void | Promise<void>
@@ -164,15 +166,16 @@ function LedgerRow({ row, delay }: { row: W3EarnLedger; delay: number }) {
   )
 }
 
-export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }: { vm: W3SessionVm } & W3SessionActions) {
+export default function W3SessionView({ vm, onBack, onShare, onExport, onToday, workoutDate }: { vm: W3SessionVm } & W3SessionActions) {
   const reduce = useReducedMotion()
-  const [place, setPlace] = useState<'outdoor' | 'indoor'>(vm.route ? 'outdoor' : 'indoor')
+  const [outdoorOpen, setOutdoorOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [exportErr, setExportErr] = useState<string | null>(null)
 
   // Robust primary action: when a real workout exists, await the export and
   // surface a failure instead of silently no-op'ing; otherwise go to today.
   const handlePrimary = async () => {
+    if (workoutDate) { setOutdoorOpen(true); return }
     if (!vm.canExport) { onToday?.(); return }
     setExporting(true); setExportErr(null)
     try { await onExport?.() } catch { setExportErr('Export fehlgeschlagen — prüfe die Verbindung und versuch es nochmal.') }
@@ -379,76 +382,12 @@ export default function W3SessionView({ vm, onBack, onShare, onExport, onToday }
           </div>
         )}
 
-        {/* Where to ride it — Outdoor route from history OR Indoor on the trainer.
-            Always available: the Outdoor/Indoor switch is the real place choice. */}
-        <div style={{ ...band(28), gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: 20, fontWeight: 700, letterSpacing: -0.5, color: T.ink }}>Wo du sie fährst</span>
-            <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 100, background: T.surface }}>
-              {(['outdoor', 'indoor'] as const).map((p) => {
-                const on = place === p
-                const Ic = p === 'outdoor' ? MapPin : Home
-                return (
-                  <button key={p} onClick={() => setPlace(p)}
-                    style={{ display: 'flex', gap: 5, alignItems: 'center', padding: '6px 12px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT, background: on ? T.acid : 'transparent' }}>
-                    <Ic size={12} color={on ? T.bg : T.mid} />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: on ? T.bg : T.mid }}>{p === 'outdoor' ? 'Outdoor' : 'Indoor'}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-          {place === 'indoor' ? (
-            <div style={{ ...card(), gap: 14 }}>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Home size={20} color={T.acid} /></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>Indoor · Smart-Trainer</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>ERG MODE</span>
-                </div>
-              </div>
-              <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>
-                {vm.thresholdW !== DASH
-                  ? `ERG hält die Zielwatt automatisch — ${vm.thresholdW} im Hauptteil. Kein Verkehr, keine Ampeln, exakt die geplante Belastung.`
-                  : 'ERG hält die geplante Belastung automatisch — kein Verkehr, keine Ampeln, exakt die Vorgabe.'}
-              </span>
-              <div style={{ height: 1, background: T.rule }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>Exportiere den Workout unten und lade ihn in Zwift, MyWhoosh oder auf deinen Head-Unit.</span>
-            </div>
-          ) : vm.route ? (
-            <div style={{ ...card(), gap: 16 }}>
-              <div style={{ display: 'flex', gap: 14, alignItems: 'center' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center' }}><ArrowRight size={20} color={T.acid} style={{ transform: 'rotate(-45deg)' }} /></div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                  <span style={{ fontSize: 17, fontWeight: 700, color: T.ink }}>{vm.route.name}</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{vm.route.lastRidden}</span>
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: 10 }}>
-                {vm.route.stats.map((s) => (
-                  <div key={s.l} style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                    <span style={{ fontSize: 17, fontWeight: 700, color: s.v === DASH ? T.quiet : T.ink }}>{s.v}</span>
-                    <Kicker>{s.l}</Kicker>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                {vm.route.notes.map((n, i) => (
-                  <span key={i} style={{ fontSize: 11.5, fontWeight: 600, color: T.mid }}>· {n}</span>
-                ))}
-              </div>
-              <div style={{ height: 1, background: T.rule }} />
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet }}>{vm.route.foot}</span>
-            </div>
-          ) : (
-            <div style={{ ...card(), gap: 12 }}>
-              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                <div style={{ width: 44, height: 44, borderRadius: 14, background: T.surface2, display: 'grid', placeItems: 'center' }}><MapPin size={20} color={T.mid} /></div>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid, lineHeight: 1.4 }}>Noch keine passende Strecke aus deinen Fahrten — wähle Indoor oder fahr deine Lieblingsrunde.</span>
-              </div>
-            </div>
-          )}
-        </div>
+        {workoutDate && <div style={{...band(28),gap:14}}>
+          <button onClick={()=>setOutdoorOpen(true)} style={{...card(),flexDirection:'row',alignItems:'center',justifyContent:'space-between',border:0,textAlign:'left',cursor:'pointer',fontFamily:FONT}}>
+            <div style={{display:'flex',alignItems:'center',gap:16}}><MapPin size={24} color={T.acid}/><div><div style={{fontSize:23,color:T.ink,letterSpacing:-.7}}>Dein Training. Deine Strecke.</div><div style={{fontSize:14,color:T.mid,marginTop:6}}>Route prüfen · Zwift, Garmin & Wahoo</div></div></div><ArrowRight size={20} color={T.acid}/>
+          </button>
+          {outdoorOpen&&<W3OutdoorWorkout date={workoutDate} onClose={()=>setOutdoorOpen(false)}/>}
+        </div>}
 
         {/* What it earns — REAL: the streak this session extends, and the season
             ledgers (TSS, saddle time) it pays into. One card so the section

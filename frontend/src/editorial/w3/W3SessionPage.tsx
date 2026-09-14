@@ -1,4 +1,6 @@
 import { useCallback, useMemo } from 'react'
+import W3Loading from './W3Loading'
+import W3LoadError from './W3LoadError'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSessionModel } from '../data/useSessionModel'
 import { useTodaySession } from '../../hooks/useTodaySession'
@@ -9,7 +11,6 @@ import { useGarage } from '../../hooks/useGarage'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { planDurSec, planIF, planTargetWatts, blocksFromIntervals, isSessionDay, parseISO, fmtDEShort, DE_WD } from './w3plan'
-import { downloadWorkoutExport } from '../../api/coach'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
 import { forecastRideRc } from '../../api/rewards'
@@ -61,7 +62,12 @@ export default function W3SessionPage() {
   // /weeks/current payload the plan renders, so the two can never disagree.
   const { id: param } = useParams()
   const dateParam = param && /^\d{4}-\d{2}-\d{2}$/.test(param) ? param : null
-  const { data: week } = useCurrentWeek(0)
+  const now = new Date()
+  const localToday = new Date(now.getFullYear(),now.getMonth(),now.getDate(),12)
+  const requested = dateParam ? new Date(`${dateParam}T12:00:00`) : localToday
+  const ahead = Math.round((requested.getTime()-localToday.getTime())/86400000)
+  const offset = ahead < 7 ? 0 : Math.min(12,Math.floor((ahead+(localToday.getDay()+6)%7)/7))
+  const { data: week, isLoading: weekLoading, isError: weekError, refetch: retryWeek, isFetching: weekFetching } = useCurrentWeek(offset)
   const { data: profile } = useAthleteProfile()
   const model = useSessionModel()
   const session = useTodaySession()
@@ -263,13 +269,6 @@ export default function W3SessionPage() {
     }
   }, [model, session.workout, adaptive, streak, seasonActs, garage])
 
-  const onExport = useCallback(async () => {
-    // The real export path — GET /coach/workout/export serves today's
-    // prescribed workout as a .fit for a head unit. Client-side Blob download.
-    // Returns the promise so the view can await it and surface a failure.
-    await downloadWorkoutExport('fit')
-  }, [])
-
   const onToday = useCallback(() => navigate('/e/w3-today'), [navigate])
 
   const onShare = useCallback(async () => {
@@ -287,8 +286,10 @@ export default function W3SessionPage() {
   }, [vm])
 
   // ── the date branch, after every hook has run ─────────────────────────
-  const day = dateParam ? (week?.days ?? []).find((d) => d.date === dateParam) ?? null : null
-  if (dateParam && day && !day.is_today && isSessionDay(day)) {
+  if (weekLoading && !week) return <W3Loading label="Deine Einheit lädt…"/>
+  if (weekError && !week) return <W3LoadError title="Einheit gerade nicht verfügbar" detail="Bitte lade den gewählten Trainingstag erneut." onRetry={()=>void retryWeek()} retrying={weekFetching}/>
+  const day = (week?.days ?? []).find((d) => dateParam ? d.date === dateParam : d.is_today) ?? null
+  if (day && isSessionDay(day)) {
     const ftp = profile?.ftp_watts ?? null
     const secs = planDurSec(day)
     const durMin = secs > 0 ? Math.round(secs / 60) : null
@@ -343,17 +344,19 @@ export default function W3SessionPage() {
       route: null,
       // Forward-looking honesty: a future day extends no streak yet and pays
       // nothing until ridden — the note carries the forecast, the tiles stay out.
-      earns: [],
-      ledgers: [],
+      earns: day.is_today ? vm.earns : [],
+      ledgers: day.is_today ? vm.ledgers : [],
       earnNote: (() => {
         const rc = forecastRideRc(dTss, streak?.streak ?? null)
         return rc != null ? `Bringt ca. ${rc.toLocaleString('de-DE')} RideCoin, wenn du sie fährst.` : ''
       })(),
-      canExport: false,
-      primaryLabel: 'Zum Plan',
+      canExport: true,
+      primaryLabel: 'Strecke & Export',
     }
-    return <W3SessionView vm={dayVm} onBack={() => navigate(-1)} onToday={() => navigate('/e/w3-plan')} />
+    return <W3SessionView workoutDate={day.date} vm={dayVm} onBack={() => navigate(-1)} onToday={() => navigate('/e/w3-plan')} />
   }
 
-  return <W3SessionView vm={vm} onBack={() => navigate(-1)} onShare={onShare} onExport={onExport} onToday={onToday} />
+  if (dateParam && (!day || !isSessionDay(day))) return <div style={{padding:28,color:'#fff'}}><h2>{day?'An diesem Tag ist kein Radtraining geplant.':'Diese Einheit ist in der aktuellen Woche nicht verfügbar.'}</h2><button onClick={()=>navigate('/e/w3-plan')}>Zum Plan</button></div>
+  const todayDate = (week?.days??[]).find(d=>d.is_today&&isSessionDay(d))?.date
+  return <W3SessionView workoutDate={dateParam??todayDate} vm={{...vm,canExport:!!todayDate,primaryLabel:todayDate?'Strecke & Export':vm.primaryLabel}} onBack={() => navigate(-1)} onShare={onShare} onToday={onToday} />
 }

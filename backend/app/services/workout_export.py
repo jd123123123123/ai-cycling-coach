@@ -247,6 +247,7 @@ def to_fit(
     description: str,
     blocks: Sequence[Block],
     ftp: int,
+    lap_start: bool = False,
 ) -> bytes:
     """Emit a binary FIT WORKOUT file for Garmin head units / Connect.
 
@@ -290,10 +291,20 @@ def to_fit(
     workout = WorkoutMessage()
     workout.workout_name = title[:15]  # FIT cap
     workout.sport = Sport.CYCLING
-    workout.num_valid_steps = len(blocks)
+    first_work = next((i for i, b in enumerate(blocks) if b.pct_ftp >= .75),
+                      1 if len(blocks)>1 and blocks[0].name == "Warmup" else 0)
+    workout.num_valid_steps = len(blocks) + (1 if lap_start else 0)
     builder.add(workout)
 
     for idx, block in enumerate(blocks):
+        if lap_start and idx == first_work:
+            transfer = WorkoutStepMessage()
+            transfer.message_index = idx
+            transfer.workout_step_name = "Start: LAP"
+            transfer.intensity = Intensity.WARMUP
+            transfer.duration_type = WorkoutStepDuration.OPEN
+            transfer.target_type = WorkoutStepTarget.OPEN
+            builder.add(transfer)
         kind = _block_kind(block)
         intensity = {
             "warmup": Intensity.WARMUP,
@@ -306,7 +317,7 @@ def to_fit(
             intensity = Intensity.REST
 
         step = WorkoutStepMessage()
-        step.message_index = idx
+        step.message_index = idx + (1 if lap_start and idx >= first_work else 0)
         step.workout_step_name = block.name[:15]
         step.intensity = intensity
         step.duration_type = WorkoutStepDuration.TIME

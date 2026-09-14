@@ -287,6 +287,8 @@ from app.api.shop import router as shop_router  # noqa: E402
 app.include_router(push_router)
 app.include_router(climbs_router)
 app.include_router(achievements_router)
+from app.api.outdoor import router as outdoor_router
+app.include_router(outdoor_router)
 app.include_router(routes_router)
 app.include_router(plan_import_router)
 app.include_router(weather_router)
