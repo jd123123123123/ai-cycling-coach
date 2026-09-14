@@ -136,7 +136,7 @@ export function ProgressRecords({records,start,end,showDetails=false}:{showDetai
  const selected=records.find(p=>p.seconds===seconds)??records[0]
  const activeSeconds=selected?.seconds??seconds
  const max=Math.ceil(Math.max(100,...records.flatMap(p=>[showDetails?(p.all_time_watts??0):0,p.watts??0,p.previous_watts??0]))/100)*100
- const x=(s:number)=>32+Math.log(s/5)/Math.log(3600/5)*266
+ const x=(s:number)=>32+Math.log(s)/Math.log(3600)*266
  const y=(v:number)=>232-v/max*132
  const makePath=(key:'watts'|'all_time_watts'|'previous_watts')=>smoothCurve(records.map(p=>p[key]==null?null:{x:x(p.seconds),y:y(p[key]!)}))
  const gap=selected?.watts!=null&&selected.all_time_watts!=null?selected.all_time_watts-selected.watts:null
@@ -169,7 +169,7 @@ export function ProgressRecords({records,start,end,showDetails=false}:{showDetai
      {selected&&<line x1={x(activeSeconds)} x2={x(activeSeconds)} y1="92" y2="236" stroke={T.mid} strokeDasharray="2 4" opacity=".55"/>}
      {selected?.previous_watts!=null&&<circle cx={x(activeSeconds)} cy={y(selected.previous_watts)} r="4" fill={T.surface} stroke={T.mid} strokeWidth="2"/>}
      {selected?.watts!=null&&<><circle cx={x(activeSeconds)} cy={y(selected.watts)} r="8" fill={T.acid} opacity=".12"/><circle cx={x(activeSeconds)} cy={y(selected.watts)} r="4" fill={T.acid}/></>}
-     {[5,60,300,3600].map(s=><text key={s} x={x(s)} y="258" textAnchor={s===5?'start':s===3600?'end':'middle'} fill={T.mid} fontSize="11">{dur(s)}</text>)}
+     {[1,60,300,3600].map(s=><text key={s} x={x(s)} y="258" textAnchor={s===1?'start':s===3600?'end':'middle'} fill={T.mid} fontSize="11">{dur(s)}</text>)}
    </svg>
    <div className="w3-progress-durations" aria-label="Rekorddauer">{records.map(p=><button type="button" key={p.seconds} aria-pressed={activeSeconds===p.seconds} onClick={()=>setSeconds(p.seconds)}>{dur(p.seconds)}</button>)}</div>
    {selected&&showDetails&&<div className="w3-progress-record-detail"><div><span>Bisheriger Bestwert</span><strong>{n(selected.all_time_watts,0)} W</strong></div></div>}
