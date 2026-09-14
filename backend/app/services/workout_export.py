@@ -55,6 +55,8 @@ def _block_kind(block: Block) -> Literal["warmup", "cooldown", "steady"]:
         return "warmup"
     if "cool" in n or "ramp down" in n:
         return "cooldown"
+    if n.startswith(("belastung", "intervall", "recovery")):
+        return "steady"
     if block.watts_low < block.watts_high:
         return "warmup"
     if block.watts_low > block.watts_high:
@@ -330,13 +332,8 @@ def to_fit(
             step.custom_target_power_low = _watts_to_fit_power(block.watts_low)
             step.custom_target_power_high = _watts_to_fit_power(block.watts_high)
 
-        # FIT supports a secondary target_value on the step for cadence —
-        # exposed via custom_target_cadence_low/high. Garmin head units render
-        # this as a cadence band alongside the power target. Skipping the
-        # field leaves it "open" so the rider isn't forced into a window.
-        if block.cadence_low is not None and block.cadence_high is not None:
-            step.custom_target_cadence_low = int(block.cadence_low)
-            step.custom_target_cadence_high = int(block.cadence_high)
+        # Cadence aliases share FIT fields 6/7 with power; assigning them here
+        # overwrites the watt targets. Keep the primary power prescription.
 
         builder.add(step)
 

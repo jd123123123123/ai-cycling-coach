@@ -53,3 +53,15 @@ def test_route_gaps_and_unbounded_distance_refused():
     with pytest.raises(WorkoutUnavailable):place_workout(bad,blocks(),240,75)
     bad=RehearsalRoute([],float('inf'),0,'Invalid',None)
     with pytest.raises(WorkoutUnavailable):place_workout(bad,blocks(),240,75)
+
+
+def test_cadence_does_not_overwrite_fit_power_range():
+    from app.services.workout_export import Block,to_fit,to_zwo
+    from fit_tool.fit_file import FitFile
+    from fit_tool.profile.messages.workout_step_message import WorkoutStepMessage
+    block=Block('Intervall 1',180,250,270,1.08,85,95)
+    out=to_fit(title='Power + cadence',description='',blocks=[block],ftp=240)
+    step=next(r.message for r in FitFile.from_bytes(out).records if isinstance(r.message,WorkoutStepMessage))
+    assert step.custom_target_power_low==1250
+    assert step.custom_target_power_high==1270
+    assert 'SteadyState' in to_zwo(title='Power',description='',blocks=[block],ftp=240)
