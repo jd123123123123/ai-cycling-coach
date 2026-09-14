@@ -64,3 +64,13 @@ def test_maintenance_does_not_end_after_one_mesocycle(endpoint):
 
 def test_requires_authentication():
     assert TestClient(app).get('/plan/current').status_code == 401
+
+
+def test_ended_goal_survives_historical_block_removal(endpoint):
+    client,db,_=endpoint(None,date(2026,9,11))
+    body=client.get('/plan/current').json()
+    assert body['status']=='ended'
+    assert body['plan_end_date']=='2026-09-11'
+    assert body['plan_start_date'] is None
+    assert body['weekly_tss_targets'] is None
+    db.commit.assert_not_called()

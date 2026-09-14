@@ -60,7 +60,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  </>:view==='profile'||state==='ended'?<>
  <div className="w3-plan-opening"><h1>{state==='ended'?<>Das hast du<br/>bewegt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{title}</p></div>
  <button className="w3-plan-link slim" onClick={()=>setSheet('profile')}><span><strong>Leistungsprofil vergleichen</strong></span><ArrowUpRight size={18}/></button>
- <W3ProgressAnalyticsView data={results.data} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={results.isPending} error={results.isError}/>
+ <W3ProgressAnalyticsView emptyMessage={state==='ended'?'Der frühere Planbeginn ist nicht gespeichert. Wähle Woche, Monat oder Jahr für deinen Verlauf.':undefined} data={results.data} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={results.isPending} error={results.isError}/>
  {state==='ended'&&<button className="w3-plan-primary" onClick={()=>setCompose('auto')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  </>:<>
  <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1><p>{state==='created'?'Gespeichert · bereit für deine erste Einheit':`${vm.block?.phase??'Training'} · ${vm.planWeekLabel}${goalDate?' · Ziel '+new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'}):''}`}</p></div><div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div></header>

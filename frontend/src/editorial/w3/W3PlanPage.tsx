@@ -426,11 +426,11 @@ export default function W3PlanPage() {
     } catch { return false }
   }, [qc])
 
-  if ((weekLoading && !week) || profileLoading || planLoading) {
+  if ((plan?.status === 'active' && weekLoading && !week) || profileLoading || planLoading) {
     return <W3Loading label="Dein Plan lädt…" />
   }
-  if ((weekError && !week) || planError) {
-    return <W3LoadError title="Dein Plan lädt nicht" detail="Bitte versuche es noch einmal." onRetry={() => { void refetchWeek(); void refetchPlan() }} retrying={weekFetching}/>
+  if ((plan?.status === 'active' && weekError && !week) || (planError && !plan)) {
+    return <W3LoadError title="Dein Plan lädt nicht" detail="Bitte versuche es noch einmal." onRetry={() => { if (plan?.status === 'active') void refetchWeek(); void refetchPlan() }} retrying={weekFetching}/>
   }
   const state = plan?.status === 'ended' ? 'ended' : plan?.status === 'empty' || !hasPlan ? 'empty' : params.get('created') === '1' ? 'created' : 'active'
   return <W3PlanExperience

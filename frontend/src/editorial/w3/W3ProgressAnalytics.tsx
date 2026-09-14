@@ -177,7 +177,7 @@ export function ProgressRecords({records,start,end,showDetails=false}:{showDetai
  </div>
 }
 
-export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onReferenceDate,today,mode:controlledMode,onMode,pending=false,error=false}:{mode?:'ftp'|'vo2'|'records';onMode?:(mode:'ftp'|'vo2'|'records')=>void;data?:ProgressExplorer;referenceDate?:string|null;onReferenceDate?:(value:string)=>void;today?:string;period:ProgressPeriod;onPeriod:(p:ProgressPeriod)=>void;onGoal?:()=>void;pending?:boolean;error?:boolean}) {
+export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onReferenceDate,today,mode:controlledMode,onMode,pending=false,error=false,emptyMessage}:{emptyMessage?:string;mode?:'ftp'|'vo2'|'records';onMode?:(mode:'ftp'|'vo2'|'records')=>void;data?:ProgressExplorer;referenceDate?:string|null;onReferenceDate?:(value:string)=>void;today?:string;period:ProgressPeriod;onPeriod:(p:ProgressPeriod)=>void;onGoal?:()=>void;pending?:boolean;error?:boolean}) {
  const [localMode,setLocalMode]=useState<'ftp'|'vo2'|'records'>('ftp')
  const [info,setInfo]=useState(false)
  const mode=controlledMode??localMode
@@ -194,7 +194,7 @@ export function W3ProgressAnalyticsView({data,period,onPeriod,referenceDate,onRe
    {pending?<p className="w3-progress-empty" role="status">Verlauf wird geladen…</p>:error?<p className="w3-progress-empty" role="alert">Der Verlauf konnte nicht geladen werden. Öffne die Kachel erneut oder wähle einen anderen Zeitraum.</p>:data?.start?<>
      {mode==='records'?<ProgressRecords key={`${period}-${data.start}`} records={data.records} showDetails={info} start={data.start} end={data.end}/>:<ProgressTrend key={`${mode}-${period}-${data.start}`} metric={data[mode]} showDetails={info} start={data.start} end={data.end} kind={mode}/>}
      {info&&period==='plan'&&<p className="w3-progress-plan-note">{data.plan_note}</p>}
-   </>:<p className="w3-progress-empty">Sobald dein Plan startet, kannst du hier deinen Fortschritt seit Planbeginn verfolgen.</p>}
+   </>:<p className="w3-progress-empty">{emptyMessage??'Sobald dein Plan startet, kannst du hier deinen Fortschritt seit Planbeginn verfolgen.'}</p>}
  </section>
 }
 

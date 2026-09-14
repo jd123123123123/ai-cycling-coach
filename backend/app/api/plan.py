@@ -156,6 +156,12 @@ async def current_plan(
     ).order_by(MesocyclePlan.plan_start_date.desc()).limit(1))
     plan = result.scalar_one_or_none()
     if plan is None:
+        # Rebuilds historically removed old mesocycle rows. The saved event
+        # remains real evidence of an ended goal, but its start is unknown.
+        if ended:
+            return CurrentPlanResponse(status="ended", plan_end_date=profile.target_event_date.isoformat(),
+                goal_date=profile.target_event_date.isoformat(),
+                goal_name=(profile.goals or {}).get('target_event_name'))
         return CurrentPlanResponse()
     return CurrentPlanResponse(
         plan_start_date=plan.plan_start_date.isoformat(),
