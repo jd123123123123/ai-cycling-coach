@@ -494,9 +494,10 @@ async def get_progress_explorer(
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
     period: ProgressPeriod = 'month',
     reference_date: date | None = None,
+    plan_end: date | None = None,
 ) -> ProgressExplorer:
     from app.services.progress_explorer import load_progress
     try:
-        return await load_progress(db, user.id, period, reference_date)
+        return await load_progress(db, user.id, period, reference_date, plan_end)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

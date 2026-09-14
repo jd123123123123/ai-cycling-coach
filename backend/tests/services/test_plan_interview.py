@@ -646,3 +646,23 @@ def test_interview_state_without_plan_returns_zero_state():
     assert state["sessions_done"] == 0
     assert state["compliance_pct"] is None
     assert state["favorite_session"] is None
+
+
+def test_atomic_custom_goal_rebuild_leaves_commit_to_caller():
+    """Profile change, future rows and adaptation must roll back together."""
+    db = _rebuild_db(sacred_rows=[1, 2])
+    db.flush = AsyncMock()
+    meso = SimpleNamespace(phase="build1", weekly_tss_targets=[300, 320, 340, 200])
+    with patch("app.services.mesocycle_generator.generate_mesocycle", AsyncMock(return_value=meso)), \
+         patch("app.services.pmc_service.compute_user_pmc", AsyncMock(return_value={"total": []})), \
+         patch("app.services.plan_interview.log_adaptation", AsyncMock()) as log, \
+         patch("app.services.plan_interview.last_adaptation", AsyncMock(return_value=None)):
+        summary = asyncio.run(rebuild_plan(db, 1, _profile(), source="plan_change", signal="custom_goal", atomic=True))
+    db.commit.assert_not_awaited()
+    assert db.flush.await_count == 2
+    assert log.await_args.kwargs["commit"] is False
+    assert summary["preserved_sessions"] == 2
+    delete_query = db.execute.call_args_list[1].args[0]
+    assert "planned_workouts.user_id" in str(delete_query)
+    assert "planned_workouts.date >" in str(delete_query)
+    assert "planned_workouts.blocks_source IN" in str(delete_query)

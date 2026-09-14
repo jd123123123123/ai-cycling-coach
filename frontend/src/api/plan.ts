@@ -163,6 +163,7 @@ export async function buildPlan(
 }
 
 export interface CurrentPlanResponse {
+  goal_name?:string|null; goal_date?:string|null; goal_start?:string|null;
   plan_start_date: string | null
   plan_end_date: string | null
   phase: string | null

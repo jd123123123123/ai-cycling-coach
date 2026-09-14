@@ -57,39 +57,20 @@ export default function W3PlanPage() {
   const [params, setParams] = useSearchParams()
   const [weekOffset, setWeekOffset] = useState(0)
   const qc = useQueryClient()
-  const { data: week, isLoading: weekLoading, isError: weekError, refetch: refetchWeek, isFetching: weekFetching } = useCurrentWeek(weekOffset)
-  const { data: profile, isLoading: profileLoading } = useAthleteProfile()
-  const { data: streak } = useStreak()
-  const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
-  const { data: seasonActs } = useActivitiesRange(seasonStart, new Date())
-  // /plan/build is idempotent per athlete-local day — it returns the existing
-  // plan (with its weekly_tss_targets series) without rebuilding. Cached hard so
-  // a plan-view open costs at most one request per session.
-  // A PLAN IS NOT BUILT BY LOOKING AT THE PLAN SCREEN. `/plan/build` is
-  // idempotent for an athlete who HAS a plan — it hands back the existing one —
-  // but for an athlete who has none it is a constructor, and firing it on mount
-  // would give every visitor a plan they never asked for and delete the empty
-  // state by visiting it. Gated on the same rule the render branches on.
-  const hasPlan = hasPersonalPlan(profile)
-  // A PLAN AND A GOAL ARE DIFFERENT THINGS, and only the PLAN decides which
-  // shape this route takes. `w3hasPlan` exists precisely so Today and this page
-  // cannot disagree about that — "two screens deciding the same thing from two
-  // different derivations is a bug waiting for the one athlete they disagree
-  // about". Swapping in the empty page on a missing GOAL made this that bug:
-  // a rider with real prescribed days saw a full week on Today and "NOCH KEIN
-  // PLAN" here, on the same morning.
-  //
-  // The goal is still missing, and it is still worth asking for — the DOCK does
-  // that (`W3PlanDock` drops the countdown and the periodisation when there is
-  // no dated event and asks for one instead, deriving it from `daysToStart` so
-  // there is no second source for that either). Asking is not the same as
-  // pretending the training does not exist.
   const { data: plan, isLoading: planLoading, isError: planError, refetch: refetchPlan } = useQuery({
     queryKey: ['plan', 'current'],
     queryFn: fetchCurrentPlan,
     staleTime: 60_000,
     retry: false,
   })
+  const { data: week, isLoading: weekLoading, isError: weekError, refetch: refetchWeek, isFetching: weekFetching } = useCurrentWeek(weekOffset, plan?.status === 'active')
+  const { data: profile, isLoading: profileLoading } = useAthleteProfile()
+  const { data: streak } = useStreak()
+  const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
+  const { data: seasonActs } = useActivitiesRange(seasonStart, new Date())
+  // Read saved state first. The legacy weeks endpoint can generate a block;
+  // do not call it for an empty or completed plan merely by opening this page.
+  const hasPlan = hasPersonalPlan(profile)
   // Reuse-only: the parsed target-event route (distance/elevation) if the athlete
   // already rehearsed it — never creates one from the plan view.
   const { data: rehearsals } = useQuery({
@@ -121,7 +102,7 @@ export default function W3PlanPage() {
 
     // ── event identity ──
     const eventDate = profile?.target_event_date ? parseISO(profile.target_event_date) : null
-    const eventName = goals?.target_event_name || (goals?.target_ftp ? `FTP → ${goals.target_ftp} W` : '') || EVENT_NAME[profile?.target_event_type ?? ''] || 'Kein Ziel gesetzt'
+    const eventName = plan?.goal_name || goals?.target_event_name || (goals?.target_ftp ? `FTP → ${goals.target_ftp} W` : '') || EVENT_NAME[profile?.target_event_type ?? ''] || 'Kein Ziel gesetzt'
     const targetRe = rehearsals?.find((r) => r.source_kind === 'target_event') ?? null
     const distKm = targetRe ? Math.round(targetRe.distance_m / 1000) : null
     const hm = targetRe ? Math.round(targetRe.ascent_m) : null
@@ -321,7 +302,7 @@ export default function W3PlanPage() {
       eventSub: subParts.join(' · ') || '—',
       daysToStart,
       weeksDaysLabel: daysToStart != null ? weeksDaysLabel(daysToStart) : '—',
-      planWeekLabel: `Planwoche ${planWeek} von ${totalWeeks}`,
+      planWeekLabel: `Blockwoche ${planWeek} von ${totalWeeks}`,
       phases,
       railProgress: currentIdx / Math.max(1, totalWeeks),
       planWeekNum: planWeek,
@@ -453,7 +434,7 @@ export default function W3PlanPage() {
   }
   const state = plan?.status === 'ended' ? 'ended' : plan?.status === 'empty' || !hasPlan ? 'empty' : params.get('created') === '1' ? 'created' : 'active'
   return <W3PlanExperience
-    vm={vm} state={state} userId={profile?.user_id}
+    vm={vm} state={state} userId={profile?.user_id} planEnd={plan?.plan_end_date} goalDate={plan?.goal_date}
     onRebuild={onRebuild} onOpenSession={iso => navigate(`/e/w3-session/${iso}`)}
     onCreatedDone={() => setParams({}, {replace:true})}
     weekOffset={weekOffset} onWeekOffset={setWeekOffset} loading={weekFetching}

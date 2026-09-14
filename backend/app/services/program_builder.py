@@ -211,6 +211,9 @@ def set_program(goals: dict | None, sport: str, program_id: ProgramId | None) ->
     is removed entirely (absence == race plan, matching the legacy semantics).
     """
     out = dict(goals or {})
+    if sport == "bike" and program_id is not None:
+        for key in ("custom_goal", "custom_goal_recommendation", "custom_goal_started"):
+            out.pop(key, None)
     p = out.get("program")
     nested: dict[str, dict | None] = {"bike": None, "run": None}
     if isinstance(p, dict):

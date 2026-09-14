@@ -129,6 +129,9 @@ class CurrentPlanResponse(BaseModel):
     phase: str | None = None
     weekly_tss_targets: list[int] | None = None
     planned_hours: float | None = None
+    goal_name: str | None = None
+    goal_date: str | None = None
+    goal_start: str | None = None
     status: Literal["empty", "active", "ended"] = "empty"
 
 
@@ -143,19 +146,24 @@ async def current_plan(
 
     profile = await _load_profile(db, user.id)
     set_athlete_tz_from_profile(profile)
+    # A mesocycle is a block, not the entire ongoing fitness plan. A passed
+    # event refers to its own block, not maintenance auto-generated afterwards.
+    ended = bool(profile.target_event_date and profile.target_event_date < today_local())
+    until = profile.target_event_date if ended else today_local()
     result = await db.execute(select(MesocyclePlan).where(
         MesocyclePlan.user_id == user.id,
+        MesocyclePlan.plan_start_date <= until,
     ).order_by(MesocyclePlan.plan_start_date.desc()).limit(1))
     plan = result.scalar_one_or_none()
     if plan is None:
         return CurrentPlanResponse()
-    # A mesocycle is a block, not the entire ongoing fitness plan. Only a
-    # dated target passing ends the target plan; maintenance keeps rolling.
-    ended = bool(profile.target_event_date and profile.target_event_date < today_local())
     return CurrentPlanResponse(
         plan_start_date=plan.plan_start_date.isoformat(),
-        plan_end_date=plan.plan_end_date.isoformat(),
+        plan_end_date=(min(plan.plan_end_date, profile.target_event_date) if ended else plan.plan_end_date).isoformat(),
         phase=plan.phase, weekly_tss_targets=plan.weekly_tss_targets,
+        goal_name=(profile.goals or {}).get('target_event_name') or ((profile.goals or {}).get('custom_goal_recommendation') or {}).get('focus_label'),
+        goal_date=profile.target_event_date.isoformat() if profile.target_event_date else None,
+        goal_start=(profile.goals or {}).get('custom_goal_started'),
         planned_hours=profile.weekly_hours_available,
         status="ended" if ended else "active",
     )

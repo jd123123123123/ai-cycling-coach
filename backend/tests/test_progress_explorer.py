@@ -102,3 +102,7 @@ async def test_historical_payload_keeps_current_profile_values_out_of_past_perio
     assert date(2025,12,31) in metric_query.params.values()
     ride_query=db.execute.await_args_list[3].args[0].compile()
     assert datetime(2025,12,31,23,tzinfo=timezone.utc) in ride_query.params.values()
+
+
+def test_completed_plan_uses_its_own_end_as_today():
+    assert period_start('plan',date(2026,9,11),date(2026,9,7)) == date(2026,9,7)

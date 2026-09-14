@@ -294,6 +294,8 @@ app.include_router(plan_import_router)
 app.include_router(weather_router)
 app.include_router(workshop_router)
 app.include_router(plan_router)
+from app.api.plan_goal import router as plan_goal_router
+app.include_router(plan_goal_router)
 app.include_router(custom_workouts_router)
 app.include_router(health_router)
 app.include_router(crew_events_router)

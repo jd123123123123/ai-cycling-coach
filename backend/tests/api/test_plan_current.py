@@ -11,7 +11,7 @@ from app.dependencies import get_current_active_user, get_current_user, get_db_f
 def endpoint():
     def make(plan=None, target=None):
         user=SimpleNamespace(id=71,is_active=True)
-        profile=SimpleNamespace(user_id=71,timezone='Europe/Berlin',target_event_date=target,weekly_hours_available=6)
+        profile=SimpleNamespace(user_id=71,timezone='Europe/Berlin',target_event_date=target,weekly_hours_available=6, goals={})
         db=AsyncMock()
         statements=[]
         async def execute(stmt):
@@ -52,8 +52,10 @@ def test_returns_saved_block_not_fabricated_horizon(endpoint):
     db.commit.assert_not_called()
 
 def test_passed_target_ends_plan(endpoint):
-    client,_,_=endpoint(saved(),date(2020,1,1))
-    assert client.get('/plan/current').json()['status']=='ended'
+    client,_,_=endpoint(saved(),date(2026,9,11))
+    body=client.get('/plan/current').json()
+    assert body['status']=='ended'
+    assert body['plan_end_date']=='2026-09-11'
 
 def test_maintenance_does_not_end_after_one_mesocycle(endpoint):
     client,_,_=endpoint(saved(),None)

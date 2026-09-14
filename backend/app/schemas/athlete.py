@@ -70,7 +70,14 @@ def _validate_blackouts(v: list[str] | None) -> list[str] | None:
     return seen
 
 
+from app.schemas.plan_goal import CustomGoalInput
+
+
 class TrainingGoals(BaseModel):
+    custom_goal: CustomGoalInput | None = None
+    custom_goal_recommendation: dict | None = None
+    custom_goal_started: str | None = None
+    training_model: Literal["pyramidal", "polarized", "sweetspot"] | None = None
     target_ftp: int | None = None
     target_event_name: str | None = None
     target_event_date: str | None = None  # ISO date string e.g. "2026-09-15"

@@ -15,10 +15,11 @@ export const WEEK_CURRENT_KEY_ROOT = ['weeks', 'current'] as const
  * - 409/4xx short-circuit retry — UI in Plan 05 detects 409 and renders "set FTP first" CTA.
  * - Language-keyed: toggling language mode triggers a fresh fetch.
  */
-export function useCurrentWeek(weekOffset = 0) {
+export function useCurrentWeek(weekOffset = 0, enabled = true) {
   const { language } = useLanguage()
   const { locale } = useLocale()
   return useQuery<WeekResponse>({
+    enabled,
     queryKey: [...WEEK_CURRENT_KEY_ROOT, language, locale, weekOffset],
     queryFn: () => fetchCurrentWeek(language, locale, weekOffset),
     staleTime: 30 * 60 * 1000, // 30 min — research §3 "one adaptation per day max"

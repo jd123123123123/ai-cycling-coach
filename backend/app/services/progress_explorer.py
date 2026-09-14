@@ -8,7 +8,7 @@ from math import isfinite
 from app.schemas.progress_explorer import ProgressExplorer, ProgressMetric, ProgressPoint, ProgressRecord
 from app.services.athlete_power_profile import build_sanitized_envelope
 
-DURATIONS = (5, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600)
+DURATIONS = (1, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600)
 
 def period_start(period, today, plan_start=None):
     if period == 'week': return today - timedelta(days=today.weekday())
@@ -61,7 +61,7 @@ def record_envelopes(rides, start, end):
         out.append(ProgressRecord(seconds=seconds,watts=now[0] if now else None,all_time_watts=historical[0] if historical else None,previous_watts=prev[0] if prev else None,date=now[1].isoformat() if now else None,activity_id=now[2] if now else None))
     return out
 
-async def load_progress(db,user_id,period,reference_date=None):
+async def load_progress(db,user_id,period,reference_date=None,plan_end=None):
     from sqlalchemy import select
     from app.models.athlete_profile import AthleteProfile
     from app.models.daily_metric import DailyMetric
@@ -73,9 +73,20 @@ async def load_progress(db,user_id,period,reference_date=None):
     profile=(await db.execute(select(AthleteProfile).where(AthleteProfile.user_id==user_id))).scalar_one_or_none()
     set_athlete_tz_from_profile(profile)
     today=today_local()
-    plan=(await db.execute(select(MesocyclePlan).where(MesocyclePlan.user_id==user_id,MesocyclePlan.plan_start_date<=today,MesocyclePlan.plan_end_date>=today).order_by(MesocyclePlan.plan_start_date.desc()).limit(1))).scalars().first()
+    if plan_end and (period != 'plan' or plan_end > today or plan_end < date(1970,1,1)):
+        raise ValueError('plan_end requires a past or current plan date')
+    plan_day=plan_end or today
+    plan=(await db.execute(select(MesocyclePlan).where(MesocyclePlan.user_id==user_id,MesocyclePlan.plan_start_date<=plan_day,MesocyclePlan.plan_end_date>=plan_day).order_by(MesocyclePlan.plan_start_date.desc()).limit(1))).scalars().first()
     anchor=plan.plan_start_date if plan else None
-    start,end=period_bounds(period,today,reference_date,anchor)
+    custom_start=(profile.goals or {}).get('custom_goal_started') if profile else None
+    if custom_start:
+        try:
+            recorded_start=date.fromisoformat(custom_start)
+            if recorded_start <= plan_day:
+                anchor=recorded_start
+        except (TypeError,ValueError):
+            pass
+    start,end=period_bounds(period,plan_day if plan_end else today,reference_date,anchor)
     ftp_points=[]
     for item in (profile.ftp_history or []) if profile else []:
         try:
@@ -98,6 +109,6 @@ async def load_progress(db,user_id,period,reference_date=None):
     ordered_ftp = [p for _,p in sorted(ftp_points,key=lambda row:row[0]) if p.date <= end.isoformat()]
     ftp_current = (profile.ftp_watts if profile else None) if end == today else (ordered_ftp[-1].value if ordered_ftp else None)
     return ProgressExplorer(period=period,start=start.isoformat() if start else None,end=end.isoformat(),today=today.isoformat(),plan_start=anchor.isoformat() if anchor else None,
-        plan_note='Seit Beginn des aktuellen vierwöchigen Trainingsplans.' if anchor else 'Kein aktiver Trainingsplan.',
+        plan_note='Seit Beginn deines gespeicherten Trainingsplans.' if anchor else 'Kein aktiver Trainingsplan.',
         ftp=metric(ordered_ftp,start,end,ftp_current,goals.get('target_ftp') if end == today else None),
         vo2=metric(vo2_points,start,end,vo2[max(vo2)] if vo2 else None),records=records)

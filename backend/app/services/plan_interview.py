@@ -546,6 +546,7 @@ async def rebuild_plan(
     signal: str,
     carried: dict | None = None,
     idempotent_per_day: bool = False,
+    atomic: bool = False,
 ) -> dict:
     """Rebuild the plan from the profile via the generator's PUBLIC entry
     point. Credits completed work two ways:
@@ -610,7 +611,10 @@ async def rebuild_plan(
             MesocyclePlan.plan_start_date >= monday - timedelta(days=28),
         )
     )
-    await db.commit()
+    if atomic:
+        await db.flush()
+    else:
+        await db.commit()
 
     # Live CTL is the generator's anchor — the mechanism that credits every
     # completed session. If PMC has data, the anchor MUST exist.
@@ -632,7 +636,10 @@ async def rebuild_plan(
     )
     # generate_mesocycle leaves the commit to its caller (weeks.py does the
     # same) — without this the fresh plan silently rolls back.
-    await db.commit()
+    if atomic:
+        await db.flush()
+    else:
+        await db.commit()
 
     summary = await _week_summary(db, user_id, monday)
     summary["rebuilt"] = True
@@ -708,6 +715,7 @@ async def rebuild_plan(
             source=source,
             signal=signal,
             rule="plan_built",
+            commit=not atomic,
             message_de=message_de,
             message_en=message_en,
             before=None,

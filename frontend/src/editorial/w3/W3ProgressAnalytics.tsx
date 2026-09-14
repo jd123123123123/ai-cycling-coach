@@ -13,8 +13,8 @@ const dateLabel=(v:string)=>new Date(`${v.slice(0,10)}T12:00:00`).toLocaleDateSt
 const stamp=(v:string)=>Date.parse(`${v.slice(0,10)}T00:00:00Z`)
 const dur=(s:number)=>s<60?`${s} s`:`${s/60} min`
 export const PROGRESS_KEY=['analytics','progress-explorer'] as const
-export function useProgressExplorer(period:ProgressPeriod='month', referenceDate?:string|null) {
- return useQuery({queryKey:referenceDate?[...PROGRESS_KEY,period,referenceDate]:[...PROGRESS_KEY,period],queryFn:()=>fetchProgressExplorer(period,referenceDate),staleTime:60_000,retry:1})
+export function useProgressExplorer(period:ProgressPeriod='month', referenceDate?:string|null,planEnd?:string|null) {
+ return useQuery({queryKey:planEnd?[...PROGRESS_KEY,period,'ended',planEnd]:referenceDate?[...PROGRESS_KEY,period,referenceDate]:[...PROGRESS_KEY,period],queryFn:()=>fetchProgressExplorer(period,referenceDate,planEnd),staleTime:60_000,retry:1})
 }
 
 const iso=(d:Date)=>d.toISOString().slice(0,10)

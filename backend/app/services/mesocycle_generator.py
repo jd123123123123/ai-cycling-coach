@@ -825,7 +825,8 @@ def build_week_drafts(
     # TSS budgeting / trimming machinery below still applies unchanged.
     from app.services.program_builder import active_program, program_day, program_week_index
 
-    prog = active_program(getattr(athlete, "goals", None))
+    custom = (getattr(athlete, "goals", None) or {}).get("custom_goal_recommendation") or {}
+    prog = None if custom else active_program(getattr(athlete, "goals", None))
     prog_id = prog[0] if prog else None
     prog_week = program_week_index(prog[1], week_start) if prog else 0
 
@@ -882,6 +883,11 @@ def build_week_drafts(
         (_LONG_DAY_TSS_SHARE * max(0, weekly_tss_target_val)) / _Z2_TSS_PER_MIN_PLAN
     )
     long_day_min = max(long_floor_min, min(long_window_min, budget_cap_min))
+    custom_long = custom.get("long_ride_target_minutes")
+    if isinstance(custom_long, (int, float)) and custom_long > 0:
+        # Event demand may reduce the existing safe windows, never enlarge them.
+        long_day_min = min(long_day_min, int(custom_long))
+        long_window_min = min(long_window_min, int(custom_long))
 
     # ── Pass 1: resolve session type + template for each riding day ────────
     hard_sessions_done = 0
@@ -1074,13 +1080,22 @@ def build_week_drafts(
         # weekend day) to climbing / low-cadence variants when the athlete
         # targets a fondo / hilly race inside the specificity window.
         preferred_id = None
-        if athlete.target_event_date is not None:
+        if athlete.target_event_date is not None and (not custom or custom.get("climbing")):
             preferred_id = mountain_event_template(
                 session_type=session_type,
                 event_type=athlete.target_event_type,
                 days_to_event=(athlete.target_event_date - day_date).days,
                 day_of_week=vdow,
             )
+        if custom and preferred_id is None and block_position != "recovery":
+            # Focus only selects within the phase-authorized intensity category.
+            # No easy day becomes hard; age, availability and TSS rails still apply.
+            focus_templates = {
+                "vo2": {"vo2": "vo2_5x4"},
+                "threshold": {"sweet_spot": "sweet_spot_2x20", "threshold": "threshold_2x15"},
+                "endurance": {},
+            }
+            preferred_id = focus_templates.get(custom.get("focus"), {}).get(session_type)
         # The Saturday-role climbing keystone (z2_climbing_long, 3h) needs the
         # long-day window or it silently never fits a time-crunched athlete.
         if vdow == 5 and preferred_id == "z2_climbing_long":
