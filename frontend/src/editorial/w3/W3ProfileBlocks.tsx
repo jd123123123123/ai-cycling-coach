@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Info } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { lux, TNUM } from './w3surfaces'
 import W3Eyebrow from './W3Eyebrow'
@@ -92,7 +93,8 @@ export function W3SeasonGrid({ title, stats, onAll }: {
  * ends of this series: the series is what the window happens to show, the
  * delta is what the training engine actually computed.
  */
-export function W3FormCurve({ value, delta, series, months }: {
+export function W3FormCurve({ value, delta, series, months, embedded = false }: {
+  embedded?: boolean
   value: number
   delta: number | null
   /** CTL per day, oldest first. */
@@ -101,6 +103,7 @@ export function W3FormCurve({ value, delta, series, months }: {
   months: string[]
 }) {
   const reduce = useReducedMotion()
+  const [infoOpen, setInfoOpen] = useState(false)
   if (series.length < 4) return null
 
   const W = 318, H = 96
@@ -115,52 +118,54 @@ export function W3FormCurve({ value, delta, series, months }: {
   const last = series[series.length - 1]
 
   return (
-    <div style={{ ...lux(24), padding: '16px 16px 14px', gap: 12 }}>
+    <div style={{ ...(embedded ? { display: 'flex', flexDirection: 'column' as const } : lux(24)), padding: embedded ? '0' : '16px 16px 14px', gap: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7, minWidth: 0 }}>
-          <W3Eyebrow tone={T.acid}>Formkurve · 12 Wochen</W3Eyebrow>
+          <span style={{fontSize: 12, color: T.mid, lineHeight: 1.5}}>Trainingsbelastung · 12 Wochen</span>
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
             <span style={{ ...TNUM, fontSize: 34, fontWeight: 700, letterSpacing: -1.4, lineHeight: 1, color: T.ink }}>
               {nf.format(Math.round(value))}
             </span>
-            <span style={{ fontSize: 13, fontWeight: 600, color: T.mid }}>Formstand</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: T.mid }}>CTL</span>
           </span>
         </div>
         {delta != null && (
           <span style={{
             flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 5,
             padding: '6px 11px', borderRadius: 100,
-            background: delta >= 0 ? T.acidDim : T.d1,
-            color: delta >= 0 ? T.acid : T.mid,
+            background: T.surface2,
+            color: T.mid,
             ...TNUM, fontSize: 12, fontWeight: 700,
           }}>
-            <TrendingUp size={12} color={delta >= 0 ? T.acid : T.mid}
+            <TrendingUp size={12} color={T.mid}
               style={{ transform: delta >= 0 ? 'none' : 'scaleY(-1)' }} />
-            {delta >= 0 ? '+' : '−'}{nf.format(Math.abs(Math.round(delta)))}
+            {delta >= 0 ? '+' : '−'}{nf.format(Math.abs(Math.round(delta)))} · 7 Tage
           </span>
         )}
       </div>
 
       <svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none"
-        role="img" aria-label={`Formstand ${Math.round(value)}, zwölf Wochen`}
+        role="img" aria-label={`Trainingsbelastung CTL ${Math.round(value)}, zwölf Wochen; Skala ${Math.round(floor)} bis ${Math.round(hi)}`}
         style={{ display: 'block', overflow: 'visible' }}>
         <defs>
           <linearGradient id="w3-form" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={T.acid} stopOpacity={0.34} />
-            <stop offset="100%" stopColor={T.acid} stopOpacity={0} />
+            <stop offset="0%" stopColor={embedded ? T.mid : T.acid} stopOpacity={0.18} />
+            <stop offset="100%" stopColor={embedded ? T.mid : T.acid} stopOpacity={0} />
           </linearGradient>
         </defs>
         <motion.path d={area} fill="url(#w3-form)" stroke="none"
           initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
           transition={{ duration: 0.6, ease: EASE, delay: 0.15 }} />
-        <motion.path d={line} fill="none" stroke={T.acid} strokeWidth={2.2}
+        <motion.path d={line} fill="none" stroke={embedded ? T.mid : T.acid} strokeWidth={2.2}
           strokeLinecap="round" strokeLinejoin="round"
           initial={reduce ? false : { pathLength: 0 }} animate={{ pathLength: 1 }}
           transition={{ duration: 0.9, ease: 'easeOut' }} />
         {/* Today, as a dot. The curve's whole point is where it ends. */}
-        <circle cx={W} cy={y(last)} r={4.5} fill={T.acid} />
+        <circle cx={W} cy={y(last)} r={4.5} fill={embedded ? T.ink : T.acid} />
       </svg>
 
+      {embedded && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><span style={{ fontSize: 11.5, color: T.mid }}>Skala {Math.floor(floor)}–{Math.ceil(hi)} CTL</span><button type="button" aria-label="Trainingsbelastung erklären" aria-expanded={infoOpen} onClick={() => setInfoOpen(!infoOpen)} style={{ width: 44, height: 44, display: 'grid', placeItems: 'center', border: 0, borderRadius: 100, background: T.surface2, color: T.mid, cursor: 'pointer' }}><Info size={18}/></button></div>}
+      {embedded && infoOpen && <p style={{fontSize: 13, lineHeight: 1.5, color: T.mid, margin: 0}}>CTL schätzt deine längerfristige Trainingsbelastung. Ein höherer Wert bedeutet nicht automatisch bessere Fitness oder Erholung. Die Änderung oben bezieht sich auf sieben Tage.</p>}
       {months.length > 1 && (
         <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
           {months.map((m, i) => (

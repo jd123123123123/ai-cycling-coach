@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { ArrowUpRight, Lock, Mail, ShieldCheck, Watch } from 'lucide-react'
 import { apiClient } from '../api/client'
@@ -14,6 +14,9 @@ interface ConnectResponse {
 
 export default function GarminConnectPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  // Only the known profile route is accepted; never navigate to arbitrary input.
+  const returnTo = location.state?.returnTo === '/e/w3-biker' ? '/e/w3-biker' : '/dashboard'
   const qc = useQueryClient()
   const { locale } = useLocale()
 
@@ -62,7 +65,7 @@ export default function GarminConnectPage() {
       await qc.invalidateQueries({ queryKey: ['pmc'] })
       const { activities_synced, metrics_days } = res.data
       setTimeout(() => {
-        navigate('/dashboard', {
+        navigate(returnTo, {
           replace: true,
           state: { garminJustConnected: { activities_synced, metrics_days } },
         })
@@ -268,11 +271,11 @@ export default function GarminConnectPage() {
 
           <p className="mt-6 text-center text-[13px]" style={{ color: 'var(--color-muted)' }}>
             <Link
-              to="/dashboard"
+              to={returnTo}
               className="font-medium"
               style={{ color: 'var(--color-forest-2)' }}
             >
-              {locale === 'de' ? '← Zurück zum Dashboard' : '← Back to dashboard'}
+              {returnTo === '/e/w3-biker' ? (locale === 'de' ? '← Zurück zum Profil' : '← Back to profile') : (locale === 'de' ? '← Zurück zum Dashboard' : '← Back to dashboard')}
             </Link>
           </p>
         </div>

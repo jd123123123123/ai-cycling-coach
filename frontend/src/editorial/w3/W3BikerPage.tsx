@@ -20,30 +20,9 @@ import { useRiderLifetime } from './w3RiderStats'
 import { highlightRecords } from './w3RiderRecords'
 import W3BikerView, { type W3BikerVm, type W3Device } from './W3BikerView'
 
-/**
- * W3 · 05 BIKER (profile), wired. Route /e/w3-biker.
- *
- * ALL REAL, or the card is not drawn:
- *  · the figure ......... `useGarage().rider` — the rider's OWN figurine. No
- *                         garage rider → the empty seat that offers the studio,
- *                         never someone else's showcase avatar.
- *  · lifetime pills ..... `useRiderLifetime` (the same /activities reducer the
- *                         AVATAR UNLOCKED reveal uses — one arithmetic, two
- *                         screens), see `w3RiderStats.ts`
- *  · the two rings ...... level progress from the rides, shop-tier progress
- *                         from the real wallet
- *  · the records ........ `/achievements/records` — LIFETIME bests computed
- *                         server-side. They are deliberately not derived from
- *                         `useActivitiesRange`: the client holds a 90-day
- *                         window, so a client-side "longest ride" would shrink
- *                         as the rider's best ride aged out of it.
- *  · badges ............. `/achievements/mine` counts + the real latest unlock
- *  · account tail ....... real wallet, real referral, real device status
- *
- * Deliberately absent: FTP/W/kg/CTL (the engine block) and the seven monuments.
- * They were the reason this page read as a dashboard about a rider rather than
- * a page about one — the training numbers live on the screens that act on them.
- */
+/** The authenticated W3 profile. Existing endpoints provide identity, activity,
+ * records, wallet and devices; the view never manufactures missing data.
+ * Secondary controls preserve their established routes and server writes. */
 
 const DASH = '—'
 const nf1 = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 })
@@ -69,13 +48,13 @@ export default function W3BikerPage() {
   const { data: wallet } = useWallet()
   const { data: referrals } = useMyReferrals()
   const { data: achievements } = useAchievements()
-  const { data: records } = useRiderRecords()
-  const { data: garmin } = useGarminStatus()
-  const { data: wahoo } = useWahooStatus()
-  const { data: coros } = useCorosStatus()
-  const { data: garage } = useGarage()
+  const { data: records, isPending: recordsPending, isError: recordsError } = useRiderRecords()
+  const { data: garmin, isPending: garminPending, isError: garminError } = useGarminStatus()
+  const { data: wahoo, isPending: wahooPending, isError: wahooError } = useWahooStatus()
+  const { data: coros, isPending: corosPending, isError: corosError } = useCorosStatus()
+  const { data: garage, isPending: garagePending, isError: garageError } = useGarage()
   // ── pen `pMYpt`'s three new blocks, each from a source that already exists ──
-  const { data: rhythm } = useActivityRhythm()
+  const { data: rhythm, isPending: rhythmPending, isError: rhythmError } = useActivityRhythm()
   const { data: ftp } = useFtpHistory()
   const { data: form } = useFormProgress()
   // 12 weeks, which is what the frame's axis spans.
@@ -88,6 +67,7 @@ export default function W3BikerPage() {
   const { data: profile } = useAthleteProfile()
   const qc = useQueryClient()
   const [voiceBusy, setVoiceBusy] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
 
   const vm = useMemo<W3BikerVm>(() => {
     const has = life.loaded && life.rides > 0
@@ -128,17 +108,17 @@ export default function W3BikerPage() {
 
     const counts = achievements?.counts
     const devices: W3Device[] = [
-      { name: 'Garmin', sub: garmin?.connected ? syncedLabel(garmin.last_sync_at) : 'Nicht verbunden', icon: 'watch', on: !!garmin?.connected },
-      { name: 'Wahoo', sub: wahoo?.connected ? syncedLabel(wahoo.last_sync) : 'Nicht verbunden', icon: 'zap', on: !!wahoo?.connected },
+      { name: 'Garmin', sub: garminError ? 'Status nicht verfügbar' : garminPending ? 'Status wird geladen …' : garmin?.connected ? syncedLabel(garmin.last_sync_at) : 'Nicht verbunden', icon: 'watch', on: !!garmin?.connected },
+      { name: 'Wahoo', sub: wahooError ? 'Status nicht verfügbar' : wahooPending ? 'Status wird geladen …' : wahoo?.connected ? syncedLabel(wahoo.last_sync) : 'Nicht verbunden', icon: 'zap', on: !!wahoo?.connected },
     ]
     if (coros?.configured) {
-      devices.push({ name: 'Coros', sub: coros.connected ? syncedLabel(coros.last_sync) : 'Nicht verbunden', icon: 'activity', on: !!coros.connected })
+      devices.push({ name: 'Coros', sub: corosError ? 'Status nicht verfügbar' : corosPending ? 'Status wird geladen …' : coros.connected ? syncedLabel(coros.last_sync) : 'Nicht verbunden', icon: 'activity', on: !!coros.connected })
     }
 
     return {
       rider: {
         avatarUrl: garage?.rider?.image_base64 ?? null,
-        handle: user?.display_name ? `@${user.display_name}` : (user?.email ? `@${user.email.split('@')[0]}` : '@rider'),
+        handle: user?.display_name?.trim() || 'Dein Profil',
         role: ready ? life.role : '',
         pills,
         tier,
@@ -158,7 +138,7 @@ export default function W3BikerPage() {
         : null,
       devices,
     }
-  }, [user, wallet, referrals, achievements, records, garmin, wahoo, coros, garage, life])
+  }, [user, wallet, referrals, achievements, records, garmin, wahoo, coros, garage, life, garminError, garminPending, wahooError, wahooPending, corosError, corosPending])
 
   // ── SAISON: this year, against last, from the same rollup the Fahrten dock
   //    reads. Every stat is dropped rather than dashed when its source has not
@@ -177,7 +157,7 @@ export default function W3BikerPage() {
       let note: string | null = null
       if (yoy && yoy.previous.km > 0) {
         const pct = Math.round(((yoy.current.km - yoy.previous.km) / yoy.previous.km) * 100)
-        note = `${pct >= 0 ? '+' : '−'}${nf.format(Math.abs(pct))} % zum Vorjahr`
+        note = `${pct >= 0 ? '+' : '−'}${nf.format(Math.abs(pct))} % zum Vorjahreszeitraum`
       }
       out.push({ label: 'Kilometer', value: nf.format(Math.round(s.km)), unit: 'km', note })
 
@@ -189,7 +169,7 @@ export default function W3BikerPage() {
       }
     }
 
-    const cur = ftp?.current_ftp
+    const cur = ftp?.current_ftp ?? profile?.ftp_watts
     if (cur != null) {
       const first = ftp?.history?.[0]?.ftp_watts
       out.push({
@@ -212,7 +192,7 @@ export default function W3BikerPage() {
       })
     }
     return out
-  }, [rhythm, ftp, achievements])
+  }, [rhythm, ftp, achievements, profile?.ftp_watts])
 
   // ── FORMKURVE: the engine's own CTL, and its own delta. The series is what
   //    the window shows; the delta is what the training engine computed, and
@@ -222,18 +202,11 @@ export default function W3BikerPage() {
     if (entries.length < 4) return null
     const series = entries.map((e) => e.ctl).filter((v) => Number.isFinite(v))
     if (series.length < 4) return null
-    const MON = ['JAN', 'FEB', 'MRZ', 'APR', 'MAI', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEZ']
-    const months: string[] = []
-    let last = -1
-    for (const e of entries) {
-      const m = new Date(`${e.date}T00:00:00`).getMonth()
-      if (m !== last && !Number.isNaN(m)) { months.push(MON[m]); last = m }
-    }
     return {
       value: form?.ctl ?? series[series.length - 1],
       delta: form?.ctl_7d_delta ?? null,
       series,
-      months: months.slice(0, 6),
+      months: [entries[0].date, entries[entries.length - 1].date].map(d => new Date(`${d}T12:00:00`).toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })),
     }
   }, [pmc, form])
 
@@ -251,6 +224,17 @@ export default function W3BikerPage() {
     <W3BikerView
       vm={vm}
       season={season}
+      seasonLabel={rhythm?.season?.label ? `Saison ${rhythm.season.label}` : `Saison ${new Date().getFullYear()}`}
+      seasonBuckets={rhythm?.season?.buckets ?? []}
+      seasonState={rhythmError ? 'error' : rhythmPending ? 'loading' : 'ready'}
+      garageState={garageError ? 'error' : garagePending ? 'loading' : 'ready'}
+      recordsState={recordsError ? 'error' : recordsPending ? 'loading' : 'ready'}
+      onRetry={() => { void qc.invalidateQueries({ queryKey: ['activities', 'rhythm'] }); void qc.invalidateQueries({ queryKey: ['achievements'] }); void qc.invalidateQueries({ queryKey: ['garage'] }) }}
+      onEdit={() => navigate('/profile')}
+      onSettings={() => navigate('/settings')}
+      onDevice={(name) => navigate(name === 'Garmin' ? '/garmin/connect' : '/settings', { state: { returnTo: '/e/w3-biker' } })}
+      onPower={() => navigate('/power-profile')}
+      onRides={() => navigate('/e/w3-rides')}
       curve={curve}
       bike={bike}
       onGarage={() => navigate('/e/w3-garage')}
@@ -258,8 +242,10 @@ export default function W3BikerPage() {
       voice={{
         value: profile?.goals?.coach_voice ?? 'sachlich',
         busy: voiceBusy,
+        error: voiceError,
         onSet: (id: string) => {
           setVoiceBusy(true)
+          setVoiceError(null)
           void updateGoals({ coach_voice: id })
             // The brief is cached server-side for hours, so a new voice must
             // also drop the cached one — otherwise the rider picks a register
@@ -268,12 +254,13 @@ export default function W3BikerPage() {
               qc.invalidateQueries({ queryKey: ['athlete', 'me'] }),
               qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT }),
             ]))
+            .catch(() => setVoiceError('Die Coach-Stimme konnte nicht gespeichert werden. Bitte erneut versuchen.'))
             .finally(() => setVoiceBusy(false))
         },
       }}
       onReferral={() => navigate('/e/w3-referrals')}
       onBadges={() => navigate('/e/w3-wins')}
-      onRecord={() => navigate('/e/w3-wins')}
+      onRecord={(key) => { const id = records?.[key]?.activity_id; if (id != null) navigate(`/e/w3-ride/${id}`) }}
       onCreateRider={() => navigate('/e/w3-avatar-onboard')}
     />
   )
