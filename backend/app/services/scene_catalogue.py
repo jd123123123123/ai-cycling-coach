@@ -186,7 +186,7 @@ SCENES: list[Scene] = [
         id="waschanlage",
         name_de="Die Waschanlage",
         tier="ernsthaft",
-        unlock_de="Regen über zwei Stunden",
+        unlock_de="Fahrt über 2 Stunden mit Regen",
         # Bedingung im Klartext: was_wet + duration_s > 7 200
         axis='duration_s', op='>', threshold=7200,
         analogy="A1",
