@@ -1,1 +1,1 @@
-{"name":"ridr-plan-review-parsers","private":true,"type":"module","description":"Isolated document readers for local design review; not part of the app release","dependencies":{"mammoth":"^1.12.3","pdfjs-dist":"^6.3.289"}}
+{"name":"ridr-plan-review-parsers","private":true,"type":"module","description":"Isolated document readers for local design review; not part of the app release","dependencies":{"@garmin/fitsdk":"^21.214.0","mammoth":"^1.12.3","pdfjs-dist":"^6.3.289"}}

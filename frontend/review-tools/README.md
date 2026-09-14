@@ -1,11 +1,13 @@
-# Local plan-review document readers
+# Local plan-review dependencies
 
-These dependencies are isolated from the shared application `node_modules` and are only imported by `src/review-plan/documentReader.ts`. They are not included in the application's production entry.
+These dependencies are isolated from the shared application `node_modules`. They are imported only by review entries and are not part of the production app entry.
 
-Install reproducibly with `npm ci --prefix review-tools --ignore-scripts` from `frontend`, then start the existing Vite development server. Open `/review-plan-profile.html`.
+Reproduce with `npm ci --prefix review-tools --ignore-scripts` from `frontend`, then start the existing Vite server. Open `/review-plan-entry-export.html`.
 
-- Mammoth: DOCX **raw text** only; never insert converted HTML.
-- PDF.js: local text extraction, no OCR. PDF JavaScript is not executed.
-- 10 MB input, 30 PDF pages, 50,000 text characters; DOCX ZIP metadata preflight.
-- No LLM request, file upload, plan activation, or other API mutation occurs in this prototype.
-- Natural-language extraction is a deliberately limited, editable local rule-based demonstration. Production needs authenticated document processing and validated structured AI output before integration.
+- Mammoth: DOCX raw text; no HTML insertion.
+- PDF.js: local text extraction, no OCR or PDF JavaScript execution.
+- Garmin FIT SDK 21.214.0: lazy local workout encoding; files are decoded and integrity-checked in review QA.
+- Document limits: 10 MB, 30 PDF pages, 50,000 characters, DOCX ZIP metadata preflight.
+- GPX route export requires an actual valid route (at least two valid coordinate points). Never generate route geometry from workout intervals.
+- No account synchronization, LLM call, file upload, plan activation or other API mutation occurs here. Files are local downloads requiring the target app/device's import process.
+- Natural-language parsing is a limited editable rule-based demonstration. Production needs authenticated processing and validated structured output.
