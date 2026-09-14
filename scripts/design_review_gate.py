@@ -72,7 +72,8 @@ def validate(repo, packet_path, reports_path, approval_path, expected_commit=Non
         require(isinstance(packet.get('motion_relevant'), bool), 'Declare whether motion changed')
         if packet['motion_relevant']:
             require(any(e.get('reduced_motion') is True and e['state'] == 'after' for e in shots), 'Motion changes need reduced-motion evidence')
-            require(bool(packet.get('motion_check_refs')) and set(packet['motion_check_refs']) <= ids, 'Motion changes also need animation check/video observation evidence')
+            check_ids = {e['id'] for e in evidence if e['kind'] == 'check-output'}
+            require(bool(packet.get('motion_check_refs')) and set(packet['motion_check_refs']) <= check_ids, 'Motion changes also need animation check/video observation evidence')
     else:
         require(bool(packet.get('non_ui_reason')), 'Non-UI scope requires an explicit reason')
     phash = digest(packet)

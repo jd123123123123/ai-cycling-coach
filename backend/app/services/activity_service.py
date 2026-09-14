@@ -346,6 +346,7 @@ async def create_activity(
                 exc,
             )
 
+    base_rc = 0
     # Award RideCoin for the ride at ingestion (push, not pull): base from TSS,
     # lifted by the athlete's forgiving streak. Idempotent per activity, so a
     # re-sync never double-pays. Defensive: the reward layer must never break
@@ -354,37 +355,31 @@ async def create_activity(
         from app.services import rewards
         from app.services.streak import build_streak
 
-        streak = await build_streak(db, user_id)
-        award = await rewards.award_ride(
-            db, user_id, activity.id, activity.tss, int(streak.get("streak", 0)),
-        )
-        # If this rider was recruited via a referral and is inside their 30-day
-        # window, accrue the recruiter's 10% cut of what this ride just earned.
-        # Only on a genuinely-new award (award_ride returns None on a re-sync),
-        # so a ride accrues at most once. Runs on a system session (the
-        # recruiter's row is invisible to this rider's RLS session) and commits
-        # independently, so it can never roll back the ride itself.
-        if award and award.get("total", 0) > 0:
-            from app.services import referral
-
-            await referral.accrue_for_ride(user_id, int(award["total"]))
-
-        # The bike economy settles on the same ingestion: the component
-        # odometers absorb this ride's kilometres, the equipped loadout pays
-        # what its conditional bonuses actually earned on THIS ride, and a new
-        # Eddington number pays its milestone. Every step is idempotent per
-        # activity and individually guarded — see `ride_economy.settle`.
-        from app.services import ride_economy
-
-        await ride_economy.settle(
-            db, user_id, activity, int((award or {}).get("total", 0)),
-        )
+        async with db.begin_nested():
+            streak = await build_streak(db, user_id)
+            award = await rewards.award_ride(
+                db, user_id, activity.id, activity.tss, int(streak.get("streak", 0)),
+            )
+            base_rc = int((award or {}).get("total", 0))
     except Exception as exc:
-        logger.warning(
-            "RideCoin award failed for user_id=%s after activity create (non-fatal): %s",
-            user_id,
-            exc,
-        )
+        base_rc = 0
+        logger.warning("RideCoin award failed for user_id=%s (non-fatal): %s", user_id, exc)
+
+    # Referral accrual owns a separate session. Its failure must not erase a
+    # successful base award from the gear-bonus calculation.
+    if base_rc > 0:
+        try:
+            from app.services import referral
+            await referral.accrue_for_ride(user_id, base_rc)
+        except Exception as exc:
+            logger.warning("Referral accrual failed for user_id=%s (non-fatal): %s", user_id, exc)
+
+    # Milestones are a property of the ride, independent of the coin payout.
+    try:
+        from app.services import ride_economy
+        await ride_economy.settle(db, user_id, activity, base_rc)
+    except Exception as exc:
+        logger.warning("Ride settlement failed for user_id=%s (non-fatal): %s", user_id, exc)
 
     return activity
 

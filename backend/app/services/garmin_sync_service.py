@@ -401,6 +401,11 @@ async def _fetch_and_store_streams(
         # bound to 5 W/kg when the athlete's weight is known.
         weight_kg=float(profile.weight_kg) if profile and profile.weight_kg else None,
     )
+    # Weather/GPS arrive after the activity row. Re-evaluate earned scenes
+    # using those real facts while preserving the caller's transaction.
+    if is_ride:
+        from app.services import ride_economy
+        await ride_economy.check_backdrops(db, user_id, activity, commit=commit)
     logger.info(
         "Ingested streams for activity id=%s (garmin %s): %s",
         activity.id,

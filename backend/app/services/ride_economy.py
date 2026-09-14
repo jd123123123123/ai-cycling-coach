@@ -125,7 +125,7 @@ async def _drivetrain(db: AsyncSession, user_id: int) -> tuple[float, bool]:
 
 async def _pay_gear(
     db: AsyncSession, user_id: int, activity: Activity, base_rc: int, chain_km: float,
-    facts: em.RideFacts | None = None,
+    facts: em.RideFacts | None = None, *, check_scenes: bool = True,
 ) -> int:
     """Credit what the equipped loadout added. Returns the RideCoin paid.
 
@@ -133,33 +133,14 @@ async def _pay_gear(
     uniqueness rule — the same guard `award_ride` relies on — so a re-sync
     cannot pay the gear bonus twice.
     """
+    if check_scenes:
+        await check_backdrops(db, user_id, activity, facts=facts, commit=True)
     if base_rc <= 0:
         return 0
     equipped = await gear.equipped_ids(db, user_id)
-    # Passed in by `settle`, which builds them once for the whole settlement.
-    # Still resolved here when a caller has none, so this stays usable alone.
     if facts is None:
-        # Freshness comes from the same read as the kilometres, never from a
-        # default. Letting it fall back to False here would silently withhold
-        # the fresh-drivetrain bonus from anyone reaching this path alone.
         _, fresh = await _drivetrain(db, user_id)
         facts = await _ride_facts(db, user_id, activity, chain_km, fresh)
-    # The facts are already paid for here, weather included, so this is the one
-    # place a stage gated on rain or cold can honestly be earned. Never fatal:
-    # a rider must not lose the RideCoin their ride earned because a backdrop
-    # failed to unlock. See `services.backdrops` and `models.garage.RiderBackdrop`.
-    try:
-        # THE RETURN VALUE USED TO BE DISCARDED, and that was the whole defect:
-        # the rows were written, the stage really was earned, and nothing
-        # announced it — a rider found out by noticing an extra swatch in the
-        # picker weeks later. It is captured now and handed to `stage_unlock`,
-        # which starts rendering their bike into the new place so the unlock
-        # screen has a picture rather than a spinner.
-        opened = await _open_backdrops(db, user_id, activity, facts)
-        if opened:
-            stage_unlock.warm(user_id, opened)
-    except Exception:
-        logger.info("a backdrop unlock failed (non-fatal)", exc_info=True)
     try:
         await _stamp_place(db, user_id, activity)
     except Exception:
@@ -186,8 +167,32 @@ async def _pay_gear(
     return bonus
 
 
+async def check_backdrops(
+    db: AsyncSession, user_id: int, activity: Activity, *,
+    facts: em.RideFacts | None = None, commit: bool = False,
+) -> list[str]:
+    """Optional rewards must not poison the caller's activity/stream transaction.
+
+    No commit or background render before a caller-owned transaction finishes.
+    Gallery metadata reads recover warming once the earned row is visible.
+    """
+    try:
+        async with db.begin_nested():
+            if facts is None:
+                facts = await _ride_facts(db, user_id, activity, 0, False)
+            opened = await _open_backdrops(db, user_id, activity, facts, commit=False)
+        if commit:
+            await db.commit()
+            if opened:
+                stage_unlock.warm(user_id, opened)
+        return opened
+    except Exception:
+        logger.info("backdrop check failed (non-fatal)", exc_info=True)
+        return []
+
+
 async def _open_backdrops(
-    db: AsyncSession, user_id: int, activity: Activity, facts: em.RideFacts
+    db: AsyncSession, user_id: int, activity: Activity, facts: em.RideFacts, *, commit: bool = True
 ) -> list[str]:
     """Record every stage this ride opened. Returns the newly earned ids.
 
@@ -216,7 +221,10 @@ async def _open_backdrops(
         {"user_id": user_id, "backdrop": b, "activity_id": activity.id} for b in fresh
     ]).on_conflict_do_nothing(index_elements=["user_id", "backdrop"]).returning(RiderBackdrop.backdrop))
     inserted = set(result.scalars().all())
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     return [b for b in fresh if b in inserted]
 
 
@@ -374,6 +382,8 @@ async def settle(
     if activity.sport != "cycling":
         return result
 
+    await check_backdrops(db, user_id, activity)
+
     km = (activity.distance_meters or 0) / 1000
     if km < MIN_KM:
         return result
@@ -400,7 +410,7 @@ async def settle(
         logger.warning("ride facts failed for user_id=%s", user_id, exc_info=True)
 
     try:
-        gear_rc = await _pay_gear(db, user_id, activity, base_rc, chain_km, facts)
+        gear_rc = await _pay_gear(db, user_id, activity, base_rc, chain_km, facts, check_scenes=False)
         result["gear_rc"] = gear_rc
     except Exception:
         logger.warning("gear bonus failed for user_id=%s", user_id, exc_info=True)

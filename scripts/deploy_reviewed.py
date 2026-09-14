@@ -40,7 +40,7 @@ def main():
         export_commit(a.repo, result['scope_commit'], Path(temp))
         # CLI-only; project and environment are explicitly linked in the clean export.
         subprocess.run(['railway', 'link', '--project', PROJECT, '--service', SERVICE, '--environment', ENVIRONMENT], cwd=temp, check=True)
-        subprocess.run(['railway', 'up', '--service', SERVICE, '--environment', ENVIRONMENT, '--detach'], cwd=temp, check=True)
+        subprocess.run(['railway', 'up', '--service', SERVICE, '--environment', ENVIRONMENT, '--detach', '--message', f'{result["scope_commit"]} nine-role reviewed release'], cwd=temp, check=True)
     print('Upload requested. Deployment success and live bundle/health still require verification.')
 
 if __name__ == '__main__':

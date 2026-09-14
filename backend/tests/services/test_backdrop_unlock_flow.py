@@ -4,6 +4,7 @@ SQLite exercises the ownership queries and commits; it does not test Postgres
 RLS or activity ingestion. Image generation and weather/place lookups are mocked.
 """
 from datetime import datetime, timezone
+from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
@@ -26,6 +27,14 @@ class LocalDB:
 
     async def execute(self, statement):
         return self.session.execute(statement)
+
+    @asynccontextmanager
+    async def begin_nested(self):
+        with self.session.begin_nested():
+            yield
+
+    async def flush(self):
+        self.session.flush()
 
     def add(self, row):
         self.session.add(row)
@@ -175,3 +184,40 @@ async def test_scene_master_does_not_return_unchecked_preview(local_db):
     with pytest.raises(HTTPException) as exc:
         await garage.get_gallery_image('startrampe', SimpleNamespace(id=1), local_db)
     assert exc.value.status_code == 404
+
+async def test_measured_distance_unlocks_even_without_a_coin_payout(local_db):
+    paid = await ride_economy._pay_gear(local_db, 1, ride(), base_rc=0, chain_km=0, facts=facts())
+    assert paid == 0
+    assert await stage_unlock.unlocked_by(local_db, 1, 200) == ["coast_road", "startrampe"]
+    stage_unlock.warm.assert_called_once_with(1, ["coast_road", "startrampe"])
+
+
+async def test_metadata_gallery_preserves_status_without_loading_or_converting_images(local_db, monkeypatch):
+    from app.services import scene_render
+    await ride_economy._open_backdrops(local_db, 1, ride(), facts())
+    asset = await garage._get_asset(local_db, 1, 'bike')
+    key = garage._bike_key(asset, [], 'startrampe')
+    local_db.add(BikeRender(build_key=key, status='ok', image='large-master-image'))
+    await local_db.commit()
+    local_db.session.expunge_all()
+    convert = Mock(side_effect=AssertionError('metadata must not convert images'))
+    monkeypatch.setattr(scene_render, 'display_image', convert)
+    statements = []
+    execute = local_db.execute
+    async def capture(stmt):
+        statements.append(str(stmt))
+        return await execute(stmt)
+    monkeypatch.setattr(local_db, 'execute', capture)
+    view = await garage.get_gallery(SimpleNamespace(id=1), local_db, include_images=False)
+    assert all(s.image is None for s in view.stages)
+    assert next(s for s in view.stages if s.id == 'startrampe').render_status == 'ok'
+    assert not any('bike_renders.image' in sql for sql in statements)
+    convert.assert_not_called()
+
+
+async def test_metadata_gallery_still_warms_missing_owned_scenes(local_db):
+    await ride_economy._open_backdrops(local_db, 1, ride(), facts())
+    stage_unlock.warm.reset_mock()
+    view = await garage.get_gallery(SimpleNamespace(id=1), local_db, include_images=False)
+    assert next(s for s in view.stages if s.id == 'startrampe').render_status == 'missing'
+    stage_unlock.warm.assert_called_once_with(1, ['startrampe'])

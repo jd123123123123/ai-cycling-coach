@@ -8,6 +8,7 @@ export interface StageCard {
 }
 export interface StageGallery { stages: StageCard[]; owned_count: number; total_count: number }
 export const fetchStageGallery = async (): Promise<StageGallery> => (await apiClient.get('/garage/gallery')).data
+export const fetchStageUpdates = async (): Promise<StageGallery> => (await apiClient.get('/garage/gallery', {params: {include_images: false}})).data
 export const fetchRideStages = async (id: number): Promise<{ stages: StageCard[] }> => (await apiClient.get(`/garage/gallery/unlocked-by/${id}`)).data
 
 export const fetchStageImage = async (id: string): Promise<string> => (await apiClient.get(`/garage/gallery/${encodeURIComponent(id)}/image`)).data.image

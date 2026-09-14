@@ -48,6 +48,10 @@ export function invalidateGarminData(qc: QueryClient, includeStatus = true) {
       qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
       qc.invalidateQueries({ queryKey: ['athlete', 'streak'] })
       qc.invalidateQueries({ queryKey: ['rewards'] })
+      qc.invalidateQueries({ queryKey: ['garage', 'gallery'] })
+      qc.invalidateQueries({ queryKey: ['garage', 'ride-unlocks'] })
+      qc.invalidateQueries({ queryKey: ['garage', 'backdrops'] })
+      qc.invalidateQueries({ queryKey: ['w3-celebration-scan'] })
       qc.invalidateQueries({ queryKey: ['coach', 'adaptive'] })
 }
 

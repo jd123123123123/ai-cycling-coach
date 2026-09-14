@@ -2157,6 +2157,7 @@ class GalleryOut(BaseModel):
 async def get_gallery(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    include_images: bool = True,
 ) -> GalleryOut:
     """The rider's stage collection — owned ones with their own picture in them.
 
@@ -2166,6 +2167,8 @@ async def get_gallery(
     PICTURE, because the only honest picture of an unearned stage would be
     somebody else's bike standing in it.
     """
+    from sqlalchemy.orm import load_only
+
     owned_ids = set(await _unlocked_backdrops(db, current_user.id))
     selected = await _selected_backdrop(db, current_user.id)
     history = await _cheap_history_facts(db, current_user.id)
@@ -2192,19 +2195,28 @@ async def get_gallery(
     statuses: dict[str, str] = {}
     if keys:
         found = (await db.execute(
-            select(BikeRender).where(BikeRender.build_key.in_(list(keys.values())))
+            select(BikeRender)
+            .options(*([] if include_images else [load_only(BikeRender.build_key, BikeRender.status)]))
+            .where(BikeRender.build_key.in_(list(keys.values())))
         )).scalars().all()
         by_key = {r.build_key: r for r in found}
         for sid, k in keys.items():
             row = by_key.get(k)
             if row is not None:
                 statuses[sid] = row.status
-                if row.status == "ok" and row.image:
+                if include_images and row.status == "ok" and row.image:
                     if sid in backdrops.scene_catalogue.RELEASED:
                         from app.services import scene_render
                         images[sid] = await run_in_threadpool(scene_render.display_image, row.image)
                     else:
                         images[sid] = row.image
+
+    # Recover render warming after a stream transaction or a worker restart.
+    # The renderer's atomic lease prevents parallel gallery reads duplicating work.
+    missing_scenes = [sid for sid in keys if sid in backdrops.scene_catalogue.RELEASED
+                      and statuses.get(sid, "missing") == "missing"]
+    if missing_scenes:
+        stage_unlock.warm(current_user.id, missing_scenes)
 
     stages = [
         GalleryStageOut(

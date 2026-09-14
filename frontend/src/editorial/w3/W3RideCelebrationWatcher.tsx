@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '../../contexts/AuthContext'
 import { fetchActivitiesRange } from '../../api/dashboard'
 import { CHEST_KEY } from '../../hooks/useWallet'
+import W3SceneUnlockNudge from './W3SceneUnlockNudge'
 
 /**
  * W3 · New-ride watcher.
@@ -61,7 +62,9 @@ export default function W3RideCelebrationWatcher() {
     lastSeen.current = id
     // The chest, not the screen. The rider decides when to open it.
     qc.invalidateQueries({ queryKey: CHEST_KEY })
+    qc.invalidateQueries({ queryKey: ['garage', 'gallery'] })
+    qc.invalidateQueries({ queryKey: ['garage', 'ride-unlocks'] })
   }, [data, inW3, qc])
 
-  return null
+  return <W3SceneUnlockNudge/>
 }

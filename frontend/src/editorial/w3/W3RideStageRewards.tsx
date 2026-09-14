@@ -7,7 +7,7 @@ import { useMyReferrals } from '../../hooks/useReferrals'
 import { fetchMyReferrals } from '../../api/referral'
 import { SceneCollectionView } from './W3SceneCollection'
 export default function W3RideStageRewards({ activityId, autoReveal = false, quiet = false }: { activityId: number; autoReveal?: boolean; quiet?: boolean }) {
-  const q = useQuery({ queryKey: ['garage', 'ride-unlocks', activityId], queryFn: () => fetchRideStages(activityId), staleTime: 60000 })
+  const q = useQuery({ queryKey: ['garage', 'ride-unlocks', activityId], queryFn: () => fetchRideStages(activityId), staleTime: 30000, refetchInterval: query => query.state.data?.stages.some(s => s.render_status === 'pending') ? 15000 : false })
   const select = useSelectStage(), referrals = useMyReferrals()
   const [opened, setOpened] = useState(0)
   if (!q.data?.stages.length) return null
