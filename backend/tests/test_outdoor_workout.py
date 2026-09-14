@@ -65,3 +65,10 @@ def test_cadence_does_not_overwrite_fit_power_range():
     assert step.custom_target_power_low==1250
     assert step.custom_target_power_high==1270
     assert 'SteadyState' in to_zwo(title='Power',description='',blocks=[block],ftp=240)
+
+
+def test_localized_virtual_ride_excluded():
+    from app.services.route_library import is_virtual_title
+    assert is_virtual_title('Thio Virtuelles Radfahren')
+    assert is_virtual_title('Watopia')
+    assert not is_virtual_title('Berlin Radfahren')

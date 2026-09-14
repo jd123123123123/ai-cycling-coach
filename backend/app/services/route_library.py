@@ -35,7 +35,7 @@ MAX_RIDES_SCANNED = 300
 # never shows real-world weather for an indoor route.
 _VIRTUAL_MARKERS = (
     "zwift", "rouvy", "kinomap", "indoor", "mywhoosh", "trainerroad",
-    "virtual", "watopia",
+    "virtual", "virtuell", "watopia",
 )
 
 
