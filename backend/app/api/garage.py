@@ -495,6 +495,8 @@ class TodayStageOut(BaseModel):
     changes: list[str]
     #: The stage in use, and every stage the rider can swipe to.
     stage: str
+    bike_scene: bool = False
+    scene_pending: bool = False
     stages: list[StageOut]
     status: str
 
@@ -535,17 +537,29 @@ async def get_today_stage(
             rider_image = cached
 
     bike_image = bike.image_url if bike else None
+    bike_scene = False
+    scene_pending = False
     if bike is not None and bike.image_url:
         cached = await _cached_render(db, _bike_key(bike, equipped, stage_id))
         if cached:
             bike_image = cached
+            from app.services import scene_render
+            bike_scene = stage_id in scene_render.READY
+            if bike_scene:
+                bike_image = await run_in_threadpool(scene_render.display_image, cached, 900)
 
+    from app.services import scene_render
+    if bike is not None and stage_id in scene_render.READY and not bike_scene:
+        render_row = (await db.execute(select(BikeRender).where(BikeRender.build_key == _bike_key(bike, equipped, stage_id)))).scalar_one_or_none()
+        scene_pending = render_row is not None and render_row.status == 'pending'
     return TodayStageOut(
         rider_image=rider_image,
         bike_image=bike_image,
         bike_name=bike.name if bike else None,
         changes=changes,
         stage=stage_id,
+        bike_scene=bike_scene,
+        scene_pending=scene_pending,
         stages=owned,
         status="ok" if (rider_image and bike_image) else "needs_assets",
     )
@@ -565,6 +579,9 @@ def _rider_key(rider: GarageAsset, worn: str) -> str:
 
 
 def _bike_key(bike: GarageAsset, equipped: list[str], stage_id: str) -> str:
+    from app.services import scene_render
+    if stage_id in scene_render.READY:
+        return scene_render.cache_key(bike, stage_id)
     stamp = (bike.updated_at or bike.created_at).isoformat()
     return bike_build.build_key(bike.id, stamp, equipped, stage_id)
 
@@ -573,7 +590,7 @@ async def _cached_render(db: AsyncSession, key: str) -> str | None:
     row = (await db.execute(
         select(BikeRender).where(BikeRender.build_key == key)
     )).scalar_one_or_none()
-    return row.image if row is not None and row.image else None
+    return row.image if row is not None and row.status == "ok" and row.image else None
 
 
 async def _store_render(db: AsyncSession, key: str, image: str) -> None:
@@ -629,6 +646,10 @@ async def render_today_stage(
     stage_id = await _selected_backdrop(db, current_user.id)
     stage = await stages.stage_for(db, stage_id)
 
+    from app.services import scene_render, stage_unlock
+    if stage_id in scene_render.READY:
+        stage_unlock.warm(current_user.id, [stage_id])
+
     # THE BUST, wearing what the rider owns. Re-rendered rather than edited:
     # a helmet changes the silhouette of the head, which is more than an edit
     # pass holds onto, and the bust is cheap to redraw from its description.
@@ -649,7 +670,7 @@ async def render_today_stage(
     if bike is not None and bike.image_url:
         key = _bike_key(bike, equipped, stage_id)
         needs = not bike_build.is_stock(equipped) or stage.id != backdrops.DEFAULT_ID
-        if needs and not await _cached_render(db, key):
+        if needs and stage_id not in backdrops.scene_catalogue.RELEASED and not await _cached_render(db, key):
             # PROSE, NOT THE PLATE, and this was settled on the evidence rather
             # than by preference. Handing the model the bike AND the place plate
             # asks an image-conditioned EDIT to do a compositing job — rescale a
@@ -1532,7 +1553,7 @@ async def _unlocked_backdrops(db: AsyncSession, user_id: int) -> list[str]:
     earned = set((await db.execute(
         select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == user_id)
     )).scalars().all())
-    live = set(backdrops.unlocked_ids(await _cheap_history_facts(db, user_id)))
+    live = set(backdrops.unlocked_ids(await _cheap_history_facts(db, user_id))) - backdrops.scene_catalogue.RELEASED
     have = earned | live | set(backdrops.STARTERS)
     return [b for b in backdrops.CATALOGUE if b in have]
 
@@ -1821,7 +1842,13 @@ async def select_backdrop(
         row.backdrop = backdrop_id
     await db.commit()
 
-    return await get_today_stage(current_user, db)
+    from app.services import stage_unlock, scene_render
+    if backdrop_id in scene_render.READY:
+        stage_unlock.warm(current_user.id, [backdrop_id])
+    result = await get_today_stage(current_user, db)
+    if backdrop_id in scene_render.READY and not result.bike_scene:
+        result.scene_pending = True
+    return result
 
 
 def _route_points(data: dict) -> list[tuple[float, float]]:
@@ -2112,6 +2139,12 @@ class GalleryStageOut(BaseModel):
     #: anything granted by the live history check rather than at ingestion.
     unlocked_at: datetime | None
     activity_id: int | None
+    plate_url: str | None = None
+    tier: str = "alltag"
+    starter: bool = False
+    selected: bool = False
+    progress: dict | None = None
+    render_status: str = "missing"
 
 
 class GalleryOut(BaseModel):
@@ -2134,6 +2167,8 @@ async def get_gallery(
     somebody else's bike standing in it.
     """
     owned_ids = set(await _unlocked_backdrops(db, current_user.id))
+    selected = await _selected_backdrop(db, current_user.id)
+    history = await _cheap_history_facts(db, current_user.id)
 
     rows = (await db.execute(
         select(RiderBackdrop).where(RiderBackdrop.user_id == current_user.id)
@@ -2149,20 +2184,27 @@ async def get_gallery(
 
     keys: dict[str, str] = {}
     if asset is not None and asset.image_url:
-        stamp = (asset.image_url or "")[-32:]
+        stamp = (asset.updated_at or asset.created_at).isoformat()
         for sid in owned_ids:
-            keys[sid] = bike_build.build_key(asset.id, stamp, equipped, backdrop=sid)
+            keys[sid] = _bike_key(asset, equipped, sid)
 
     images: dict[str, str] = {}
+    statuses: dict[str, str] = {}
     if keys:
         found = (await db.execute(
             select(BikeRender).where(BikeRender.build_key.in_(list(keys.values())))
         )).scalars().all()
-        by_key = {r.build_key: r for r in found if r.image}
+        by_key = {r.build_key: r for r in found}
         for sid, k in keys.items():
             row = by_key.get(k)
             if row is not None:
-                images[sid] = row.image
+                statuses[sid] = row.status
+                if row.status == "ok" and row.image:
+                    if sid in backdrops.scene_catalogue.RELEASED:
+                        from app.services import scene_render
+                        images[sid] = await run_in_threadpool(scene_render.display_image, row.image)
+                    else:
+                        images[sid] = row.image
 
     stages = [
         GalleryStageOut(
@@ -2171,6 +2213,12 @@ async def get_gallery(
             unlock_de=b.unlock_de,
             owned=b.id in owned_ids,
             image=images.get(b.id),
+            render_status=statuses.get(b.id, "missing"),
+            plate_url=backdrops.scene_catalogue.plate_url(b.id),
+            tier=backdrops.scene_catalogue.CATALOGUE[b.id].tier if b.id in backdrops.scene_catalogue.CATALOGUE else "alltag",
+            starter=b.is_starter,
+            selected=b.id == selected,
+            progress=backdrops.scene_catalogue.progress(backdrops.scene_catalogue.CATALOGUE[b.id], history) if b.id in backdrops.scene_catalogue.CATALOGUE else None,
             unlocked_at=getattr(meta.get(b.id), "unlocked_at", None),
             activity_id=getattr(meta.get(b.id), "activity_id", None),
         )
@@ -2211,3 +2259,21 @@ async def get_unlocked_by(
     gallery = await get_gallery(current_user, db)
     by_id = {s.id: s for s in gallery.stages}
     return RideUnlockOut(stages=[by_id[i] for i in ids if i in by_id])
+
+
+@router.get("/gallery/{stage_id}/image", summary="The rider's original checked scene for sharing")
+async def get_gallery_image(
+    stage_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    if stage_id not in await _unlocked_backdrops(db, current_user.id):
+        raise HTTPException(status_code=403, detail="Diese Kulisse ist noch nicht freigeschaltet.")
+    bike = await _get_asset(db, current_user.id, "bike")
+    if bike is None:
+        raise HTTPException(status_code=404, detail="Dein Fahrrad fehlt noch.")
+    equipped = await gear.equipped_ids(db, current_user.id)
+    image = await _cached_render(db, _bike_key(bike, equipped, stage_id))
+    if image is None:
+        raise HTTPException(status_code=404, detail="Dein Bild ist noch nicht bereit.")
+    return {"image": image}

@@ -48,6 +48,7 @@ export function earnedToday(ledger: { amount: number; at: string | null }[] | nu
 export function heroVm(s: HeroSources): W3StageVm {
   const collectible = s.collection?.render ?? itemById(s.collection?.loadout.bike)?.art ?? null
   const wantsCollection = s.stageBike === 'collection' && collectible != null
+  const scene = !wantsCollection && s.stage?.bike_scene === true && Boolean(s.stage?.bike_image)
   return {
     handle: s.displayName ? `@${s.displayName}` : '@rider',
     role: blockLine(s.meso ?? null),
@@ -55,9 +56,9 @@ export function heroVm(s: HeroSources): W3StageVm {
     // bare-headed collectible until then.
     rider: s.stage?.rider_image ?? s.garage?.rider?.image_base64 ?? null,
     // Generated backdrop scenes must not replace the saved bicycle identity.
-    bike: wantsCollection ? collectible : s.garage?.bike?.image_base64 ?? collectible,
+    bike: scene ? s.stage!.bike_image : wantsCollection ? collectible : s.garage?.bike?.image_base64 ?? collectible,
     bikeStudioArt: wantsCollection || (s.garage?.bike?.image_base64 == null && collectible != null),
-    bikeInScene: false,
+    bikeInScene: scene,
     bikeName: wantsCollection
       ? itemById(s.collection?.loadout.bike)?.name ?? 'Dein Bike'
       : s.stage?.bike_name ?? s.garage?.bike?.name ?? 'Dein Bike',

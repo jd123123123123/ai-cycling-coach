@@ -33,6 +33,7 @@ import type { Loadout } from '../../api/shop'
  */
 
 export interface W3GarageProps {
+  stagePreview?: React.ReactNode
   balance: number | null
   owned: Set<string>
   loadout: Loadout | undefined
@@ -58,7 +59,7 @@ export interface W3GarageProps {
 const TIER_LABEL = new Map(TIERS.map((t) => [t.tier, t.label]))
 
 export default function W3GarageView({
-  balance, owned, loadout, busyId, soul, render, rendering, onEquip, onOpenShop, slots,
+  stagePreview, balance, owned, loadout, busyId, soul, render, rendering, onEquip, onOpenShop, slots,
 }: W3GarageProps) {
   const reduce = useReducedMotion()
   const bike = itemById(loadout?.bike)
@@ -117,7 +118,7 @@ export default function W3GarageView({
               >
                 {/* One stage, shared with the shop and the first-bike screen,
                     so the same bike never looks like two different objects. */}
-                <W3BikeStage src={hero} alt={bike.name} rendering={rendering} />
+                {stagePreview ?? <W3BikeStage src={hero} alt={bike.name} rendering={rendering} />}
               </motion.div>
             ) : (
               <div style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center' }}>

@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useGear, useBuyGear, useEquipGear } from '../../hooks/useGear'
-import { useBackdrops, useBuyPlace, useSelectStage } from '../../hooks/useGarage'
+import { useTodayStage, useBackdrops, useBuyPlace, useSelectStage } from '../../hooks/useGarage'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { bikeSoul } from './w3BikeSoul'
+import { ScenePortrait } from './W3SceneCollection'
+import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import W3GarageView from './W3GarageView'
 import W3Loading from './W3Loading'
 import W3LoadError from './W3LoadError'
@@ -27,6 +29,8 @@ import type { ShopItem } from './w3shop'
  */
 export default function W3GaragePage() {
   const navigate = useNavigate()
+  const { data: currentStage } = useTodayStage()
+  const { data: profile } = useAthleteProfile()
   const { data, isLoading, isError, refetch, isFetching } = useGarageCollection()
   const equip = useEquipItem()
   // The garage is where a build is looked at, so it is where one gets made.
@@ -115,6 +119,7 @@ export default function W3GaragePage() {
 
   return (
     <W3GarageView
+      stagePreview={currentStage?.bike_scene && currentStage.bike_image && profile?.goals?.stage_bike !== 'collection' ? <ScenePortrait fill scene={{ id: currentStage.stage, plate_url: null, image: currentStage.bike_image }} bike={null} /> : undefined}
       balance={data?.balance ?? null}
       owned={owned}
       loadout={data?.loadout}

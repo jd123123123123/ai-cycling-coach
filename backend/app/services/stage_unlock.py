@@ -99,8 +99,12 @@ async def _render_one(user_id: int, stage_id: str) -> None:
     transaction, which will have been committed and closed long before an image
     model answers.
     """
+    from app.services import scene_render
+    if stage_id in scene_render.READY:
+        await scene_render.render(user_id, stage_id)
+        return
     stage = backdrops.CATALOGUE.get(stage_id)
-    if stage is None or stage.is_starter:
+    if stage is None or stage.is_starter or stage_id in backdrops.scene_catalogue.RELEASED:
         return
 
     # Imported here rather than at module scope: `cyclr_studio` pulls in the

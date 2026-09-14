@@ -58,3 +58,11 @@ describe('heroVm · absence is stated, not invented', () => {
     expect(vm.bonus).not.toBeNull()
   })
 })
+
+it('uses only a checked complete scene, and respects the selected collection bicycle', () => {
+  const checked = { ...(stage('CHECKED') as object), bike_scene:true } as never
+  expect(heroVm({...EMPTY,stage:checked,garage:garage('OWN')}).bikeInScene).toBe(true)
+  const collection = heroVm({...EMPTY,stage:checked,garage:garage('OWN'),stageBike:'collection',collection:{render:'COLLECTION',loadout:{}}})
+  expect(collection.bike).toBe('COLLECTION')
+  expect(collection.bikeInScene).toBe(false)
+})

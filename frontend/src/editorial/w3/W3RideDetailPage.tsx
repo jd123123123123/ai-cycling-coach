@@ -13,6 +13,7 @@ import { useChest, useClaimRide, useRideEarning } from '../../hooks/useWallet'
 import { useRideScene, useRenderRideScene } from '../../hooks/useGarage'
 import { useRehearseRoute } from '../../hooks/useRehearseRoute'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
+import W3RideStageRewards from './W3RideStageRewards'
 import W3RideDetailView, { type W3RideVm, type W3RideSceneState, type W3SceneStatus, type W3Zone, type W3Rank, type W3Repeat, type MovedRow } from './W3RideDetailView'
 import W3Loading from './W3Loading'
 import W3StatusBar from './W3StatusBar'
@@ -809,6 +810,7 @@ export default function W3RideDetailPage() {
 
   const detail = (
     <W3RideDetailView
+      stageRewards={activityId ? <W3RideStageRewards activityId={activityId} /> : undefined}
       vm={{ ...vm, hero: heroVm }}
       trainingReview={trainingReview.data ? <W3TrainingReview review={trainingReview.data} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
       scene={scene}
@@ -862,6 +864,7 @@ export default function W3RideDetailPage() {
         {/* The payoff fires on the claim itself — the burst was finished art
             that only the orphaned /e/w3-ride-points route ever mounted. */}
         <W3CoinBurst active={claim.isSuccess} />
+        {activityId && <W3RideStageRewards activityId={activityId} autoReveal={claim.isSuccess} quiet />}
       </div>
     </div>
   )

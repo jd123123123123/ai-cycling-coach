@@ -208,11 +208,16 @@ async def _open_backdrops(
         select(RiderBackdrop.backdrop).where(RiderBackdrop.user_id == user_id)
     )).scalars().all())
     fresh = [b for b in earned if b not in have]
-    for b in fresh:
-        db.add(RiderBackdrop(user_id=user_id, backdrop=b, activity_id=activity.id))
-    if fresh:
-        await db.commit()
-    return fresh
+    if not fresh:
+        return []
+    # Providers may settle the same ride concurrently. The database owns uniqueness.
+    from sqlalchemy.dialects.postgresql import insert
+    result = await db.execute(insert(RiderBackdrop).values([
+        {"user_id": user_id, "backdrop": b, "activity_id": activity.id} for b in fresh
+    ]).on_conflict_do_nothing(index_elements=["user_id", "backdrop"]).returning(RiderBackdrop.backdrop))
+    inserted = set(result.scalars().all())
+    await db.commit()
+    return [b for b in fresh if b in inserted]
 
 
 def _route_points(data: dict) -> list[tuple[float, float]]:

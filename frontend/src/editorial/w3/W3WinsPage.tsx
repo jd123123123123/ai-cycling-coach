@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Bike, Flag, Gauge, Medal, Mountain, Route, Sunrise, Timer, Trophy, Zap } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -10,6 +10,7 @@ import { useFtpHistory } from '../../hooks/useFtpHistory'
 import { DASH } from './w3tokens'
 import { useHeroPanel } from './W3HeroShell'
 import { W3WinsContent, type W3WinsVm, type W3Beam, type W3Medal, type W3Milestone } from './W3WinsView'
+import W3SceneCollection from './W3SceneCollection'
 import W3WinsDockPanel from './W3WinsDockPanel'
 
 /**
@@ -90,6 +91,7 @@ function hms(total: number): string {
 }
 
 export default function W3WinsPage() {
+  const [section, setSection] = useState<'collection' | 'performance'>('collection')
   const nav = useNavigate()
   const { data: challengeFeed } = useRewardChallenges()
   const { data: curveData, isLoading: curveLoading } = usePowerProfileView()
@@ -406,7 +408,7 @@ export default function W3WinsPage() {
 
   // A failed achievements read must say so and offer a retry, never fall
   // through to the "you have never ridden" sentence.
-  if (achError && !ach) {
+  if (section === 'performance' && achError && !ach) {
     return (
       <>
         {portal}
@@ -423,7 +425,8 @@ export default function W3WinsPage() {
   return (
     <>
       {portal}
-      <W3WinsContent vm={vm} />
+      <nav className="w3-wins-tabs" aria-label="Erfolge-Bereich"><button aria-pressed={section === 'collection'} onClick={() => setSection('collection')}>Sammlung</button><button aria-pressed={section === 'performance'} onClick={() => setSection('performance')}>Leistung & Abzeichen</button></nav>
+      {section === 'collection' ? <W3SceneCollection /> : <W3WinsContent vm={vm} />}
     </>
   )
 }

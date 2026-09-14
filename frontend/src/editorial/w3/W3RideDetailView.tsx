@@ -112,6 +112,7 @@ const SCENE_IDLE: W3RideSceneState = { status: 'loading', image: null, pending: 
 
 export interface W3RideDetailProps {
   vm: W3RideVm
+  stageRewards?: ReactNode
   trainingReview?: ReactNode
   /** Omitted → the cover stays the route trace, exactly as before. */
   scene?: W3RideSceneState
@@ -336,7 +337,7 @@ function SceneNote({ text, action, onClick }: { text: string; action?: string; o
     : <div style={box}>{body}</div>
 }
 
-export default function W3RideDetailView({ vm, trainingReview, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap, onRehearse, rehearsePending, rehearseError }: W3RideDetailProps) {
+export default function W3RideDetailView({ stageRewards, vm, trainingReview, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap, onRehearse, rehearsePending, rehearseError }: W3RideDetailProps) {
   // ── THE CHAPTERS ARE NUMBERED BY WHAT ACTUALLY RENDERS ──────────────────
   // These ordinals were hardcoded "01".."05", and two of the five are
   // conditional — the repeat set and the season push. So a free outdoor ride,
@@ -392,6 +393,7 @@ export default function W3RideDetailView({ vm, trainingReview, scene = SCENE_IDL
              card (a proportion of threshold, which is what IF actually is,
              instead of a word in a pill), and distance is the first of the
              three stats under the duration. See `W3RideMapHero`. ── */}
+        {stageRewards}
         <W3RideMapHero
           vm={vm.hero}
           onExpandMap={onExpandMap}

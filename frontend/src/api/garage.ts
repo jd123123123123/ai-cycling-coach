@@ -163,6 +163,8 @@ export interface TodayStage {
   /** What the model was asked to change, so a build can be explained. */
   changes: string[]
   stage: string
+  bike_scene?: boolean
+  scene_pending?: boolean
   stages: Stage[]
   status: 'ok' | 'needs_assets' | string
 }

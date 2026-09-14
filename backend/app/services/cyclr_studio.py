@@ -586,6 +586,7 @@ async def _render(
     contents: list, seed_src: str, size: str, aspect: str = "1:1", *,
     frame_ratio: float | None = None,
     model: str | None = None,
+    sampling: dict | None = None,
 ) -> str | None:
     """Ask the image model for one picture. Returns None rather than raising.
 
@@ -628,6 +629,7 @@ async def _render(
                 contents=contents,
                 config=types.GenerateContentConfig(
                     response_modalities=["Image"],
+                    **(sampling or {}),
                     seed=_seed(seed_src),
                     image_config=types.ImageConfig(
                         aspect_ratio=aspect, image_size=attempt_size,
@@ -1575,6 +1577,7 @@ async def edit_image(
     base_b64: str, prompt: str, seed_src: str, size: str = "", *,
     extra_b64: str | None = None, aspect: str = "1:1",
     frame_ratio: float | None = None,
+    sampling: dict | None = None,
 ) -> str | None:
     """Image-conditioned edit: hand a picture back with an instruction.
 
@@ -1613,7 +1616,7 @@ async def edit_image(
     # resolution at which this model spells a Standert "Stanlert". A size the
     # model cannot do is still safe to ask for — `_render` retries at 1K.
     return await _render(contents, seed_src, size or RENDER_SIZE, aspect,
-                         frame_ratio=frame_ratio)
+                         frame_ratio=frame_ratio, sampling=sampling)
 
 
 def _img_part(photo_b64: str):

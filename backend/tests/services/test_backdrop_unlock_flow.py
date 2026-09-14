@@ -85,8 +85,8 @@ async def test_200km_persists_unlock_and_selects_it_without_replacing_base_bike(
     db = local_db
     await assert_locked(db)
     await ride_economy._pay_gear(db, 1, ride(), base_rc=100, chain_km=200, facts=facts())
-    assert await stage_unlock.unlocked_by(db, 1, 200) == ["coast_road"]
-    stage_unlock.warm.assert_called_once_with(1, ["coast_road"])
+    assert await stage_unlock.unlocked_by(db, 1, 200) == ["coast_road", "startrampe"]
+    stage_unlock.warm.assert_called_once_with(1, ["coast_road", "startrampe"])
     # Re-read from storage, as a later Studio request does.
     db.session.expire_all()
     selected = await garage.select_backdrop("coast_road", SimpleNamespace(id=1), db)
@@ -104,14 +104,15 @@ async def test_resync_and_another_200km_ride_do_not_grant_or_warm_twice(local_db
         await ride_economy._pay_gear(local_db, 1, ride(activity_id=activity_id),
                                      base_rc=100, chain_km=200, facts=facts())
     rows = (await local_db.execute(select(RiderBackdrop))).scalars().all()
-    assert [(r.backdrop, r.activity_id) for r in rows] == [("coast_road", 200)]
-    assert await stage_unlock.unlocked_by(local_db, 1, 200) == ["coast_road"]
+    assert [(r.backdrop, r.activity_id) for r in rows] == [("coast_road", 200), ("startrampe", 200)]
+    assert await stage_unlock.unlocked_by(local_db, 1, 200) == ["coast_road", "startrampe"]
     assert await stage_unlock.unlocked_by(local_db, 1, 201) == []
-    stage_unlock.warm.assert_called_once_with(1, ["coast_road"])
+    stage_unlock.warm.assert_called_once_with(1, ["coast_road", "startrampe"])
 
 
-@pytest.mark.parametrize("distance,expected", [(99_999, []), (100_000, ["coast_road"]),
-                                               (199_999, ["coast_road"]), (200_000, ["coast_road"])])
+@pytest.mark.parametrize("distance,expected", [(49_999, []), (50_000, []),
+    (99_999, []), (100_000, ["coast_road"]),
+    (199_999, ["coast_road"]), (200_000, ["coast_road", "startrampe"])])
 async def test_distance_threshold(local_db, distance, expected):
     assert await ride_economy._open_backdrops(local_db, 1, ride(distance), facts(distance)) == expected
 
@@ -125,7 +126,7 @@ async def test_old_200km_ride_does_not_unlock(local_db):
 async def test_two_shorter_rides_are_not_added_into_one_distance_reward(local_db):
     for activity_id in (1, 2):
         assert await ride_economy._open_backdrops(local_db, 1, ride(60_000, activity_id=activity_id),
-                                                 facts(60_000)) == []
+                                                 facts(60_000)) == ([] if activity_id == 1 else [])
     await assert_locked(local_db)
 
 
@@ -142,3 +143,35 @@ async def test_warmed_image_is_reused_by_studio_with_original_bike_and_framing(l
     await stage_unlock._render_one(1, "coast_road")
     cyclr_studio.edit_image.assert_awaited_once()
     assert (await garage._get_asset(local_db, 1, "bike")).image_url == "original-bike-image"
+
+
+async def test_scene_select_keeps_original_until_guarded_render_is_ready(local_db):
+    await ride_economy._open_backdrops(local_db, 1, ride(), facts())
+    stage = await garage.select_backdrop("startrampe", SimpleNamespace(id=1), local_db)
+    assert stage.bike_scene is False
+    assert stage.bike_image == "original-bike-image"
+
+    cyclr_studio.edit_image.assert_not_awaited()
+    with pytest.raises(HTTPException) as exc:
+        await garage.select_backdrop("startrampe", SimpleNamespace(id=2), local_db)
+    assert exc.value.status_code == 403
+
+async def test_gallery_matches_renderer_cache_key(local_db):
+    await ride_economy._open_backdrops(local_db, 1, ride(), facts())
+    await stage_unlock._render_one(1, "coast_road")
+    view = await garage.get_gallery(SimpleNamespace(id=1), local_db)
+    assert next(s for s in view.stages if s.id == "coast_road").image == "simulated-render"
+    assert next(s for s in view.stages if s.id == "startrampe").activity_id == 200
+    assert view.owned_count == sum(s.owned for s in view.stages)
+
+async def test_scene_master_requires_ownership(local_db):
+    await ride_economy._open_backdrops(local_db, 1, ride(), facts())
+    with pytest.raises(HTTPException) as exc:
+        await garage.get_gallery_image('startrampe', SimpleNamespace(id=2), local_db)
+    assert exc.value.status_code == 403
+
+async def test_scene_master_does_not_return_unchecked_preview(local_db):
+    await ride_economy._open_backdrops(local_db, 1, ride(), facts())
+    with pytest.raises(HTTPException) as exc:
+        await garage.get_gallery_image('startrampe', SimpleNamespace(id=1), local_db)
+    assert exc.value.status_code == 404

@@ -176,6 +176,7 @@ export function useTodayStage() {
   return useQuery<TodayStage>({
     queryKey: TODAY_STAGE_KEY,
     queryFn: fetchTodayStage,
+    refetchInterval: query => query.state.data?.scene_pending ? 5000 : false,
     staleTime: 10 * 60 * 1000,
     gcTime: 10 * 60 * 1000,
   })
@@ -207,7 +208,7 @@ export function useSelectStage() {
     onMutate: async (id: string) => {
       await qc.cancelQueries({ queryKey: TODAY_STAGE_KEY })
       const previous = qc.getQueryData<TodayStage>(TODAY_STAGE_KEY)
-      if (previous) qc.setQueryData<TodayStage>(TODAY_STAGE_KEY, { ...previous, stage: id })
+      if (previous) qc.setQueryData<TodayStage>(TODAY_STAGE_KEY, { ...previous, stage: id, bike_scene: false, scene_pending: true })
       return { previous }
     },
     onError: (_e, _id, ctx) => {

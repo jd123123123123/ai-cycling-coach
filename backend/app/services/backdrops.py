@@ -210,6 +210,14 @@ _ALL: list[Backdrop] = [
     ),
 ]
 
+# New scenes join only after their canonical empty stage has passed visual review.
+from app.services import scene_catalogue
+
+_ALL.extend(Backdrop(
+    id=scene.id, name_de=scene.name_de, prose=scene.prose, unlock_de=scene.unlock_de,
+    unlocked_by=lambda f, scene=scene: scene_catalogue.matches(scene, f),
+) for scene in scene_catalogue.SCENES if scene.id in scene_catalogue.RELEASED)
+
 CATALOGUE: dict[str, Backdrop] = {b.id: b for b in _ALL}
 
 #: What a rider gets before they have ridden anything at all.
@@ -232,7 +240,7 @@ DEFAULT_ID = "studio_black"
 #: history. Kept as data rather than as a comment so the two halves cannot
 #: silently drift apart — `test_backdrops` asserts this set is exactly the set
 #: of rules that read a weather fact.
-NEEDS_WEATHER: frozenset[str] = frozenset({"rain_road", "winter_road"})
+NEEDS_WEATHER: frozenset[str] = frozenset({"rain_road", "winter_road", "waschanlage"})
 
 
 def earned_by(facts: RideFacts) -> list[str]:

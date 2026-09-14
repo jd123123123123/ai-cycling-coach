@@ -1,13 +1,12 @@
-import { describe, it, expect, beforeAll } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest'
 import { setShareInviteCode, shareInviteCode } from '../w3share'
 import { inviteUrl, inviteDisplay } from '../w3invite'
 
 describe('invite on shared cards', () => {
   beforeAll(() => {
-    Object.defineProperty(window, 'location', {
-      value: { origin: 'https://ridr.app', host: 'ridr.app' }, writable: true,
-    })
+    vi.stubGlobal('window', { location: { origin: 'https://ridr.app', host: 'ridr.app' } })
   })
+  afterAll(() => vi.unstubAllGlobals())
   it('builds the short url the register route accepts', () => {
     expect(inviteUrl('ABC123')).toBe('https://ridr.app/r/ABC123')
   })

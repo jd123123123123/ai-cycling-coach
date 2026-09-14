@@ -62,8 +62,8 @@ def test_the_weather_gated_set_is_exactly_what_it_claims():
     """`NEEDS_WEATHER` drives a real split — those rules are earned at
     ingestion, the rest evaluate live over history. If a new rule starts reading
     a weather fact without joining the set, it silently never unlocks."""
-    wet = em.RideFacts(was_wet=True, temp_c=-5)
-    dry = em.RideFacts(was_wet=False, temp_c=20)
+    wet = em.RideFacts(was_wet=True, temp_c=-5, distance_m=50000, duration_s=8000, elevation_gain_m=20)
+    dry = em.RideFacts(was_wet=False, temp_c=20, distance_m=50000, duration_s=8000, elevation_gain_m=20)
     reads_weather = {
         b.id for b in backdrops.CATALOGUE.values()
         if not b.is_starter and b.unlocked_by(wet) != b.unlocked_by(dry)  # type: ignore[misc]
