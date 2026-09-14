@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "roles": [
+    {"id":"awwwards","focus":"Visual hierarchy, composition, distinctive craft without decoration for its own sake."},
+    {"id":"apple-design-award","focus":"Interaction clarity, motion continuity, platform conventions and polish."},
+    {"id":"amateur","focus":"A recreational cyclist without a power meter: comprehension and next action."},
+    {"id":"pro","focus":"An ambitious rider: metric meaning, uncertainty and actionable training decisions."},
+    {"id":"whoop-product","focus":"Recovery and training product perspective: coherent data-to-action flow."},
+    {"id":"psychology","focus":"Motivation, autonomy, honest expectations and absence of coercion or shame."},
+    {"id":"gamification","focus":"Earned progression, understandable rewards and no fabricated scarcity."},
+    {"id":"accessibility","focus":"Contrast, focus, touch targets, text scaling, reduced motion and overflow."},
+    {"id":"design-system","focus":"W3 colors, typography, spacing, component anatomy and consistency."}
+  ],
+  "disclaimer":"All roles are synthetic review perspectives, not employees, award jurors, clinical experts or real user research."
+}
