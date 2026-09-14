@@ -41,3 +41,9 @@ The rendered case uses a single 800 × 754 coordinate system. Its visible seam w
 Personal invitation uses the existing authenticated /referrals/mine code and /r/:code route. The detail footer links to it, the exported image prints the full host and referral path, and native sharing includes the URL. Local preview uses an explicitly synthetic DEMO26 code. No code is invented for production; sharing retries retrieval if necessary.
 
 Scene deployment remains pending visual approval after the subsequent mobile/animation revisions. The Plan release c99d66a was independently deployed successfully as Railway 0a2624c2-2a29-4b5e-b0cc-efbc189e1563. Its full commit chain must be preserved before any scene deployment.
+
+## Integrated validation checkpoint
+
+Scene commits e0294f8/e14f00c are combined with the complete production Plan chain (17f16ef, 8ed9068, 3d07ce8, c99d66a cherry-picked as 3e5f2c1, 422d4f4, bbe0bfb, 288fdc6). After integration, 82 focused backend tests passed, including plan-state/custom-goal and scene ownership/render guards. Twelve invitation/hero view-model tests passed. TypeScript and production build passed, with the existing large-map chunk warning. This is still a local scene review build; no scene deployment occurred.
+
+The user requested another visual challenge after the Houston headline change and the removal of floating particles. An independent reviewer is inspecting the actual preview, not only the source. A separate agent is creating 50 additional Easter-Egg concepts and a separate isolated worktree is redesigning the profile after a four-perspective concept critique. Neither work item is automatically included in the scene release.
