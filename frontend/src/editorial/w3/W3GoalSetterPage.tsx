@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { updateGoals } from '../../api/athletes'
-import { applyPlanChange, type InterviewAnswers } from '../../api/plan'
+import { applyPlanChange, buildPlan, type InterviewAnswers } from '../../api/plan'
 import { WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import W3GoalSetter, { type GoalDraft, type GoalKind } from './W3GoalSetter'
@@ -64,15 +64,17 @@ export default function W3GoalSetterPage() {
           target_ftp: d.targetFtp ?? undefined,
           target_event_date: d.dateISO ?? undefined,
         })
+        await buildPlan('plan_change')
       } else {
         return false
       }
+      void qc.invalidateQueries({ queryKey: ['plan', 'current'] })
       void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
       void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
       // ['athlete','me'] is the real profile key (useAthleteProfile) — the old
       // ['athlete','profile'] matched nothing, so /e/w3-plan read a stale goal.
       void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
-      navigate('/e/w3-plan')
+      navigate('/e/w3-plan?created=1')
       return true
     } catch {
       return false

@@ -161,3 +161,15 @@ export async function buildPlan(
   const res = await apiClient.post<PlanBuildResponse>('/plan/build', { source })
   return res.data
 }
+
+export interface CurrentPlanResponse {
+  plan_start_date: string | null
+  plan_end_date: string | null
+  phase: string | null
+  weekly_tss_targets: number[] | null
+  planned_hours: number | null
+  status: 'empty' | 'active' | 'ended'
+}
+export async function fetchCurrentPlan(): Promise<CurrentPlanResponse> {
+  return (await apiClient.get<CurrentPlanResponse>('/plan/current')).data
+}

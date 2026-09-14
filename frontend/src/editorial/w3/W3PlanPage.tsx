@@ -1,29 +1,26 @@
-import { useCallback, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useCallback, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
-import { buildPlan, applyPlanChange, type InterviewAnswers } from '../../api/plan'
+import { fetchCurrentPlan, applyPlanChange, type InterviewAnswers } from '../../api/plan'
 import { listRehearsals, getRehearsal } from '../../api/rehearsal'
-import { modifyTodayWorkout, undoTodayModify, type TodayModificationType } from '../../api/todayModify'
 import type { DayPlan } from '../../api/weeks'
 import {
   parseISO, addDays, daysBetween, fmtRange, fmtDE, fmtDEShort, weeksDaysLabel, fmtHoursHM,
   planDurSec, isSessionDay, planIF, planTargetWatts, blocksFromIntervals, enduranceEnvelope,
-  displayPhase, phaseRail, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
+  displayPhase, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
 } from './w3plan'
-import { hasPersonalPlan, hasPlanFromWeek } from './w3hasPlan'
+import { hasPersonalPlan } from './w3hasPlan'
 import { useStreak } from '../../hooks/useStreak'
 import { forecastRideRc, streakMultiplier, formatMultiplier } from '../../api/rewards'
 import W3Loading from './W3Loading'
 import W3LoadError from './W3LoadError'
-import W3PlanEmptyView, { type W3PlanEmptyVm } from './W3PlanEmptyView'
-import { useHeroPanel } from './W3HeroShell'
-import W3PlanView, {
-  type W3PlanVm, type GoalOption, type AdaptKind, type AdaptResult,
-  type RebuildPayload, type GoalSwitchPayload, type PlanDaySession,
+import type {
+  W3PlanVm, GoalOption,
+  RebuildPayload, PlanDaySession,
 } from './W3PlanView'
 import { DASH } from './w3tokens'
 // THE DOCK, in the idiom Today and Fahrten share. The plan used to open on a
@@ -31,7 +28,7 @@ import { DASH } from './w3tokens'
 // and its meter — so the plan was the odd screen out on the first thing a
 // rider sees. Its own big number is the countdown, and its meter is the
 // periodisation: Grundlage · Aufbau · Spezifisch · Taper.
-import W3PlanDock from './W3PlanDock'
+import W3PlanExperience from './W3PlanExperience'
 
 /**
  * W3 · TRAININGSPLAN, wired to the REAL periodization engine. Route /e/w3-plan.
@@ -57,9 +54,11 @@ const EVENT_NAME: Record<string, string> = {
 
 export default function W3PlanPage() {
   const navigate = useNavigate()
+  const [params, setParams] = useSearchParams()
+  const [weekOffset, setWeekOffset] = useState(0)
   const qc = useQueryClient()
-  const { data: week, isLoading: weekLoading, isError: weekError, refetch: refetchWeek, isFetching: weekFetching } = useCurrentWeek(0)
-  const { data: profile } = useAthleteProfile()
+  const { data: week, isLoading: weekLoading, isError: weekError, refetch: refetchWeek, isFetching: weekFetching } = useCurrentWeek(weekOffset)
+  const { data: profile, isLoading: profileLoading } = useAthleteProfile()
   const { data: streak } = useStreak()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
   const { data: seasonActs } = useActivitiesRange(seasonStart, new Date())
@@ -71,7 +70,7 @@ export default function W3PlanPage() {
   // but for an athlete who has none it is a constructor, and firing it on mount
   // would give every visitor a plan they never asked for and delete the empty
   // state by visiting it. Gated on the same rule the render branches on.
-  const hasPlan = hasPlanFromWeek(week) && hasPersonalPlan(profile)
+  const hasPlan = hasPersonalPlan(profile)
   // A PLAN AND A GOAL ARE DIFFERENT THINGS, and only the PLAN decides which
   // shape this route takes. `w3hasPlan` exists precisely so Today and this page
   // cannot disagree about that — "two screens deciding the same thing from two
@@ -85,11 +84,10 @@ export default function W3PlanPage() {
   // no dated event and asks for one instead, deriving it from `daysToStart` so
   // there is no second source for that either). Asking is not the same as
   // pretending the training does not exist.
-  const { data: plan } = useQuery({
-    queryKey: ['plan', 'build'],
-    queryFn: () => buildPlan('onboarding'),
-    enabled: hasPlan,
-    staleTime: 60 * 60 * 1000,
+  const { data: plan, isLoading: planLoading, isError: planError, refetch: refetchPlan } = useQuery({
+    queryKey: ['plan', 'current'],
+    queryFn: fetchCurrentPlan,
+    staleTime: 60_000,
     retry: false,
   })
   // Reuse-only: the parsed target-event route (distance/elevation) if the athlete
@@ -123,7 +121,7 @@ export default function W3PlanPage() {
 
     // ── event identity ──
     const eventDate = profile?.target_event_date ? parseISO(profile.target_event_date) : null
-    const eventName = goals?.target_event_name || EVENT_NAME[profile?.target_event_type ?? ''] || 'Kein Ziel gesetzt'
+    const eventName = goals?.target_event_name || (goals?.target_ftp ? `FTP → ${goals.target_ftp} W` : '') || EVENT_NAME[profile?.target_event_type ?? ''] || 'Kein Ziel gesetzt'
     const targetRe = rehearsals?.find((r) => r.source_kind === 'target_event') ?? null
     const distKm = targetRe ? Math.round(targetRe.distance_m / 1000) : null
     const hm = targetRe ? Math.round(targetRe.ascent_m) : null
@@ -137,15 +135,15 @@ export default function W3PlanPage() {
     const daysToStart = meso?.days_to_event ?? (eventDate ? Math.max(0, daysBetween(today, eventDate)) : null)
     const targets = plan?.weekly_tss_targets ?? null
     const planStart = plan?.plan_start_date ? parseISO(plan.plan_start_date) : null
-    const totalWeeks = targets?.length ?? (daysToStart != null ? Math.max(4, Math.ceil(daysToStart / 7)) : 12)
+    const totalWeeks = targets?.length ?? 0
     const currentIdx = planStart
       ? Math.max(0, Math.min(totalWeeks - 1, Math.floor(daysBetween(planStart, today) / 7)))
       : Math.max(0, totalWeeks - (daysToStart != null ? Math.ceil(daysToStart / 7) : totalWeeks))
     const planWeek = currentIdx + 1
 
     // ── phase rail (active = real phase; ranges DERIVED) ──
-    const active = displayPhase(meso?.phase)
-    const phases = phaseRail(totalWeeks, active)
+    const active = displayPhase(plan?.phase ?? meso?.phase)
+    const phases = totalWeeks > 0 ? [{ name: active, weeks: `W1–${totalWeeks}`, active: true }] : []
     const activeSegIdx = phases.findIndex((p) => p.active)
     const activeSeg = phases[activeSegIdx] ?? phases[0]
     const [segFrom, segTo] = parseSpan(activeSeg?.weeks ?? 'W1')
@@ -423,37 +421,6 @@ export default function W3PlanPage() {
     }
   }, [week, profile, plan, rehearsals, targetCourse, seasonActs, ftp, streak])
 
-  // ── real adapt (persists via /workouts/today/modify) ──
-  const onAdapt = useCallback(async (kind: AdaptKind): Promise<AdaptResult | null> => {
-    const modType: TodayModificationType = kind === 'shorter' ? 'shorten' : kind
-    const durationMin = kind === 'shorter' ? 45 : undefined
-    const res = await modifyTodayWorkout(modType, durationMin)
-    if (!res.success) return null
-    void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
-    void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
-    return {
-      title: res.title ?? null,
-      tss: res.predicted_tss ?? null,
-      note: res.title ? `Angepasst – ${res.title}${res.duration_min != null ? ` · ${res.duration_min} min` : ''}` : (res.reason || 'Coach hat die Einheit angepasst.'),
-      railsDowngraded: res.rails_downgraded ?? false,
-    }
-  }, [qc])
-
-  // The revert half of the adapt row — same invalidations, same source of
-  // truth. `undoTodayModify` sat in the API layer with no W3 caller, which
-  // made every adapt one-way.
-  const onUndoAdapt = useCallback(async (): Promise<boolean> => {
-    try {
-      const res = await undoTodayModify()
-      const ok = !!res.success
-      if (ok) {
-        void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
-        void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
-      }
-      return ok
-    } catch { return false }
-  }, [qc])
-
   // ── real rebuild (Plan anpassen → /plan/change/apply) ──
   const onRebuild = useCallback(async (p: RebuildPayload): Promise<boolean> => {
     const [mon, tue, wed, thu, fri, sat, sun] = p.days
@@ -465,7 +432,7 @@ export default function W3PlanPage() {
     try {
       await applyPlanChange(answers)
       void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
-      void qc.invalidateQueries({ queryKey: ['plan', 'build'] })
+      void qc.invalidateQueries({ queryKey: ['plan', 'current'] })
       void qc.invalidateQueries({ queryKey: COACH_BRIEF_KEY_ROOT })
       // The dialog seeds its hours slider from `profile.weekly_hours_available`
       // (see `adjustHours` above), and the server writes the new value onto the
@@ -478,107 +445,19 @@ export default function W3PlanPage() {
     } catch { return false }
   }, [qc])
 
-  // ── real goal switch (Ziel wechseln → /plan/change/apply) ──
-  const onSwitchGoal = useCallback(async (_id: string, p: GoalSwitchPayload): Promise<boolean> => {
-    const answers: InterviewAnswers = { goal_changed: p.goal_changed, ...(p.goal_new ? { goal_new: p.goal_new } : {}) }
-    try {
-      await applyPlanChange(answers)
-      void qc.invalidateQueries({ queryKey: WEEK_CURRENT_KEY_ROOT })
-      void qc.invalidateQueries({ queryKey: ['plan', 'build'] })
-      void qc.invalidateQueries({ queryKey: ['athlete', 'me'] })
-      return true
-    } catch { return false }
-  }, [qc])
-
-  // The rider's own season, which is the only argument the empty page makes.
-  const emptyVm = useMemo<W3PlanEmptyVm>(() => {
-    const cyc = (seasonActs?.activities ?? []).filter((a) => a.sport === 'cycling')
-    const secs = cyc.reduce((s, a) => s + (a.duration_seconds ?? 0), 0)
-    const tss = cyc.reduce((s, a) => s + (a.tss ?? 0), 0)
-    return {
-      rides: cyc.length > 0 ? cyc.length : null,
-      hours: secs > 0 ? Math.round(secs / 3600) : null,
-      tss: tss > 0 ? Math.round(tss) : null,
-      since: `seit ${fmtDE(seasonStart).replace(/^\w+,\s*/, '')}`,
-    }
-  }, [seasonActs, seasonStart])
-
-  // IN THE ROOM, the machine is the hero and the plan's three figures dock
-  // under it; the page below carries the rest. `inShell` is false on the
-  // preview route and on a deep link that skips the shell, and there the view
-  // keeps drawing its own status bar and header exactly as before — a page
-  // outside the room is a legitimate thing to be.
-  //
-  // ABOVE THE EMPTY-PLAN RETURN, because it is a hook. Called below it, the
-  // hook order changes the moment a rider has no plan — React's rule, and a
-  // real bug rather than a lint nag: the empty state and the built state would
-  // disagree about how many hooks this component runs.
-  const { inShell, portal } = useHeroPanel((
-    <W3PlanDock
-      vm={{
-        daysToStart: vm.daysToStart,
-        eventName: vm.eventName,
-        planWeekNum: vm.planWeekNum,
-        totalWeeks: vm.totalWeeks,
-        phases: vm.phases,
-        blockName: vm.block?.phase ?? null,
-      }}
-      onOpen={() => navigate('/e/w3-goal-set')} />
-  ))
-
-  // "YOU HAVE NO PLAN" IS A CLAIM, and it needs the read to have landed.
-  // `hasPlanFromWeek(undefined)` is false, so the empty page used to render on
-  // every load — and permanently on a 401/403/404/409, where the query does not
-  // retry. A rider with a live 12-week plan was told "NOCH KEIN PLAN" and
-  // offered onboarding.
-  if (weekLoading && !week) {
+  if ((weekLoading && !week) || profileLoading || planLoading) {
     return <W3Loading label="Dein Plan lädt…" />
   }
-  if (weekError && !week) {
-    return (
-      <W3LoadError
-        title="Dein Plan lädt nicht"
-        detail="Wir konnten deine Woche gerade nicht abrufen. Am Plan ändert das nichts — das ist nur die Verbindung."
-        onRetry={() => void refetchWeek()}
-        retrying={weekFetching}
-      />
-    )
+  if ((weekError && !week) || planError) {
+    return <W3LoadError title="Dein Plan lädt nicht" detail="Bitte versuche es noch einmal." onRetry={() => { void refetchWeek(); void refetchPlan() }} retrying={weekFetching}/>
   }
-
-  if (!hasPlan) {
-    return (
-      <>
-      {portal}
-      <W3PlanEmptyView
-        vm={emptyVm}
-        chromeless={inShell}
-        onBack={() => navigate(-1)}
-        onStart={(key) => navigate(`/e/w3-goal-set?intent=${key}`)}
-        onBuilder={() => navigate('/workouts/builder')}
-        onImport={() => navigate('/plan/import')}
-      />
-      </>
-    )
-  }
-
-  return (
-    <>
-    {portal}
-    <W3PlanView
-      vm={vm}
-      chromeless={inShell}
-      onBack={() => navigate(-1)}
-      onGoal={() => navigate('/e/w3-goal')}
-      onLoad={() => navigate('/e/w3-load')}
-      onStartRide={() => navigate('/e/w3-session')}
-      onAdapt={onAdapt}
-      onRebuild={onRebuild}
-      onSwitchGoal={onSwitchGoal}
-      onUndoAdapt={onUndoAdapt}
-      onOpenSession={(iso) => navigate(`/e/w3-session/${iso}`)}
-    />
-    </>
-  )
+  const state = plan?.status === 'ended' ? 'ended' : plan?.status === 'empty' || !hasPlan ? 'empty' : params.get('created') === '1' ? 'created' : 'active'
+  return <W3PlanExperience
+    vm={vm} state={state} userId={profile?.user_id}
+    onRebuild={onRebuild} onOpenSession={iso => navigate(`/e/w3-session/${iso}`)}
+    onCreatedDone={() => setParams({}, {replace:true})}
+    weekOffset={weekOffset} onWeekOffset={setWeekOffset} loading={weekFetching}
+  />
 }
 
 // ── local helpers ──

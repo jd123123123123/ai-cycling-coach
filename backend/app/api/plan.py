@@ -123,6 +123,44 @@ async def _load_profile(db: AsyncSession, user_id: int) -> AthleteProfile:
     return profile
 
 
+class CurrentPlanResponse(BaseModel):
+    plan_start_date: str | None = None
+    plan_end_date: str | None = None
+    phase: str | None = None
+    weekly_tss_targets: list[int] | None = None
+    planned_hours: float | None = None
+    status: Literal["empty", "active", "ended"] = "empty"
+
+
+@router.get("/current", response_model=CurrentPlanResponse)
+async def current_plan(
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> CurrentPlanResponse:
+    """Read the saved plan. Opening this page must never generate a plan."""
+    from app.models.mesocycle_plan import MesocyclePlan
+    from app.services.athlete_time import set_athlete_tz_from_profile, today_local
+
+    profile = await _load_profile(db, user.id)
+    set_athlete_tz_from_profile(profile)
+    result = await db.execute(select(MesocyclePlan).where(
+        MesocyclePlan.user_id == user.id,
+    ).order_by(MesocyclePlan.plan_start_date.desc()).limit(1))
+    plan = result.scalar_one_or_none()
+    if plan is None:
+        return CurrentPlanResponse()
+    # A mesocycle is a block, not the entire ongoing fitness plan. Only a
+    # dated target passing ends the target plan; maintenance keeps rolling.
+    ended = bool(profile.target_event_date and profile.target_event_date < today_local())
+    return CurrentPlanResponse(
+        plan_start_date=plan.plan_start_date.isoformat(),
+        plan_end_date=plan.plan_end_date.isoformat(),
+        phase=plan.phase, weekly_tss_targets=plan.weekly_tss_targets,
+        planned_hours=profile.weekly_hours_available,
+        status="ended" if ended else "active",
+    )
+
+
 @router.post("/build", response_model=PlanBuildResponse, summary="Build/rebuild the plan from the profile")
 async def build_plan(
     payload: PlanBuildRequest,

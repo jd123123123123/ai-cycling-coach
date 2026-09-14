@@ -309,7 +309,7 @@ function SessionBeam({ bars, ftpTag }: { bars: PlanSessionBar[]; ftpTag: string 
 }
 
 // ── Plan anpassen sheet (pen F2sjUl) ──
-function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: () => void; onRebuild?: W3PlanActions['onRebuild'] }) {
+export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: () => void; onRebuild?: W3PlanActions['onRebuild'] }) {
   const [days, setDays] = useState<boolean[]>(vm.adjustDays)
   const [hours, setHours] = useState<number>(vm.adjustHours)
   const [longDay, setLongDay] = useState<number>(vm.adjustLongDay)
