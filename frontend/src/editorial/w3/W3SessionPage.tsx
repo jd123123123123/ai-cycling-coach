@@ -10,7 +10,7 @@ import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useGarage } from '../../hooks/useGarage'
 import { useCurrentWeek } from '../../hooks/useCurrentWeek'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
-import { planDurSec, planIF, planTargetWatts, blocksFromIntervals, isSessionDay, parseISO, fmtDEShort, DE_WD } from './w3plan'
+import { planDurSec, planIF, planTargetWatts, blocksFromIntervals, isSessionDay, parseISO, fmtDEShort } from './w3plan'
 import { isPresent } from '../data/value'
 import { funName, powerProfile, effortGuide } from './w3session'
 import { forecastRideRc } from '../../api/rewards'
@@ -295,9 +295,10 @@ export default function W3SessionPage() {
     const durMin = secs > 0 ? Math.round(secs / 60) : null
     const dTss = day.target_tss != null ? Math.round(day.target_tss) : null
     const iff = planIF(day)
-    const w = planTargetWatts(day, ftp)
+    const mainPct = Math.max(0,...day.intervals.map(iv=>iv.power_target_pct_ftp??0))
+    const w = ftp!=null&&mainPct>0 ? Math.round(ftp*mainPct) : planTargetWatts(day,ftp)
     const dt = parseISO(day.date)
-    const dayLabel = dt ? `${DE_WD[(dt.getDay() + 6) % 7]}, ${fmtDEShort(dt)}` : day.date
+    const dayLabel = dt ? `${dt.toLocaleDateString('de-DE',{weekday:'short'})}, ${fmtDEShort(dt)}` : day.date
     const bars = day.intervals.length > 0 ? blocksFromIntervals(day.intervals) : []
     const shape = powerProfile(bars.map((b) => ({ w: b.w, work: b.work })), true)
     const gaugeSegs: boolean[] = shape.length > 0
