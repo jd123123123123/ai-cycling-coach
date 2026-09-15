@@ -6,3 +6,35 @@
 .state-created .w3-plan-week-beams{height:120px}.state-created .w3-plan-heading h1{font-size:38px}
 .w3-plan-impact{background:var(--plan-card);border:1px solid var(--plan-stroke);border-radius:24px;padding:18px 17px 16px;display:flex;flex-direction:column;gap:12px}.w3-plan-impact-intro>span{font-size:10px;letter-spacing:1.2px;font-weight:700;color:var(--plan-muted)}.w3-plan-impact-intro h2{margin-top:6px;font-size:25px}.w3-plan-impact-intro p{margin-top:7px;color:var(--plan-muted);font-size:13px;line-height:1.45}.w3-plan-impact .w3-power-profile{padding:0;background:transparent;border:0}.w3-plan-impact .w3-power-profile-heading{display:none}.w3-plan-impact .w3-power-profile>svg{margin-top:-5px}.w3-plan-impact-note{font-size:11px!important;line-height:1.45;color:var(--plan-muted);margin:0!important}
 .w3-plan-empty-note{font-size:14px;line-height:1.45;color:var(--plan-muted);max-width:36em}
+
+/* New-plan handoff: orient the rider before asking for a first workout. */
+.state-created .w3-plan-overview,.state-created .w3-plan-first-week{background:var(--plan-card);border:1px solid var(--plan-stroke);border-radius:24px;padding:17px}
+.state-created .w3-plan-overview{gap:16px;display:flex;flex-direction:column}
+.w3-plan-overview-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.w3-plan-overview-stats>div{display:flex;flex-direction:column;gap:4px;min-width:0}
+.w3-plan-overview-stats strong{font-size:28px;line-height:1;font-weight:500;letter-spacing:-1px}
+.w3-plan-overview-stats span{font-size:10px;line-height:1.2;color:var(--plan-muted)}
+.w3-plan-overview-load{display:flex;flex-direction:column;gap:8px}
+.w3-plan-overview-load-head{display:flex;justify-content:space-between;gap:8px;color:var(--plan-muted);font-size:11px}
+.state-created .w3-plan-overview .w3-plan-week-beams{height:62px;gap:4px;margin-top:0;align-items:flex-end}
+.state-created .w3-plan-overview .w3-plan-week-track{max-width:none;height:100%;align-items:flex-end}
+.state-created .w3-plan-overview .w3-plan-week-track>i{background:linear-gradient(#59614e,#30362c);border-radius:5px 5px 2px 2px;display:block;width:100%}
+.state-created .w3-plan-overview .w3-plan-week-track>i[data-rest=true]{background:var(--plan-raised)}
+.w3-plan-block-summary{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:11px}
+.w3-plan-block-summary strong{font-size:25px;font-weight:500;letter-spacing:-.6px;color:var(--plan-acid)}
+.w3-plan-block-summary span{font-size:11px;color:var(--plan-muted);text-align:right}
+.state-created .w3-plan-journey{display:flex;flex-direction:column;gap:0}
+.state-created .w3-plan-journey .w3-plan-week-beams{margin-top:14px}
+.state-created .w3-plan-first-week{display:flex;flex-direction:column;gap:13px}
+.w3-plan-first-week-list{display:flex;flex-direction:column;gap:4px}
+.w3-plan-first-week-list>button{display:grid;grid-template-columns:48px minmax(0,1fr) auto 18px;align-items:center;gap:9px;width:100%;min-height:42px;padding:6px 2px;background:none;text-align:left;border-bottom:1px solid var(--plan-stroke)}
+.w3-plan-first-week-list>button:last-child{border-bottom:0}
+.w3-plan-first-week-day{display:flex;flex-direction:column;gap:2px}
+.w3-plan-first-week-day b{font-size:12px;color:var(--plan-ink);font-weight:600}
+.w3-plan-first-week-day small{font-size:10px;color:var(--plan-muted)}
+.w3-plan-first-week-name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--plan-ink)}
+.w3-plan-first-week-meta{font-size:10px;color:var(--plan-muted);white-space:nowrap}
+.w3-plan-first-week-list>button.is-rest .w3-plan-first-week-name,.w3-plan-first-week-list>button.is-rest svg{color:var(--plan-muted)}
+.w3-plan-first-week-list>button.is-session svg{color:var(--plan-acid)}
+.state-created .w3-plan-rhythm{border-top:1px solid var(--plan-stroke);padding-top:14px}
+@media(max-width:380px){.w3-plan-first-week-list>button{grid-template-columns:42px minmax(0,1fr) 18px}.w3-plan-first-week-meta{display:none}.w3-plan-overview-stats strong{font-size:25px}}

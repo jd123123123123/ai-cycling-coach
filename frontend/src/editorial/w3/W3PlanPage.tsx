@@ -11,7 +11,7 @@ import type { DayPlan } from '../../api/weeks'
 import {
   parseISO, addDays, daysBetween, fmtRange, fmtDE, fmtDEShort, weeksDaysLabel, fmtHoursHM,
   planDurSec, isSessionDay, planIF, planTargetWatts, blocksFromIntervals, enduranceEnvelope,
-  displayPhase, phaseBlurb, buildWeeklyBars, DE_WD, DE_WD2,
+  displayPhase, phaseBlurb, buildWeeklyBars, phaseRail, DE_WD, DE_WD2,
 } from './w3plan'
 import { hasPersonalPlan } from './w3hasPlan'
 import { useStreak } from '../../hooks/useStreak'
@@ -124,7 +124,11 @@ export default function W3PlanPage() {
 
     // ── phase rail (active = real phase; ranges DERIVED) ──
     const active = displayPhase(plan?.phase ?? meso?.phase)
-    const phases = totalWeeks > 0 ? [{ name: active, weeks: `W1–${totalWeeks}`, active: true }] : []
+    // The plan response stores the active engine phase, while the weekly
+    // targets describe the complete horizon. Build the overview from that
+    // horizon so a freshly created plan immediately explains its chapters
+    // instead of showing one oversized "first block" with no context.
+    const phases = totalWeeks > 0 ? phaseRail(totalWeeks, active) : []
     const activeSegIdx = phases.findIndex((p) => p.active)
     const activeSeg = phases[activeSegIdx] ?? phases[0]
     const [segFrom, segTo] = parseSpan(activeSeg?.weeks ?? 'W1')

@@ -64,12 +64,43 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <button className="w3-plan-primary" onClick={()=>setCompose(goal==='ftp'?'threshold':goal==='vo2'?'vo2':'endurance')}>Meinen Plan erstellen<ArrowRight size={20}/></button>
  </>:view==='profile'||state==='ended'?<>
  <div className="w3-plan-opening"><h1>{missingPlanHistory?<>Dein nächster<br/>Schritt.</>:state==='ended'?<>Das hast du<br/>bewegt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{missingPlanHistory?'Dein bisheriger Plan ist beendet. Wähle, was du als Nächstes verbessern möchtest.':title}</p></div>
- {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Meinen nächsten Plan erstellen<ArrowRight size={20}/></button>}
+ {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  <button className="w3-plan-link slim" onClick={()=>setSheet('profile')}><span><strong>Leistungsprofil vergleichen</strong></span><ArrowUpRight size={18}/></button>
  <W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={results.data} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={results.isPending} error={results.isError}/>
  {state==='ended'&&!missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  </>:<>
- <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1><p>{state==='created'?'Gespeichert · bereit für deine erste Einheit':`${vm.block?.phase??'Training'} · ${vm.planWeekLabel}${goalDate?' · Ziel '+new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'}):''}`}</p></div><div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div></header>
+ <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1><p>{state==='created'?'Gespeichert · dein Weg ist klar':`${vm.block?.phase??'Training'} · ${vm.planWeekLabel}${goalDate?' · Ziel '+new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'}):''}`}</p></div><div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div></header>
+ {state==='created'?<>
+ <section className="w3-plan-overview">
+   <div className="w3-plan-card-head"><strong>Dein Weg auf einen Blick</strong><span>{vm.totalWeeks} Wochen</span></div>
+   <div className="w3-plan-overview-stats">
+     <div><strong>{vm.totalWeeks}</strong><span>Wochen</span></div>
+     <div><strong>{vm.daySessions?.filter(s=>s.title).length ?? vm.adjustDays.filter(Boolean).length}</strong><span>Einheiten / Woche</span></div>
+     <div><strong>{vm.avgTss}</strong><span>Ø TSS / Woche</span></div>
+   </div>
+   <div className="w3-plan-overview-load">
+     <div className="w3-plan-overview-load-head"><span>Belastung über den Plan</span><span>locker → intensiv</span></div>
+     <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><span key={i} className="w3-plan-week-track"><i style={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div>
+   </div>
+ </section>
+ <section className="w3-plan-journey">
+   <div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.block?.weekOfBlock ?? vm.planWeekLabel}</span></div>
+   <div className="w3-plan-block-summary"><strong>{vm.block?.phase ?? 'Grundlage'}</strong><span>{vm.block?.dateRange ?? vm.weekRangeLabel}</span></div>
+   <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={`Woche ${i+1}: ${b.tss??'keine'} TSS${b.kind==='done'?', gefahren':', geplant'}`} aria-pressed={currentBar===i} data-selected={currentBar===i} disabled={i<currentIndex||i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><span className="w3-plan-week-track"><motion.i initial={false} animate={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} transition={{duration:reduced?0:.35}} data-rest={b.isRest} data-past={i<currentIndex}/></span><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
+   <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
+ </section>
+ <section className="w3-plan-first-week">
+   <div className="w3-plan-card-head"><strong>Deine erste Woche</strong><span>{vm.weekRangeLabel}</span></div>
+   <div className="w3-plan-first-week-list">{sessions.map((s,i)=><button key={s.dateISO??i} onClick={()=>{setDay(i);if(s.title&&s.dateISO) onOpenSession(s.dateISO)}} className={s.title?'is-session':'is-rest'}><span className="w3-plan-first-week-day"><b>{s.weekday.slice(0,2)}</b><small>{s.dateLabel}</small></span><span className="w3-plan-first-week-name">{s.title??'Ruhetag'}</span><span className="w3-plan-first-week-meta">{s.title?`${s.dur??'—'} · ${s.tss} TSS`:'Erholung'}</span><ArrowRight size={16}/></button>)}</div>
+ </section>
+ <section className="w3-plan-rhythm"><div><strong>{vm.adjustHours} h</strong><span>pro Woche verfügbar</span></div><div><strong>{vm.adjustDays.filter(Boolean).length}</strong><span>Trainingstage möglich</span></div><button aria-label="Trainingswoche anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button></section>
+ <button className="w3-plan-primary" onClick={onCreatedDone}>Zum ersten Training<ArrowRight size={20}/></button>
+ </>:<>
+ <section className="w3-plan-journey"><div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.totalWeeks} Wochen · TSS</span></div>
+ <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={`Woche ${i+1}: ${b.tss??'keine'} TSS${b.kind==='done'?', gefahren':', geplant'}`} aria-pressed={currentBar===i} data-selected={currentBar===i} disabled={i<currentIndex||i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><span className="w3-plan-week-track"><motion.i initial={false} animate={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} transition={{duration:reduced?0:.35}} data-rest={b.isRest} data-past={i<currentIndex}/></span><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
+ <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
+ <div className="w3-plan-selected-week"><button aria-label="Vorherige Woche" disabled={weekOffset===0} onClick={()=>onWeekOffset(weekOffset-1)}><ChevronLeft size={17}/></button><span>{vm.weekRangeLabel}</span><button aria-label="Nächste Woche" disabled={weekOffset>=Math.min(12,vm.totalWeeks-progress)} onClick={()=>onWeekOffset(weekOffset+1)}><ChevronRight size={17}/></button></div>
+ </section>
  {state==='active'&&<section className="w3-plan-session" aria-busy={loading}>
  <div className="w3-plan-card-head"><span>{selected?.isToday?'Heute':selected?.weekday} · {selected?.dateLabel??vm.weekRangeLabel}</span><span>{selected?.dur??'Frei'}</span></div>
  <h2>{selected?.title??'Raum für Erholung.'}</h2>
@@ -78,17 +109,8 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <div className="w3-plan-days" aria-label="Trainingstag">{sessions.map((s,i)=><button key={s.dateISO??i} aria-label={`${s.weekday} ${s.dateLabel}: ${s.title??'Ruhetag'}`} aria-pressed={day===i} onClick={()=>setDay(i)}><span>{s.weekday.slice(0,2)}</span><i data-work={!!s.title} data-ridden={s.ridden}/></button>)}</div>
  <button className="w3-plan-primary" disabled={loading||!selected} onClick={openSession}>{hasWorkout?'Einheit ansehen':'Warum heute Pause?'}<ArrowRight size={19}/></button>
  </section>}
- <section className="w3-plan-journey"><div className="w3-plan-card-head"><strong>{state==='created'?'Dein erster Block':'Dein aktueller Block'}</strong><span>{vm.totalWeeks} Wochen · TSS</span></div>
- <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={`Woche ${i+1}: ${b.tss??'keine'} TSS${b.kind==='done'?', gefahren':', geplant'}`} aria-pressed={currentBar===i} data-selected={currentBar===i} disabled={i<currentIndex||i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><span className="w3-plan-week-track"><motion.i initial={false} animate={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} transition={{duration:reduced?0:.35}} data-rest={b.isRest} data-past={i<currentIndex}/></span><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
- <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
- <div className="w3-plan-selected-week"><button aria-label="Vorherige Woche" disabled={weekOffset===0} onClick={()=>onWeekOffset(weekOffset-1)}><ChevronLeft size={17}/></button><span>{vm.weekRangeLabel}</span><button aria-label="Nächste Woche" disabled={weekOffset>=Math.min(12,vm.totalWeeks-progress)} onClick={()=>onWeekOffset(weekOffset+1)}><ChevronRight size={17}/></button></div>
- </section>
- {state==='created'&&priorPlanCompleted&&<section className="w3-plan-impact">
-   <div className="w3-plan-impact-intro"><span>DEIN LETZTER PLAN</span><h2>Was sich bewegt hat.</h2><p>Dein neuer Plan startet auf dem Stand, den du dir erarbeitet hast. Die fünf Achsen zeigen den belegten Vergleich — keine Gesamtwertung.</p></div>
-   <W3PowerProfile data={results.data}/>
-   {results.data?.start&&<p className="w3-plan-impact-note">Davor und jetzt werden gleich lange Zeiträume bis zum Abschluss verglichen. Fehlende Messungen bleiben offen.</p>}
- </section>}
- {state==='created'?<><section className="w3-plan-rhythm"><div><strong>{vm.adjustHours} h</strong><span>pro Woche verfügbar</span></div><div><strong>{vm.adjustDays.filter(Boolean).length}</strong><span>Trainingstage</span></div><button aria-label="Trainingswoche anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button></section><button className="w3-plan-primary" onClick={onCreatedDone}>Zum ersten Training<ArrowRight size={20}/></button></>:latest?<button className="w3-plan-adaptation" onClick={()=>setSheet('adaptation')}><span><Check size={17}/></span><strong>Dein Plan hat sich angepasst.</strong><ArrowUpRight size={18}/></button>:<button className="w3-plan-link slim" onClick={()=>setSheet('why')}><span><strong>Warum diese Woche?</strong></span><ArrowUpRight size={18}/></button>}
+ {latest?<button className="w3-plan-adaptation" onClick={()=>setSheet('adaptation')}><span><Check size={17}/></span><strong>Dein Plan hat sich angepasst.</strong><ArrowUpRight size={18}/></button>:<button className="w3-plan-link slim" onClick={()=>setSheet('why')}><span><strong>Warum diese Woche?</strong></span><ArrowUpRight size={18}/></button>}
+ </>}
  </>}
  </main><W3TabBar/>
  {sheet==='profile'&&<PlanDialog title="Dein Leistungsprofil" onClose={()=>setSheet(null)}><W3PowerProfile data={results.data}/></PlanDialog>}
