@@ -4,6 +4,20 @@
 
 This document is the product and interaction specification for rebuilding the completed-plan screen from scratch. It intentionally replaces the current implementation. The goal is a premium, calm, data-rich result experience that feels closer to Whoop, Apple Fitness and a high-end editorial sports product than to a dashboard full of cards.
 
+## Apple-first constraint: one screen
+
+The completed result is a one-screen product moment. On a 390 × 844 phone, the rider should see the whole win without entering a dashboard or scrolling through stacked cards. The screen has one canvas, one hero card and one obvious gesture target. The first viewport contains only:
+
+1. completion ring + emotional result
+2. FTP / VO₂max / records comparison
+3. one plan-effect graph: intended load versus actual load
+4. compact totals row
+5. a small clickable performance-profile preview
+
+The full FTP / VO₂max / records analysis opens from that preview as a detail sheet. It contains the week / month / year / since-plan controls. It must not be rendered below the hero on the default screen. This is the Apple rule for the page: the first state is calm and complete; depth is one deliberate tap away.
+
+Do not use a persistent bottom analytics dashboard, multiple explanatory cards, repeated headings or a second load module. If a fact does not help the rider understand the completed block in the first two seconds, it belongs in the detail sheet.
+
 The rider has finished a training plan. The screen must answer four questions in this order:
 
 1. **Did I finish?**
