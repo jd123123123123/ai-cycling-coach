@@ -32,7 +32,7 @@ describe('live plan experience',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Mittwoch inaktiv'}))
   fireEvent.click(screen.getByRole('button',{name:'MI'}))
   fireEvent.click(screen.getByRole('button',{name:'Plan neu berechnen'}))
-  await waitFor(()=>expect(onRebuild).toHaveBeenCalledWith({weekly_hours:7.5,days:[true,false,true,false,false,true,true],longDay:2}))
+  await waitFor(()=>expect(onRebuild).toHaveBeenCalledWith({weekly_hours:7.5,days:[true,false,true,false,false,true,true],longDay:2,longDays:[2,5]}))
  })
  it('lets a finished rider select a new goal',()=>{mount('ended');expect(screen.getByRole('button',{name:'Nächstes Ziel wählen'})).toBeTruthy()})
 })

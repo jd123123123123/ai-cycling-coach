@@ -1,0 +1,93 @@
+/*
+ * RIDR iOS-first interaction contract.
+ *
+ * The visual language stays W3: near-black ground, editorial type and acid
+ * lime. These rules bring the native iOS behaviours from the shared design
+ * system to every W3 route without forcing a second component library on the
+ * app: safe-area geometry, 44pt controls, glass navigation, inertial scroll,
+ * and reduced-motion fallbacks.
+ */
+
+.w3-root {
+  min-height: 100svh;
+  background: var(--w-bg, #0b0b0b);
+  overscroll-behavior-y: none;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.w3-root button,
+.w3-root a,
+.w3-root [role='button'],
+.w3-root [role='tab'] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+/* Avoid Safari's default zoom when a rider focuses a small form field. */
+.w3-root input,
+.w3-root select,
+.w3-root textarea {
+  font-size: max(16px, 1em);
+  color-scheme: dark;
+}
+
+/* Every persistent navigation control keeps the Apple-sized hit target even
+ * when its visual icon is intentionally small. */
+.w3-root [data-w3-topbar] button,
+.w3-root [data-w3-tabbar] button,
+.w3-root .w3-topbar-control {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+/* The top bar reads like a native navigation bar while content scrolls below. */
+.w3-root [data-w3-topbar] {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--w-bg, #0b0b0b) 78%, transparent);
+  -webkit-backdrop-filter: saturate(145%) blur(18px);
+  backdrop-filter: saturate(145%) blur(18px);
+  border-bottom: 1px solid color-mix(in srgb, var(--w-ink, #fff) 7%, transparent);
+}
+
+/* Fixed tab bars get the same translucent separation as iOS TabView. */
+.w3-root [data-w3-tabbar] {
+  -webkit-backdrop-filter: saturate(145%) blur(24px);
+  backdrop-filter: saturate(145%) blur(24px);
+  box-shadow: 0 -12px 34px rgb(0 0 0 / 24%);
+}
+
+/* Native-feeling sheets: preserve the grab area and never exceed the visible
+ * viewport when the keyboard or a compact iPhone is present. */
+.w3-root dialog,
+.w3-root [data-w3-sheet] {
+  max-height: min(88svh, calc(100svh - 16px));
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+.w3-root :focus-visible {
+  outline: 2px solid var(--w-acid, #bfff3c);
+  outline-offset: 3px;
+}
+
+@media (max-width: 430px) {
+  .w3-frame {
+    width: 100%;
+    min-height: 100svh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w3-root *,
+  .w3-root *::before,
+  .w3-root *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
+}

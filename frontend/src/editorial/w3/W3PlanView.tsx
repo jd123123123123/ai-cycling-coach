@@ -143,6 +143,7 @@ export interface W3PlanVm {
   adjustDays: boolean[]        // Mon..Sun
   adjustHours: number          // decimal hours
   adjustLongDay: number        // 5=Sat 6=Sun (index into Mon..Sun)
+  adjustLongDays?: number[]    // optional multi-day endurance preference
   goalOptions: GoalOption[]
 }
 export interface GoalOption {
@@ -166,7 +167,7 @@ export interface AdaptResult { title: string | null; tss: number | null; note: s
 export type OnAdapt = (kind: AdaptKind) => Promise<AdaptResult | null>
 
 export interface GoalSwitchPayload { goal_changed: 'no_event' | 'new_event' | 'same'; goal_new?: 'race' | 'fondo' | 'audax' | 'maintenance' }
-export interface RebuildPayload { weekly_hours: number; days: boolean[]; longDay: number }
+export interface RebuildPayload { weekly_hours: number; days: boolean[]; longDay: number; longDays?: number[] }
 
 export interface W3PlanActions {
   onBack?: () => void
@@ -316,7 +317,7 @@ function SessionBeam({ bars, ftpTag }: { bars: PlanSessionBar[]; ftpTag: string 
 export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: () => void; onRebuild?: W3PlanActions['onRebuild'] }) {
   const [days, setDays] = useState<boolean[]>(vm.adjustDays)
   const [hours, setHours] = useState<number>(vm.adjustHours)
-  const [longDay, setLongDay] = useState<number>(vm.adjustLongDay)
+  const [longDays, setLongDays] = useState<number[]>(() => [...new Set(vm.adjustLongDays?.length ? vm.adjustLongDays : [vm.adjustLongDay])])
   // NO REST-CADENCE OR INDOOR-SHARE STATE. Both were segmented controls whose
   // values never reached `RebuildPayload` — `/plan/change/apply` has no field
   // for either (`InterviewAnswers` carries weekly_hours / days_available /
@@ -328,7 +329,11 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
   const dayCount = days.filter(Boolean).length
   const dayLabels = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO']
   const dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
-  const selectedLongDay = days[longDay] ? longDay : Math.max(0, days.findIndex(Boolean))
+  const selectedLongDays = longDays.filter((d) => days[d])
+  const fallbackLongDay = Math.max(0, days.findIndex(Boolean))
+  const effectiveLongDays = selectedLongDays.length ? selectedLongDays : [fallbackLongDay]
+  const selectedLongDay = effectiveLongDays[0]
+  const selectedLongLabel = effectiveLongDays.map((d) => dayLabels[d]).join(' + ')
 
   const submit = async () => {
     if (!onRebuild || busy || dayCount === 0) return
@@ -336,7 +341,7 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
     setError(null)
     try {
       // Preserve half-hour precision; rounding here made a 6.5 h choice arrive as 7 h.
-      const ok = await onRebuild({ weekly_hours: hours, days, longDay: selectedLongDay })
+      const ok = await onRebuild({ weekly_hours: hours, days, longDay: selectedLongDay, longDays: effectiveLongDays })
       if (ok) onClose()
       else setError('Die Änderung konnte nicht gespeichert werden. Versuch es noch einmal.')
     } catch {
@@ -372,7 +377,10 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
               onClick={() => setDays((prev) => {
                 if (prev[i] && prev.filter(Boolean).length === 1) return prev
                 const next = prev.map((v, j) => j === i ? !v : v)
-                if (!next[selectedLongDay]) setLongDay(Math.max(0, next.findIndex(Boolean)))
+                setLongDays((current) => {
+                  const kept = current.filter((d) => next[d])
+                  return kept.length ? kept : [Math.max(0, next.findIndex(Boolean))]
+                })
                 return next
               })}>{d}</button>
           ))}
@@ -390,8 +398,15 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
         </div>
       </SheetRow>
 
-      <SheetRow title="Lange Ausfahrt" sub="Der Schlüsseltag für deine Ausdauer">
-        <Segmented options={days.map((on, i) => on ? [dayLabels[i], i] as [string, number] : null).filter((v): v is [string, number] => v !== null)} value={selectedLongDay} onChange={setLongDay} />
+      <SheetRow title="Lange Ausfahrten" sub="Ein oder mehrere Ausdauertage pro Woche">
+        <div style={{ display: 'flex', gap: 5, padding: 4, borderRadius: 100, background: T.surface2 }}>
+          {days.map((on, i) => on ? (
+            <button key={dayLabels[i]} type="button" aria-pressed={effectiveLongDays.includes(i)} onClick={() => setLongDays((current) => {
+              if (current.includes(i)) return current.length === 1 ? current : current.filter((d) => d !== i)
+              return [...current, i].sort((a, b) => a - b)
+            })} style={{ minWidth: 36, height: 30, padding: '0 8px', border: 0, borderRadius: 100, background: effectiveLongDays.includes(i) ? T.acid : 'transparent', color: effectiveLongDays.includes(i) ? T.bg : T.mid, fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>{dayLabels[i]}</button>
+          ) : null)}
+        </div>
       </SheetRow>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 14, border: `1px solid ${T.stroke}` }}>
@@ -399,7 +414,7 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
           <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>i</span>
         </div>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>
-          Neue Woche: {fmtHM(hours)} h · {dayCount} Tage · lange Fahrt am {dayLabels[selectedLongDay]}
+          Neue Woche: {fmtHM(hours)} h · {dayCount} Tage · lange Ausfahrten am {selectedLongLabel}
         </span>
       </div>
 
@@ -497,19 +512,6 @@ function SheetRow({ title, sub, children }: { title: string; sub: string; childr
         <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>{sub}</span>
       </div>
       {children}
-    </div>
-  )
-}
-function Segmented({ options, value, onChange }: { options: [string, number][]; value: number; onChange: (v: number) => void }) {
-  return (
-    <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 100, background: T.surface2 }}>
-      {options.map(([label, v]) => {
-        const on = v === value
-        return (
-          <button key={label} onClick={() => onChange(v)}
-            style={{ padding: '7px 14px', borderRadius: 100, border: 0, cursor: 'pointer', fontFamily: FONT, fontSize: 12.5, fontWeight: 600, background: on ? T.acid : 'transparent', color: on ? T.bg : T.mid }}>{label}</button>
-        )
-      })}
     </div>
   )
 }

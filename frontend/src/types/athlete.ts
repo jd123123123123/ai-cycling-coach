@@ -118,4 +118,5 @@ export interface DaysAvailableFlags {
   sat: boolean
   sun: boolean
   long_day?: 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun' | null
+  long_days?: ('mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun')[] | null
 }

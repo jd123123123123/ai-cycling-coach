@@ -72,6 +72,7 @@ export interface DaysAvailable {
   sat: boolean
   sun: boolean
   long_day?: string | null
+  long_days?: string[] | null
 }
 
 /** Typed answer payload — every field optional; ids match the questions. */

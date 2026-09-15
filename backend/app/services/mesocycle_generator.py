@@ -254,15 +254,14 @@ def _pick_variety_filler(
     return pool[idx % n]
 
 
-def _athlete_availability(athlete) -> tuple[set[int], int, set[int]]:
+def _athlete_availability(athlete) -> tuple[set[int], set[int], set[int]]:
     """Parse the profile's days_available / hard_day_blackouts JSON.
 
-    Returns ``(available_dows, long_dow, blackout_dows)``:
+    Returns ``(available_dows, long_dows, blackout_dows)``:
       - available_dows: day-of-week indices (Mon=0) the athlete can train.
         Defaults to all 7 when the profile has no days_available.
-      - long_dow: the athlete's long-ride day. Their explicit long_day when
-        set and available; else Sunday, else Saturday, else the last
-        available day.
+      - long_dows: one or more endurance-anchor days. ``long_days`` is used
+        when present; the legacy ``long_day`` value remains supported.
       - blackout_dows: days on which HARD sessions must never land.
     """
     available: set[int] = set(range(7))
@@ -274,18 +273,19 @@ def _athlete_availability(athlete) -> tuple[set[int], int, set[int]]:
         if parsed:  # an all-false dict would make the week impossible — ignore
             available = parsed
 
-    long_dow = 6
+    long_dows: set[int] = set()
     if isinstance(raw, dict):
-        ld = raw.get("long_day")
-        if isinstance(ld, str) and ld in _WEEKDAY_KEYS:
-            long_dow = _WEEKDAY_KEYS.index(ld)
-    if long_dow not in available:
-        if 6 in available:
-            long_dow = 6
-        elif 5 in available:
-            long_dow = 5
-        else:
-            long_dow = max(available)
+        raw_long_days = raw.get("long_days")
+        if isinstance(raw_long_days, (list, tuple)):
+            long_dows = {_WEEKDAY_KEYS.index(d) for d in raw_long_days if d in _WEEKDAY_KEYS}
+        if not long_dows:
+            ld = raw.get("long_day")
+            if isinstance(ld, str) and ld in _WEEKDAY_KEYS:
+                long_dows = {_WEEKDAY_KEYS.index(ld)}
+    long_dows &= available
+    if not long_dows:
+        fallback = 6 if 6 in available else 5 if 5 in available else max(available)
+        long_dows = {fallback}
 
     blackouts: set[int] = set()
     raw_blackouts = getattr(athlete, "hard_day_blackouts", None)
@@ -293,14 +293,14 @@ def _athlete_availability(athlete) -> tuple[set[int], int, set[int]]:
         blackouts = {
             _WEEKDAY_KEYS.index(d) for d in raw_blackouts if d in _WEEKDAY_KEYS
         }
-    return available, long_dow, blackouts
+    return available, long_dows, blackouts
 
 
 def _rest_dows_for_week(
     phase: Phase,
     block_position: Literal["accumulation", "transmutation", "realization", "recovery"],
     available: set[int] | None = None,
-    long_dow: int = 6,
+    long_dows: set[int] | None = None,
 ) -> set[int]:
     """Designate which day-of-week indices are scheduled rest days.
 
@@ -313,8 +313,8 @@ def _rest_dows_for_week(
     is placed deterministically on the least-disruptive AVAILABLE days first,
     while *protecting* the phase's key days:
 
-        - the long-ride day (athlete's long_day, default Sunday)  always
-        - the available day before the long day                   base/build/peak
+        - all long-ride days (athlete's long_days, default Sunday) always
+        - the available day before a long day                      base/build/peak
         - a keystone quality day (Wed when available)             base2/build/peak
         - two more quality days                                   build2/peak
 
@@ -338,7 +338,7 @@ def _rest_dows_for_week(
     if len(rest) >= n_rest:
         return rest
 
-    protected: set[int] = {long_dow}
+    protected: set[int] = set(long_dows or {6}) & available
 
     def _prev_available(d: int) -> int | None:
         for step in range(1, 7):
@@ -348,9 +348,10 @@ def _rest_dows_for_week(
         return None
 
     if phase in ("base1", "base2", "build1", "build2", "peak"):
-        second = _prev_available(long_dow)  # 2nd weekend/endurance day
-        if second is not None:
-            protected.add(second)
+        for long_dow in sorted(protected):
+            second = _prev_available(long_dow)  # 2nd weekend/endurance day
+            if second is not None:
+                protected.add(second)
     if phase in ("base2", "build1", "build2", "peak"):
         for cand in (2, 1, 3, 0, 4, 5, 6):  # keystone quality — Wed preferred
             if cand in available and cand not in protected:
@@ -378,7 +379,7 @@ def _rest_dows_for_week(
         for d in priority:
             if len(rest) >= n_rest:
                 break
-            if d in available and d != long_dow and d not in rest:
+            if d in available and d not in protected and d not in rest:
                 rest.add(d)
     return rest
 
@@ -404,7 +405,7 @@ _QUALITY_VIRTUAL_DOWS: frozenset[int] = frozenset({1, 2, 3})
 
 def _assign_virtual_dows(
     training_dows: list[int],
-    long_dow: int,
+    long_dows: set[int] | int,
     blackout_dows: set[int],
 ) -> dict[int, int]:
     """Map actual training days → canonical weekday roles (see _VIRTUAL_SLOTS).
@@ -414,9 +415,14 @@ def _assign_virtual_dows(
     athlete's hard sessions move rather than vanish. (The generator's pick loop
     additionally enforces the blackout as a hard guarantee.)
     """
+    selected_long = {long_dows} if isinstance(long_dows, int) else set(long_dows)
+    selected_long &= set(training_dows)
+    if not selected_long:
+        selected_long = {max(training_dows)} if training_dows else {6}
+    primary_long = max(selected_long)
     others = sorted(
-        (d for d in training_dows if d != long_dow),
-        key=lambda d: (d - long_dow - 1) % 7,
+        (d for d in training_dows if d not in selected_long),
+        key=lambda d: (d - primary_long - 1) % 7,
     )
     slots = _VIRTUAL_SLOTS.get(len(others), [0, 1, 2, 3, 4, 5])[: len(others)]
     mapping: dict[int, int] = dict(zip(others, slots))
@@ -429,7 +435,12 @@ def _assign_virtual_dows(
                 ):
                     mapping[day], mapping[other_day] = mapping[other_day], mapping[day]
                     break
-    mapping[long_dow] = 6
+    # The primary endurance day keeps the canonical long-ride role. Additional
+    # selected days become the adjacent weekend role, which still receives an
+    # aerobic window but leaves the phase's key intensity slot intact.
+    mapping[primary_long] = 6
+    for extra in sorted(selected_long - {primary_long}, key=lambda d: (d - primary_long) % 7):
+        mapping[extra] = 5
     return mapping
 
 
@@ -885,7 +896,8 @@ def build_week_drafts(
     # The athlete's declared days are LAW: unavailable days are forced rest,
     # the long ride lands on their long_day, and hard sessions never land on
     # a blacked-out day (review findings 2 + 3).
-    available_dows, long_dow, blackout_dows = _athlete_availability(athlete)
+    available_dows, long_dows, blackout_dows = _athlete_availability(athlete)
+    primary_long_dow = max(long_dows)
 
     # ── Rest-day skeleton ─────────────────────────────────────────────────
     # Real rest days are placed deterministically from the phase's rest_days
@@ -893,11 +905,11 @@ def build_week_drafts(
     # picker's history-based Monday-rest rule can never fire — we own the week
     # shape here instead.  On a rest DOW we emit the rest_day template (tss 0)
     # rather than yet another Z2 session.
-    rest_dows = _rest_dows_for_week(phase, block_position, available_dows, long_dow)
+    rest_dows = _rest_dows_for_week(phase, block_position, available_dows, long_dows)
 
     # Actual training days → canonical weekday roles for the phase logic.
     virtual_dow = _assign_virtual_dows(
-        [d for d in range(7) if d not in rest_dows], long_dow, blackout_dows
+        [d for d in range(7) if d not in rest_dows], long_dows, blackout_dows
     )
 
     # Riding days drive a realistic per-day time window (weekly hours spread
@@ -1003,7 +1015,7 @@ def build_week_drafts(
             # window and pick LONGEST-FIT (rotation_key=0) — passing the
             # rotation key here was the bug that demoted the long ride to a
             # 60-90min spin (Z2-degeneration cause 3).
-            if pd.session_type == "endurance" and dow in (5, 6):
+            if pd.session_type == "endurance" and (dow in long_dows or dow in (5, 6)):
                 available_min = long_window_min if pd.template_id else long_day_min
                 rotation = 0
             else:
@@ -1064,7 +1076,12 @@ def build_week_drafts(
             training_model=training_model,
             is_recovery_week=(block_position == "recovery"),
         )
-        if (focus_block or len(focuses) > 1) and block_position != "recovery" and phase not in ("race", "taper"):
+        if dow in long_dows and block_position != "recovery" and phase not in ("race", "taper"):
+            # A rider may reserve more than one day for a long endurance ride.
+            # Keep both days aerobic; the hour budget below differentiates the
+            # primary and secondary anchor instead of creating two hard days.
+            session_type = "endurance"
+        if (focus_block or len(focuses) > 1) and block_position != "recovery" and phase not in ("race", "taper") and dow not in long_dows:
             session_type = _custom_quality_type(session_type, focuses, hard_placed, week_start)
 
         # hard_day_blackouts are a hard guarantee: if a hard session would
@@ -1110,8 +1127,14 @@ def build_week_drafts(
 
         available_min = base_available_min
         # For the long ride or key sessions: use a longer window
-        if vdow == 6:  # long ride — day-type-aware window (cause 3)
-            available_min = max(available_min, long_day_min)
+        if dow in long_dows:  # one or more long rides — split the safe window
+            # The primary anchor receives the full long-ride budget. Additional
+            # anchors get a shorter endurance window so total weekly hours do
+            # not silently exceed the rider's declared availability.
+            ordered_long = sorted(long_dows, key=lambda d: (d - primary_long_dow) % 7)
+            long_rank = ordered_long.index(dow)
+            anchor_min = long_day_min if long_rank == 0 else max(45, int(long_day_min * 0.62))
+            available_min = max(available_min, anchor_min)
         elif session_type in _HARD_TYPES and vdow == 2:  # keystone session
             available_min = max(available_min, min(75, int(weekly_hours * 60)))
 
@@ -1148,7 +1171,7 @@ def build_week_drafts(
         # (longest-fit) and any climbing-preferred day keep their own pick
         # and are exempt from the rotation.
         is_filler = (
-            session_type == "endurance" and vdow != 6 and preferred_id is None
+            session_type == "endurance" and dow not in long_dows and preferred_id is None
         )
         if is_filler:
             preferred_id = _pick_variety_filler(

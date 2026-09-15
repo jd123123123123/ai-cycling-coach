@@ -38,6 +38,9 @@ class DaysAvailable(BaseModel):
     sat: bool = True
     sun: bool = True
     long_day: Weekday | None = None
+    # Optional multi-day endurance preference. ``long_day`` remains the
+    # primary/backwards-compatible value for older clients and generators.
+    long_days: list[Weekday] | None = None
 
     def available_days(self) -> list[str]:
         return [d for d in WEEKDAY_KEYS if getattr(self, d)]
@@ -50,10 +53,16 @@ class DaysAvailable(BaseModel):
     def model_post_init(self, __context) -> None:  # noqa: ANN001
         if not self.available_days():
             raise ValueError("days_available cannot mark every day unavailable")
-        if self.long_day is not None and not getattr(self, self.long_day):
-            raise ValueError(
-                f"long_day {self.long_day!r} is marked unavailable in days_available"
-            )
+        selected = list(dict.fromkeys(self.long_days or ([] if self.long_day is None else [self.long_day])))
+        if self.long_day is not None and self.long_day not in selected:
+            selected.insert(0, self.long_day)
+        if any(not getattr(self, day) for day in selected):
+            bad = next(day for day in selected if not getattr(self, day))
+            raise ValueError(f"long_day {bad!r} is marked unavailable in days_available")
+        if selected:
+            object.__setattr__(self, "long_days", selected)
+            if self.long_day is None:
+                object.__setattr__(self, "long_day", selected[0])
 
 
 def _validate_blackouts(v: list[str] | None) -> list[str] | None:

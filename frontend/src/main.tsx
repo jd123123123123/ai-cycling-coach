@@ -6,6 +6,7 @@ import { startPersistingQueries } from './lib/queryPersist'
 import { warmRoute } from './lib/warmRoute'
 import { LanguageProvider } from './contexts/LanguageContext'
 import './index.css'
+import './editorial/w3/w3ios.css'
 import App from './App.tsx'
 
 // ── APPLY THE WEB FONTS ────────────────────────────────────────────────────

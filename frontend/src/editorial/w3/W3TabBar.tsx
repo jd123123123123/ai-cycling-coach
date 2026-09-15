@@ -85,7 +85,7 @@ export default function W3TabBar() {
       <div aria-hidden style={{ marginTop: 'auto', height: 'calc(92px + env(safe-area-inset-bottom))' }} />
       {/* The bar itself is viewport-fixed → always visible regardless of scroll,
           centered within the 390px frame on desktop. */}
-      <div style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 390, maxWidth: '100%', height: 'calc(92px + env(safe-area-inset-bottom))', padding: '10px 14px calc(0px + env(safe-area-inset-bottom))', background: T.bar, backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderTop: `1px solid ${T.rule}`, fontFamily: FONT, zIndex: 50 }}>
+      <div data-w3-tabbar style={{ position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: 390, maxWidth: '100%', height: 'calc(92px + env(safe-area-inset-bottom))', padding: '10px 14px calc(0px + env(safe-area-inset-bottom))', background: T.bar, backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)', borderTop: `1px solid ${T.rule}`, fontFamily: FONT, zIndex: 50 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'stretch' }}>
           {TABS.map(({ key, label, icon: Icon, route }) => {
             const active = key === shownKey

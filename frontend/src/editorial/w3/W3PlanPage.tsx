@@ -326,6 +326,9 @@ export default function W3PlanPage() {
     const adjustHours = profile?.weekly_hours_available ?? plan?.planned_hours ?? 8
     const longDayMap: Record<string, number> = { mon: 0, tue: 1, wed: 2, thu: 3, fri: 4, sat: 5, sun: 6 }
     const adjustLongDay = da?.long_day ? (longDayMap[da.long_day] ?? 5) : 5
+    const adjustLongDays = da?.long_days?.length
+      ? da.long_days.map((d) => longDayMap[d]).filter((d): d is number => d != null)
+      : [adjustLongDay]
 
     // ── goal switcher options (real active race + presets) ──
     const goalOptions: GoalOption[] = [
@@ -448,6 +451,7 @@ export default function W3PlanPage() {
       adjustDays,
       adjustHours,
       adjustLongDay,
+      adjustLongDays,
       goalOptions,
     }
   }, [week, profile, plan, rehearsals, targetCourse, seasonActs, ftp, streak])
@@ -458,7 +462,11 @@ export default function W3PlanPage() {
     const longKeys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
     const answers: InterviewAnswers = {
       weekly_hours: p.weekly_hours,
-      days_available: { mon, tue, wed, thu, fri, sat, sun, long_day: longKeys[p.longDay] },
+      days_available: {
+        mon, tue, wed, thu, fri, sat, sun,
+        long_day: longKeys[p.longDay],
+        long_days: (p.longDays?.length ? p.longDays : [p.longDay]).map((d) => longKeys[d]),
+      },
     }
     try {
       await applyPlanChange(answers)
