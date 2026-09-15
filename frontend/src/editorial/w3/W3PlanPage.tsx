@@ -67,7 +67,8 @@ export default function W3PlanPage() {
   const { data: profile, isLoading: profileLoading } = useAthleteProfile()
   const { data: streak } = useStreak()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
-  const { data: seasonActs } = useActivitiesRange(seasonStart, new Date())
+  const activityStart = plan?.plan_start_date ? parseISO(plan.plan_start_date) : seasonStart
+  const { data: seasonActs } = useActivitiesRange(activityStart, new Date())
   // Read saved state first. The legacy weeks endpoint can generate a block;
   // do not call it for an empty or completed plan merely by opening this page.
   const hasPlan = hasPersonalPlan(profile)
@@ -270,6 +271,26 @@ export default function W3PlanPage() {
     const easierD = sTss != null ? Math.round(sTss * 0.15) : null
     const harderD = sTss != null ? Math.round(sTss * 0.15) : null
 
+    const finishStats = plan?.plan_start_date && seasonActs?.activities
+      ? (() => {
+          const start = plan.plan_start_date as string
+          const end = plan.plan_end_date ?? new Date().toISOString().slice(0, 10)
+          const rides = seasonActs.activities.filter((a) => {
+            const day = a.started_at.slice(0, 10)
+            return day >= start && day <= end && a.sport === 'cycling'
+          })
+          const tss = rides.reduce((sum, a) => sum + (a.tss ?? 0), 0)
+          const km = rides.reduce((sum, a) => sum + (a.distance_meters ?? 0), 0) / 1000
+          const hours = rides.reduce((sum, a) => sum + (a.duration_seconds ?? 0), 0) / 3600
+          return {
+            tss: Math.round(tss).toLocaleString('de-DE'),
+            km: km.toLocaleString('de-DE', { maximumFractionDigits: 1 }),
+            hours: hours.toLocaleString('de-DE', { maximumFractionDigits: 1 }),
+            rides: String(rides.length),
+          }
+        })()
+      : undefined
+
     // ── forecast preview value ──
     const proj = week?.projection ?? null
     const forecastValue = proj?.projected_central != null ? `${Math.round(proj.projected_central)} ${proj.unit || 'W'}` : (proj?.current_estimate != null ? `${Math.round(proj.current_estimate)} ${proj.unit || 'W'}` : '—')
@@ -333,6 +354,7 @@ export default function W3PlanPage() {
       phaseOfTotal: `Phase ${activeSegIdx + 1} von ${phases.length}`,
       block,
       avgTss: avg != null ? String(avg) : '—',
+      finishStats,
       weekBars,
       weekRangeLabel: weekStartD && weekEndD
         ? `${DE_WD2[(weekStartD.getDay() + 6) % 7]} ${weekStartD.getDate()}. – ${DE_WD2[(weekEndD.getDay() + 6) % 7]} ${weekEndD.getDate()}. ${monthDE(weekEndD)} · Woche ${weekOfBlock} im ${active}`

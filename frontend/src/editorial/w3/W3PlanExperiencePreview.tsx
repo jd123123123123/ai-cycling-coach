@@ -22,7 +22,7 @@ export default function W3PlanExperiencePreview() {
     return value === 'active' || value === 'ended' || value === 'empty' ? value : 'created'
   }, [])
   return <W3PlanExperience
-    vm={beforeVm}
+    vm={{...beforeVm, finishStats:{tss:'1.984',km:'642,0',hours:'26,4',rides:'18'}}}
     state={state}
     previewProgress={PROGRESS}
     planStart="2026-08-17"

@@ -107,6 +107,8 @@ export interface W3PlanVm {
   phaseOfTotal: string
   block: ActiveBlockVm | null
   avgTss: string
+  /** Totals earned across the completed plan, when a plan history exists. */
+  finishStats?: { tss: string; km: string; hours: string; rides: string }
   weekBars: WeekBar[]
   weekRangeLabel: string
   weekBadge: string
