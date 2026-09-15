@@ -31,6 +31,16 @@ function RideCard({ride,hero,onOpen}:{ride:W3RideCard;hero?:boolean;onOpen:(id:n
   {hero&&ride.note&&<p className="w3-journal-ride-note">{ride.note}</p>}
  </button>
 }
+function RhythmGraph({values,labels,selected,onSelect}:{values:number[];labels:(i:number)=>string;selected:number|null;onSelect:(index:number|null)=>void}){
+ const width=280,height=86,pad=7,max=Math.max(1,...values),step=values.length>1?(width-pad*2)/(values.length-1):0
+ const points=values.map((value,index)=>[pad+index*step,height-pad-(value/max)*(height-pad*2)] as const)
+ const line=points.length?`M ${points[0][0]} ${points[0][1]} ${points.slice(1).map((p,i)=>{const prev=points[i],mid=(prev[0]+p[0])/2;return `Q ${mid} ${prev[1]} ${p[0]} ${p[1]}`}).join(' ')}`:''
+ const area=line?`${line} L ${points.at(-1)![0]} ${height-pad} L ${points[0][0]} ${height-pad} Z`:''
+ return <div className="w3-summary-graph" role="group" aria-label="Kilometertrend">
+  <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="w3-summary-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#c6f53c" stopOpacity=".38"/><stop offset="1" stopColor="#c6f53c" stopOpacity="0"/></linearGradient></defs><path d={area} fill="url(#w3-summary-fill)"/><path d={line} fill="none" stroke="#c6f53c" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+  {points.map(([x,y],index)=><button key={index} aria-label={`${labels(index)}: ${nf.format(values[index])} Kilometer`} aria-pressed={selected===index} className="w3-summary-point" style={{left:`${x/width*100}%`,top:`${y/height*100}%`}} onClick={()=>onSelect(selected===index?null:index)}><i/></button>)}
+ </div>
+}
 export function RideJournal({vm,onOpen}:{vm:W3RidesVm;onOpen:(id:number)=>void}){
  const [filter,setFilter]=useState<W3RideFilter>('all'),[query,setQuery]=useState(''),[search,setSearch]=useState(false),[limit,setLimit]=useState(12),[sort,setSort]=useState<'recent'|'distance'|'power'|'duration'>('recent')
  const shown=useMemo(()=>{
@@ -49,11 +59,13 @@ export function RideJournal({vm,onOpen}:{vm:W3RidesVm;onOpen:(id:number)=>void})
 }
 export function RideSummary({vm,rhythm,onSetGoal}:{vm:W3RidesVm;rhythm?:ActivityRhythm|null;onSetGoal:()=>void}){
  const [period,setPeriod]=useState<'season'|'month'|'week'>('season'),[selected,setSelected]=useState<number|null>(null),[open,setOpen]=useState(false)
- const win=rhythm?.[period],buckets=win?.buckets??vm.barMonths.map(m=>({km:m.km})),values=buckets.map(b=>b.km),max=Math.max(1,...values),picked=selected==null?null:buckets[selected]
+ const win=rhythm?.[period],buckets=win?.buckets??vm.barMonths.map(m=>({km:m.km})),values=buckets.map(b=>b.km),picked=selected==null?null:buckets[selected]
  const label=(i:number)=>win?new Date(`${win.buckets[i].start}T12:00:00`).toLocaleDateString('de-DE',period==='season'?{month:'short'}:{day:'numeric',month:'short'}):`${vm.barMonths[i].label} ${vm.barMonths[i].year}`
  const meta=picked&&win?[['FAHRTEN',String(win.buckets[selected!].rides),''],['ZEIT',nf.format(win.buckets[selected!].hours),' h'],['HÖHENMETER',nf.format(win.buckets[selected!].elevation_m),' hm']]:win?[['FAHRTEN',String(win.rides),''],['ZEIT',nf.format(win.hours),' h'],['HÖHENMETER',nf.format(win.elevation_m),' hm']]:[['FAHRTEN',vm.count.replace(/\s*Fahrten.*$/,''),''],['SATTELZEIT',vm.saddleTime,' h'],['Ø LEISTUNG',vm.avgPower,' W']]
+ const previous=values.length>1?values[values.length-2]:values[0]??0,current=values.at(-1)??0,trendDelta=previous?Math.round((current-previous)/previous*100):0,trend=trendDelta>3?'Aufbauend':trendDelta<-3?'Ruhiger':'Stabil'
  return <section className="w3-ride-summary" aria-label="Deine Kilometer"><header>{rhythm?<div role="group" aria-label="Zeitraum">{([['season','Saison'],['month','Monat'],['week','Woche']]as const).map(([key,text])=><button aria-pressed={period===key} key={key} onClick={()=>{setPeriod(key);setSelected(null)}}>{text}</button>)}</div>:<span>Letzte 12 Monate</span>}<button className="w3-journal-icon is-small" aria-label={open?'Kilometerdetails schließen':'Kilometerdetails öffnen'} aria-expanded={open} onClick={()=>setOpen(!open)}>{open?<Minus size={17}/>:<Plus size={17}/>}</button></header>
- <div className="w3-summary-main"><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div><div className="w3-summary-bars" role="group" aria-label="Kilometerverlauf">{values.map((v,i)=><button key={i} aria-label={`${label(i)}: ${nf.format(v)} Kilometer`} aria-pressed={selected===i} onClick={()=>setSelected(selected===i?null:i)}><i style={{height:`${v>0?Math.max(5,v/max*100):2}%`}}/></button>)}</div></div>
+ <div className="w3-summary-main"><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div><RhythmGraph values={values} labels={label} selected={selected} onSelect={index=>setSelected(index)}/></div>
+ <div className={`w3-summary-trend trend-${trend.toLowerCase()}`}><span>{period==='season'?'SAISON-TREND':period==='month'?'30-TAGE-TREND':'7-TAGE-TREND'}</span><strong>{trend}</strong><em>{trendDelta>=0?'+':''}{trendDelta}%</em></div>
  <div className="w3-summary-meta" aria-label="Zusammenfassung">{meta.map(([label,value,unit])=><span key={label}><small>{label}</small><strong>{value}<em>{unit}</em></strong></span>)}</div>
  {open&&<div className="w3-summary-details">{picked&&win?<><span><strong>{win.buckets[selected!].rides}</strong> Fahrten</span><span><strong>{nf.format(win.buckets[selected!].hours)}</strong> h</span><span><strong>{nf.format(win.buckets[selected!].elevation_m)}</strong> hm</span></>:win?<><span><strong>{win.rides}</strong> Fahrten</span><span><strong>{nf.format(win.hours)}</strong> h</span><span><strong>{nf.format(win.elevation_m)}</strong> hm</span></>:!picked?<><span><strong>{vm.avgSpeed}</strong> km/h Ø</span><span><strong>{vm.avgPower}</strong> W Ø</span><span><strong>{vm.saddleTime}</strong> h</span></>:<span>Monatsdistanz: {nf.format(picked.km)} km</span>}</div>}
  {open&&period==='season'&&selected==null&&<button className="w3-summary-goal" onClick={onSetGoal}>{vm.goal?`${vm.goal.chip} · ${vm.goal.ofGoalPct}`:'Saisonziel setzen'}<ArrowUpRight size={16}/></button>}
