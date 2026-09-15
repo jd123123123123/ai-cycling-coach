@@ -82,20 +82,15 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
      <div><strong>{vo2Delta!=null?`${vo2Delta>=0?'+':''}${Math.round(vo2Delta)}`:'—'}</strong><span>VO₂MAX-PUNKTE</span></div>
      <div><strong>{vm.avgTss}</strong><span>Ø TSS / WOCHE</span></div>
    </div>
-   {vm.finishStats&&<div className="w3-plan-finish-totals" aria-label="Gesamtleistung im Plan">
-     <div className="w3-plan-finish-totals-head"><span>DEIN BLOCK IN ZAHLEN</span><small>{vm.totalWeeks} Wochen · {vm.finishStats.rides} Fahrten</small></div>
+   {vm.finishStats&&<div className="w3-plan-finish-telemetry" aria-label="Gesamtleistung im Plan">
      <div className="w3-plan-finish-total-grid">
      <div><Activity size={14}/><strong>{vm.finishStats.tss}</strong><span>GESAMT TSS</span></div>
      <div><Route size={14}/><strong>{vm.finishStats.km}</strong><span>KILOMETER</span></div>
      <div><Clock3 size={14}/><strong>{vm.finishStats.hours}</strong><span>STUNDEN</span></div>
      <div><Bike size={14}/><strong>{vm.finishStats.rides}</strong><span>FAHRTEN</span></div>
      </div>
+     <div className="w3-plan-finish-mini-graph" aria-label={`Belastung über ${vm.totalWeeks} Wochen`}>{vm.weekBars.map((b,i)=><span key={i} title={`Woche ${i+1}: ${b.tss??'Ruhe'}`}><i style={{height:`${b.tss==null?7:Math.max(10,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div>
    </div>}
-   <div className="w3-plan-finish-volume" aria-label="Trainingsrhythmus über den Plan">
-     <div className="w3-plan-finish-volume-head"><span>DEIN RHYTHMUS</span><small>Belastung pro Woche</small></div>
-     <div className="w3-plan-finish-volume-bars">{vm.weekBars.map((b,i)=><span key={i} title={`Woche ${i+1}: ${b.tss??'Ruhe'}`}><i style={{height:`${b.tss==null?7:Math.max(10,b.tss/max*100)}%`}} data-rest={b.isRest}/><b>{i+1}</b></span>)}</div>
-     <div className="w3-plan-finish-volume-axis"><span>Planstart</span><span>Abschluss</span></div>
-   </div>
    <div className="w3-plan-finish-profile"><W3PowerProfile data={progressData}/></div>
    <div className="w3-plan-finish-wins"><span>DEINE GEWINNE</span><strong>{ftpDelta!=null&&ftpDelta>0?'Schwelle angehoben':'Deine Basis gefestigt'} · {vo2Delta!=null&&vo2Delta>0?'mehr Reserve':'mehr Konstanz'}</strong></div>
  </section>}

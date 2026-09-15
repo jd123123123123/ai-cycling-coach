@@ -15,17 +15,12 @@
 .w3-plan-finish-copy{position:relative;z-index:1;color:var(--plan-muted);font-size:13px;line-height:1.4;margin-top:10px!important;max-width:30em}
 .w3-plan-finish-score{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:15px;margin:15px auto 1px;width:100%}.w3-plan-finish-score svg{width:112px;height:112px;overflow:visible;transform:rotate(-90deg);filter:drop-shadow(0 0 12px #c6f53c25)}.w3-plan-finish-score circle{fill:none;stroke-width:7}.w3-plan-finish-score-track{stroke:#ffffff16}.w3-plan-finish-score-fill{stroke:var(--plan-acid);stroke-linecap:round}.w3-plan-finish-score>div{display:flex;flex-direction:column;gap:3px;min-width:110px}.w3-plan-finish-score strong{font-size:32px;line-height:1;letter-spacing:-1.2px}.w3-plan-finish-score span{font-size:9px;letter-spacing:.1em;line-height:1.2;color:var(--plan-muted)}
 .w3-plan-finish-stats{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px;padding-top:15px;border-top:1px solid #ffffff20}.w3-plan-finish-stats>div{display:flex;flex-direction:column;gap:5px;min-width:0}.w3-plan-finish-stats strong{font-size:21px;letter-spacing:-.7px;color:var(--plan-ink);font-weight:550}.w3-plan-finish-stats span{font-size:9px;line-height:1.15;color:var(--plan-muted);letter-spacing:.06em}
-.w3-plan-finish-totals{position:relative;z-index:1;margin-top:15px;padding:13px 0 12px;border-top:1px solid #ffffff20;border-bottom:1px solid #ffffff20}
-.w3-plan-finish-totals-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:11px}
-.w3-plan-finish-totals-head span{font-size:9px;letter-spacing:1.05px;color:var(--plan-muted)}
-.w3-plan-finish-totals-head small{font-size:10px;color:#eaffbb80;white-space:nowrap}
-.w3-plan-finish-total-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+.w3-plan-finish-telemetry{position:relative;z-index:1;display:flex;align-items:center;gap:12px;margin-top:15px;padding:11px 0 10px;border-top:1px solid #ffffff20;border-bottom:1px solid #ffffff20}
+.w3-plan-finish-total-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px;flex:1;min-width:0}
 .w3-plan-finish-total-grid>div{display:flex;flex-direction:column;gap:4px;min-width:0}.w3-plan-finish-total-grid svg{color:var(--plan-acid);opacity:.82;margin-bottom:1px}
-.w3-plan-finish-total-grid strong{font-size:18px;font-weight:550;letter-spacing:-.55px;color:var(--plan-ink)}
+.w3-plan-finish-total-grid strong{font-size:16px;font-weight:550;letter-spacing:-.55px;color:var(--plan-ink)}
 .w3-plan-finish-total-grid span{font-size:8px;line-height:1.1;letter-spacing:.08em;color:var(--plan-muted)}
-.w3-plan-finish-volume{position:relative;z-index:1;margin-top:15px;padding:14px 0 1px;border-bottom:1px solid #ffffff20}
-.w3-plan-finish-volume-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.w3-plan-finish-volume-head span{font-size:9px;letter-spacing:1.05px;color:var(--plan-muted)}.w3-plan-finish-volume-head small{font-size:10px;color:#eaffbb80}
-.w3-plan-finish-volume-bars{height:62px;display:flex;align-items:flex-end;gap:4px;margin-top:12px}.w3-plan-finish-volume-bars>span{height:100%;flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:5px;min-width:0}.w3-plan-finish-volume-bars i{display:block;width:100%;max-width:22px;min-height:4px;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#dfff84,var(--plan-acid) 50%,#648a18);box-shadow:0 0 14px #c6f53c20}.w3-plan-finish-volume-bars i[data-rest=true]{background:#ffffff18;box-shadow:none}.w3-plan-finish-volume-bars b{font-size:8px;font-weight:450;color:#ffffff45}.w3-plan-finish-volume-axis{display:flex;justify-content:space-between;color:#ffffff45;font-size:9px;margin-top:8px;padding-bottom:10px}
+.w3-plan-finish-mini-graph{height:42px;width:29%;display:flex;align-items:flex-end;gap:2px;padding:0 1px}.w3-plan-finish-mini-graph>span{height:100%;flex:1;display:flex;align-items:flex-end;min-width:0}.w3-plan-finish-mini-graph i{display:block;width:100%;min-height:3px;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#dfff84,var(--plan-acid) 50%,#648a18);box-shadow:0 0 10px #c6f53c20}.w3-plan-finish-mini-graph i[data-rest=true]{background:#ffffff18;box-shadow:none}
 .state-ended .w3-plan-finish-profile .w3-power-profile{position:relative;z-index:1;background:transparent;border:0;margin:16px -2px 0;padding:0}.state-ended .w3-plan-finish-profile .w3-power-profile-heading{display:none}.state-ended .w3-plan-finish-profile .w3-power-profile svg{max-height:210px}.state-ended .w3-plan-finish-profile .w3-power-comparison{margin-top:8px}.state-ended .w3-plan-finish-profile .w3-power-comparison strong{font-size:17px}
 .w3-plan-finish-wins{position:relative;z-index:1;display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-top:16px;padding-top:13px;border-top:1px solid #ffffff20}.w3-plan-finish-wins span{font-size:9px;letter-spacing:1.1px;color:var(--plan-muted);white-space:nowrap}.w3-plan-finish-wins strong{text-align:right;color:#eaffbb;font-size:12px;font-weight:550}
 
@@ -81,12 +76,9 @@
  .w3-plan-finish-score{gap:10px;margin-top:10px}.w3-plan-finish-score svg{width:88px;height:88px}.w3-plan-finish-score>div{min-width:88px}.w3-plan-finish-score strong{font-size:27px}
  .state-ended .w3-plan-finish-stats{margin-top:14px;padding-top:12px}
  .state-ended .w3-plan-finish-stats strong{font-size:19px}
- .state-ended .w3-plan-finish-totals{margin-top:10px;padding:10px 0 9px}
- .w3-plan-finish-totals-head{margin-bottom:8px}
+ .state-ended .w3-plan-finish-telemetry{margin-top:10px;padding:9px 0 8px;gap:8px}
  .w3-plan-finish-total-grid strong{font-size:16px}
- .w3-plan-finish-volume{margin-top:10px;padding-top:10px}
- .w3-plan-finish-volume-bars{height:43px;margin-top:8px}
- .w3-plan-finish-volume-axis{margin-top:5px;padding-bottom:7px}
+ .w3-plan-finish-mini-graph{height:34px;width:25%}
  .state-ended .w3-plan-finish-profile .w3-power-profile{margin-top:9px}
  .state-ended .w3-plan-finish-profile .w3-power-profile svg{max-height:145px}
  .state-ended .w3-plan-finish-profile .w3-power-comparison{margin-top:3px}
