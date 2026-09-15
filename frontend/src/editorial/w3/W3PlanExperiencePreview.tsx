@@ -25,6 +25,8 @@ export default function W3PlanExperiencePreview() {
     vm={beforeVm}
     state={state}
     previewProgress={PROGRESS}
+    planStart="2026-08-17"
+    planEnd="2026-10-11"
     onRebuild={async () => true}
     onOpenSession={() => {}}
     onCreatedDone={() => {}}

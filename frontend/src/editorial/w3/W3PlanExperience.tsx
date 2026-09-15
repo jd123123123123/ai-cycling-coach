@@ -40,6 +40,8 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const [period,setPeriod]=useState<import('../../api/progressExplorer').ProgressPeriod>(missingPlanHistory?'month':'plan')
  const results=useProgressExplorer(period,referenceDate,period==='plan'&&(state==='ended'||priorPlanCompleted)?(priorPlanCompleted?priorPlanEnd:planEnd):undefined)
  const progressData=previewProgress??results.data
+ const ftpDelta=progressData?.ftp.current!=null&&progressData.ftp.baseline?.value!=null?progressData.ftp.current-progressData.ftp.baseline.value:null
+ const vo2Delta=progressData?.vo2.current!=null&&progressData.vo2.baseline?.value!=null?progressData.vo2.current-progressData.vo2.baseline.value:null
  const sessions=vm.daySessions??[]
  const identity=sessions.map(s=>s.dateISO).join(',')
  useEffect(()=>{setDay(Math.max(0,sessions.findIndex(s=>s.isToday)))},[identity])
@@ -67,9 +69,21 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  </>:view==='profile'||state==='ended'?<>
  <div className="w3-plan-opening"><h1>{missingPlanHistory?<>Dein nächster<br/>Schritt.</>:state==='ended'?<>Das hast du<br/>bewegt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{missingPlanHistory?'Dein bisheriger Plan ist beendet. Wähle, was du als Nächstes verbessern möchtest.':title}</p></div>
  {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
+ {state==='ended'&&!missingPlanHistory&&<section className="w3-plan-finish-hero" aria-labelledby="w3-plan-finish-title">
+   <div className="w3-plan-finish-eyebrow">PLAN ABGESCHLOSSEN · DEIN ERGEBNIS</div>
+   <h2 id="w3-plan-finish-title">Du hast den<br/><em>Block geliefert.</em></h2>
+   <p className="w3-plan-finish-copy">{vm.totalWeeks} Wochen konsequent gefahren. Hier ist, was davon geblieben ist.</p>
+   <div className="w3-plan-finish-stats">
+     <div><strong>{ftpDelta!=null?`${ftpDelta>=0?'+':''}${Math.round(ftpDelta)} W`:'—'}</strong><span>FTP SEIT START</span></div>
+     <div><strong>{vo2Delta!=null?`${vo2Delta>=0?'+':''}${Math.round(vo2Delta)}`:'—'}</strong><span>VO₂MAX-PUNKTE</span></div>
+     <div><strong>{vm.avgTss}</strong><span>Ø TSS / WOCHE</span></div>
+   </div>
+   <div className="w3-plan-finish-profile"><W3PowerProfile data={progressData}/></div>
+   <div className="w3-plan-finish-wins"><span>DEINE GEWINNE</span><strong>{ftpDelta!=null&&ftpDelta>0?'Schwelle angehoben':'Deine Basis gefestigt'} · {vo2Delta!=null&&vo2Delta>0?'mehr Reserve':'mehr Konstanz'}</strong></div>
+ </section>}
  <button className="w3-plan-link slim" onClick={()=>setSheet('profile')}><span><strong>Leistungsprofil vergleichen</strong></span><ArrowUpRight size={18}/></button>
- <W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={results.isPending} error={results.isError}/>
- {state==='ended'&&!missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
+ <W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={previewProgress?false:results.isPending} error={previewProgress?false:results.isError}/>
+ {state==='ended'&&!missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Was baust du als Nächstes?<ArrowRight size={20}/></button>}
  </>:<>
  <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1><p>{state==='created'?'Gespeichert · dein Weg ist klar':`${vm.block?.phase??'Training'} · ${vm.planWeekLabel}${goalDate?' · Ziel '+new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'}):''}`}</p></div><div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div></header>
  {state==='created'?<>
