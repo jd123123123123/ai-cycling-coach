@@ -1,5 +1,5 @@
 import {useMemo, useState} from 'react'
-import {ArrowUpRight, Bike, Search, X, Plus, Minus} from 'lucide-react'
+import {ArrowDownUp,ArrowUpRight, Bike, Search, X, Plus, Minus} from 'lucide-react'
 import {motion, useReducedMotion} from 'motion/react'
 import type {W3RideCard, W3RidesVm, W3RideFilter} from './W3RidesView'
 import type {ActivityRhythm} from '../../api/rhythm'
@@ -23,16 +23,26 @@ function RideCard({ride,hero,onOpen}:{ride:W3RideCard;hero?:boolean;onOpen:(id:n
  return <button type="button" disabled={ride.id==null} className={`w3-journal-ride ${hero?'is-hero':''}`} onClick={()=>ride.id!=null&&onOpen(ride.id)} aria-label={`${ride.title}, ${number(ride.km)} Kilometer, ${ride.dateLabel}`}>
   <div className="w3-journal-ride-head"><time>{ride.dateLabel}</time><ArrowUpRight size={18}/></div>
   <div className="w3-journal-ride-body"><div><h3>{ride.title}</h3><div className="w3-journal-distance"><strong>{number(ride.km)}</strong><span>km</span></div>{!ride.polyline?.length&&<span className="w3-journal-no-route">Ohne GPS-Spur</span>}</div><RouteArt ride={ride} hero={hero}/></div>
-  <div className="w3-journal-ride-stats"><span><strong>{ride.dur}</strong> h</span><span><strong>{number(ride.speed)}</strong> km/h</span><span><strong>{ride.power}</strong> W</span></div>
+  <div className="w3-journal-ride-stats" aria-label="Fahrtdaten">
+    <span><small>DAUER</small><strong>{ride.dur}<em> h</em></strong></span>
+    <span><small>Ø TEMPO</small><strong>{number(ride.speed)}<em> km/h</em></strong></span>
+    <span><small>Ø LEISTUNG</small><strong>{ride.power}<em> W</em></strong></span>
+  </div>
   {hero&&ride.note&&<p className="w3-journal-ride-note">{ride.note}</p>}
  </button>
 }
 export function RideJournal({vm,onOpen}:{vm:W3RidesVm;onOpen:(id:number)=>void}){
- const [filter,setFilter]=useState<W3RideFilter>('all'),[query,setQuery]=useState(''),[search,setSearch]=useState(false),[limit,setLimit]=useState(12)
- const shown=useMemo(()=>vm.rides.filter(r=>(filter==='all'||filter==='indoor'&&r.indoor||filter==='outdoor'&&!r.indoor||filter==='race'&&r.race)&&`${r.title} ${r.dateLabel}`.toLocaleLowerCase('de').includes(query.trim().toLocaleLowerCase('de'))),[vm.rides,query,filter])
+ const [filter,setFilter]=useState<W3RideFilter>('all'),[query,setQuery]=useState(''),[search,setSearch]=useState(false),[limit,setLimit]=useState(12),[sort,setSort]=useState<'recent'|'distance'|'power'|'duration'>('recent')
+ const shown=useMemo(()=>{
+  const metric=(value:string)=>{const clean=value.replace(/\s/g,'').replace(',','.');if(clean.includes(':')){const [hours,minutes]=clean.split(':').map(Number);return (hours||0)+(minutes||0)/60}return Number.parseFloat(clean)||0}
+  const rows=vm.rides.filter(r=>(filter==='all'||filter==='indoor'&&r.indoor||filter==='outdoor'&&!r.indoor||filter==='race'&&r.race)&&`${r.title} ${r.dateLabel}`.toLocaleLowerCase('de').includes(query.trim().toLocaleLowerCase('de')))
+  if(sort==='recent')return rows
+  return [...rows].sort((a,b)=>metric(b[sort==='distance'?'km':sort==='power'?'power':'dur'])-metric(a[sort==='distance'?'km':sort==='power'?'power':'dur']))
+ },[vm.rides,query,filter,sort])
  return <section className="w3-ride-journal"><header className="w3-journal-heading"><div><h1>Deine Fahrten.</h1><span>{vm.count}</span></div><button className="w3-journal-icon" aria-label={search?'Suche schließen':'Fahrten suchen'} onClick={()=>{setSearch(!search);setQuery('')}}>{search?<X size={20}/>:<Search size={20}/>}</button></header>
  {search&&<label className="w3-journal-search"><Search size={18}/><input autoFocus value={query} placeholder="Fahrt oder Datum suchen" aria-label="Fahrt oder Datum suchen" onChange={e=>{setQuery(e.target.value);setLimit(12)}}/></label>}
  <div className="w3-journal-filters" role="group" aria-label="Fahrten filtern">{([['all','Alle'],['outdoor','Outdoor'],['indoor','Indoor'],['race','Rennen']] as const).map(([key,label])=><button key={key} aria-pressed={filter===key} onClick={()=>{setFilter(key);setLimit(12)}}>{label}</button>)}</div>
+ <div className="w3-journal-sort" role="group" aria-label="Fahrten sortieren"><ArrowDownUp size={14}/><span>Sortieren</span>{([['recent','Neueste'],['distance','Distanz'],['power','Leistung'],['duration','Dauer']] as const).map(([key,label])=><button key={key} aria-pressed={sort===key} onClick={()=>{setSort(key);setLimit(12)}}>{label}</button>)}</div>
  {vm.prAnnounce&&<button className="w3-journal-record" onClick={()=>onOpen(vm.prAnnounce!.id)}><span>{vm.prAnnounce.title.replace(' · ',' — ')}</span><ArrowUpRight size={18}/></button>}
  {shown.length?<><RideCard ride={shown[0]} hero onOpen={onOpen}/>{shown.length>1&&<div className="w3-journal-archive"><h2>Weitere Fahrten</h2>{shown.slice(1,limit).map((r,i)=><RideCard key={r.id??i} ride={r} onOpen={onOpen}/>)}</div>}{shown.length>limit&&<button className="w3-journal-more" onClick={()=>setLimit(n=>n+20)}>Weitere Fahrten laden <span>{shown.length-limit}</span></button>}</>:<div className="w3-journal-empty"><Bike size={44} strokeWidth={1}/><h2>{vm.rides.length?'Keine passende Fahrt':'Hier beginnt deine Geschichte.'}</h2><p>{vm.rides.length?'Wähle einen anderen Filter oder Suchbegriff.':'Deine synchronisierten Fahrten erscheinen hier.'}</p>{vm.rides.length>0&&<button onClick={()=>{setFilter('all');setQuery('')}}>Alle Fahrten zeigen</button>}</div>}
  </section>
