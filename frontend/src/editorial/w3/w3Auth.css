@@ -1,6 +1,6 @@
 /* Auth stays on the original W3 black even if a previous rider used light mode. */
 .w3-auth{--auth-bg:#0B0B0B;--auth-ink:#fff;--auth-muted:#9BA0A6;--auth-acid:#BFFF3C;background:var(--auth-bg);color:var(--auth-ink);font-family:'Inter Tight',ui-sans-serif,system-ui,sans-serif;min-height:100dvh;color-scheme:dark}
-.w3-auth .w3-auth-frame{background:var(--auth-bg);width:430px}
+.w3-auth .w3-auth-frame{background:var(--auth-bg);width:390px;max-width:100%}
 .w3-auth-hero{position:relative;isolation:isolate;min-height:280px;display:flex;flex-direction:column;justify-content:space-between;padding:calc(18px + env(safe-area-inset-top)) 24px 0;overflow:hidden}
 .w3-auth-photo,.w3-auth-photo-shade{position:absolute;inset:0;width:100%;height:100%;z-index:-1}.w3-auth-photo{object-fit:cover;object-position:50% 56%}.w3-auth-photo-shade{background:linear-gradient(180deg,#0b0b0b55 0%,#0b0b0b00 24%,#0b0b0b22 37%,#0b0b0be8 77%,#0b0b0b 100%)}
 .w3-auth-brand{display:flex;align-items:center;gap:6px;font-size:18px;font-weight:750;letter-spacing:1.7px}.w3-auth-heading{padding-top:68px}.w3-auth h1{margin:0;font-size:43px;line-height:1.02;font-weight:600;letter-spacing:-1.9px;overflow-wrap:anywhere}.w3-auth h1 span{color:var(--auth-acid)}.w3-auth-heading p{margin:13px 0 0;color:var(--auth-muted);font-size:15px;line-height:1.4}
