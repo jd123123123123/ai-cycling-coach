@@ -100,7 +100,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
    {vm.finishStats&&<div className="w3-plan-finish-total-grid" aria-label="Gesamtleistung im Plan">
      <div><Activity size={14}/><strong>{vm.finishStats.tss}</strong><span>TSS</span></div><div><Route size={14}/><strong>{vm.finishStats.km}</strong><span>KM</span></div><div><Clock3 size={14}/><strong>{vm.finishStats.hours}</strong><span>STUNDEN</span></div><div><Bike size={14}/><strong>{vm.finishStats.rides}</strong><span>FAHRTEN</span></div>
    </div>}
-   <div className="w3-plan-finish-profile-teaser" role="button" tabIndex={0} aria-label="Leistungsprofil öffnen" onClick={()=>setSheet('progress')} onKeyDown={e=>{if(e.key==='Enter'||e.key===' ')setSheet('progress')}}><div><span>LEISTUNGSPROFIL</span><small>Tippen für FTP, VO₂max und Rekorde</small></div><W3PowerProfile data={progressData}/></div>
+   <button className="w3-plan-finish-detail-link" onClick={()=>setSheet('progress')}><span><strong>Leistungsprofil öffnen</strong><small>FTP · VO₂max · Rekorde · Zeiträume</small></span><ArrowUpRight size={17}/></button>
  </section>}
  {state!=='ended'&&<W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={previewProgress?false:results.isPending} error={previewProgress?false:results.isError}/>} 
  {state==='ended'&&!missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Was baust du als Nächstes?<ArrowRight size={20}/></button>}
