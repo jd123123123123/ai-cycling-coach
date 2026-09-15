@@ -27,13 +27,13 @@ function hoursMinutes(seconds: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
 }
 
-/** `4. Mai` — the day it happened, never the year: these are all this rider's
- *  own rides and the year adds a column of noise to four small captions. */
+/** `4. Mai 2021` — include the year so an old personal best is anchored in
+ *  time. The extra context matters once a rider has several seasons of data. */
 function germanDay(iso: string | null): string | null {
   if (!iso) return null
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return null
-  return d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short' })
+  return d.toLocaleDateString('de-DE', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 interface Spec { label: string; format: (value: number) => { value: string; unit: string } }
@@ -80,6 +80,7 @@ export function highlightRecords(records: RiderRecords | undefined): HighlightRe
       label: spec.label,
       ride: rec.title?.trim() || null,
       when: germanDay(rec.at),
+      activityId: rec.activity_id ?? null,
     })
   }
   return out

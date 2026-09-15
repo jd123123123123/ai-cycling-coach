@@ -38,6 +38,8 @@ export interface HighlightRecord {
   /** The ride it came from, or null. */
   ride: string | null
   when: string | null
+  /** Source activity, when the record can open its ride detail. */
+  activityId?: number | null
 }
 
 export interface W3RiderHighlightsProps {

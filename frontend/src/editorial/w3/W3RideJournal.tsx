@@ -67,7 +67,14 @@ export function RideSummary({vm,rhythm,onSetGoal}:{vm:W3RidesVm;rhythm?:Activity
  <div className="w3-summary-main"><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div><RhythmGraph values={values} labels={label} selected={selected} onSelect={index=>setSelected(index)}/></div>
  <div className={`w3-summary-trend trend-${trend.toLowerCase()}`}><span>{period==='season'?'SAISON-TREND':period==='month'?'30-TAGE-TREND':'7-TAGE-TREND'}</span><strong>{trend}</strong><em>{trendDelta>=0?'+':''}{trendDelta}%</em></div>
  <div className="w3-summary-meta" aria-label="Zusammenfassung">{meta.map(([label,value,unit])=><span key={label}><small>{label}</small><strong>{value}<em>{unit}</em></strong></span>)}</div>
+ {period==='season'&&selected==null&&<div className="w3-summary-goal-card" aria-label="Saisonziel">
+   {vm.goal?<>
+    <div className="w3-summary-goal-head"><span>SAISONZIEL</span><strong>{nf.format(vm.goal.currentKm)} / {nf.format(vm.goal.targetKm)} km</strong></div>
+    <div className="w3-summary-goal-track" aria-hidden="true"><i style={{width:`${Math.min(100,vm.goal.progress*100)}%`}}/></div>
+    <div className="w3-summary-goal-read"><strong>{vm.goal.realityLabel}</strong><span>{vm.goal.projectionLabel}</span></div>
+   </>:<button className="w3-summary-goal-cta" onClick={onSetGoal}><span><b>Dein Saisonziel</b><small>Setze eine Marke, die zu dir gehört.</small></span><ArrowUpRight size={16}/></button>}
+ </div>}
  {open&&<div className="w3-summary-details">{picked&&win?<><span><strong>{win.buckets[selected!].rides}</strong> Fahrten</span><span><strong>{nf.format(win.buckets[selected!].hours)}</strong> h</span><span><strong>{nf.format(win.buckets[selected!].elevation_m)}</strong> hm</span></>:win?<><span><strong>{win.rides}</strong> Fahrten</span><span><strong>{nf.format(win.hours)}</strong> h</span><span><strong>{nf.format(win.elevation_m)}</strong> hm</span></>:!picked?<><span><strong>{vm.avgSpeed}</strong> km/h Ø</span><span><strong>{vm.avgPower}</strong> W Ø</span><span><strong>{vm.saddleTime}</strong> h</span></>:<span>Monatsdistanz: {nf.format(picked.km)} km</span>}</div>}
- {open&&period==='season'&&selected==null&&<button className="w3-summary-goal" onClick={onSetGoal}>{vm.goal?`${vm.goal.chip} · ${vm.goal.ofGoalPct}`:'Saisonziel setzen'}<ArrowUpRight size={16}/></button>}
+ {open&&period==='season'&&selected==null&&vm.goal&&<button className="w3-summary-goal" onClick={onSetGoal}>{vm.goal.chip} · {vm.goal.ofGoalPct}<ArrowUpRight size={16}/></button>}
  </section>
 }

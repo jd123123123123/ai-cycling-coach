@@ -134,11 +134,27 @@ export default function W3RidesPage() {
     const expected = goalKm != null ? goalKm * (dayOfYear / 365) : 0
     const paceDelta = totalKm - expected
     const paceAhead = paceDelta >= 0
+    const firstRide = acts.at(-1)
+    const activeDays = firstRide
+      ? Math.max(30, Math.min(365, Math.round((now.getTime() - new Date(firstRide.started_at).getTime()) / 864e5) + 1))
+      : 365
+    const projectedKm = goalKm != null
+      ? Math.round((totalKm / activeDays * 365) / 10) * 10
+      : 0
+    const realityLabel = goalKm == null ? ''
+      : projectedKm >= goalKm ? 'Auf Kurs'
+      : projectedKm >= goalKm * .85 ? 'Machbar mit kleinem Schub'
+      : 'Noch ambitioniert'
     const goal = goalKm != null
       ? {
           chip: `ZIEL ${spaced(goalKm)} KM`,
           ofGoalPct: `${Math.round(Math.min(1, totalKm / goalKm) * 100)}%`,
           progress: Math.min(1, totalKm / goalKm),
+          currentKm: Math.round(totalKm),
+          targetKm: Math.round(goalKm),
+          projectedKm,
+          realityLabel,
+          projectionLabel: `Hochrechnung · ${spaced(projectedKm)} km`,
           toGoLabel: `NOCH ${spaced(Math.max(0, goalKm - totalKm))} KM`,
           paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'VOR' : 'HINTER'} PLAN`,
           paceAhead,

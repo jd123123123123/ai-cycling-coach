@@ -53,6 +53,11 @@ export interface W3RidesVm {
     chip: string
     ofGoalPct: string
     progress: number                // 0..1
+    currentKm: number
+    targetKm: number
+    projectedKm: number
+    realityLabel: string
+    projectionLabel: string
     toGoLabel: string
     paceLabel: string
     paceAhead: boolean
