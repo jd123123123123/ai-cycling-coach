@@ -31,10 +31,16 @@ class ReviewGateTests(unittest.TestCase):
         self.reports = [dict(role=role, agent_id=f'agent-{role}', scope_commit=self.commit, packet_sha256=digest(self.packet), synthetic=True, summary='Actual supplied screenshot inspected', evidence_refs=['after'], verdict='pass', findings=[]) for role in sorted(ROLES)]
         self.approval = {'approved':True,'source':'user-message','message_reference':'test-only-user-message','verbatim_approval':'Test fixture approval only','scope_commit':self.commit,'packet_sha256':digest(self.packet),'reports_sha256':digest(self.reports)}
     def tearDown(self): self.tmp.cleanup()
-    def check(self, commit=None):
+    def check(self, commit=None, luna_fallback=False):
         for name, value in [('packet',self.packet),('reports',self.reports),('approval',self.approval)]: (self.root / f'{name}.json').write_text(json.dumps(value))
-        return validate(self.repo, self.root/'packet.json', self.root/'reports.json', self.root/'approval.json', commit or self.commit)
+        return validate(self.repo, self.root/'packet.json', self.root/'reports.json', self.root/'approval.json', commit or self.commit, luna_fallback)
     def test_valid_exact_scope(self): self.assertEqual(self.check()['roles'],9)
+    def test_explicit_luna_fallback(self):
+        self.reports = [dict(role='luna-fallback', agent_id='gpt-5.6-luna-review', review_lenses=['awwwards','apple-design-award','whoop-product'], scope_commit=self.commit, packet_sha256=digest(self.packet), synthetic=True, summary='Single Luna review inspected the supplied evidence through the three declared lenses', evidence_refs=['after'], verdict='pass', findings=[])]
+        self.approval['review_mode'] = 'luna-fallback'
+        self.approval['reports_sha256'] = digest(self.reports)
+        self.assertEqual(self.check(luna_fallback=True)['roles'], 1)
+        with self.assertRaises(GateError): self.check()
     def test_missing_role(self):
         self.reports.pop()
         with self.assertRaises(GateError): self.check()

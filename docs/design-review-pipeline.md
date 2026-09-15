@@ -12,6 +12,10 @@ This is a local CLI guard and Codex working agreement. It is **not Railway-side 
 6. Run the guard, then the deployment wrapper. Default is read-only/dry-run. Only an explicit `--execute` performs Railway CLI linking/upload from a temporary **git archive of the reviewed SHA**. Working-tree changes are never included; local previews, node_modules and .env credentials are excluded. No migrations or unrelated service deploys are implied.
 7. After upload, verify Railway deployment success, health and the live bundle/affected routes. Upload acceptance is not deployment success. Record deployment ID and reviewed SHA; retain the previous deployment for rollback.
 
+### Luna fallback
+
+The normal nine-role panel remains the default. If the user explicitly enables the fallback because only Luna is available, pass `--luna-fallback` to validation and deployment. The fallback still requires the same immutable packet, matching before/after evidence, functional checks, reduced-motion evidence when relevant, and user-bound approval. It accepts exactly one genuine report with `role:"luna-fallback"`, `review_lenses:["awwwards","apple-design-award","whoop-product"]`, and `review_mode:"luna-fallback"` in the approval. This is a reduced-confidence release path, never a claim that nine reviewers ran; it must be revisited with the full panel when capacity returns.
+
 ## File contract
 
 All JSON uses schema below. Hashes are lowercase SHA-256. The packet hash is `sha256(json.dumps(packet,sort_keys=True,separators=(',',':'),ensure_ascii=False).encode())`; reports hash uses the same function on the entire report array. `scripts/design_review_gate.py` exports `digest` for this; no self-hash field is added to the packet.
@@ -36,7 +40,7 @@ All JSON uses schema below. Hashes are lowercase SHA-256. The packet hash is `sh
 }
 ```
 
-For motion, add `motion_check_refs` referencing an actual `check-output` evidence file with checksummed observations (including actual observed animation, timings and reduced-motion behavior). Add screenshots with `reduced_motion:true` in both states. For non-UI changes, keep all nine reports: `change_kind:"non-ui"`, an explicit `non_ui_reason`, and check-output evidence. Roles genuinely unaffected may return explained `not-applicable`; this is not permission to skip nine reviews.
+For motion, add `motion_check_refs` referencing an actual `check-output` evidence file with checksummed observations (including actual observed animation, timings and reduced-motion behavior). Add screenshots with `reduced_motion:true` in both states. For non-UI changes, keep all nine reports: `change_kind:"non-ui"`, an explicit `non_ui_reason`, and check-output evidence. Roles genuinely unaffected may return explained `not-applicable`; this is not permission to skip nine reviews unless the explicit Luna fallback is active.
 
 Each entry in `reports.json` (an array of exactly nine):
 
@@ -59,6 +63,9 @@ The script checks the recorded provenance fields and exact hashes, but cannot cr
 ```sh
 python3 scripts/design_review_gate.py --repo /absolute/repo --packet /absolute/evidence/packet.json --reports /absolute/evidence/reports.json --approval /absolute/evidence/approval.json --commit EXACT_SHA
 python3 scripts/deploy_reviewed.py --repo /absolute/repo --packet /absolute/evidence/packet.json --reports /absolute/evidence/reports.json --approval /absolute/evidence/approval.json --commit EXACT_SHA
+# Explicitly user-enabled fallback while the full reviewer panel is unavailable:
+python3 scripts/design_review_gate.py --repo /absolute/repo --packet /absolute/evidence/packet.json --reports /absolute/evidence/reports.json --approval /absolute/evidence/approval.json --commit EXACT_SHA --luna-fallback
+python3 scripts/deploy_reviewed.py --repo /absolute/repo --packet /absolute/evidence/packet.json --reports /absolute/evidence/reports.json --approval /absolute/evidence/approval.json --commit EXACT_SHA --luna-fallback
 # Only after the above passes and real user authorization exists:
 python3 scripts/deploy_reviewed.py --repo /absolute/repo --packet /absolute/evidence/packet.json --reports /absolute/evidence/reports.json --approval /absolute/evidence/approval.json --commit EXACT_SHA --execute
 python3 -m unittest discover -s scripts/tests -v

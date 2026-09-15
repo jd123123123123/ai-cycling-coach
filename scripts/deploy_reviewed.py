@@ -31,7 +31,7 @@ def export_commit(repo, commit, destination):
 def main():
     p = parser(); p.add_argument('--execute', action='store_true', help='Explicitly upload after review validation; never implies user approval')
     a = p.parse_args()
-    result = validate(a.repo, a.packet, a.reports, a.approval, a.commit)
+    result = validate(a.repo, a.packet, a.reports, a.approval, a.commit, a.luna_fallback)
     print(json.dumps({'mode': 'execute' if a.execute else 'dry-run', **result, 'project': PROJECT, 'service': SERVICE, 'environment': ENVIRONMENT}, indent=2))
     if not a.execute:
         print('No archive, network request or deployment performed. Re-run with --execute only after user approval.')

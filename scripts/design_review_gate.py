@@ -24,7 +24,7 @@ def load(path):
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), ensure_ascii=False).encode()).hexdigest()
 
-def validate(repo, packet_path, reports_path, approval_path, expected_commit=None):
+def validate(repo, packet_path, reports_path, approval_path, expected_commit=None, luna_fallback=False):
     repo, packet_path = Path(repo), Path(packet_path).resolve()
     packet, reports, approval = load(packet_path), load(reports_path), load(approval_path)
     require(packet.get('schema_version') == 1, 'Unsupported evidence schema')
@@ -77,10 +77,16 @@ def validate(repo, packet_path, reports_path, approval_path, expected_commit=Non
     else:
         require(bool(packet.get('non_ui_reason')), 'Non-UI scope requires an explicit reason')
     phash = digest(packet)
-    require(isinstance(reports, list) and len(reports) == 9, 'Exactly nine reviewer reports required')
-    require({r.get('role') for r in reports} == ROLES, 'Missing or duplicate reviewer role')
+    if luna_fallback:
+        require(isinstance(reports, list) and len(reports) == 1, 'Luna fallback requires exactly one reviewer report')
+        require(reports[0].get('role') == 'luna-fallback', 'Luna fallback report must use role luna-fallback')
+        require(reports[0].get('review_lenses') == ['awwwards', 'apple-design-award', 'whoop-product'], 'Luna fallback must cover the three requested design lenses')
+    else:
+        require(isinstance(reports, list) and len(reports) == 9, 'Exactly nine reviewer reports required')
+        require({r.get('role') for r in reports} == ROLES, 'Missing or duplicate reviewer role')
     agents = [r.get('agent_id') for r in reports]
-    require(all(isinstance(a, str) and a.strip() for a in agents) and len(set(agents)) == 9, 'Nine independently identified agents required')
+    expected_agents = 1 if luna_fallback else 9
+    require(all(isinstance(a, str) and a.strip() for a in agents) and len(set(agents)) == expected_agents, f'{expected_agents} independently identified agent(s) required')
     for r in reports:
         require(r.get('scope_commit') == commit and r.get('packet_sha256') == phash, f'Stale report: {r["role"]}')
         require(r.get('synthetic') is True and bool(r.get('summary')), 'Report must acknowledge synthetic review and give a conclusion')
@@ -102,20 +108,23 @@ def validate(repo, packet_path, reports_path, approval_path, expected_commit=Non
                 require(bool(resolution.get('explanation')) and bool(resolution.get('evidence_refs')) and set(resolution['evidence_refs']) <= ids, 'Resolved finding needs verified resolution evidence')
             require(not (f['severity'] in ('P0', 'P1') and f['status'] != 'resolved'), f'Open deployment blocker: {f["id"]}')
     require(approval.get('approved') is True and approval.get('source') == 'user-message', 'Explicit user approval required; scripts cannot approve')
+    if luna_fallback:
+        require(approval.get('review_mode') == 'luna-fallback', 'Luna fallback approval must declare review_mode=luna-fallback')
     require(bool(approval.get('message_reference')) and bool(approval.get('verbatim_approval')), 'Preserve user approval message reference and exact text')
     require(approval.get('scope_commit') == commit and approval.get('packet_sha256') == phash and approval.get('reports_sha256') == digest(reports), 'Approval does not match exact code, evidence and reviews')
-    return {'scope_commit': commit, 'packet_sha256': phash, 'reports_sha256': digest(reports), 'roles': 9, 'changed_files': changed}
+    return {'scope_commit': commit, 'packet_sha256': phash, 'reports_sha256': digest(reports), 'roles': 1 if luna_fallback else 9, 'review_mode': 'luna-fallback' if luna_fallback else 'full', 'changed_files': changed}
 
 def parser():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('repo', 'packet', 'reports', 'approval', 'commit'):
         p.add_argument('--' + name, required=True)
+    p.add_argument('--luna-fallback', action='store_true', help='Use one clearly labeled Luna review covering Awwwards, Apple and Whoop lenses while the full panel is unavailable')
     return p
 
 def main():
     a = parser().parse_args()
     try:
-        print(json.dumps(validate(a.repo, a.packet, a.reports, a.approval, a.commit), indent=2))
+        print(json.dumps(validate(a.repo, a.packet, a.reports, a.approval, a.commit, a.luna_fallback), indent=2))
     except (GateError, OSError, subprocess.CalledProcessError, KeyError, TypeError, json.JSONDecodeError) as exc:
         raise SystemExit(f'Design review blocked: {exc}')
 
