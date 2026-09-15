@@ -42,6 +42,10 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const progressData=previewProgress??results.data
  const ftpDelta=progressData?.ftp.current!=null&&progressData.ftp.baseline?.value!=null?progressData.ftp.current-progressData.ftp.baseline.value:null
  const vo2Delta=progressData?.vo2.current!=null&&progressData.vo2.baseline?.value!=null?progressData.vo2.current-progressData.vo2.baseline.value:null
+ const ftpStart=progressData?.ftp.baseline?.value??null
+ const ftpNow=progressData?.ftp.current??null
+ const vo2Start=progressData?.vo2.baseline?.value??null
+ const vo2Now=progressData?.vo2.current??null
  const sessions=vm.daySessions??[]
  const identity=sessions.map(s=>s.dateISO).join(',')
  useEffect(()=>{setDay(Math.max(0,sessions.findIndex(s=>s.isToday)))},[identity])
@@ -70,29 +74,22 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <div className="w3-plan-opening"><h1>{missingPlanHistory?<>Dein nächster<br/>Schritt.</>:state==='ended'?<>Das hast du<br/>bewegt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{missingPlanHistory?'Dein bisheriger Plan ist beendet. Wähle, was du als Nächstes verbessern möchtest.':title}</p></div>
  {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  {state==='ended'&&!missingPlanHistory&&<section className="w3-plan-finish-hero" aria-labelledby="w3-plan-finish-title">
-   <div className="w3-plan-finish-eyebrow">PLAN ABGESCHLOSSEN · DEIN ERGEBNIS</div>
-   <h2 id="w3-plan-finish-title">Du hast den<br/><em>Block geliefert.</em></h2>
-   <p className="w3-plan-finish-copy">{vm.totalWeeks} Wochen konsequent gefahren. Hier ist, was davon geblieben ist.</p>
-   <div className="w3-plan-finish-score" aria-label="Plan zu 100 Prozent abgeschlossen">
-     <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="49" className="w3-plan-finish-score-track"/><motion.circle cx="60" cy="60" r="49" className="w3-plan-finish-score-fill" initial={{pathLength:reduced?1:0}} animate={{pathLength:1}} transition={{duration:reduced?0:1.15,ease:[.22,1,.36,1]}}/></svg>
-     <div><strong>100</strong><span>PLAN<br/>ABSCHLUSS</span></div>
-   </div>
-   <div className="w3-plan-finish-stats">
-     <div><strong>{ftpDelta!=null?`${ftpDelta>=0?'+':''}${Math.round(ftpDelta)} W`:'—'}</strong><span>FTP SEIT START</span></div>
-     <div><strong>{vo2Delta!=null?`${vo2Delta>=0?'+':''}${Math.round(vo2Delta)}`:'—'}</strong><span>VO₂MAX-PUNKTE</span></div>
-     <div><strong>{vm.avgTss}</strong><span>Ø TSS / WOCHE</span></div>
-   </div>
-   {vm.finishStats&&<div className="w3-plan-finish-telemetry" aria-label="Gesamtleistung im Plan">
-     <div className="w3-plan-finish-total-grid">
-     <div><Activity size={14}/><strong>{vm.finishStats.tss}</strong><span>GESAMT TSS</span></div>
-     <div><Route size={14}/><strong>{vm.finishStats.km}</strong><span>KILOMETER</span></div>
-     <div><Clock3 size={14}/><strong>{vm.finishStats.hours}</strong><span>STUNDEN</span></div>
-     <div><Bike size={14}/><strong>{vm.finishStats.rides}</strong><span>FAHRTEN</span></div>
+   <div className="w3-plan-finish-topline"><span>BLOCK {String(vm.totalWeeks).padStart(2,'0')} / {String(vm.totalWeeks).padStart(2,'0')}</span><span>ABGESCHLOSSEN</span></div>
+   <div className="w3-plan-finish-lead">
+     <div className="w3-plan-finish-score" aria-label="Plan zu 100 Prozent abgeschlossen">
+       <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="49" className="w3-plan-finish-score-track"/><motion.circle cx="60" cy="60" r="49" className="w3-plan-finish-score-fill" initial={{pathLength:reduced?1:0}} animate={{pathLength:1}} transition={{duration:reduced?0:1.15,ease:[.22,1,.36,1]}}/></svg>
+       <div><strong>100</strong><span>PROZENT<br/>KOMPLETT</span></div>
      </div>
-     <div className="w3-plan-finish-mini-graph" aria-label={`Belastung über ${vm.totalWeeks} Wochen`}>{vm.weekBars.map((b,i)=><span key={i} title={`Woche ${i+1}: ${b.tss??'Ruhe'}`}><i style={{height:`${b.tss==null?7:Math.max(10,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div>
+     <div className="w3-plan-finish-lead-copy"><h2 id="w3-plan-finish-title">Stärker<br/><em>als am Start.</em></h2><p>{vm.totalWeeks} Wochen. Dein Körper kennt den Weg jetzt.</p></div>
+   </div>
+   <div className="w3-plan-finish-comparison" aria-label="Leistungsentwicklung seit Planstart">
+     <div><span>FTP</span><strong>{ftpStart!=null&&ftpNow!=null?`${Math.round(ftpStart)} → ${Math.round(ftpNow)} W`:'—'}</strong><b>{ftpDelta!=null?`${ftpDelta>=0?'+':''}${Math.round(ftpDelta)} W`:'—'}</b></div>
+     <div><span>VO₂MAX</span><strong>{vo2Start!=null&&vo2Now!=null?`${Math.round(vo2Start)} → ${Math.round(vo2Now)}`:'—'}</strong><b>{vo2Delta!=null?`${vo2Delta>=0?'+':''}${Math.round(vo2Delta)}`:'—'}</b></div>
+   </div>
+   <div className="w3-plan-finish-load" aria-label={`Belastungsverlauf über ${vm.totalWeeks} Wochen`}><div className="w3-plan-finish-load-head"><span>DEIN LOAD</span><strong>{vm.avgTss} <small>Ø TSS / WOCHE</small></strong></div><div className="w3-plan-finish-mini-graph">{vm.weekBars.map((b,i)=><span key={i} title={`Woche ${i+1}: ${b.tss??'Ruhe'}`}><i style={{height:`${b.tss==null?7:Math.max(10,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div></div>
+   {vm.finishStats&&<div className="w3-plan-finish-total-grid" aria-label="Gesamtleistung im Plan">
+     <div><Activity size={14}/><strong>{vm.finishStats.tss}</strong><span>TSS</span></div><div><Route size={14}/><strong>{vm.finishStats.km}</strong><span>KM</span></div><div><Clock3 size={14}/><strong>{vm.finishStats.hours}</strong><span>STUNDEN</span></div><div><Bike size={14}/><strong>{vm.finishStats.rides}</strong><span>FAHRTEN</span></div>
    </div>}
-   <div className="w3-plan-finish-profile"><W3PowerProfile data={progressData}/></div>
-   <div className="w3-plan-finish-wins"><span>DEINE GEWINNE</span><strong>{ftpDelta!=null&&ftpDelta>0?'Schwelle angehoben':'Deine Basis gefestigt'} · {vo2Delta!=null&&vo2Delta>0?'mehr Reserve':'mehr Konstanz'}</strong></div>
  </section>}
  <button className="w3-plan-link slim" onClick={()=>setSheet('profile')}><span><strong>Leistungsprofil vergleichen</strong></span><ArrowUpRight size={18}/></button>
  <W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={previewProgress?false:results.isPending} error={previewProgress?false:results.isError}/>
