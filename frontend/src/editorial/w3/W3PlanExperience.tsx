@@ -73,6 +73,10 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
    <div className="w3-plan-finish-eyebrow">PLAN ABGESCHLOSSEN · DEIN ERGEBNIS</div>
    <h2 id="w3-plan-finish-title">Du hast den<br/><em>Block geliefert.</em></h2>
    <p className="w3-plan-finish-copy">{vm.totalWeeks} Wochen konsequent gefahren. Hier ist, was davon geblieben ist.</p>
+   <div className="w3-plan-finish-score" aria-label="Plan zu 100 Prozent abgeschlossen">
+     <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="49" className="w3-plan-finish-score-track"/><motion.circle cx="60" cy="60" r="49" className="w3-plan-finish-score-fill" initial={{pathLength:reduced?1:0}} animate={{pathLength:1}} transition={{duration:reduced?0:1.15,ease:[.22,1,.36,1]}}/></svg>
+     <div><strong>100</strong><span>PLAN<br/>ABSCHLUSS</span></div>
+   </div>
    <div className="w3-plan-finish-stats">
      <div><strong>{ftpDelta!=null?`${ftpDelta>=0?'+':''}${Math.round(ftpDelta)} W`:'—'}</strong><span>FTP SEIT START</span></div>
      <div><strong>{vo2Delta!=null?`${vo2Delta>=0?'+':''}${Math.round(vo2Delta)}`:'—'}</strong><span>VO₂MAX-PUNKTE</span></div>

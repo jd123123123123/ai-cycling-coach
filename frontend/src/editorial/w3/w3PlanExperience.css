@@ -13,6 +13,7 @@
 .w3-plan-finish-eyebrow{position:relative;z-index:1;color:var(--plan-acid);font-size:9px;font-weight:700;letter-spacing:1.3px}
 .w3-plan-finish-hero h2{position:relative;z-index:1;font-size:36px;line-height:.98;letter-spacing:-1.8px;margin-top:14px}.w3-plan-finish-hero h2 em{color:var(--plan-acid);font-style:normal}
 .w3-plan-finish-copy{position:relative;z-index:1;color:var(--plan-muted);font-size:13px;line-height:1.4;margin-top:10px!important;max-width:30em}
+.w3-plan-finish-score{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;gap:15px;margin:15px auto 1px;width:100%}.w3-plan-finish-score svg{width:112px;height:112px;overflow:visible;transform:rotate(-90deg);filter:drop-shadow(0 0 12px #c6f53c25)}.w3-plan-finish-score circle{fill:none;stroke-width:7}.w3-plan-finish-score-track{stroke:#ffffff16}.w3-plan-finish-score-fill{stroke:var(--plan-acid);stroke-linecap:round}.w3-plan-finish-score>div{display:flex;flex-direction:column;gap:3px;min-width:110px}.w3-plan-finish-score strong{font-size:32px;line-height:1;letter-spacing:-1.2px}.w3-plan-finish-score span{font-size:9px;letter-spacing:.1em;line-height:1.2;color:var(--plan-muted)}
 .w3-plan-finish-stats{position:relative;z-index:1;display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:20px;padding-top:15px;border-top:1px solid #ffffff20}.w3-plan-finish-stats>div{display:flex;flex-direction:column;gap:5px;min-width:0}.w3-plan-finish-stats strong{font-size:21px;letter-spacing:-.7px;color:var(--plan-ink);font-weight:550}.w3-plan-finish-stats span{font-size:9px;line-height:1.15;color:var(--plan-muted);letter-spacing:.06em}
 .w3-plan-finish-totals{position:relative;z-index:1;margin-top:15px;padding:13px 0 12px;border-top:1px solid #ffffff20;border-bottom:1px solid #ffffff20}
 .w3-plan-finish-totals-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:11px}
@@ -77,6 +78,7 @@
  .state-ended .w3-plan-finish-eyebrow{font-size:8px}
  .state-ended .w3-plan-finish-hero h2{font-size:32px;letter-spacing:-1.5px;margin-top:11px}
  .state-ended .w3-plan-finish-copy{font-size:12px;margin-top:8px!important}
+ .w3-plan-finish-score{gap:10px;margin-top:10px}.w3-plan-finish-score svg{width:88px;height:88px}.w3-plan-finish-score>div{min-width:88px}.w3-plan-finish-score strong{font-size:27px}
  .state-ended .w3-plan-finish-stats{margin-top:14px;padding-top:12px}
  .state-ended .w3-plan-finish-stats strong{font-size:19px}
  .state-ended .w3-plan-finish-totals{margin-top:10px;padding:10px 0 9px}
