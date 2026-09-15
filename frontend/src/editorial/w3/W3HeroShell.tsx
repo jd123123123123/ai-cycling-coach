@@ -110,9 +110,10 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
     <GroundCtx.Provider value={ground}>
       <div className="w3-root">
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-          <div style={{
+          <div className={`w3-hero-slot${archive ? ' w3-hero-slot-archive' : ''}`} style={{
             position: 'relative',
             height: compact || archive ? 'auto' : 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
+            ...(archive ? { height: 'calc(100svh - 92px - env(safe-area-inset-bottom))', minHeight: '560px' } : {}),
             display: 'flex', flexDirection: 'column',
             background: ground ?? T.heroBg,
           }}>

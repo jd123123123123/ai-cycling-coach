@@ -3,6 +3,12 @@
 @media(max-width:360px){.w3-ride-journal{padding-left:16px;padding-right:16px}.w3-journal-heading>div{display:block}.w3-journal-heading h1{font-size:25px;margin-bottom:5px}.w3-journal-ride.is-hero{padding:16px}.w3-journal-ride.is-hero h3{font-size:19px}.w3-journal-ride.is-hero .w3-journal-distance strong{font-size:36px}.w3-journal-route.is-hero{height:120px;width:40%}.w3-summary-main strong{font-size:34px}.w3-summary-meta strong{font-size:15px}.w3-summary-graph{flex-basis:38%}.w3-ride-summary{padding-left:16px;padding-right:16px}.w3-journal-ride-stats strong{font-size:13px}}
 @media(prefers-reduced-motion:reduce){.w3-journal-ride,.w3-summary-bars i,.w3-summary-point i{transition:none}}
 
+/* Fahrten opens as one deliberate glance. The summary owns the first viewport;
+   the archive starts only after the rider scrolls past it. */
+.w3-hero-slot-archive{scroll-margin-top:12px}
+.w3-hero-slot-archive .w3-ride-summary{max-height:calc(100svh - 180px);overflow:auto;scrollbar-width:none}
+.w3-hero-slot-archive .w3-ride-summary::-webkit-scrollbar{display:none}
+
 /* The season goal is part of the glance view: a rider sees current distance,
    target, and an honest pace projection without opening another panel. */
 .w3-summary-goal-card{margin-top:16px;padding-top:14px;border-top:1px solid #ffffff18;position:relative;z-index:1}

@@ -83,6 +83,11 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
      <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><span key={i} className="w3-plan-week-track"><i style={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div>
    </div>
  </section>
+ <section className="w3-plan-development" aria-labelledby="w3-plan-development-title">
+   <div className="w3-plan-card-head"><h2 id="w3-plan-development-title">Start → jetzt</h2><span>Was sich bewegt</span></div>
+   <p className="w3-plan-development-note">Dein Leistungsprofil im Vergleich zum Planstart.</p>
+   <W3PowerProfile data={results.data}/>
+ </section>
  <section className="w3-plan-journey">
    <div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.block?.weekOfBlock ?? vm.planWeekLabel}</span></div>
    <div className="w3-plan-block-summary"><strong>{vm.block?.phase ?? 'Grundlage'}</strong><span>{vm.block?.dateRange ?? vm.weekRangeLabel}</span></div>

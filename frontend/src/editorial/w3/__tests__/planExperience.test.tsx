@@ -21,7 +21,7 @@ describe('live plan experience',()=>{
  it('does not show a made-up adaptation',()=>{mount();expect(screen.queryByText('Dein Plan hat sich angepasst.')).toBeNull()})
  it('has an actionable empty state without training values',()=>{mount('empty');expect(screen.getByRole('button',{name:'Meinen Plan erstellen'})).toBeTruthy();expect(screen.queryByText('240 W')).toBeNull()})
  it('confirms a saved plan without claiming an unsaved draft',()=>{const {onCreatedDone}=mount('created');fireEvent.click(screen.getByRole('button',{name:'Zum ersten Training'}));expect(onCreatedDone).toHaveBeenCalledOnce()})
- it('shows a complete plan handoff before the first workout',()=>{mount('created');expect(screen.getByText('Dein Weg auf einen Blick')).toBeTruthy();expect(screen.getByText('Dein aktueller Block')).toBeTruthy();expect(screen.getByText('Deine erste Woche')).toBeTruthy();expect(screen.queryByText('DEIN LETZTER PLAN')).toBeNull()})
+ it('shows a complete plan handoff before the first workout',()=>{mount('created');expect(screen.getByText('Dein Weg auf einen Blick')).toBeTruthy();expect(screen.getByText('Start → jetzt')).toBeTruthy();expect(screen.getByText('Dein aktueller Block')).toBeTruthy();expect(screen.getByText('Deine erste Woche')).toBeTruthy();expect(screen.queryByText('DEIN LETZTER PLAN')).toBeNull()})
  it('puts the current block before the workout in the active view',()=>{mount('active');const block=screen.getByText('Dein aktueller Block');const workout=screen.getByRole('heading',{name:'Schwelle'});expect(block.compareDocumentPosition(workout)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()})
  it('lets a finished rider select a new goal',()=>{mount('ended');expect(screen.getByRole('button',{name:'Nächstes Ziel wählen'})).toBeTruthy()})
 })

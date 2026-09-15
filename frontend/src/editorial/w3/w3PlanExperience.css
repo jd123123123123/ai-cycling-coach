@@ -37,4 +37,12 @@
 .w3-plan-first-week-list>button.is-rest .w3-plan-first-week-name,.w3-plan-first-week-list>button.is-rest svg{color:var(--plan-muted)}
 .w3-plan-first-week-list>button.is-session svg{color:var(--plan-acid)}
 .state-created .w3-plan-rhythm{border-top:1px solid var(--plan-stroke);padding-top:14px}
+.state-created .w3-plan-development{background:var(--plan-card);border:1px solid var(--plan-stroke);border-radius:24px;padding:17px;display:flex;flex-direction:column;gap:5px}
+.w3-plan-development .w3-plan-card-head h2{font-size:16px;font-weight:550;letter-spacing:0;margin:0;color:var(--plan-ink)}
+.w3-plan-development-note{font-size:11px!important;color:var(--plan-muted);line-height:1.35}
+.state-created .w3-plan-development .w3-power-profile{margin:7px -2px 0;padding:0;border:0;background:transparent}
+.state-created .w3-plan-development .w3-power-profile-heading{display:none}
+.state-created .w3-plan-development .w3-power-profile svg{max-height:230px}
+.state-created .w3-plan-development .w3-power-comparison{margin-top:12px}
+.state-created .w3-plan-development .w3-power-comparison strong{font-size:18px}
 @media(max-width:380px){.w3-plan-first-week-list>button{grid-template-columns:42px minmax(0,1fr) 18px}.w3-plan-first-week-meta{display:none}.w3-plan-overview-stats strong{font-size:25px}}
