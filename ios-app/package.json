@@ -1,0 +1,22 @@
+{
+  "name": "ios-app",
+  "version": "1.0.0",
+  "description": "Standalone iOS App Store shell for RIDR. The existing web app remains a separate product.",
+  "main": "index.js",
+  "scripts": {
+    "build:web": "cd ../frontend && VITE_API_URL=${VITE_API_URL:-https://ai-cycling-coach-api-production.up.railway.app} npm run build -- --outDir dist-ios",
+    "sync": "npx cap sync ios",
+    "build:ios": "npm run build:web && npm run sync",
+    "open": "npx cap open ios",
+    "test": "echo \"Native app tests are run in Xcode\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@capacitor/cli": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  }
+}

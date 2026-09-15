@@ -1,0 +1,5 @@
+{
+  "appId": "com.ridr.cyclingcoach",
+  "appName": "RIDR",
+  "webDir": "../frontend/dist-ios"
+}

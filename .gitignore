@@ -23,6 +23,7 @@ backend/.venv/
 # Node / frontend build
 node_modules/
 frontend/dist/
+frontend/dist-ios/
 frontend/.vite/
 *.tsbuildinfo
 
