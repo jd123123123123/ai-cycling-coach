@@ -128,6 +128,7 @@ const W3OnboardGoalsPreview = lazyWithRetry(() => import('./editorial/w3/W3Onboa
 const W3OnboardRiderPage = lazyWithRetry(() => import('./editorial/w3/W3OnboardRiderPage'))
 const W3PlanPage = lazyWithRetry(() => import('./editorial/w3/W3PlanPage'))
 const W3PlanPreview = lazyWithRetry(() => import('./editorial/w3/W3PlanPreview'))
+const W3PlanExperiencePreview = lazyWithRetry(() => import('./editorial/w3/W3PlanExperiencePreview'))
 const W3GoalPage = lazyWithRetry(() => import('./editorial/w3/W3GoalPage'))
 const W3GoalSetterPage = lazyWithRetry(() => import('./editorial/w3/W3GoalSetterPage'))
 const W3GoalPreview = lazyWithRetry(() => import('./editorial/w3/W3GoalPreview'))
@@ -584,6 +585,7 @@ function AppRoutes() {
           <Route path="/e/w3-onboard-rider" element={<ProtectedRoute><W3OnboardRiderPage /></ProtectedRoute>} />
           {/* Trainingsplan: periodized plan, goal detail, load forecast */}
           <Route path="/e/w3-plan-preview" element={preview(<W3PlanPreview />)} />
+          <Route path="/e/w3-plan-experience-preview" element={preview(<W3PlanExperiencePreview />)} />
           <Route path="/e/w3-goal" element={<ProtectedRoute checkOnboarding><W3GoalPage /></ProtectedRoute>} />
           {/* SETTING a goal is a different job from READING one. The dossier
               at /e/w3-goal answers "what am I aiming at and where do I stand";
