@@ -109,6 +109,8 @@ export interface W3PlanVm {
   avgTss: string
   /** Totals earned across the completed plan, when a plan history exists. */
   finishStats?: { tss: string; km: string; hours: string; rides: string }
+  /** Honest plan-vs-actual load series for a completed plan. */
+  finishAnalysis?: { planned: number[]; actual: (number | null)[]; adherence: number | null; note: string | null; impact: string | null }
   weekBars: WeekBar[]
   weekRangeLabel: string
   weekBadge: string

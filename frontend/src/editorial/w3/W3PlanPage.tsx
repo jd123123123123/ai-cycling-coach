@@ -290,6 +290,29 @@ export default function W3PlanPage() {
           }
         })()
       : undefined
+    const finishAnalysis = plan?.plan_start_date && targets
+      ? (() => {
+          const planned = targets.map((t) => Math.max(0, Math.round(t)))
+          const actual: (number | null)[] = actualByWeek
+          const plannedTotal = planned.reduce((sum, value) => sum + value, 0)
+          const actualTotal = actual.reduce<number>((sum, value) => sum + (value ?? 0), 0)
+          const adherence = plannedTotal > 0 ? Math.round((actualTotal / plannedTotal) * 100) : null
+          const missingWeeks = actual.filter((value, i) => value == null || value < planned[i] * 0.8).length
+          const note = adherence == null ? null
+            : adherence < 80
+              ? `${adherence}% der geplanten Belastung umgesetzt · ${missingWeeks} ${missingWeeks === 1 ? 'Woche' : 'Wochen'} deutlich unter dem Soll`
+              : adherence > 115
+                ? `${adherence}% der geplanten Belastung umgesetzt · mehr Reiz, aber auch mehr Ermüdung als vorgesehen`
+                : `${adherence}% der geplanten Belastung umgesetzt · dein tatsächlicher Weg lag nah am Plan`
+          const impact = adherence == null ? null
+            : adherence < 80
+              ? 'Weniger geplante Schwellen- und VO₂-Reize wurden gesetzt. Das kann erklären, warum der Leistungszuwachs hinter der Plan-Sollkurve bleibt.'
+              : adherence > 115
+                ? 'Mehr Belastung als vorgesehen kann kurzfristig mehr Reiz setzen, erhöht aber auch die Ermüdung. Der nächste Aufbau sollte das berücksichtigen.'
+                : 'Die Belastungsdosis lag nah am Plan. Dadurch ist der Vergleich von Startwert und Abschluss besonders belastbar.'
+          return { planned, actual, adherence, note, impact }
+        })()
+      : undefined
 
     // ── forecast preview value ──
     const proj = week?.projection ?? null
@@ -355,6 +378,7 @@ export default function W3PlanPage() {
       block,
       avgTss: avg != null ? String(avg) : '—',
       finishStats,
+      finishAnalysis,
       weekBars,
       weekRangeLabel: weekStartD && weekEndD
         ? `${DE_WD2[(weekStartD.getDay() + 6) % 7]} ${weekStartD.getDate()}. – ${DE_WD2[(weekEndD.getDay() + 6) % 7]} ${weekEndD.getDate()}. ${monthDE(weekEndD)} · Woche ${weekOfBlock} im ${active}`

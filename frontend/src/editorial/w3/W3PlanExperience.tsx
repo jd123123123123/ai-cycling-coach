@@ -46,6 +46,10 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const ftpNow=progressData?.ftp.current??null
  const vo2Start=progressData?.vo2.baseline?.value??null
  const vo2Now=progressData?.vo2.current??null
+ const recordWins=progressData?.records?.filter(r=>r.watts!=null&&r.previous_watts!=null&&r.watts>r.previous_watts).length??null
+ const compareSeries=vm.finishAnalysis
+ const compareMax=Math.max(1,...(compareSeries?.planned??[]),...(compareSeries?.actual??[]).map(v=>v??0))
+ const curvePoints=(values:(number|null)[])=>values.map((value,i)=>value==null?null:`${10+(i/Math.max(1,values.length-1))*300},${78-(value/compareMax)*60}`).filter(Boolean).join(' ')
  const sessions=vm.daySessions??[]
  const identity=sessions.map(s=>s.dateISO).join(',')
  useEffect(()=>{setDay(Math.max(0,sessions.findIndex(s=>s.isToday)))},[identity])
@@ -85,8 +89,14 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
    <div className="w3-plan-finish-comparison" aria-label="Leistungsentwicklung seit Planstart">
      <div><span>FTP</span><strong>{ftpStart!=null&&ftpNow!=null?`${Math.round(ftpStart)} → ${Math.round(ftpNow)} W`:'—'}</strong><b>{ftpDelta!=null?`${ftpDelta>=0?'+':''}${Math.round(ftpDelta)} W`:'—'}</b></div>
      <div><span>VO₂MAX</span><strong>{vo2Start!=null&&vo2Now!=null?`${Math.round(vo2Start)} → ${Math.round(vo2Now)}`:'—'}</strong><b>{vo2Delta!=null?`${vo2Delta>=0?'+':''}${Math.round(vo2Delta)}`:'—'}</b></div>
+     <div><span>REKORDE</span><strong>{recordWins!=null?recordWins:'—'}</strong><b>{recordWins!=null?'verbessert':'—'}</b></div>
    </div>
-   <div className="w3-plan-finish-load" aria-label={`Belastungsverlauf über ${vm.totalWeeks} Wochen`}><div className="w3-plan-finish-load-head"><span>DEIN LOAD</span><strong>{vm.avgTss} <small>Ø TSS / WOCHE</small></strong></div><div className="w3-plan-finish-mini-graph">{vm.weekBars.map((b,i)=><span key={i} title={`Woche ${i+1}: ${b.tss??'Ruhe'}`}><i style={{height:`${b.tss==null?7:Math.max(10,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div></div>
+   {compareSeries&&<div className="w3-plan-finish-impact" aria-label="Plan-Soll und tatsächlich gefahrene Belastung">
+     <div className="w3-plan-finish-impact-head"><span>PLANWIRKUNG</span><strong>{compareSeries.adherence!=null?`${compareSeries.adherence}% umgesetzt`:''}</strong></div>
+     <svg viewBox="0 0 320 90" role="img" aria-label="Vergleich der geplanten und tatsächlichen Trainingsbelastung"><path d="M10 78H310M10 48H310M10 18H310" className="w3-plan-finish-impact-grid"/><polyline points={curvePoints(compareSeries.planned)} className="w3-plan-finish-impact-plan"/><polyline points={curvePoints(compareSeries.actual)} className="w3-plan-finish-impact-actual"/></svg>
+     <div className="w3-plan-finish-impact-legend"><span><i data-plan/>Plan-Soll</span><span><i data-actual/>Dein Weg</span><small>Start → Abschluss</small></div>
+     <p><strong>Was das verändert</strong> {compareSeries.impact}</p>
+   </div>}
    {vm.finishStats&&<div className="w3-plan-finish-total-grid" aria-label="Gesamtleistung im Plan">
      <div><Activity size={14}/><strong>{vm.finishStats.tss}</strong><span>TSS</span></div><div><Route size={14}/><strong>{vm.finishStats.km}</strong><span>KM</span></div><div><Clock3 size={14}/><strong>{vm.finishStats.hours}</strong><span>STUNDEN</span></div><div><Bike size={14}/><strong>{vm.finishStats.rides}</strong><span>FAHRTEN</span></div>
    </div>}
