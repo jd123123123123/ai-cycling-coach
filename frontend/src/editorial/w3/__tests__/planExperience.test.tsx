@@ -1,4 +1,4 @@
-import {render,screen,fireEvent,cleanup} from '@testing-library/react'
+import {render,screen,fireEvent,cleanup,waitFor} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
 import {afterEach,describe,it,expect,vi} from 'vitest'
 import W3PlanExperience from '../W3PlanExperience'
@@ -23,5 +23,16 @@ describe('live plan experience',()=>{
  it('confirms a saved plan without claiming an unsaved draft',()=>{const {onCreatedDone}=mount('created');fireEvent.click(screen.getByRole('button',{name:'Zum ersten Training'}));expect(onCreatedDone).toHaveBeenCalledOnce()})
  it('shows a complete plan handoff before the first workout',()=>{mount('created');expect(screen.getByText('Dein Weg auf einen Blick')).toBeTruthy();expect(screen.getByText('Start → jetzt')).toBeTruthy();expect(screen.getByText('Dein aktueller Block')).toBeTruthy();expect(screen.getByText('Deine erste Woche')).toBeTruthy();expect(screen.queryByText('DEIN LETZTER PLAN')).toBeNull()})
  it('puts the current block before the workout in the active view',()=>{mount('active');const block=screen.getByText('Dein aktueller Block');const workout=screen.getByRole('heading',{name:'Schwelle'});expect(block.compareDocumentPosition(workout)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()})
+ it('lets the rider change hours, days and the long-ride day',async()=>{
+  const onRebuild=vi.fn().mockResolvedValue(true)
+  render(<MemoryRouter><W3PlanExperience vm={{...beforeVm,daySessions:[first]}} state="active" onOpenSession={()=>{}} onCreatedDone={()=>{}} weekOffset={0} onWeekOffset={()=>{}} onRebuild={onRebuild}/></MemoryRouter>)
+  fireEvent.click(screen.getByRole('button',{name:'Zeit und Trainingstage anpassen'}))
+  fireEvent.change(screen.getByRole('slider',{name:'Stunden pro Woche'}),{target:{value:'7.5'}})
+  fireEvent.click(screen.getByRole('button',{name:'Donnerstag aktiv'}))
+  fireEvent.click(screen.getByRole('button',{name:'Mittwoch inaktiv'}))
+  fireEvent.click(screen.getByRole('button',{name:'MI'}))
+  fireEvent.click(screen.getByRole('button',{name:'Plan neu berechnen'}))
+  await waitFor(()=>expect(onRebuild).toHaveBeenCalledWith({weekly_hours:7.5,days:[true,false,true,false,false,true,true],longDay:2}))
+ })
  it('lets a finished rider select a new goal',()=>{mount('ended');expect(screen.getByRole('button',{name:'Nächstes Ziel wählen'})).toBeTruthy()})
 })

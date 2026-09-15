@@ -324,15 +324,24 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
   // the five controls in a form that says "Plan neu berechnen" silently did
   // nothing. They are gone until the engine can honour them.
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const dayCount = days.filter(Boolean).length
-  const newTss = Math.round((hours / vm.adjustHours) * (Number(vm.weekStats[1].value.replace(/\D/g, '')) || 0)) || null
+  const dayLabels = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO']
+  const dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
+  const selectedLongDay = days[longDay] ? longDay : Math.max(0, days.findIndex(Boolean))
 
   const submit = async () => {
-    if (!onRebuild || busy) return
+    if (!onRebuild || busy || dayCount === 0) return
     setBusy(true)
-    const ok = await onRebuild({ weekly_hours: Math.round(hours), days, longDay })
-    setBusy(false)
-    if (ok) onClose()
+    setError(null)
+    try {
+      // Preserve half-hour precision; rounding here made a 6.5 h choice arrive as 7 h.
+      const ok = await onRebuild({ weekly_hours: hours, days, longDay: selectedLongDay })
+      if (ok) onClose()
+      else setError('Die Änderung konnte nicht gespeichert werden. Versuch es noch einmal.')
+    } catch {
+      setError('Die Änderung konnte nicht gespeichert werden. Versuch es noch einmal.')
+    } finally { setBusy(false) }
   }
   const pill = (on: boolean): CSSProperties => ({
     padding: '9px 0', borderRadius: 14, textAlign: 'center', fontSize: 13, fontWeight: 600, cursor: 'pointer', border: `1px solid ${on ? T.acid : T.stroke}`,
@@ -353,28 +362,36 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <span style={{ fontSize: 17, fontWeight: 600, color: T.ink }}>Trainingstage</span>
-            <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>An welchen Tagen du fahren kannst</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>Wann soll RIDR für dich planen?</span>
           </div>
           <span style={{ fontSize: 15, fontWeight: 600, color: T.mid }}>{dayCount} Tage</span>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
-          {['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO'].map((d, i) => (
-            <div key={d} style={{ flex: 1, ...pill(days[i]) }} role="button" tabIndex={0}
-              onClick={() => setDays((prev) => prev.map((v, j) => (j === i ? !v : v)))}>{d}</div>
+          {dayLabels.map((d, i) => (
+            <button key={d} type="button" style={{ flex: 1, ...pill(days[i]) }} aria-pressed={days[i]} aria-label={`${dayNames[i]} ${days[i] ? 'aktiv' : 'inaktiv'}`}
+              onClick={() => setDays((prev) => {
+                if (prev[i] && prev.filter(Boolean).length === 1) return prev
+                const next = prev.map((v, j) => j === i ? !v : v)
+                if (!next[selectedLongDay]) setLongDay(Math.max(0, next.findIndex(Boolean)))
+                return next
+              })}>{d}</button>
           ))}
         </div>
       </div>
 
-      <SheetRow title="Stunden pro Woche" sub={`Aktuell ${fmtHM(vm.adjustHours)} h · Korridor 6:00 – 11:00`}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '8px 12px', borderRadius: 100, background: T.surface2 }}>
-          <button aria-label="weniger" onClick={() => setHours((h) => Math.max(6, +(h - 0.25).toFixed(2)))} style={stepBtn}><Minus size={16} color={T.ink} /></button>
-          <span style={{ fontSize: 16, fontWeight: 600, color: T.ink, minWidth: 44, textAlign: 'center' }}>{fmtHM(hours)}</span>
-          <button aria-label="mehr" onClick={() => setHours((h) => Math.min(11, +(h + 0.25).toFixed(2)))} style={stepBtn}><Plus size={16} color={T.ink} /></button>
+      <SheetRow title="Stunden pro Woche" sub={`Aktuell ${fmtHM(vm.adjustHours)} h · frei wählbar von 2–20 h`}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 8, width: 154 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '7px 10px', borderRadius: 100, background: T.surface2 }}>
+            <button aria-label="weniger" onClick={() => setHours((h) => Math.max(2, +(h - 0.25).toFixed(2)))} style={stepBtn}><Minus size={16} color={T.ink} /></button>
+            <span style={{ fontSize: 16, fontWeight: 600, color: T.ink, minWidth: 44, textAlign: 'center' }}>{fmtHM(hours)}</span>
+            <button aria-label="mehr" onClick={() => setHours((h) => Math.min(20, +(h + 0.25).toFixed(2)))} style={stepBtn}><Plus size={16} color={T.ink} /></button>
+          </div>
+          <input aria-label="Stunden pro Woche" type="range" min="2" max="20" step="0.25" value={hours} onChange={(e) => setHours(Number(e.target.value))} style={{ width: '100%', accentColor: T.acid }} />
         </div>
       </SheetRow>
 
-      <SheetRow title="Lange Ausfahrt" sub="Der Schlüsseltag der Woche">
-        <Segmented options={[['SA', 5], ['SO', 6]]} value={longDay} onChange={setLongDay} />
+      <SheetRow title="Lange Ausfahrt" sub="Der Schlüsseltag für deine Ausdauer">
+        <Segmented options={days.map((on, i) => on ? [dayLabels[i], i] as [string, number] : null).filter((v): v is [string, number] => v !== null)} value={selectedLongDay} onChange={setLongDay} />
       </SheetRow>
 
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '12px 14px', borderRadius: 14, border: `1px solid ${T.stroke}` }}>
@@ -382,9 +399,11 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
           <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>i</span>
         </div>
         <span style={{ fontSize: 12.5, fontWeight: 600, color: T.mid }}>
-          Neue Wochenlast: {vm.weekStats[1].value} → {newTss != null ? `${newTss} TSS` : '—'} · {dayCount} Einheiten bleiben
+          Neue Woche: {fmtHM(hours)} h · {dayCount} Tage · lange Fahrt am {dayLabels[selectedLongDay]}
         </span>
       </div>
+
+      {error && <div role="alert" style={{ padding: '10px 12px', borderRadius: 12, background: '#ff6b6b12', color: '#ff9f9f', fontSize: 12, fontWeight: 600 }}>{error}</div>}
 
       <button onClick={submit} disabled={busy || !onRebuild}
         style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
