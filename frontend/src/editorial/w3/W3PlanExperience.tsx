@@ -48,6 +48,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const vo2Now=progressData?.vo2.current??null
  const recordWins=progressData?.records?.filter(r=>r.watts!=null&&r.previous_watts!=null&&r.watts>r.previous_watts).length??null
  const compareSeries=vm.finishAnalysis
+ const planAdherence=Math.max(0,Math.min(100,compareSeries?.adherence??100))
  const compareMax=Math.max(1,...(compareSeries?.planned??[]),...(compareSeries?.actual??[]).map(v=>v??0))
  const curvePoints=(values:(number|null)[])=>values.map((value,i)=>value==null?null:`${10+(i/Math.max(1,values.length-1))*300},${78-(value/compareMax)*60}`).filter(Boolean).join(' ')
  const sessions=vm.daySessions??[]
@@ -78,11 +79,11 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  {state!=='ended'&&<div className="w3-plan-opening"><h1>{missingPlanHistory?<>Dein nächster<br/>Schritt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{missingPlanHistory?'Dein bisheriger Plan ist beendet. Wähle, was du als Nächstes verbessern möchtest.':title}</p></div>}
  {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  {state==='ended'&&!missingPlanHistory&&<section className="w3-plan-finish-hero" aria-labelledby="w3-plan-finish-title">
-   <div className="w3-plan-finish-topline"><span>BLOCK {String(vm.totalWeeks).padStart(2,'0')} / {String(vm.totalWeeks).padStart(2,'0')}</span><span>ABGESCHLOSSEN</span></div>
+   <div className="w3-plan-finish-topline"><span>DEIN PLAN · ERGEBNIS</span><span>{vm.totalWeeks} WOCHEN</span></div>
    <div className="w3-plan-finish-lead">
-     <div className="w3-plan-finish-score" aria-label="Plan zu 100 Prozent abgeschlossen">
-       <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="49" className="w3-plan-finish-score-track"/><motion.circle cx="60" cy="60" r="49" className="w3-plan-finish-score-fill" initial={{pathLength:reduced?1:0}} animate={{pathLength:1}} transition={{duration:reduced?0:1.15,ease:[.22,1,.36,1]}}/></svg>
-       <div><strong>100</strong><span>PROZENT<br/>KOMPLETT</span></div>
+     <div className="w3-plan-finish-score" aria-label={`Plan zu ${planAdherence} Prozent umgesetzt`}>
+       <svg viewBox="0 0 120 120" aria-hidden="true"><circle cx="60" cy="60" r="49" className="w3-plan-finish-score-track"/><motion.circle cx="60" cy="60" r="49" className="w3-plan-finish-score-fill" initial={{pathLength:reduced?planAdherence/100:0}} animate={{pathLength:planAdherence/100}} transition={{duration:reduced?0:1.15,ease:[.22,1,.36,1]}}/></svg>
+       <div><strong>{planAdherence}</strong><span>PROZENT<br/>UMGESETZT</span></div>
      </div>
      <div className="w3-plan-finish-lead-copy"><h2 id="w3-plan-finish-title">Stärker<br/><em>als am Start.</em></h2><p>{vm.totalWeeks} Wochen. Dein Körper kennt den Weg jetzt.</p></div>
    </div>

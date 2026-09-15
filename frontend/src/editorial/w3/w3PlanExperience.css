@@ -101,3 +101,32 @@
 .w3-plan-finish-detail-link{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;margin-top:12px;padding:10px 0 0;border:0;border-top:1px solid #ffffff20;background:none;text-align:left;color:var(--plan-ink);cursor:pointer}.w3-plan-finish-detail-link>span{display:flex;flex-direction:column;gap:3px}.w3-plan-finish-detail-link strong{font-size:13px;font-weight:550}.w3-plan-finish-detail-link small{font-size:9px;color:var(--plan-muted)}.w3-plan-finish-detail-link svg{color:var(--plan-acid);flex:0 0 auto}.w3-plan-finish-detail-link:focus-visible{outline:2px solid var(--plan-acid);outline-offset:4px;border-radius:12px}
 @media(max-width:430px) and (max-height:900px){.w3-plan-finish-profile-teaser{margin-top:9px;padding-top:8px}.w3-plan-finish-profile-teaser>div:first-child small{font-size:8px}.w3-plan-finish-profile-teaser .w3-power-profile svg{max-height:132px}.w3-plan-finish-profile-teaser .w3-power-profile{margin-bottom:-10px}}
 @media(max-width:430px) and (max-height:900px){.w3-plan-finish-detail-link{margin-top:8px;padding-top:8px}.w3-plan-finish-detail-link strong{font-size:12px}.w3-plan-finish-detail-link small{font-size:8px}}
+
+/* Result page: quiet luxury, high signal. The hero is a proof surface, not a dashboard. */
+.state-ended{background:radial-gradient(120% 58% at 50% 0,#13180f 0,var(--plan-bg) 58%)}
+.state-ended .w3-plan-finish-hero{border-color:#c6f53c48;background:radial-gradient(90% 78% at 100% 0,#293718 0,#11150f 42%,#0d0f0d 100%);box-shadow:0 24px 80px #000b,0 0 0 1px #ffffff06 inset}
+.state-ended .w3-plan-finish-hero::before{background:linear-gradient(110deg,transparent 43%,#eaffbb0e 49%,#ffffff0c 51%,transparent 57%);animation-duration:11s}
+.state-ended .w3-plan-finish-hero::after{background:#c6f53c19;filter:blur(32px)}
+.state-ended .w3-plan-finish-topline{color:#ffffff70;letter-spacing:1.5px}.state-ended .w3-plan-finish-topline span:last-child{color:#eaffbb}
+.state-ended .w3-plan-finish-lead{grid-template-columns:124px minmax(0,1fr);gap:18px;margin-top:16px}
+.state-ended .w3-plan-finish-lead .w3-plan-finish-score,.state-ended .w3-plan-finish-lead .w3-plan-finish-score svg{width:124px;height:124px}
+.state-ended .w3-plan-finish-score svg{filter:drop-shadow(0 0 18px #c6f53c36)}
+.state-ended .w3-plan-finish-score circle{stroke-width:6}.state-ended .w3-plan-finish-score-track{stroke:#ffffff12}.state-ended .w3-plan-finish-score-fill{stroke:#d6ff61}
+.state-ended .w3-plan-finish-score strong{font-size:31px;font-weight:600;color:#f3ffd9}.state-ended .w3-plan-finish-score span{font-size:8px;color:#ffffff78;letter-spacing:.14em}
+.state-ended .w3-plan-finish-lead-copy h2{font-size:39px;line-height:.94;letter-spacing:-2px}.state-ended .w3-plan-finish-lead-copy h2 em{color:#d6ff61}.state-ended .w3-plan-finish-lead-copy p{font-size:12px;color:#ffffff86;max-width:18em}
+.state-ended .w3-plan-finish-comparison{margin-top:18px;gap:0;border-top:1px solid #ffffff1c;border-bottom:1px solid #ffffff1c;padding:9px 0}.state-ended .w3-plan-finish-comparison>div{border:0;border-radius:0;background:none;padding:7px 10px;border-right:1px solid #ffffff18;gap:4px}.state-ended .w3-plan-finish-comparison>div:last-child{border-right:0}.state-ended .w3-plan-finish-comparison span{font-size:7px;letter-spacing:1.3px;color:#ffffff66}.state-ended .w3-plan-finish-comparison strong{font-size:15px;color:#f2f5ef}.state-ended .w3-plan-finish-comparison b{font-size:10px;color:#d6ff61}
+.state-ended .w3-plan-finish-impact{margin-top:15px;padding-top:12px;border-top:0}.state-ended .w3-plan-finish-impact-head span{font-size:7px;letter-spacing:1.45px;color:#ffffff68}.state-ended .w3-plan-finish-impact-head strong{font-size:12px;color:#d6ff61}.state-ended .w3-plan-finish-impact svg{height:72px;margin-top:8px}.state-ended .w3-plan-finish-impact-grid{stroke:#ffffff0a}.state-ended .w3-plan-finish-impact-plan{stroke:#ffffff3d;stroke-width:2;stroke-dasharray:3 6}.state-ended .w3-plan-finish-impact-actual{stroke:#d6ff61;stroke-width:3;filter:drop-shadow(0 0 8px #c6f53c4d)}.state-ended .w3-plan-finish-impact-legend{font-size:8px;color:#ffffff70}.state-ended .w3-plan-finish-impact-legend small{color:#ffffff45}.state-ended .w3-plan-finish-impact p{font-size:10px;color:#ffffff80}.state-ended .w3-plan-finish-impact p strong{color:#f2f5ef}
+.state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid{margin-top:12px;padding-top:11px;border-top:1px solid #ffffff1c}.state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid svg{color:#d6ff61}.state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid strong{font-size:16px;color:#f2f5ef}.state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid span{font-size:7px;color:#ffffff60;letter-spacing:.12em}
+.state-ended .w3-plan-finish-detail-link{margin-top:13px;padding-top:11px;border-top-color:#ffffff1c}.state-ended .w3-plan-finish-detail-link strong{font-size:12px;color:#f2f5ef}.state-ended .w3-plan-finish-detail-link small{font-size:9px;color:#ffffff68}.state-ended .w3-plan-finish-detail-link svg{color:#d6ff61}
+.state-ended>.w3-plan-content>.w3-plan-primary{box-shadow:0 12px 30px #c6f53c12}
+@media(max-width:430px) and (max-height:900px){
+ .state-ended .w3-plan-finish-hero{padding:15px 14px 12px}
+ .state-ended .w3-plan-finish-lead{grid-template-columns:92px minmax(0,1fr);gap:12px;margin-top:10px}
+ .state-ended .w3-plan-finish-lead .w3-plan-finish-score,.state-ended .w3-plan-finish-lead .w3-plan-finish-score svg{width:92px;height:92px}
+ .state-ended .w3-plan-finish-score strong{font-size:25px}.state-ended .w3-plan-finish-score span{font-size:7px}
+ .state-ended .w3-plan-finish-lead-copy h2{font-size:30px;letter-spacing:-1.5px}.state-ended .w3-plan-finish-lead-copy p{font-size:10px;margin-top:7px}
+ .state-ended .w3-plan-finish-comparison{margin-top:11px;padding:6px 0}.state-ended .w3-plan-finish-comparison>div{padding:6px 7px}.state-ended .w3-plan-finish-comparison strong{font-size:13px}.state-ended .w3-plan-finish-comparison b{font-size:9px}
+ .state-ended .w3-plan-finish-impact{margin-top:10px;padding-top:0}.state-ended .w3-plan-finish-impact svg{height:54px;margin-top:5px}.state-ended .w3-plan-finish-impact p{font-size:9px;margin-top:6px!important}
+ .state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid{margin-top:8px;padding-top:8px}.state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid strong{font-size:13px}
+ .state-ended .w3-plan-finish-detail-link{margin-top:8px;padding-top:8px}
+}
