@@ -101,6 +101,11 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <section className="w3-plan-rhythm"><div><strong>{vm.adjustHours} h</strong><span>pro Woche verfügbar</span></div><div><strong>{vm.adjustDays.filter(Boolean).length}</strong><span>Trainingstage möglich</span></div><button aria-label="Trainingswoche anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button></section>
  <button className="w3-plan-primary" onClick={onCreatedDone}>Zum ersten Training<ArrowRight size={20}/></button>
  </>:<>
+ <section className="w3-plan-development" aria-labelledby="w3-plan-development-active-title">
+   <div className="w3-plan-card-head"><h2 id="w3-plan-development-active-title">Start → jetzt</h2><span>Was sich bewegt</span></div>
+   <p className="w3-plan-development-note">Dein Leistungsprofil im Vergleich zum Planstart.</p>
+   <W3PowerProfile data={results.data}/>
+ </section>
  <section className="w3-plan-journey"><div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.totalWeeks} Wochen · TSS</span></div>
  <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={`Woche ${i+1}: ${b.tss??'keine'} TSS${b.kind==='done'?', gefahren':', geplant'}`} aria-pressed={currentBar===i} data-selected={currentBar===i} disabled={i<currentIndex||i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><span className="w3-plan-week-track"><motion.i initial={false} animate={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} transition={{duration:reduced?0:.35}} data-rest={b.isRest} data-past={i<currentIndex}/></span><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
  <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
