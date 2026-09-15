@@ -13,12 +13,6 @@ export interface W3AuthActions {
   /** Retained for existing preview callers; this view no longer rotates covers. */
   now?: Date
 }
-const SCENES = [
-  { id: 'startrampe', name: 'Startrampe' },
-  { id: 'waschanlage', name: 'Waschanlage' },
-  { id: 'mond', name: 'Mond' },
-]
-
 /** Presentation only. The existing wrappers own authentication, referral
  * validation, errors and navigation; no credentials are persisted here. */
 export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange }: { vm: W3AuthVm } & W3AuthActions) {
@@ -45,10 +39,6 @@ export default function W3AuthView({ vm, onSubmit, onSwitch, onCodeChange }: { v
       <div className="w3-auth-content">
         {isRegister && <section className="w3-auth-value" aria-label="Was dich bei RIDR erwartet">
           <p>Versteh dein Training. Gestalte dein Bike.<br />Fahr dir neue Kulissen frei.</p>
-          <div className="w3-auth-scenes" aria-label="Freischaltbare Kulissen – Vorschau mit Referenzrad">{SCENES.map(scene => <figure key={scene.id}>
-            <img src={`/w3/scenes/${scene.id}.webp`} alt={`${scene.name}: Kulissen-Vorschau mit Referenzrad`} />
-            <figcaption>{scene.name}</figcaption>
-          </figure>)}</div>
         </section>}
         <form className="w3-auth-form" aria-label={isRegister ? 'Konto erstellen' : 'Anmelden'} aria-busy={vm.busy} onSubmit={async event => {
           event.preventDefault()

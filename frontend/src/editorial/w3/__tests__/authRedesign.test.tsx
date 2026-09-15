@@ -51,9 +51,10 @@ describe('auth forms',()=>{
   expect(screen.getByRole('button',{name:'Passwort verbergen'}).getAttribute('aria-pressed')).toBe('true')
   expect(submit).not.toHaveBeenCalled()
  })
- it('shows the three shipped scene previews on registration only',()=>{
+ it('keeps the auth entry focused without scene thumbnails',()=>{
   const result=render(<Auth vm={{...vm,mode:'register'}}/>)
-  expect(screen.getAllByRole('img',{name:/Kulissen-Vorschau mit Referenzrad/})).toHaveLength(3)
+  expect(screen.queryAllByRole('img',{name:/Kulissen-Vorschau/})).toHaveLength(0)
+  expect(screen.getByText(/Versteh dein Training/)).toBeTruthy()
   result.rerender(<Auth vm={vm}/>);expect(screen.queryAllByRole('img',{name:/Kulissen-Vorschau/})).toHaveLength(0)
  })
 })
