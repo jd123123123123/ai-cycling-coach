@@ -29,6 +29,8 @@ export interface BackdropArt {
   css: string
   /** One word for what the room is, under the name. */
   mood: string
+  /** Authored scene plate shown while a personalised render is warming. */
+  image?: string
 }
 
 /** Alpha suffixes, so the ramps read as light rather than as flat fills. */
@@ -63,6 +65,7 @@ const ART: Record<string, BackdropArt> = {
   rain_road: {
     css: `linear-gradient(180deg, ${T.nightHi} 0%, ${T.nightMid} 45%, ${T.bg} 46%, ${T.surface2} 100%), repeating-linear-gradient(97deg, ${a(T.d2, '55')} 0 1px, transparent 1px 7px)`,
     mood: 'Regen',
+    image: '/w3/scenes/waschanlage.webp',
   },
   gravel_track: {
     css: `linear-gradient(180deg, ${T.cool} 0%, ${a(T.warn, '55')} 40%, ${T.warn} 41%, ${T.surface} 100%)`,
@@ -75,6 +78,16 @@ const ART: Record<string, BackdropArt> = {
   velodrome: {
     css: `radial-gradient(120% 90% at 50% 108%, ${a(T.warn, '99')}, ${a(T.warn, '3A')} 46%, ${T.bg} 74%), linear-gradient(180deg, ${T.bg}, ${T.surface})`,
     mood: 'Bahn',
+  },
+  mond: {
+    css: `linear-gradient(180deg, ${T.nightLo} 0%, ${T.nightMid} 48%, ${T.surface2} 49%, ${T.surface} 100%)`,
+    mood: 'Mond',
+    image: '/w3/scenes/mond.webp',
+  },
+  startrampe: {
+    css: `linear-gradient(180deg, ${T.nightHi} 0%, ${T.nightMid} 48%, ${T.surface2} 49%, ${T.surface} 100%)`,
+    mood: 'Startrampe',
+    image: '/w3/scenes/startrampe.webp',
   },
 }
 
@@ -91,4 +104,8 @@ const PLACE_FALLBACK: BackdropArt = {
  */
 export function backdropArt(id: string): BackdropArt {
   return ART[id] ?? PLACE_FALLBACK
+}
+
+export function backdropImage(id: string): string | null {
+  return ART[id]?.image ?? null
 }

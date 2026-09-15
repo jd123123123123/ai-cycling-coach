@@ -171,6 +171,16 @@
 @media(max-width:340px) and (max-height:700px){.w3-reward-identity h2{font-size:26px}.w3-reward-milestone>strong{font-size:31px}.w3-scene-dialog:not(.is-sealed) .w3-scene-actions button{font-size:12px}.w3-reward-kicker{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.w3-legendary-atmosphere,.w3-scene-dialog.tier-legendaer::after,.w3-scene-dialog.tier-mythisch::after{display:none}.w3-scene-unsealed.is-developing>.w3-scene-portrait,.w3-collectible.is-earned.tier-legendaer .w3-collectible-glint{animation:none}}
 
+@media(max-width:600px){
+ .w3-scene-dialog:not(.is-sealed){width:calc(100vw - 20px);max-width:420px;height:auto;max-height:calc(100dvh - 20px);margin:auto;border-radius:24px;overflow:auto}
+ .w3-scene-dialog:not(.is-sealed)[open]{display:block}
+ .w3-scene-dialog:not(.is-sealed) .w3-scene-unsealed{display:block;min-height:0}
+ .w3-scene-dialog:not(.is-sealed) .w3-scene-portrait{height:auto;max-height:52dvh;aspect-ratio:9/16;background:#0B0B0B!important}
+ .w3-scene-dialog:not(.is-sealed) .w3-scene-world{height:100%;object-fit:contain;object-position:50% 50%}
+ .w3-scene-dialog:not(.is-sealed) .w3-scene-detail{padding:12px 16px max(14px,env(safe-area-inset-bottom));background:#0B0B0B}
+ .w3-scene-close{top:10px;right:10px;width:40px;height:40px}
+}
+
 /* All case layers use the source's 800 × 754 coordinate system, without letterboxing. */
 .w3-scene-sealed button.w3-rendered-case{display:grid;place-items:center}
 .w3-rendered-case-object{position:relative;inset:auto;width:100%;height:auto;aspect-ratio:800/754}

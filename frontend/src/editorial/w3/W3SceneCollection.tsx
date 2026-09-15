@@ -7,7 +7,7 @@ import { useSelectStage } from '../../hooks/useGarage'
 import { useMyReferrals } from '../../hooks/useReferrals'
 import { fetchMyReferrals } from '../../api/referral'
 import { inviteUrl, inviteDisplay } from './w3invite'
-import { backdropArt } from './w3backdropArt'
+import { backdropArt, backdropImage } from './w3backdropArt'
 import { SCENE_COPY, TIER_ORDER } from './w3sceneCopy'
 import { motion } from 'motion/react'
 import W3RewardCase from './W3RewardCase'
@@ -19,8 +19,9 @@ import './w3scenes.css'
 const RARITY: Record<string,string> = { alltag:'Klassiker', ernsthaft:'Besonders', selten:'Selten', legendaer:'Legendär', mythisch:'Mythisch', kurios:'Kurios' }
 
 export function ScenePortrait({ scene, obscured = false, fill = false }: { scene: Pick<StageCard, 'id' | 'plate_url' | 'image'>; bike: string | null; obscured?: boolean; fill?: boolean }) {
+  const image = scene.image || scene.plate_url || backdropImage(scene.id)
   return <div className={`w3-scene-portrait ${obscured ? 'is-obscured' : ''}`} style={{ background: backdropArt(scene.id).css, ...(fill ? { height: '100%', aspectRatio: 'auto' } : {}) }}>
-    {(scene.image || scene.plate_url) && <img className="w3-scene-world" src={scene.image || scene.plate_url!} alt={scene.image ? "Dein Fahrrad in der Kulisse" : "Kulissenvorschau mit Referenzrad"} loading="lazy" />}
+    {image && <img className="w3-scene-world" src={image} alt={scene.image ? "Dein Fahrrad in der Kulisse" : "Kulissenvorschau mit Referenzrad"} loading="lazy" />}
 
   </div>
 }
@@ -34,9 +35,10 @@ const REWARD_MILESTONES: Record<string, { value: string; unit: string; context: 
 
 function RewardIdentity({ scene, newlyRevealed }: { scene: StageCard; newlyRevealed: boolean }) {
   const milestone = REWARD_MILESTONES[scene.id]
+  const headline = SCENE_COPY[scene.id] ?? scene.name_de.replace(/^Die |^Der |^Das /, '')
   return <div className="w3-reward-identity">
     <div className="w3-reward-kicker"><RidrMark size={21} color="#C6F53C" /><span>{newlyRevealed ? 'Neue Kulisse für dein Bike' : 'Kulisse für dein Bike'}</span></div>
-    <h2 id="scene-reward-title">{scene.id === 'startrampe' ? SCENE_COPY.startrampe : scene.name_de.replace(/^Die |^Der |^Das /, '')}</h2>
+    <h2 id="scene-reward-title">{headline}</h2>
     <span className="w3-rarity-pill">{RARITY[scene.tier] ?? 'Klassiker'}</span>
     <div className="w3-reward-milestone">
       <span className="w3-milestone-status">{scene.owned ? <><Check size={12} strokeWidth={2.3}/>Geschafft</> : 'Dein nächster Meilenstein'}</span>
@@ -149,9 +151,9 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
     </div>
     <motion.dialog ref={dialog} animate={opening ? { x:[0,0,-1,1,-2,2,0], rotate:[0,0,-.3,.3,-.45,.45,0], boxShadow:['0 24px 100px #0008','0 24px 100px #0008','0 24px 110px #000a','0 24px 110px #000a','0 24px 110px #000a','0 24px 100px #c6f53c18','0 24px 100px #0008'] } : {x:0,rotate:0,boxShadow:'0 24px 100px #0008'}} transition={{duration:3.6,times:[0,.4,.52,.64,.78,.92,1]}} aria-labelledby="scene-reward-title" className={`w3-scene-dialog tier-${selected?.tier ?? 'alltag'} ${sealed ? 'is-sealed' : ''} ${opening ? 'is-unlocking' : ''}`} onClose={() => { revealTimers.current.forEach(clearTimeout); revealTimers.current = []; setOpening(false); setSealed(false); try { navigator.vibrate?.(0) } catch { /* Optional haptics. */ } }} onClick={e => { if (e.target === e.currentTarget) dialog.current?.close() }}>
       {selected && <>
-      {selected.image && <img src={selected.image} alt="" style={{display:'none'}} />}
+      {(selected.image || selected.plate_url || backdropImage(selected.id)) && <img src={selected.image || selected.plate_url || backdropImage(selected.id)!} alt="" style={{display:'none'}} />}
       {opening && <div className="w3-reveal-fx" aria-hidden><i className="w3-reveal-halo" /><i className="w3-reveal-ring first" /><i className="w3-reveal-ring second" /><i className="w3-reveal-flash" />{Array.from({length:8},(_,i)=><i key={i} className={`w3-reveal-shard s${i}`} />)}</div>}
-      <span className="w3-scene-live-status" role="status" aria-live="polite">{!sealed && reveal ? `${selected.name_de}: Kulisse freigeschaltet. ${selected.unlock_de}.` : ''}</span><button className="w3-scene-close" aria-label="Schließen" onClick={() => dialog.current?.close()}><X size={20} /></button>{sealed ? <div className={`w3-scene-sealed ${opening ? 'is-opening' : ''}`}><span className="w3-sealed-tier">{RARITY[selected.tier] ?? 'Klassiker'}</span><W3RewardCase opening={opening} onOpen={unveil}/><h2 id="scene-reward-title">Diese Fahrt bleibt.</h2><p>{selected.unlock_de}</p><button type="button" className="w3-scene-reveal-action" disabled={opening} onClick={unveil}>Kulisse enthüllen</button></div> : <div className={`w3-scene-unsealed ${opening ? 'is-developing' : ''}`}><ScenePortrait scene={selected} bike={bike} obscured={!selected.owned} />{opening && selected.image && <W3SceneDevelop src={selected.image} />}{['legendaer','mythisch'].includes(selected.tier) && <div className="w3-legendary-atmosphere" aria-hidden><i className="w3-legendary-light"/><i className="w3-legendary-light second"/></div>}<RewardIdentity scene={selected} newlyRevealed={reveal && selected.owned} /><div className="w3-reward-caption">{SCENE_COPY[selected.id] && <p>{selected.id === 'startrampe' ? selected.name_de.replace(/^Die |^Der |^Das /, '') : SCENE_COPY[selected.id]}</p>}</div></div>}<div className="w3-scene-detail" hidden={sealed}>{!selected.owned && progressText(selected) && <p>{progressText(selected)}</p>}
+      <span className="w3-scene-live-status" role="status" aria-live="polite">{!sealed && reveal ? `${selected.name_de}: Kulisse freigeschaltet. ${selected.unlock_de}.` : ''}</span><button className="w3-scene-close" aria-label="Schließen" onClick={() => dialog.current?.close()}><X size={20} /></button>{sealed ? <div className={`w3-scene-sealed ${opening ? 'is-opening' : ''}`}><span className="w3-sealed-tier">{RARITY[selected.tier] ?? 'Klassiker'}</span><W3RewardCase opening={opening} onOpen={unveil}/><h2 id="scene-reward-title">Diese Fahrt bleibt.</h2><p>{selected.unlock_de}</p><button type="button" className="w3-scene-reveal-action" disabled={opening} onClick={unveil}>Kulisse enthüllen</button></div> : <div className={`w3-scene-unsealed ${opening ? 'is-developing' : ''}`}><ScenePortrait scene={selected} bike={bike} obscured={!selected.owned} />{opening && selected.image && <W3SceneDevelop src={selected.image} />}{['legendaer','mythisch'].includes(selected.tier) && <div className="w3-legendary-atmosphere" aria-hidden><i className="w3-legendary-light"/><i className="w3-legendary-light second"/></div>}<RewardIdentity scene={selected} newlyRevealed={reveal && selected.owned} />{!SCENE_COPY[selected.id] && <div className="w3-reward-caption" />}</div>}<div className="w3-scene-detail" hidden={sealed}>{!selected.owned && progressText(selected) && <p>{progressText(selected)}</p>}
         {selected.owned && <div className="w3-scene-actions"><button disabled={selecting || selected.selected} onClick={async () => { try { await onSelect(selected.id); setSelected({ ...selected, selected: true }); setMessage('Als Hintergrund gesetzt') } catch { setMessage('Hintergrund konnte nicht gesetzt werden') } }}>{selected.selected ? 'Aktiver Hintergrund' : selecting ? 'Wird gesetzt…' : 'Als Hintergrund setzen'}</button>{selected.image && <button aria-label="Als Story teilen" disabled={sharing} onClick={() => void share()}><Share2 size={18} /><span>Teilen</span></button>}</div>}
         {selected.owned && selected.activity_id != null && onRide && <button className="w3-scene-ride" onClick={() => onRide(selected.activity_id!)}>Die Fahrt dazu <ChevronRight size={15} /></button>}
         {selected.owned && !selected.image && <p role="status">{selected.render_status === 'pending' ? 'Dein Rad wird in Szene gesetzt. Die Kulisse gehört dir bereits.' : 'Kulissenvorschau. Beim Auswählen wird dein eigenes Rad eingesetzt.'}</p>}
