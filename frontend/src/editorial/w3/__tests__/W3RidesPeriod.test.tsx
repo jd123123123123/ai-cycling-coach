@@ -26,16 +26,19 @@ vi.mock('motion/react', () => ({
     return <div {...p}>{children}</div> } },
 }))
 
-/** Der Server nennt die Fenster; der Test nennt sie genauso. */
-const grain = (label: string, start: string) => ({
-  label, km: 100, rides: 1, hours: 4, elevation_m: 900,
-  buckets: [{ start, km: 100, rides: 1, hours: 4, elevation_m: 900 }],
+/** Der Server nennt die Fenster; der Test nennt sie genauso.
+ *  `km: 0` ist ein echter Fall -- ein Fenster ohne Fahrt --, und die Woche
+ *  bekommt ihn hier absichtlich: eine Fixture, die ihn nie zeigt, verbirgt
+ *  genau den Zustand, wegen dessen die Flaeche zusammenschrumpft. */
+const grain = (label: string, start: string, km = 100) => ({
+  label, km, rides: km ? 1 : 0, hours: km ? 4 : 0, elevation_m: km ? 900 : 0,
+  buckets: [{ start, km, rides: km ? 1 : 0, hours: km ? 4 : 0, elevation_m: km ? 900 : 0 }],
 })
 vi.mock('../../../hooks/useActivityRhythm', () => ({
   useActivityRhythm: () => ({ data: {
     season: grain('2026', '2026-01-01'),
     month:  grain('Letzte 30 Tage', '2026-08-18'),
-    week:   grain('Letzte 7 Tage', '2026-09-10'),
+    week:   grain('Letzte 7 Tage', '2026-09-10', 0),
   } }),
 }))
 
@@ -80,6 +83,21 @@ describe('Fahrten: der Zeitraum schneidet die Liste', () => {
     expect(screen.getByText('Fahrt diese Woche')).toBeTruthy()
     expect(screen.getByText('Fahrt letzten Monat')).toBeTruthy()
     expect(screen.queryByText('Fahrt im Fruehjahr')).toBeNull()
+  })
+
+  it('reserviert fuer ein Fenster ohne Kilometer keine Flaeche', () => {
+    // Bei lauter Nullen lag die flache Linie am Boden einer hohen Flaeche --
+    // derselbe leere Bildschirm, der auf dieser Seite gerade behoben wurde.
+    const { container } = view()
+    fireEvent.click(screen.getByRole('button', { name: 'Woche' }))
+    const graph = container.querySelector('.w3-summary-graph')
+    expect(graph).toBeTruthy()
+    expect(graph!.hasAttribute('data-empty')).toBe(true)
+  })
+
+  it('zeichnet eine Flaeche, sobald das Fenster Kilometer hat', () => {
+    const { container } = view()   // Saison: die Fixture hat Kilometer
+    expect(container.querySelector('.w3-summary-graph')!.hasAttribute('data-empty')).toBe(false)
   })
 
   it('nennt in der Ueberschrift das Fenster des Servers und zaehlt, was dasteht', () => {

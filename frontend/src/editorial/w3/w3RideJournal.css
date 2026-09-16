@@ -25,3 +25,23 @@
 .w3-summary-goal-cta b{font-size:13px;font-weight:600}
 .w3-summary-goal-cta small{color:#a0a89b;font-size:11px}
 .w3-summary-goal-cta>svg{flex:none}
+
+/* ── DIE SAISON ALS HERO ───────────────────────────────────────────────────
+   Zahl und Kurve standen nebeneinander, die Kurve auf 38 % Breite gequetscht.
+   Gestapelt bekommt beides seine Groesse: die Flaeche oben ueber die volle
+   Breite, darunter die Zahl so gross, wie sie es auf Heute und Plan auch ist.
+   Acid bleibt bei einem Element -- die Kurve. Die Zahl bleibt weiss; dieses
+   Kaertchen traegt schon Acid im Verlauf, im Zielbalken und im Trend. */
+.w3-summary-main.is-hero{flex-direction:column;align-items:stretch;gap:0}
+.w3-summary-main.is-hero>.w3-summary-graph{flex:none;width:100%;height:146px;margin:2px 0 14px}
+.w3-summary-main.is-hero>div{flex:none;min-width:0}
+.w3-summary-main.is-hero strong{font-size:64px;letter-spacing:-3px;line-height:.92}
+.w3-summary-main.is-hero span{font-size:17px;margin-left:8px}
+.w3-summary-main.is-hero p{margin-top:8px;font-size:12.5px}
+@media(max-height:780px){
+ .w3-summary-main.is-hero>.w3-summary-graph{height:114px}
+ .w3-summary-main.is-hero strong{font-size:52px;letter-spacing:-2.2px}
+}
+/* Leeres Fenster: die Flaeche schrumpft auf die Linie. Kein reservierter
+   Platz fuer eine Form, die es nicht gibt. */
+.w3-summary-main.is-hero>.w3-summary-graph[data-empty]{height:34px;margin:6px 0 16px}

@@ -36,7 +36,13 @@ function RhythmGraph({values,labels,selected,onSelect}:{values:number[];labels:(
  const points=values.map((value,index)=>[pad+index*step,height-pad-(value/max)*(height-pad*2)] as const)
  const line=points.length?`M ${points[0][0]} ${points[0][1]} ${points.slice(1).map((p,i)=>{const prev=points[i],mid=(prev[0]+p[0])/2;return `Q ${mid} ${prev[1]} ${p[0]} ${p[1]}`}).join(' ')}`:''
  const area=line?`${line} L ${points.at(-1)![0]} ${height-pad} L ${points[0][0]} ${height-pad} Z`:''
- return <div className="w3-summary-graph" role="group" aria-label="Kilometertrend">
+ // EIN FENSTER OHNE KILOMETER HAT KEINE FORM. Bei lauter Nullen lag die
+ // flache Linie am Boden einer hohen Flaeche, darueber nichts -- genau der
+ // leere Bildschirm, der auf dieser Seite gerade behoben wurde. Dann schrumpft
+ // die Flaeche auf die Linie zusammen, statt Platz fuer eine Aussage zu
+ // reservieren, die es nicht gibt.
+ const leer=!values.some(v=>v>0)
+ return <div className="w3-summary-graph" data-empty={leer||undefined} role="group" aria-label="Kilometertrend">
   <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="w3-summary-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#c6f53c" stopOpacity=".38"/><stop offset="1" stopColor="#c6f53c" stopOpacity="0"/></linearGradient></defs><path d={area} fill="url(#w3-summary-fill)"/><path d={line} fill="none" stroke="#c6f53c" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
   {points.map(([x,y],index)=><button key={index} aria-label={`${labels(index)}: ${nf.format(values[index])} Kilometer`} aria-pressed={selected===index} className="w3-summary-point" style={{left:`${x/width*100}%`,top:`${y/height*100}%`}} onClick={()=>onSelect(selected===index?null:index)}><i/></button>)}
  </div>
@@ -84,7 +90,13 @@ export function RideSummary({vm,rhythm,period,onPeriod,onSetGoal}:{vm:W3RidesVm;
  const meta=picked&&win?[['FAHRTEN',String(win.buckets[selected!].rides),''],['ZEIT',nf.format(win.buckets[selected!].hours),' h'],['HÖHENMETER',nf.format(win.buckets[selected!].elevation_m),' hm']]:win?[['FAHRTEN',String(win.rides),''],['ZEIT',nf.format(win.hours),' h'],['HÖHENMETER',nf.format(win.elevation_m),' hm']]:[['FAHRTEN',vm.count.replace(/\s*Fahrten.*$/,''),''],['SATTELZEIT',vm.saddleTime,' h'],['Ø LEISTUNG',vm.avgPower,' W']]
  const previous=values.length>1?values[values.length-2]:values[0]??0,current=values.at(-1)??0,trendDelta=previous?Math.round((current-previous)/previous*100):0,trend=trendDelta>3?'Aufbauend':trendDelta<-3?'Ruhiger':'Stabil'
  return <section className="w3-ride-summary" aria-label="Deine Kilometer"><header>{rhythm?<div role="group" aria-label="Zeitraum">{([['season','Saison'],['month','Monat'],['week','Woche']]as const).map(([key,text])=><button aria-pressed={period===key} key={key} onClick={()=>{onPeriod(key);setSelected(null)}}>{text}</button>)}</div>:<span>Letzte 12 Monate</span>}<button className="w3-journal-icon is-small" aria-label={open?'Kilometerdetails schließen':'Kilometerdetails öffnen'} aria-expanded={open} onClick={()=>setOpen(!open)}>{open?<Minus size={17}/>:<Plus size={17}/>}</button></header>
- <div className="w3-summary-main"><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div><RhythmGraph values={values} labels={label} selected={selected} onSelect={index=>setSelected(index)}/></div>
+ {/* DIE KURVE STAND NEBEN DER ZAHL und bekam 38 % der Breite -- beide
+     gedraengt, keins von beidem gross. Jetzt die Hausform, die Heute und Plan
+     benutzen: die Flaeche oben ueber die volle Breite, die Zahl darunter in
+     Hero-Groesse, das Fenster als Zeile darunter. Die antippbaren Punkte
+     bleiben, was sie waren -- eine Kurve, die man nicht befragen kann, waere
+     Dekoration. */}
+ <div className="w3-summary-main is-hero"><RhythmGraph values={values} labels={label} selected={selected} onSelect={index=>setSelected(index)}/><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div></div>
  <div className={`w3-summary-trend trend-${trend.toLowerCase()}`}><span>{period==='season'?'SAISON-TREND':period==='month'?'30-TAGE-TREND':'7-TAGE-TREND'}</span><strong>{trend}</strong><em>{trendDelta>=0?'+':''}{trendDelta}%</em></div>
  <div className="w3-summary-meta" aria-label="Zusammenfassung">{meta.map(([label,value,unit])=><span key={label}><small>{label}</small><strong>{value}<em>{unit}</em></strong></span>)}</div>
  {period==='season'&&selected==null&&<div className="w3-summary-goal-card" aria-label="Saisonziel">
