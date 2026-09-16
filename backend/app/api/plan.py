@@ -32,6 +32,7 @@ from app.schemas.athlete import (
 )
 from app.services.plan_adaptation_log import recent_adaptations
 from app.services.plan_interview import (
+    PLAN_CANCELLED_KEY,
     apply_answers,
     build_interview_questions,
     interview_state,
@@ -138,6 +139,46 @@ class CurrentPlanResponse(BaseModel):
     status: Literal["empty", "active", "ended"] = "empty"
 
 
+# ──────────────────────────────────────────────────────────────────────────
+#  Der Fahrer darf aufhoeren
+# ──────────────────────────────────────────────────────────────────────────
+#
+# `status` steht nirgends in der Datenbank -- er wird gerechnet, und zwar bis
+# eben ausschliesslich so: `ended = target_event_date < heute`. Ein Plan konnte
+# also NUR dadurch enden, dass sein Renntag vergeht. Den Gedanken "ich hoere
+# hier auf" gab es im Datenmodell nicht, und damit auch keinen Weg, ihn
+# auszudruecken.
+#
+# KEINE MIGRATION. `profile.goals` ist laengst eine JSON-Spalte und traegt
+# `custom_goal`, `custom_goal_started`, `custom_goal_block_end_date`. Ein
+# `plan_cancelled_at` daneben folgt demselben Muster -- und zwei Alembic-Koepfe
+# haben diese Produktion schon einmal beim Booten getoetet.
+#
+# ABBRECHEN HEISST BEENDEN, NICHT LOESCHEN. Der Plan springt in `ended` und
+# damit in den Abschluss-Screen, den es laengst gibt: Adhaerenz-Ring, Soll-Ist,
+# Gesamtzahlen, "Was baust du als Naechstes?". Loeschen wuerfe diesen Screen weg
+# und naehme der Fahrtenhistorie ihren Zusammenhang.
+def _plan_stop(planned_end: date, event_over_on: date | None, cancelled: date | None) -> date:
+    """Der frueheste Tag, an dem dieser Block wirklich vorbei war."""
+    stops = [planned_end] + [d for d in (event_over_on, cancelled) if d is not None]
+    return min(stops)
+
+
+def _cancelled_on(goals: dict) -> date | None:
+    """Das Datum, an dem der Fahrer diesen Plan beendet hat, oder ``None``.
+
+    Streng geparst: ein unlesbarer Wert ist KEIN Abbruch. Lieber einen Plan
+    weiterlaufen lassen als ihn wegen eines kaputten Strings zu beenden.
+    """
+    raw = goals.get(PLAN_CANCELLED_KEY)
+    if not isinstance(raw, str) or not raw:
+        return None
+    try:
+        return date.fromisoformat(raw[:10])
+    except ValueError:
+        return None
+
+
 @router.get("/current", response_model=CurrentPlanResponse)
 async def current_plan(
     user: Annotated[User, Depends(get_current_active_user)],
@@ -168,8 +209,12 @@ async def current_plan(
     )
     # A mesocycle is a block, not the entire ongoing fitness plan. A passed
     # event refers to its own block, not maintenance auto-generated afterwards.
-    ended = bool(profile.target_event_date and profile.target_event_date < today_local())
-    until = profile.target_event_date if ended else today_local()
+    event_over = bool(profile.target_event_date and profile.target_event_date < today_local())
+    # Ein Abbruch wird beim Neubau geloescht (siehe `rebuild_plan`), ein hier
+    # gefundener Wert gehoert also immer zum AKTUELLEN Plan.
+    cancelled = _cancelled_on(goals)
+    ended = event_over or cancelled is not None
+    until = profile.target_event_date if event_over else (cancelled or today_local())
     result = await db.execute(select(MesocyclePlan).where(
         MesocyclePlan.user_id == user.id,
         MesocyclePlan.plan_start_date <= until,
@@ -179,15 +224,18 @@ async def current_plan(
         # Rebuilds historically removed old mesocycle rows. The saved event
         # remains real evidence of an ended goal, but its start is unknown.
         if ended:
-            return CurrentPlanResponse(status="ended", plan_end_date=profile.target_event_date.isoformat(),
-                **goal_meta)
+            stop = profile.target_event_date if event_over else cancelled
+            return CurrentPlanResponse(status="ended",
+                plan_end_date=stop.isoformat() if stop else None, **goal_meta)
         if has_focus_plan:
             return CurrentPlanResponse(status="active", planned_hours=profile.weekly_hours_available,
                 **goal_meta)
         return CurrentPlanResponse()
     return CurrentPlanResponse(
         plan_start_date=plan.plan_start_date.isoformat(),
-        plan_end_date=(min(plan.plan_end_date, profile.target_event_date) if ended else plan.plan_end_date).isoformat(),
+        # Ein beendeter Plan endet an dem Tag, an dem er beendet wurde -- nicht
+        # an dem, an dem er geendet haette.
+        plan_end_date=_plan_stop(plan.plan_end_date, profile.target_event_date if event_over else None, cancelled).isoformat(),
         phase=plan.phase, weekly_tss_targets=plan.weekly_tss_targets,
         **goal_meta,
         planned_hours=profile.weekly_hours_available,
@@ -229,6 +277,53 @@ async def build_plan(
 
         invalidate_personalized_week_cache(user.id)
     return PlanBuildResponse(**summary)
+
+
+class PlanCancelResponse(BaseModel):
+    status: Literal["ended"]
+    cancelled_on: str
+
+
+@router.post("/cancel", response_model=PlanCancelResponse,
+             summary="Den laufenden Plan beenden (nicht loeschen)")
+async def cancel_plan(
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> PlanCancelResponse:
+    """Beendet den laufenden Block zum heutigen Athletentag.
+
+    LOESCHT NICHTS. Der Plan springt in `ended` und damit in den
+    Abschluss-Screen, den es laengst gibt. Fahrten, Adaptationen und die
+    Auswertung bleiben; was faellt, sind kuenftige geplante Einheiten -- und
+    die fallen erst beim naechsten Neubau, nicht hier.
+
+    Zweimal abbrechen ist kein Fehler: der zweite Aufruf gibt denselben Tag
+    zurueck, statt das Ende nach hinten zu schieben. Sonst haette ein
+    Doppelklick die Auswertung eines beendeten Plans verlaengert.
+    """
+    from app.services.athlete_time import set_athlete_tz_from_profile, today_local
+
+    profile = await _load_profile(db, user.id)
+    set_athlete_tz_from_profile(profile)
+    goals = dict(profile.goals) if isinstance(profile.goals, dict) else {}
+    already = _cancelled_on(goals)
+    if already is not None:
+        return PlanCancelResponse(status="ended", cancelled_on=already.isoformat())
+
+    today = today_local()
+    goals[PLAN_CANCELLED_KEY] = today.isoformat()
+    # Neues dict, nicht mutieren: eine JSON-Spalte an Ort und Stelle zu aendern
+    # meldet SQLAlchemy nicht als dirty, und das Ende waere nie gespeichert.
+    profile.goals = goals
+    await db.commit()
+
+    # Die personalisierte Woche haelt noch die Ueberlagerung des laufenden
+    # Plans -- ohne das zeigt Heute bis zu sechs Stunden lang weiter Einheiten
+    # aus einem Plan, den der Fahrer gerade beendet hat.
+    from app.api.weeks import invalidate_personalized_week_cache
+
+    invalidate_personalized_week_cache(user.id)
+    return PlanCancelResponse(status="ended", cancelled_on=today.isoformat())
 
 
 # ──────────────────────────────────────────────────────────────────────────

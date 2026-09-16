@@ -46,7 +46,7 @@ function Vessel({b,max,animate,reduced}:{b:{planned:number;fill:number|null;over
  </span></span>
 }
 
-export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSession,onCreatedDone,weekOffset,onWeekOffset,planEnd,planStart,goalDate,initialCompose=false,onComposeClose,priorPlanCompleted=false,priorPlanEnd=null,loading=false,previewProgress}:{vm:W3PlanVm;state:State;userId?:number;onRebuild:W3PlanActions['onRebuild'];onOpenSession:(iso:string)=>void;onCreatedDone:()=>void;planEnd?:string|null;planStart?:string|null;initialCompose?:boolean;onComposeClose?:()=>void;priorPlanCompleted?:boolean;priorPlanEnd?:string|null;goalDate?:string|null;weekOffset:number;onWeekOffset:(offset:number)=>void;loading?:boolean;previewProgress?:ProgressExplorer}){
+export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSession,onCreatedDone,weekOffset,onWeekOffset,planEnd,planStart,goalDate,initialCompose=false,onComposeClose,onCancelPlan,priorPlanCompleted=false,priorPlanEnd=null,loading=false,previewProgress}:{vm:W3PlanVm;state:State;userId?:number;onRebuild:W3PlanActions['onRebuild'];onOpenSession:(iso:string)=>void;onCreatedDone:()=>void;planEnd?:string|null;planStart?:string|null;initialCompose?:boolean;onComposeClose?:()=>void;onCancelPlan?:()=>Promise<void>;priorPlanCompleted?:boolean;priorPlanEnd?:string|null;goalDate?:string|null;weekOffset:number;onWeekOffset:(offset:number)=>void;loading?:boolean;previewProgress?:ProgressExplorer}){
  const nav=useNavigate(),reduced=useReducedMotion()
  const [view,setView]=useState<'plan'|'profile'>('plan'),[goal,setGoal]=useState('ftp'),[day,setDay]=useState(0),[sheet,setSheet]=useState<'adjust'|'adaptation'|'why'|'profile'|'progress'|null>(null),[intro,setIntro]=useState(false)
  const [compose,setCompose]=useState<GoalFocus|'choose'|null>(initialCompose?'choose':null)
@@ -184,7 +184,12 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  </main><W3TabBar/>
  {sheet==='profile'&&<PlanDialog title="Dein Leistungsprofil" onClose={()=>setSheet(null)}><W3PowerProfile data={progressData}/></PlanDialog>}
  {sheet==='progress'&&<PlanDialog title="Dein Fortschritt" onClose={()=>setSheet(null)}><W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={previewProgress?false:results.isPending} error={previewProgress?false:results.isError}/></PlanDialog>}
- {sheet==='adjust'&&<PlanAdjustSheet vm={vm} onClose={()=>setSheet(null)} onRebuild={onRebuild}/>}
+ {sheet==='adjust'&&<PlanAdjustSheet vm={vm} onClose={()=>setSheet(null)} onRebuild={onRebuild}
+   /* Beide Wege waren bisher nur aus dem leeren oder beendeten Zustand
+      erreichbar bzw. gar nicht. Sie leben hier, damit die Planseite
+      selbst kein neues Element bekommt. */
+   onRestart={()=>{setSheet(null);setSkipAutoIntro(true);setCompose('choose')}}
+   onCancelPlan={onCancelPlan}/>}
  {sheet==='adaptation'&&<PlanDialog title="Was sich verändert hat" onClose={()=>setSheet(null)}><div className="w3-plan-change-list">{adaptations?.adaptations.map(a=><article key={a.id}><time>{new Date(a.created_at).toLocaleDateString('de-DE',{day:'numeric',month:'short'})}</time><p>{a.message_de}</p></article>)}</div></PlanDialog>}
  {sheet==='why'&&<PlanDialog title={hasWorkout?'Warum diese Einheit?':'Deine Woche'} onClose={()=>setSheet(null)}><p>{selected?.rationale??vm.weekWhy??'Zwischen den Belastungen steht Zeit für Erholung. Deine nächste Einheit siehst du in der Wochenübersicht.'}</p><button className="w3-plan-link" onClick={()=>nav('/e/w3-goal')}>Dein Ziel ansehen<ArrowUpRight size={18}/></button></PlanDialog>}
  {compose&&<W3PlanGoalComposer focus={compose} hours={vm.adjustHours} days={vm.adjustDays} previousPlanEnd={state==='ended'?planEnd:null} onClose={()=>{setCompose(null);onComposeClose?.()}}/>}

@@ -5,7 +5,7 @@ import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWee
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
-import { fetchCurrentPlan, applyPlanChange, type InterviewAnswers } from '../../api/plan'
+import { fetchCurrentPlan, applyPlanChange, cancelPlan, type InterviewAnswers } from '../../api/plan'
 import { listRehearsals, getRehearsal } from '../../api/rehearsal'
 import type { DayPlan } from '../../api/weeks'
 import {
@@ -456,6 +456,16 @@ export default function W3PlanPage() {
     }
   }, [week, profile, plan, rehearsals, targetCourse, seasonActs, ftp, streak])
 
+  // ── den Block beenden (Plan anpassen → /plan/cancel) ──
+  // Es LOESCHT nichts: der Server setzt den Abbruchtag, `status` wird
+  // `ended`, und die Seite faellt in den Abschluss-Screen, den es laengst
+  // gibt. Deshalb reicht es, Plan und Woche neu zu lesen -- die Ansicht
+  // folgt dem Status von selbst.
+  const onCancelPlan = useCallback(async () => {
+    await cancelPlan()
+    await Promise.all([refetchPlan(), refetchWeek()])
+  }, [refetchPlan, refetchWeek])
+
   // ── real rebuild (Plan anpassen → /plan/change/apply) ──
   const onRebuild = useCallback(async (p: RebuildPayload): Promise<boolean> => {
     const [mon, tue, wed, thu, fri, sat, sun] = p.days
@@ -497,6 +507,7 @@ export default function W3PlanPage() {
     onRebuild={onRebuild} onOpenSession={iso => navigate(`/e/w3-session/${iso}`)}
     onCreatedDone={() => setParams({}, {replace:true})}
     onComposeClose={() => setParams(previous => { const next = new URLSearchParams(previous); next.delete('choose'); return next }, {replace:true})}
+    onCancelPlan={onCancelPlan}
     weekOffset={weekOffset} onWeekOffset={setWeekOffset} loading={weekFetching}
   />
 }

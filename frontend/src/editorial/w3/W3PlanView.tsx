@@ -320,7 +320,14 @@ function SessionBeam({ bars, ftpTag }: { bars: PlanSessionBar[]; ftpTag: string 
 }
 
 // ── Plan anpassen sheet (pen F2sjUl) ──
-export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onClose: () => void; onRebuild?: W3PlanActions['onRebuild'] }) {
+export function PlanAdjustSheet({ vm, onClose, onRebuild, onRestart, onCancelPlan }: {
+  vm: W3PlanVm; onClose: () => void; onRebuild?: W3PlanActions['onRebuild']
+  /** Anderes Ziel waehlen. War bisher NUR im leeren und im beendeten Zustand
+   *  erreichbar -- wer mitten im Block umschwenken wollte, hatte keinen Weg. */
+  onRestart?: () => void
+  /** Den Block beenden. Gibt den Tag zurueck, an dem er beendet wurde. */
+  onCancelPlan?: () => Promise<void>
+}) {
   const [days, setDays] = useState<boolean[]>(vm.adjustDays)
   const [hours, setHours] = useState<number>(vm.adjustHours)
   const [longDays, setLongDays] = useState<number[]>(() => [...new Set(vm.adjustLongDays?.length ? vm.adjustLongDays : [vm.adjustLongDay])])
@@ -332,6 +339,10 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
   // nothing. They are gone until the engine can honour them.
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Beenden ist nicht rueckgaengig zu machen, also fragt es einmal nach --
+  // an Ort und Stelle, nicht in einem zweiten Fenster ueber diesem.
+  const [confirmEnd, setConfirmEnd] = useState(false)
+  const [ending, setEnding] = useState(false)
   const dayCount = days.filter(Boolean).length
   const dayLabels = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO']
   const dayNames = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
@@ -430,6 +441,60 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild }: { vm: W3PlanVm; onCl
         style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
         <RefreshCw size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{busy ? 'Rechne…' : 'Plan neu berechnen'}</span>
       </button>
+
+      {/* ── WAS MIT DEM BLOCK SELBST PASSIERT ──────────────────────────────
+          Beide Wege gab es nicht: ein anderes Ziel war nur aus dem LEEREN
+          oder BEENDETEN Zustand erreichbar, und aufhoeren gar nicht -- ein
+          Plan konnte ausschliesslich dadurch enden, dass sein Renntag
+          vergeht. Sie stehen hier, weil man ohnehin hierher kommt, um am
+          Plan zu drehen; so bekommt die Planseite selbst kein neues Element.
+          Leise gehalten: das ist kein Acid wert. */}
+      {(onRestart || onCancelPlan) && (
+        <div style={{ borderTop: `1px solid ${T.rule}`, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {onRestart && (
+            <button onClick={() => { setConfirmEnd(false); onRestart() }} disabled={ending}
+              style={{ background: 'none', border: 0, padding: '12px 2px', minHeight: 48, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer' }}>
+              <Flag size={17} color={T.mid} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
+                <strong style={{ fontSize: 14, fontWeight: 550, color: T.ink }}>Neu starten</strong>
+                <span style={{ fontSize: 11.5, color: T.quiet }}>Anderes Ziel wählen — der Block wird neu gebaut</span>
+              </span>
+            </button>
+          )}
+          {onCancelPlan && !confirmEnd && (
+            <button onClick={() => setConfirmEnd(true)}
+              style={{ background: 'none', border: 0, padding: '12px 2px', minHeight: 48, display: 'flex', alignItems: 'center', gap: 12, textAlign: 'left', cursor: 'pointer' }}>
+              <X size={17} color={T.mid} />
+              <span style={{ display: 'flex', flexDirection: 'column', gap: 3, flex: 1, minWidth: 0 }}>
+                <strong style={{ fontSize: 14, fontWeight: 550, color: T.ink }}>Plan beenden</strong>
+                <span style={{ fontSize: 11.5, color: T.quiet }}>Schließt den Block mit deiner bisherigen Auswertung ab</span>
+              </span>
+            </button>
+          )}
+          {onCancelPlan && confirmEnd && (
+            <div role="group" aria-label="Plan wirklich beenden" style={{ padding: '12px 14px', borderRadius: 14, background: T.tile, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <span style={{ fontSize: 12.5, color: T.mid, lineHeight: 1.45 }}>
+                Der Block endet heute und du siehst deine Auswertung. Deine Fahrten bleiben — die noch
+                geplanten Einheiten dieses Blocks fallen weg.
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setConfirmEnd(false)} disabled={ending}
+                  style={{ flex: 1, minHeight: 44, borderRadius: 100, border: `1px solid ${T.stroke}`, background: 'none', color: T.mid, fontSize: 13.5, fontWeight: 550, cursor: 'pointer' }}>
+                  Doch nicht
+                </button>
+                <button disabled={ending}
+                  onClick={async () => {
+                    setEnding(true); setError(null)
+                    try { await onCancelPlan() } catch { setError('Der Plan ließ sich nicht beenden. Bitte noch einmal versuchen.'); setEnding(false); setConfirmEnd(false) }
+                  }}
+                  style={{ flex: 1, minHeight: 44, borderRadius: 100, border: 0, background: T.ink, color: T.bg, fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+                  {ending ? 'Beende…' : 'Ja, beenden'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </SheetShell>
   )
 }

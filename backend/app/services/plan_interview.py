@@ -537,6 +537,13 @@ async def interview_state(db: AsyncSession, user_id: int, profile) -> dict:
 #  4. Rebuild (shared by POST /plan/build and POST /plan/change/apply)
 # ──────────────────────────────────────────────────────────────────────────
 
+#: Der Tag, an dem der Fahrer den laufenden Plan beendet hat. Liegt in der
+#: JSON-Spalte `athlete_profiles.goals` -- dort, wo `custom_goal` und
+#: `custom_goal_started` schon wohnen -- und braucht deshalb KEINE Migration.
+#: `api/plan.py` liest ihn, `rebuild_plan` loescht ihn.
+PLAN_CANCELLED_KEY = "plan_cancelled_at"
+
+
 async def rebuild_plan(
     db: AsyncSession,
     user_id: int,
@@ -562,6 +569,16 @@ async def rebuild_plan(
     """
     from app.services.mesocycle_generator import generate_mesocycle
     from app.services.pmc_service import compute_user_pmc
+
+    # EIN NEUBAU HEBT EINEN ABBRUCH AUF. Ohne das bliebe der Plan fuer immer
+    # `ended`, und "neu starten" waere ein Knopf, der nichts tut. Weil der
+    # Schluessel hier faellt, kann ein spaeter gefundener Wert nur zum
+    # AKTUELLEN Plan gehoeren -- `api/plan.py` verlaesst sich darauf.
+    _goals = getattr(profile, "goals", None)
+    if isinstance(_goals, dict) and PLAN_CANCELLED_KEY in _goals:
+        _fresh = dict(_goals)
+        _fresh.pop(PLAN_CANCELLED_KEY, None)
+        profile.goals = _fresh
 
     # Guard BEFORE any destructive delete — the generator would raise the
     # same ValueError, but only after we had already wiped future rows.

@@ -176,3 +176,22 @@ export interface CurrentPlanResponse {
 export async function fetchCurrentPlan(): Promise<CurrentPlanResponse> {
   return (await apiClient.get<CurrentPlanResponse>('/plan/current')).data
 }
+
+/**
+ * DEN LAUFENDEN PLAN BEENDEN -- nicht loeschen.
+ *
+ * Der Server setzt `goals.plan_cancelled_at` auf den heutigen Athletentag;
+ * `GET /plan/current` liest daraufhin `status: "ended"`, und die Planseite
+ * zeigt den Abschluss-Screen, den es laengst gibt: Adhaerenz, Soll-Ist,
+ * Gesamtzahlen. Fahrten und Auswertung bleiben. Ein zweiter Aufruf gibt
+ * denselben Tag zurueck, statt das Ende nach hinten zu schieben.
+ */
+export interface PlanCancelResponse {
+  status: 'ended'
+  cancelled_on: string
+}
+
+export async function cancelPlan(): Promise<PlanCancelResponse> {
+  const res = await apiClient.post<PlanCancelResponse>('/plan/cancel')
+  return res.data
+}
