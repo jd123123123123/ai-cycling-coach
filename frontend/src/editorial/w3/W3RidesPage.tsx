@@ -180,6 +180,7 @@ export default function W3RidesPage() {
         id: a.id,
         title: a.title ?? 'Fahrt',
         dateLabel: dateLabel(d),
+        dateISO: a.started_at,
         km: km != null ? (km >= 100 ? km.toFixed(1) : km.toFixed(2)) : '—',
         speed,
         power: pw != null ? `${Math.round(pw)}` : '—',

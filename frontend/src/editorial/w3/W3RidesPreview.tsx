@@ -29,11 +29,11 @@ const FIXTURE: W3RidesVm = {
   avgPower: '214',
   saddleTime: '168:24',
   rides: [
-    { id: 1, title: 'Schwelle am Abend', dateLabel: 'DI 12 AUG', km: '40.34', speed: '31.5', power: '248', dur: '1:16', note: '+14 W auf deine letzte Schwelle', indoor: false, race: false, recent: true, polyline: LOOP },
-    { id: 2, title: 'Die lange Sonntagsrunde', dateLabel: 'SO 10 AUG', km: '128.6', speed: '28.9', power: '196', dur: '4:26', note: 'Längste Fahrt seit April', indoor: false, race: false, recent: true, polyline: BLOB },
-    { id: 3, title: 'Lockeres Ausfahren', dateLabel: 'SA 09 AUG', km: '32.1', speed: '25.4', power: '132', dur: '1:15', note: 'Unter 60 % geblieben — genau wie verlangt', indoor: false, race: false, recent: true, polyline: PROFILE },
-    { id: 4, title: 'Berg-Wiederholungen', dateLabel: 'DO 07 AUG', km: '54.8', speed: '27.2', power: '231', dur: '2:01', note: 'Drittbeste VAM dieser Saison', indoor: false, race: false, recent: false, polyline: ZIG },
-    { id: 5, title: 'Schwelle auf der Rolle', dateLabel: 'DI 05 AUG', km: '35.0', speed: '33.1', power: '262', dur: '1:03', note: '2 W unter deinem Indoor-Bestwert', indoor: true, race: false, recent: false, polyline: null },
+    { id: 1, title: 'Schwelle am Abend', dateLabel: 'DI 12 AUG', dateISO: '2026-08-12T17:40:00Z', km: '40.34', speed: '31.5', power: '248', dur: '1:16', note: '+14 W auf deine letzte Schwelle', indoor: false, race: false, recent: true, polyline: LOOP },
+    { id: 2, title: 'Die lange Sonntagsrunde', dateLabel: 'SO 10 AUG', dateISO: '2026-08-10T09:05:00Z', km: '128.6', speed: '28.9', power: '196', dur: '4:26', note: 'Längste Fahrt seit April', indoor: false, race: false, recent: true, polyline: BLOB },
+    { id: 3, title: 'Lockeres Ausfahren', dateLabel: 'SA 09 AUG', dateISO: '2026-08-09T11:20:00Z', km: '32.1', speed: '25.4', power: '132', dur: '1:15', note: 'Unter 60 % geblieben — genau wie verlangt', indoor: false, race: false, recent: true, polyline: PROFILE },
+    { id: 4, title: 'Berg-Wiederholungen', dateLabel: 'DO 07 AUG', dateISO: '2026-08-07T16:15:00Z', km: '54.8', speed: '27.2', power: '231', dur: '2:01', note: 'Drittbeste VAM dieser Saison', indoor: false, race: false, recent: false, polyline: ZIG },
+    { id: 5, title: 'Schwelle auf der Rolle', dateLabel: 'DI 05 AUG', dateISO: '2026-08-05T19:00:00Z', km: '35.0', speed: '33.1', power: '262', dur: '1:03', note: '2 W unter deinem Indoor-Bestwert', indoor: true, race: false, recent: false, polyline: null },
   ],
   // fixture: goal-tracking block (a preview rider who set 12 000 km)
   goal: {

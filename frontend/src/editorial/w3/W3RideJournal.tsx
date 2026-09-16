@@ -1,7 +1,7 @@
 import {useMemo, useState} from 'react'
 import {ArrowDownUp,ArrowUpRight, Bike, Search, X, Plus, Minus} from 'lucide-react'
 import {motion, useReducedMotion} from 'motion/react'
-import type {W3RideCard, W3RidesVm, W3RideFilter} from './W3RidesView'
+import type {W3RideCard, W3RidesVm, W3RideFilter, W3RidePeriod} from './W3RidesView'
 import type {ActivityRhythm} from '../../api/rhythm'
 import './w3RideJournal.css'
 const nf=new Intl.NumberFormat('de-DE',{maximumFractionDigits:1})
@@ -41,29 +41,49 @@ function RhythmGraph({values,labels,selected,onSelect}:{values:number[];labels:(
   {points.map(([x,y],index)=><button key={index} aria-label={`${labels(index)}: ${nf.format(values[index])} Kilometer`} aria-pressed={selected===index} className="w3-summary-point" style={{left:`${x/width*100}%`,top:`${y/height*100}%`}} onClick={()=>onSelect(selected===index?null:index)}><i/></button>)}
  </div>
 }
-export function RideJournal({vm,onOpen}:{vm:W3RidesVm;onOpen:(id:number)=>void}){
+/**
+ * W3 - FAHRTEN, DIE LISTE.
+ *
+ * DER ZEITRAUM KOMMT VON OBEN. Saison / Monat / Woche sass im Kopf und blieb
+ * dort: wer auf WOCHE stellte, bekam eine Wochenzahl ueber allen Fahrten des
+ * Jahres. Jetzt reicht `W3RidesView` denselben Zustand an beide, und die Liste
+ * schneidet sich am Fensteranfang, den der SERVER nennt -- dem ersten Balken
+ * des Korns. Damit zaehlt die Ueberschrift dieselben Fahrten, aus denen die
+ * Zahl darueber gerechnet ist.
+ *
+ * `Alle / Outdoor / Indoor / Rennen` bleibt daneben stehen. Das ist eine ANDERE
+ * Frage -- was fuer eine Fahrt --, und zwei Fragen duerfen zwei Regler haben.
+ */
+export function RideJournal({vm,period,windowStart,windowLabel,onOpen}:{vm:W3RidesVm;period:W3RidePeriod;windowStart:string|null;windowLabel:string|null;onOpen:(id:number)=>void}){
  const [filter,setFilter]=useState<W3RideFilter>('all'),[query,setQuery]=useState(''),[search,setSearch]=useState(false),[limit,setLimit]=useState(12),[sort,setSort]=useState<'recent'|'distance'|'power'|'duration'>('recent')
  const shown=useMemo(()=>{
+  /** Ohne Fensteranfang wird nicht gefiltert: ein noch nicht geladener
+   *  Rhythmus darf keine Fahrten verschwinden lassen. Eine Fahrt OHNE Datum
+   *  faellt heraus, solange ein Fenster gilt -- wir behaupten keine
+   *  Zugehoerigkeit, die wir nicht pruefen koennen. */
+  const inWindow=(r:W3RideCard)=>!windowStart||(r.dateISO!=null&&r.dateISO.slice(0,10)>=windowStart.slice(0,10))
   const metric=(value:string)=>{const clean=value.replace(/\s/g,'').replace(',','.');if(clean.includes(':')){const [hours,minutes]=clean.split(':').map(Number);return (hours||0)+(minutes||0)/60}return Number.parseFloat(clean)||0}
-  const rows=vm.rides.filter(r=>(filter==='all'||filter==='indoor'&&r.indoor||filter==='outdoor'&&!r.indoor||filter==='race'&&r.race)&&`${r.title} ${r.dateLabel}`.toLocaleLowerCase('de').includes(query.trim().toLocaleLowerCase('de')))
+  const rows=vm.rides.filter(r=>inWindow(r)&&(filter==='all'||filter==='indoor'&&r.indoor||filter==='outdoor'&&!r.indoor||filter==='race'&&r.race)&&`${r.title} ${r.dateLabel}`.toLocaleLowerCase('de').includes(query.trim().toLocaleLowerCase('de')))
   if(sort==='recent')return rows
   return [...rows].sort((a,b)=>metric(b[sort==='distance'?'km':sort==='power'?'power':'dur'])-metric(a[sort==='distance'?'km':sort==='power'?'power':'dur']))
- },[vm.rides,query,filter,sort])
- return <section className="w3-ride-journal"><header className="w3-journal-heading"><div><h1>Deine Fahrten.</h1><span>{vm.count}</span></div><button className="w3-journal-icon" aria-label={search?'Suche schließen':'Fahrten suchen'} onClick={()=>{setSearch(!search);setQuery('')}}>{search?<X size={20}/>:<Search size={20}/>}</button></header>
+ },[vm.rides,query,filter,sort,windowStart])
+ return <section className="w3-ride-journal"><header className="w3-journal-heading"><div><h1>Deine Fahrten.</h1><span>{windowStart&&windowLabel?`${shown.length} ${shown.length===1?'Fahrt':'Fahrten'} \u00b7 ${windowLabel}`:vm.count}</span></div><button className="w3-journal-icon" aria-label={search?'Suche schließen':'Fahrten suchen'} onClick={()=>{setSearch(!search);setQuery('')}}>{search?<X size={20}/>:<Search size={20}/>}</button></header>
  {search&&<label className="w3-journal-search"><Search size={18}/><input autoFocus value={query} placeholder="Fahrt oder Datum suchen" aria-label="Fahrt oder Datum suchen" onChange={e=>{setQuery(e.target.value);setLimit(12)}}/></label>}
  <div className="w3-journal-filters" role="group" aria-label="Fahrten filtern">{([['all','Alle'],['outdoor','Outdoor'],['indoor','Indoor'],['race','Rennen']] as const).map(([key,label])=><button key={key} aria-pressed={filter===key} onClick={()=>{setFilter(key);setLimit(12)}}>{label}</button>)}</div>
  <div className="w3-journal-sort" role="group" aria-label="Fahrten sortieren"><ArrowDownUp size={14}/><span>Sortieren</span>{([['recent','Neueste'],['distance','Distanz'],['power','Leistung'],['duration','Dauer']] as const).map(([key,label])=><button key={key} aria-pressed={sort===key} onClick={()=>{setSort(key);setLimit(12)}}>{label}</button>)}</div>
  {vm.prAnnounce&&<button className="w3-journal-record" onClick={()=>onOpen(vm.prAnnounce!.id)}><span>{vm.prAnnounce.title.replace(' · ',' — ')}</span><ArrowUpRight size={18}/></button>}
- {shown.length?<><RideCard ride={shown[0]} hero onOpen={onOpen}/>{shown.length>1&&<div className="w3-journal-archive"><h2>Weitere Fahrten</h2>{shown.slice(1,limit).map((r,i)=><RideCard key={r.id??i} ride={r} onOpen={onOpen}/>)}</div>}{shown.length>limit&&<button className="w3-journal-more" onClick={()=>setLimit(n=>n+20)}>Weitere Fahrten laden <span>{shown.length-limit}</span></button>}</>:<div className="w3-journal-empty"><Bike size={44} strokeWidth={1}/><h2>{vm.rides.length?'Keine passende Fahrt':'Hier beginnt deine Geschichte.'}</h2><p>{vm.rides.length?'Wähle einen anderen Filter oder Suchbegriff.':'Deine synchronisierten Fahrten erscheinen hier.'}</p>{vm.rides.length>0&&<button onClick={()=>{setFilter('all');setQuery('')}}>Alle Fahrten zeigen</button>}</div>}
+ {shown.length?<><RideCard ride={shown[0]} hero onOpen={onOpen}/>{shown.length>1&&<div className="w3-journal-archive"><h2>Weitere Fahrten</h2>{shown.slice(1,limit).map((r,i)=><RideCard key={r.id??i} ride={r} onOpen={onOpen}/>)}</div>}{shown.length>limit&&<button className="w3-journal-more" onClick={()=>setLimit(n=>n+20)}>Weitere Fahrten laden <span>{shown.length-limit}</span></button>}</>:<div className="w3-journal-empty"><Bike size={44} strokeWidth={1}/><h2>{vm.rides.length?'Keine passende Fahrt':'Hier beginnt deine Geschichte.'}</h2><p>{vm.rides.length?(period==='season'?'Wähle einen anderen Filter oder Suchbegriff.':`In diesem Zeitraum liegt keine Fahrt. Stelle oben auf Saison, oder wähle einen anderen Filter.`):'Deine synchronisierten Fahrten erscheinen hier.'}</p>{vm.rides.length>0&&<button onClick={()=>{setFilter('all');setQuery('')}}>Alle Fahrten zeigen</button>}</div>}
  </section>
 }
-export function RideSummary({vm,rhythm,onSetGoal}:{vm:W3RidesVm;rhythm?:ActivityRhythm|null;onSetGoal:()=>void}){
- const [period,setPeriod]=useState<'season'|'month'|'week'>('season'),[selected,setSelected]=useState<number|null>(null),[open,setOpen]=useState(false)
+/** Der Kopf. Den Zeitraum BESITZT er nicht mehr -- er bekommt ihn und meldet
+ *  den Wechsel nach oben, damit die Liste denselben Ausschnitt zeigt. */
+export function RideSummary({vm,rhythm,period,onPeriod,onSetGoal}:{vm:W3RidesVm;rhythm?:ActivityRhythm|null;period:W3RidePeriod;onPeriod:(p:W3RidePeriod)=>void;onSetGoal:()=>void}){
+ const [selected,setSelected]=useState<number|null>(null),[open,setOpen]=useState(false)
  const win=rhythm?.[period],buckets=win?.buckets??vm.barMonths.map(m=>({km:m.km})),values=buckets.map(b=>b.km),picked=selected==null?null:buckets[selected]
  const label=(i:number)=>win?new Date(`${win.buckets[i].start}T12:00:00`).toLocaleDateString('de-DE',period==='season'?{month:'short'}:{day:'numeric',month:'short'}):`${vm.barMonths[i].label} ${vm.barMonths[i].year}`
  const meta=picked&&win?[['FAHRTEN',String(win.buckets[selected!].rides),''],['ZEIT',nf.format(win.buckets[selected!].hours),' h'],['HÖHENMETER',nf.format(win.buckets[selected!].elevation_m),' hm']]:win?[['FAHRTEN',String(win.rides),''],['ZEIT',nf.format(win.hours),' h'],['HÖHENMETER',nf.format(win.elevation_m),' hm']]:[['FAHRTEN',vm.count.replace(/\s*Fahrten.*$/,''),''],['SATTELZEIT',vm.saddleTime,' h'],['Ø LEISTUNG',vm.avgPower,' W']]
  const previous=values.length>1?values[values.length-2]:values[0]??0,current=values.at(-1)??0,trendDelta=previous?Math.round((current-previous)/previous*100):0,trend=trendDelta>3?'Aufbauend':trendDelta<-3?'Ruhiger':'Stabil'
- return <section className="w3-ride-summary" aria-label="Deine Kilometer"><header>{rhythm?<div role="group" aria-label="Zeitraum">{([['season','Saison'],['month','Monat'],['week','Woche']]as const).map(([key,text])=><button aria-pressed={period===key} key={key} onClick={()=>{setPeriod(key);setSelected(null)}}>{text}</button>)}</div>:<span>Letzte 12 Monate</span>}<button className="w3-journal-icon is-small" aria-label={open?'Kilometerdetails schließen':'Kilometerdetails öffnen'} aria-expanded={open} onClick={()=>setOpen(!open)}>{open?<Minus size={17}/>:<Plus size={17}/>}</button></header>
+ return <section className="w3-ride-summary" aria-label="Deine Kilometer"><header>{rhythm?<div role="group" aria-label="Zeitraum">{([['season','Saison'],['month','Monat'],['week','Woche']]as const).map(([key,text])=><button aria-pressed={period===key} key={key} onClick={()=>{onPeriod(key);setSelected(null)}}>{text}</button>)}</div>:<span>Letzte 12 Monate</span>}<button className="w3-journal-icon is-small" aria-label={open?'Kilometerdetails schließen':'Kilometerdetails öffnen'} aria-expanded={open} onClick={()=>setOpen(!open)}>{open?<Minus size={17}/>:<Plus size={17}/>}</button></header>
  <div className="w3-summary-main"><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div><RhythmGraph values={values} labels={label} selected={selected} onSelect={index=>setSelected(index)}/></div>
  <div className={`w3-summary-trend trend-${trend.toLowerCase()}`}><span>{period==='season'?'SAISON-TREND':period==='month'?'30-TAGE-TREND':'7-TAGE-TREND'}</span><strong>{trend}</strong><em>{trendDelta>=0?'+':''}{trendDelta}%</em></div>
  <div className="w3-summary-meta" aria-label="Zusammenfassung">{meta.map(([label,value,unit])=><span key={label}><small>{label}</small><strong>{value}<em>{unit}</em></strong></span>)}</div>

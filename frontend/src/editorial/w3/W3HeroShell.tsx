@@ -112,8 +112,15 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
         <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
           <div className={`w3-hero-slot${archive ? ' w3-hero-slot-archive' : ''}`} style={{
             position: 'relative',
+            // FAHRTEN RESERVIERTE DEN GANZEN SCHIRM FUER EINE BUEHNE, DIE ES
+            // NICHT ZEICHNET. Die Zeile darueber setzt `auto`, und die Zeile
+            // hier ueberschrieb es sofort wieder mit `100svh - 92px` samt
+            // `minHeight: 560px` -- waehrend die Buehne darin auf
+            // `display: none` steht. Zusammen mit `marginTop: 'auto'` am Panel
+            // ergab das rund 480 px Nichts zwischen Titel und Dock: man
+            // scrollte an einem leeren Bildschirm vorbei, um an die Fahrten zu
+            // kommen. Die Ueberschreibung ist raus; `auto` gilt jetzt wirklich.
             height: compact || archive ? 'auto' : 'calc(100dvh - 92px - env(safe-area-inset-bottom))',
-            ...(archive ? { height: 'calc(100svh - 92px - env(safe-area-inset-bottom))', minHeight: '560px' } : {}),
             display: 'flex', flexDirection: 'column',
             background: ground ?? T.heroBg,
           }}>
@@ -128,7 +135,10 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
             </div>
 
             <div style={{
-              position: 'relative', zIndex: 2, marginTop: 'auto',
+              // `marginTop: auto` schiebt das Panel an den Fuss einer Buehne,
+              // die ueber ihm steht. Auf Fahrten steht dort nichts, also gibt
+              // es auch nichts, wovon man sich abstossen muesste.
+              position: 'relative', zIndex: 2, marginTop: archive ? undefined : 'auto',
               // The bike stands on a floor line at 76 % of the stage; a panel
               // starting higher cuts across the machine beside it.
               padding: compact || archive ? '0 16px 8px' : '10px 16px 18px', flex: 'none',

@@ -13,10 +13,17 @@ import {RideJournal, RideSummary} from './W3RideJournal'
 import './w3.css'
 export type W3RideFilter = 'all' | 'outdoor' | 'indoor' | 'race'
 
+/** Saison / Monat / Woche -- der Zeitraum, den Kopf UND Liste teilen. */
+export type W3RidePeriod = 'season' | 'month' | 'week'
+
 export interface W3RideCard {
   id: number | null                 // real activity id → /e/w3-ride/:id
   title: string
   dateLabel: string                 // "TUE 12 AUG" (real)
+  /** Das echte Startdatum. `dateLabel` ist formatiert und deutsch; danach
+   *  zu filtern hiesse, auf einer Anzeige zu rechnen. Der Zeitraum-Filter
+   *  vergleicht dieses Feld gegen den Fensteranfang, den der Server nennt. */
+  dateISO: string | null
   km: string                        // "40.34" | "—"
   speed: string                     // "31.5" | "—"
   power: string                     // "248" | "—"
@@ -67,9 +74,26 @@ export interface W3RidesVm {
 export default function W3RidesView({vm}:{vm:W3RidesVm}){
  const nav=useNavigate(),[goalSheet,setGoalSheet]=useState(false)
  const {data:rhythm}=useActivityRhythm()
- const dock=<RideSummary vm={vm} rhythm={rhythm} onSetGoal={()=>setGoalSheet(true)}/>
+ /**
+  * DER ZEITRAUM GEHOERT DER SEITE, NICHT DEM KOPF.
+  *
+  * Saison / Monat / Woche sass als `useState` IN `RideSummary`. Der Kopf hat
+  * damit umgeschaltet und alles an sich selbst neu bewertet -- die Liste
+  * darunter ist ein Geschwister und konnte den Zustand gar nicht sehen. Wer
+  * auf WOCHE stellte, bekam eine Wochenzahl ueber allen Fahrten des Jahres:
+  * zwei Bedienmodelle auf einem Bildschirm, die nichts voneinander wussten.
+  *
+  * Eine Ebene hoeher lesen ihn beide.
+  */
+ const [period,setPeriod]=useState<W3RidePeriod>('season')
+ /** DER FENSTERANFANG IST DER DES SERVERS, nicht einer, den wir hier nachbauen.
+  *  Der erste Balken eines Korns oeffnet sein Fenster, also filtert die Liste
+  *  gegen genau die Grenze, aus der die Zahl darueber gerechnet ist. Fehlt der
+  *  Rhythmus noch, filtert nichts -- lieber alle Fahrten als die falschen. */
+ const windowStart=rhythm?.[period]?.buckets?.[0]?.start??null
+ const dock=<RideSummary vm={vm} rhythm={rhythm} period={period} onPeriod={setPeriod} onSetGoal={()=>setGoalSheet(true)}/>
  const {inShell,portal}=useHeroPanel(dock)
- const content=<RideJournal vm={vm} onOpen={id=>nav(`/e/w3-ride/${id}`)}/>
+ const content=<RideJournal vm={vm} period={period} windowStart={windowStart} windowLabel={rhythm?.[period]?.label??null} onOpen={id=>nav(`/e/w3-ride/${id}`)}/>
  const sheet=goalSheet?<SeasonGoalSheet onClose={()=>setGoalSheet(false)}/>:null
  if(inShell)return <>{portal}{content}{sheet}</>
  return <div className="w3-root"><div className="w3-frame" style={{fontFamily:FONT,minHeight:'100dvh',background:T.bg}}><W3StatusBar/><W3TopBar title="Fahrten"/><div style={{padding:'8px 20px 0'}}>{dock}</div>{content}<W3TabBar/>{sheet}</div></div>
