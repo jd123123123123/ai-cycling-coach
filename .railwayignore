@@ -1,0 +1,15 @@
+# NUR IM WURZELVERZEICHNIS. Ohne fuehrenden Schraegstrich greift `*.png` auch
+# in `backend/app/assets` und `frontend/public/w3` -- 16 MB Artwork, das der
+# Build wirklich braucht. Das Dockerfile baut aus frontend/ und backend/;
+# alles hier drin erreicht ihn nie.
+/docs/
+/.planning/
+/ios-app/
+/review-tools/
+/.claude/
+/*.jpeg
+/*.jpg
+/*.png
+/*.md
+/*.csv
+/*.html

@@ -26,6 +26,26 @@ function GoalArt({goal}:{goal:string}){
  const bars=goal==='ftp'?[35,50,70,46,88,113,76,134,152]:goal==='vo2'?[32,47,82,117,89,141,166,111,70]:[64,75,81,85,86,85,83,80,76]
  return <svg viewBox="0 0 340 210" aria-hidden="true"><defs><linearGradient id={id} x2=".8" y2="1"><stop stopColor={T.acidLite}/><stop offset=".35" stopColor={T.acid}/><stop offset="1" stopColor={T.acidDeep}/></linearGradient></defs><ellipse cx="205" cy="187" rx="125" ry="15" fill={T.bg}/>{bars.map((h,i)=><motion.g key={i} initial={false} animate={{y:183-h}} transition={{duration:reduced?0:.45,delay:reduced?0:i*.025}}><rect x={50+i*28} width="20" height={h} rx="7" fill={i<2?T.surface2:`url(#${id})`}/><rect x={52+i*28} y="2" width="16" height="4" rx="2" fill={T.ink} opacity={i<2?.05:.45}/></motion.g>)}</svg>
 }
+/** Die Beschriftung nennt Soll und Ist getrennt und erfindet nichts. Ohne
+ *  Fahrt heisst es "nicht gefahren", nicht "0 TSS gefahren" -- eine Null ist
+ *  eine Messung, eine Luecke ist keine. */
+function vesselLabel(b:{idx:number;planned:number;actual:number|null;over:boolean}){
+ const soll=`Woche ${b.idx}: ${b.planned} TSS geplant`
+ if(b.actual==null) return `${soll}, nicht gefahren`
+ const pct=b.planned>0?Math.round(b.actual/b.planned*100):null
+ return `${soll}, ${b.actual} TSS gefahren${pct!=null?` (${pct} %)`:''}${b.over?', ueber dem Ziel':''}`
+}
+/** Das Gefaess: Hoehe = geplante Last, Fuellung = gefahrene. Leer heisst leer. */
+function Vessel({b,max,animate,reduced}:{b:{planned:number;fill:number|null;over:boolean};max:number;animate:boolean;reduced:boolean|null}){
+ const h=max>0?Math.max(8,b.planned/max*100):8
+ const fill=b.fill==null?null:`${Math.max(4,b.fill*100)}%`
+ return <span className="w3-plan-vessel-slot"><span className="w3-plan-vessel" data-over={b.over||undefined} style={{height:`${h}%`}}>
+  {fill!=null&&(animate
+    ?<motion.i initial={false} animate={{height:fill}} transition={{duration:reduced?0:.35}}/>
+    :<i style={{height:fill}}/>)}
+ </span></span>
+}
+
 export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSession,onCreatedDone,weekOffset,onWeekOffset,planEnd,planStart,goalDate,initialCompose=false,onComposeClose,priorPlanCompleted=false,priorPlanEnd=null,loading=false,previewProgress}:{vm:W3PlanVm;state:State;userId?:number;onRebuild:W3PlanActions['onRebuild'];onOpenSession:(iso:string)=>void;onCreatedDone:()=>void;planEnd?:string|null;planStart?:string|null;initialCompose?:boolean;onComposeClose?:()=>void;priorPlanCompleted?:boolean;priorPlanEnd?:string|null;goalDate?:string|null;weekOffset:number;onWeekOffset:(offset:number)=>void;loading?:boolean;previewProgress?:ProgressExplorer}){
  const nav=useNavigate(),reduced=useReducedMotion()
  const [view,setView]=useState<'plan'|'profile'>('plan'),[goal,setGoal]=useState('ftp'),[day,setDay]=useState(0),[sheet,setSheet]=useState<'adjust'|'adaptation'|'why'|'profile'|'progress'|null>(null),[intro,setIntro]=useState(false)
@@ -57,7 +77,9 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const selected=sessions[day]
  const title=vm.eventName==='Kein Ziel gesetzt'?'Dein Aufbauplan':vm.eventName
  const progress=Math.min(vm.totalWeeks,Math.max(1,vm.planWeekNum))
- const max=Math.max(1,...vm.weekBars.map(b=>b.tss??0))
+ // Die Skala ist die GEPLANTE Last. Sie haengt nicht daran, wie gefahren
+ // wurde -- sonst verschoebe eine starke Woche rueckwirkend alle anderen.
+ const max=Math.max(1,...vm.weekBars.map(b=>b.planned))
  const currentIndex=Math.max(0,vm.planWeekNum-1)
  const currentBar=currentIndex+weekOffset
  const hasWorkout=!!selected?.title
@@ -117,7 +139,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
    </div>
    <div className="w3-plan-overview-load">
      <div className="w3-plan-overview-load-head"><span>Belastung über den Plan</span><span>locker → intensiv</span></div>
-     <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><span key={i} className="w3-plan-week-track"><i style={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} data-rest={b.isRest}/></span>)}</div>
+     <div className="w3-plan-week-beams" role="img" aria-label={`Geplante Wochenlast: ${vm.weekBars.map(b=>`${b.planned}`).join(', ')} TSS`}>{vm.weekBars.map((b,i)=><Vessel key={i} b={b} max={max} animate={false} reduced={reduced}/>)}</div>
    </div>
  </section>
  <section className="w3-plan-development" aria-labelledby="w3-plan-development-title">
@@ -128,7 +150,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <section className="w3-plan-journey">
    <div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.block?.weekOfBlock ?? vm.planWeekLabel}</span></div>
    <div className="w3-plan-block-summary"><strong>{vm.block?.phase ?? 'Grundlage'}</strong><span>{vm.block?.dateRange ?? vm.weekRangeLabel}</span></div>
-   <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={`Woche ${i+1}: ${b.tss??'keine'} TSS${b.kind==='done'?', gefahren':', geplant'}`} aria-pressed={currentBar===i} data-selected={currentBar===i} disabled={i<currentIndex||i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><span className="w3-plan-week-track"><motion.i initial={false} animate={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} transition={{duration:reduced?0:.35}} data-rest={b.isRest} data-past={i<currentIndex}/></span><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
+   <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={vesselLabel(b)} aria-pressed={currentBar===i} data-selected={currentBar===i} data-past={i<currentIndex} disabled={i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><Vessel b={b} max={max} animate reduced={reduced}/><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
    <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
  </section>
  <section className="w3-plan-first-week">
@@ -144,7 +166,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
    <W3PowerProfile data={progressData}/>
  </section>
  <section className="w3-plan-journey"><div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.totalWeeks} Wochen · TSS</span></div>
- <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={`Woche ${i+1}: ${b.tss??'keine'} TSS${b.kind==='done'?', gefahren':', geplant'}`} aria-pressed={currentBar===i} data-selected={currentBar===i} disabled={i<currentIndex||i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><span className="w3-plan-week-track"><motion.i initial={false} animate={{height:`${b.tss==null?4:Math.max(6,b.tss/max*100)}%`}} transition={{duration:reduced?0:.35}} data-rest={b.isRest} data-past={i<currentIndex}/></span><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
+ <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={vesselLabel(b)} aria-pressed={currentBar===i} data-selected={currentBar===i} data-past={i<currentIndex} disabled={i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><Vessel b={b} max={max} animate reduced={reduced}/><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
  <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
  <div className="w3-plan-selected-week"><button aria-label="Vorherige Woche" disabled={weekOffset===0} onClick={()=>onWeekOffset(weekOffset-1)}><ChevronLeft size={17}/></button><span>{vm.weekRangeLabel}</span><button aria-label="Nächste Woche" disabled={weekOffset>=Math.min(12,vm.totalWeeks-progress)} onClick={()=>onWeekOffset(weekOffset+1)}><ChevronRight size={17}/></button></div>
  </section>

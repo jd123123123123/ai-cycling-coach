@@ -246,19 +246,25 @@ function PhaseRail({ phases, currentWeek, totalWeeks }: { phases: PhaseSeg[]; cu
 }
 
 // ── 12-week chart ──
+/**
+ * NICHT DIE LIVE-REIHE. Die Planseite rendert `W3PlanExperience`; dieses
+ * Diagramm ist nur ueber `W3PlanPreview` und die `review-plan/`-Werkbank
+ * erreichbar. Es folgt der neuen Form -- Hoehe = geplant -- damit beide
+ * dieselbe Aussage machen, bleibt aber bewusst schlicht.
+ */
 function WeekChart({ bars }: { bars: WeekBar[] }) {
   const reduce = useReducedMotion()
-  const max = Math.max(1, ...bars.map((b) => b.tss ?? 0))
+  const max = Math.max(1, ...bars.map((b) => b.planned))
   const H = 118
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', gap: 5, alignItems: 'flex-end', height: H }}>
         {bars.map((b, i) => {
-          const h = Math.max(4, Math.round(((b.tss ?? 0) / max) * H))
+          const h = Math.max(4, Math.round((b.planned / max) * H))
           const isCur = b.kind === 'current'
-          const fill = isCur ? T.acid
-            : b.kind === 'done' ? T.d4
-              : b.kind === 'rest' ? T.d2 : T.d2
+          // Gefahren, aber nicht gemessen, gibt es nicht mehr: `actual === null`
+          // bleibt ungefuellt statt den Zielwert vorzutaeuschen.
+          const fill = isCur ? T.acid : b.actual != null ? T.d4 : T.d2
           return (
             <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: h }} transition={grow(i * 0.03)}
@@ -276,7 +282,7 @@ function WeekChart({ bars }: { bars: WeekBar[] }) {
         {bars.map((b, i) => (
           <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
             <span style={{ fontSize: 9.5, fontWeight: 600, color: b.kind === 'current' ? T.acid : T.quiet }}>{b.idx}</span>
-            {b.isRest && <div style={{ width: 3, height: 3, borderRadius: 100, background: T.mid }} />}
+            {b.over && <div style={{ width: 3, height: 3, borderRadius: 100, background: T.acid }} />}
           </div>
         ))}
       </div>

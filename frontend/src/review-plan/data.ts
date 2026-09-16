@@ -27,7 +27,7 @@ export const beforeVm:W3PlanVm = {
  phases:phaseNames.map((name,i)=>({name,weeks:['W1–3','W4–6','W7','W8'][i],active:i===1})),railProgress:.5,planWeekNum:5,totalWeeks:8,
  reqSummary:'Länger Leistung halten',daysRight:'11. Oktober',phaseOfTotal:'Phase 2 von 4',
  block:{phase:'Intensiv',dateRange:'7.–27. September',weekOfBlock:'Woche 2 von 3',text:'Die intensiven Einheiten setzen einen gezielten Reiz. Die langen ruhigen Fahrten erhalten deine Ausdauer.',restNote:'Woche 8 ist eine Erholungswoche',tags:['Sweetspot','VO₂max'],next:'Danach: Form'},
- avgTss:'271',weekBars:loads.map((tss,i)=>({idx:i+1,tss,kind:i===4?'current':i<4?'done':'planned',isRest:i===3||i===7})),
+ avgTss:'271',weekBars:loads.map((t,i)=>{const planned=Math.round(t);const actual=i===0?Math.round(planned*1.08):i===1?Math.round(planned*0.72):i===2?planned:null;const fill=actual==null||planned<=0?null:Math.min(1,actual/planned);return{idx:i+1,planned,actual,fill,over:actual!=null&&actual>planned,kind:(i===4?'current':i<4?'done':'planned') as 'current'|'done'|'planned'}}),
  weekRangeLabel:weekDate(4),weekBadge:'0 / 4',weekStats:[{value:'5:30 h',label:'Zeit'},{value:'330',label:'TSS'},{value:'4',label:'Einheiten'},{value:'—',label:'Höhenmeter'}],
  dayStrip:sessions.map((s,i)=>({letter:days[i],date:String(14+i),frac:s.tss,isToday:i===0,isRest:!s.minutes})),
  daySessions:sessions.map((s,i)=>({title:s.minutes?s.title:null,weekday:days[i],dateLabel:`${days[i]}, ${14+i}. Sep.`,isToday:i===0,isPast:false,dur:s.minutes?fmtTime(s.minutes):null,tss:String(s.tss),targetW:`${s.power} W`,ftpPct:`${s.percent}%`,bars:s.heights.map(w=>({w,work:w>.8}))})),

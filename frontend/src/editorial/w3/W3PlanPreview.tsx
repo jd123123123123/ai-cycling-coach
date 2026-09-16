@@ -35,12 +35,24 @@ const FIXTURE: W3PlanVm = {
     next: 'Danach: Spezifisch ab 8. Sep – Renntempo am Berg',
   },
   avgTss: '507',
-  weekBars: TARGETS.map((t, i) => ({
-    idx: i + 1,
-    tss: t,
-    kind: i === 4 ? 'current' : i < 4 ? 'done' : (i === 3 || i === 7 || i === 11 ? 'rest' : 'planned'),
-    isRest: i === 3 || i === 7 || i === 11,
-  })),
+  // DIE VORSCHAU ZEIGT ALLE VIER ZUSTAENDE, statt einen davon vorzufuehren:
+  // uebergelaufen, deutlich zu wenig, genau getroffen, gar nicht gefahren.
+  // Eine Fixture, die nur den Normalfall kennt, verbirgt genau die Faelle,
+  // wegen derer diese Reihe umgebaut wurde.
+  weekBars: TARGETS.map((t, i) => {
+    const planned = Math.round(t)
+    const actual = i === 0 ? Math.round(planned * 1.08)
+      : i === 1 ? Math.round(planned * 0.72)
+        : i === 2 ? planned
+          : i < 4 ? null
+            : null
+    const fill = actual == null || planned <= 0 ? null : Math.min(1, actual / planned)
+    return {
+      idx: i + 1, planned, actual, fill,
+      over: actual != null && actual > planned,
+      kind: (i === 4 ? 'current' : i < 4 ? 'done' : 'planned') as 'current' | 'done' | 'planned',
+    }
+  }),
   weekRangeLabel: 'Mo 11. – So 17. August · Woche 2 im Aufbau',
   weekBadge: '1 / 6',
   weekStats: [

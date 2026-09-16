@@ -130,3 +130,27 @@
  .state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid{margin-top:8px;padding-top:8px}.state-ended .w3-plan-finish-hero>.w3-plan-finish-total-grid strong{font-size:13px}
  .state-ended .w3-plan-finish-detail-link{margin-top:8px;padding-top:8px}
 }
+
+/* ── DIE WOCHEN ALS GEFÄSSE ────────────────────────────────────────────────
+   Die Höhe ist die GEPLANTE Last, die Füllung die gefahrene. Vier fast gleich
+   hohe Balken konnten nicht sagen, ob eine Woche getroffen wurde; ein Pegel im
+   Gefäß kann es ohne Legende. Leer heißt leer -- nicht gefahren wird nicht
+   gezeichnet. Über dem Ziel wächst nichts: das Gefäß bekommt eine Lichtkante
+   und strahlt über den Rand, damit der Maßstab ehrlich bleibt. */
+.w3-plan-week-beams>.w3-plan-vessel-slot{flex:1;min-width:0}
+.w3-plan-vessel-slot{height:100%;width:100%;max-width:24px;display:flex;align-items:flex-end;margin:0 auto}
+/* Eine Kapsel braucht Laenge, sonst wird sie ein Kreis: 24 px breit auf
+   rund 70 px Hoehe. Die aktive Reihe bekommt die Hoehe dafuer. */
+.state-active .w3-plan-week-beams{height:88px}
+.state-created .w3-plan-overview .w3-plan-week-beams{height:74px}
+.w3-plan-vessel{position:relative;width:100%;border-radius:999px;overflow:hidden;
+  background:linear-gradient(#ffffff1c,#ffffff09);min-height:14px}
+.w3-plan-vessel>i{position:absolute;left:0;right:0;bottom:0;display:block;border-radius:999px;
+  background:linear-gradient(#eaff8f,var(--plan-acid) 42%,#8fbf00)}
+/* Ausgewählt: ein Ring am Gefäß, keine erfundene Füllung. */
+.w3-plan-week-beams>button[data-selected=true] .w3-plan-vessel{box-shadow:inset 0 0 0 1.4px #bfff3c66}
+.w3-plan-week-beams>button[data-selected=true]{color:var(--plan-ink)}
+/* Übergelaufen: Lichtkante plus Schein. Kein zweites Zeichen, kein höherer Balken. */
+.w3-plan-vessel[data-over]{overflow:visible;box-shadow:0 0 0 1.7px #eaff8f,0 0 18px #bfff3c4d}
+.w3-plan-vessel[data-over]>i{border-radius:999px}
+@media(prefers-reduced-motion:reduce){.w3-plan-vessel,.w3-plan-vessel>i{transition:none}}

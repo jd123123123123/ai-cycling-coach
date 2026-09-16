@@ -254,23 +254,41 @@ export function phaseBlurb(phase: 'Grundlage' | 'Aufbau' | 'Spezifisch' | 'Taper
   }
 }
 
-// ── 12-week weekly-TSS chart ────────────────────────────────────────────────
-export type WeekKind = 'done' | 'planned' | 'current' | 'rest'
-export interface WeekBar { idx: number; tss: number | null; kind: WeekKind; isRest: boolean }
-/** Detect a recovery/rest week: a local dip ≥ 12% below both neighbours. */
-function isRestWeek(targets: number[], i: number): boolean {
-  const cur = targets[i]
-  const prev = targets[i - 1] ?? cur
-  const next = targets[i + 1] ?? cur
-  return cur < prev * 0.88 && cur <= next * 0.95
-}
+// ── Die Wochen des Blocks: Gefäße und ihre Füllung ────────────────────
 /**
- * Build the 12(+)-week chart bars. `targets` is the REAL planned weekly-TSS
- * series (from /plan/build weekly_tss_targets); `actualByWeek[i]` is the real
- * ridden TSS summed for that plan week (null for weeks with no data / future).
- * Past weeks render "done" (actual), the current week "current", future weeks
- * "planned"; recovery weeks are flagged for the dot marker.
+ * ZWEI GRÖSSEN, ZWEI FELDER. Vorher stand beides in einem `tss`: vergangene
+ * Wochen trugen die GEFAHRENE Last, künftige die GEPLANTE, auf einer Skala und
+ * im selben Grau. Damit war die eine Frage, für die es diese Reihe gibt --
+ * habe ich die Woche getroffen? -- nicht darstellbar.
+ *
+ * `planned` ist die Höhe des Gefäßes und immer echt. `actual` ist die Füllung
+ * und darf `null` sein.
+ *
+ * UND `?? t` IST WEG. Eine vergangene Woche ohne Fahrt zeichnete den Zielwert
+ * in voller Höhe und meldete ihn dem Screenreader als "gefahren" -- eine
+ * erfundene Zahl, die als Messung auftrat. Sie ist jetzt `null`, das Gefäß
+ * bleibt leer, und die Beschriftung sagt "nicht gefahren".
+ *
+ * DIE RUHEWOCHE WIRD NICHT MEHR GERATEN. `isRestWeek` erkannte Erholung an
+ * einem Einbruch von >= 12 % gegen die Nachbarn; eine harte Woche zwischen zwei
+ * härteren bekam dasselbe Etikett. Der Plan kennt seine Phasen selbst, und sie
+ * stehen zwei Zeilen tiefer als Label. Ein kurzes Gefäß zeigt den Taper ohne
+ * Vermutung.
  */
+export type WeekKind = 'done' | 'planned' | 'current'
+export interface WeekBar {
+  idx: number
+  /** Die geplante Wochenlast in TSS. Höhe des Gefäßes. */
+  planned: number
+  /** Die gefahrene Last, oder `null` für "nicht gefahren". Nie ein Ersatzwert. */
+  actual: number | null
+  /** `actual / planned`, gedeckelt bei 1 — die Füllhöhe. `null` ohne Fahrt. */
+  fill: number | null
+  /** Über dem Ziel. Das Gefäß läuft über, statt höher zu werden. */
+  over: boolean
+  kind: WeekKind
+}
+
 export function buildWeeklyBars(
   targets: number[] | null,
   currentIdx: number,
@@ -278,12 +296,14 @@ export function buildWeeklyBars(
 ): WeekBar[] {
   if (!targets || targets.length === 0) return []
   return targets.map((t, i) => {
-    const rest = isRestWeek(targets, i)
-    let kind: WeekKind
-    let tss: number | null
-    if (i === currentIdx) { kind = 'current'; tss = t }
-    else if (i < currentIdx) { kind = rest ? 'rest' : 'done'; tss = actualByWeek[i] ?? t }
-    else { kind = rest ? 'rest' : 'planned'; tss = t }
-    return { idx: i + 1, tss: tss != null ? Math.round(tss) : null, kind, isRest: rest }
+    const planned = Math.round(t)
+    const raw = actualByWeek[i]
+    // Streng auf Zahlen geprüft: etwas, das sich zufällig in ein Float wandeln
+    // lässt, darf hier keine Messung werden.
+    const actual = typeof raw === 'number' && Number.isFinite(raw) ? Math.round(raw) : null
+    const kind: WeekKind = i === currentIdx ? 'current' : i < currentIdx ? 'done' : 'planned'
+    const fill = actual == null || planned <= 0 ? null : Math.min(1, actual / planned)
+    return { idx: i + 1, planned, actual, fill, over: actual != null && planned > 0 && actual > planned, kind }
   })
 }
+
