@@ -388,3 +388,47 @@ describe('reward-layer fields', () => {
     expect(isPresent(model.missedYesterday)).toBe(false)
   })
 })
+
+describe('Bereitschaft: der eigene Rechner springt ein, wo die Uhr nichts liefert', () => {
+  /**
+   * In der Produktion gemessen: ein Fahrer mit 93 Tagen Ruhepuls und 0 Tagen
+   * `training_readiness` -- seine Uhr liefert Garmins proprietaeres Feld
+   * ueberhaupt nicht. Die Kachel sagte ihm 93 Tage lang "Noch keine Messung",
+   * waehrend `GET /readiness/decision` ihn mit 72 bewertete und "Schlaf 3,2 h,
+   * dein Schnitt ist 6,8 h" als Treiber nannte.
+   */
+  it('nimmt Garmins Wert, wo es ihn gibt', () => {
+    const m = buildTodayModel(base({
+      snapshot: { training_readiness: 54 } as never,
+      decisionReadiness: 72,
+    }))
+    expect(isPresent(m.readiness) && m.readiness.value.score).toBe(54)
+  })
+
+  it('faellt auf den eigenen Wert zurueck, wo die Uhr nichts liefert', () => {
+    const m = buildTodayModel(base({
+      snapshot: { training_readiness: null } as never,
+      decisionReadiness: 72,
+    }))
+    expect(isPresent(m.readiness) && m.readiness.value.score).toBe(72)
+  })
+
+  it('bleibt ehrlich leer, wenn beide Quellen schweigen', () => {
+    const m = buildTodayModel(base({
+      snapshot: { training_readiness: null } as never,
+      decisionReadiness: null,
+    }))
+    expect(isPresent(m.readiness)).toBe(false)
+  })
+
+  it('zeigt KEINE Tagesdifferenz, wenn heute und gestern aus verschiedenen Quellen kommen', () => {
+    // Sonst misst die Subtraktion nicht die Veraenderung des Fahrers, sondern
+    // den Abstand zweier Messverfahren.
+    const m = buildTodayModel(base({
+      snapshot: { training_readiness: null } as never,
+      decisionReadiness: 72,
+      yesterdayMetric: { date: '2026-09-16', training_readiness: 60 } as never,
+    }))
+    expect(isPresent(m.readiness) && m.readiness.value.deltaVsYesterday).toBeNull()
+  })
+})

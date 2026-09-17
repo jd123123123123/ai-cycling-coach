@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useAdaptive } from '../../hooks/useAdaptive'
 import { useCoachBrief } from '../../hooks/useCoachBrief'
 import { useDailyMetrics } from '../../hooks/useDailyMetrics'
+import { useReadinessDecision } from '../../hooks/useReadinessDecision'
 import { useActivitiesRange } from '../../hooks/useActivitiesRange'
 import { useMorningHealthCheck } from '../../hooks/useMorningHealthCheck'
 import { usePlannedWorkouts } from '../../hooks/usePlannedWorkouts'
@@ -219,6 +220,24 @@ export interface TodayModel {
 export interface TodayModelInputs {
   now: Date
   state: DayState
+  /**
+   * Der Bereitschaftswert aus `GET /readiness/decision`, oder null.
+   *
+   * ES IST NICHT DER RUECKFALL, DER HIER EINMAL AUSGEBAUT WURDE. Der alte
+   * griff auf die ADAPTIVE ENGINE zurueck und setzte eine selbstbewusste Zahl
+   * in die Kachel, waehrend `W3ReadinessDecision` zwei Bloecke tiefer ehrlich
+   * ablehnte -- zwei Flaechen, die sich an genau den Morgen widersprachen, auf
+   * die es ankommt. Dieser hier liest DIESELBE Quelle wie dieser Block. Sie
+   * koennen sich nicht widersprechen, weil es eine Zahl ist.
+   *
+   * Gebraucht wird er fuer Uhren, die Garmins proprietaeres
+   * `training_readiness` gar nicht liefern. Gemessen in der Produktion: ein
+   * Fahrer mit 93 Tagen Ruhepuls, 0 Tagen `training_readiness` -- und einer
+   * Kachel, die ihm seit 93 Tagen "Noch keine Messung" sagte, waehrend die
+   * Entscheidung ihn mit 72 bewertete und "Schlaf 3,2 h, dein Schnitt ist
+   * 6,8 h" als Treiber nannte.
+   */
+  decisionReadiness?: number | null
   snapshot: TodaySnapshotResponse | null | undefined
   yesterdayMetric: DailyMetric | null
   todayMetric: DailyMetric | null
@@ -408,7 +427,11 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
       : t('heroReadinessPendingHeadline')
     : null
 
-  const todayReadiness = snapshot?.training_readiness ?? null
+  // Garmins eigenes Feld zuerst -- wo es kommt, ist es die Zahl, die der
+  // Fahrer auch auf der Uhr sieht, und zwei verschiedene Zahlen fuer dasselbe
+  // waeren schlimmer als eine fehlende. Erst wo es NIE kommt, rechnet die App
+  // selbst: aus Ruhepuls, Schlafdauer und Belastung.
+  const todayReadiness = snapshot?.training_readiness ?? inputs.decisionReadiness ?? null
   const readiness = readinessWithheld
     ? missing<{ score: number; deltaVsYesterday: number | null }>(
       readinessGate === 'stale'
@@ -418,7 +441,12 @@ export function buildTodayModel(inputs: TodayModelInputs): TodayModel {
     : fromNullable(
       todayReadiness === null ? null : {
         score: todayReadiness,
-        deltaVsYesterday: yesterdayMetric?.training_readiness != null
+        // KEINE DIFFERENZ ZWISCHEN ZWEI VERSCHIEDENEN GROESSEN. Gestern kommt
+        // aus Garmins `training_readiness`; kommt HEUTE aus dem eigenen
+        // Rechner, misst die Subtraktion nicht die Veraenderung des Fahrers,
+        // sondern den Abstand zweier Messverfahren. Dann lieber nichts.
+        deltaVsYesterday: snapshot?.training_readiness != null
+          && yesterdayMetric?.training_readiness != null
           ? todayReadiness - yesterdayMetric.training_readiness
           : null,
       },
@@ -938,7 +966,14 @@ export function useTodayModel(stateOverride?: DayState): TodayModel {
     || pmcQuery.isLoading || briefQuery.isLoading || weatherQuery.isLoading
     || activitiesQuery.isLoading || healthQuery.isLoading
 
+  // Dieselbe Quelle wie `W3ReadinessDecision` zwei Bloecke tiefer -- damit die
+  // beiden Flaechen dieselbe Zahl zeigen, statt sich zu widersprechen. Wird
+  // nur gebraucht, wo Garmins eigenes Feld nie kommt.
+  const decisionQuery = useReadinessDecision()
   const inputs: TodayModelInputs = {
+    decisionReadiness: decisionQuery.data && !decisionQuery.data.withheld
+      ? (decisionQuery.data.readiness_score ?? null)
+      : null,
     now,
     state,
     snapshot: snapshotQuery.data,
