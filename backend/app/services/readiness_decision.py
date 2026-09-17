@@ -141,7 +141,15 @@ _STATE_RANK = {"recover": 0, "easy": 1, "quality": 2, "hard": 3}
 
 #: PlanAdaptation signals that are MEASUREMENTS. `illness` is a self-report,
 #: not something a wearable measured, so it never sources this receipt.
-_MEASURED_SIGNALS = ("short_sleep_low_hrv",)
+#:
+#: `readiness_decision` gehoert hierher, seit R6 (`readiness_applied`) die
+#: Entscheidung wirklich anwendet. Ohne diesen Eintrag findet die Entscheidung
+#: ihr EIGENES Vorher-Bild nicht: sie faellt auf den `recomputed`-Pfad zurueck
+#: und rechnet die Gegenrechnung an einer Planzeile nach, die bereits
+#: abgestuft ist -- `session_planned` wird dann gleich `session_now`, und der
+#: Beleg, WAS ersetzt wurde, geht verloren. In der Produktion beobachtet,
+#: unmittelbar nachdem R6 zum ersten Mal gefeuert hatte.
+_MEASURED_SIGNALS = ("short_sleep_low_hrv", "readiness_decision")
 
 
 # ======================================================================

@@ -128,3 +128,21 @@ async def test_ein_fehler_im_urteil_kippt_den_lauf_nicht():
         out = await engine._rule_readiness(AsyncMock(), snap, SimpleNamespace())
     assert out is None
     log.assert_not_awaited()
+
+
+def test_das_eigene_signal_zaehlt_als_messung():
+    """Sonst findet die Entscheidung ihr EIGENES Vorher-Bild nicht.
+
+    `_MEASURED_SIGNALS` entscheidet, welche Adaptations-Zeilen die
+    Gegenrechnung liefern duerfen. Fehlt `readiness_decision`, faellt
+    `compute_readiness_decision` auf den `recomputed`-Pfad zurueck und
+    rechnet an einer Planzeile nach, die R6 bereits abgestuft HAT --
+    `session_planned` wird gleich `session_now`, und der Fahrer sieht nicht
+    mehr, was ersetzt wurde. Genau das war in der Produktion zu sehen,
+    unmittelbar nachdem die Regel zum ersten Mal gefeuert hatte.
+    """
+    from app.services.readiness_decision import _MEASURED_SIGNALS
+
+    assert "readiness_decision" in _MEASURED_SIGNALS
+    # Selbstauskunft bleibt draussen: eine Krankmeldung hat kein Geraet gemessen.
+    assert "illness" not in _MEASURED_SIGNALS
