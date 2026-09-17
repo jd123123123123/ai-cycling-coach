@@ -853,6 +853,99 @@ async def _push_today_change(
 
 # ─── Entry point ─────────────────────────────────────────────────────────────
 
+async def _rule_readiness(db: AsyncSession, snap: _Snapshot, profile) -> dict | None:
+    """R6 — die Bereitschaftsentscheidung ANWENDEN, statt sie nur anzuzeigen.
+
+    `GET /readiness/decision` rechnet laengst ein vollstaendiges Urteil samt
+    Beleg: welche Einheit heute stehen sollte, welche der Plan vorsah, und der
+    eine gemessene Wert, der es bewegt hat. Der Endpunkt ist read-only und sein
+    Docstring sagt, der CLIENT solle es anwenden -- nur hat das nie jemand
+    verdrahtet. In der Produktion gemessen: `changed: true`, `can_modify: true`,
+    `applied: FALSE`, taeglich, fuer jeden Fahrer. Das Urteil stand da und der
+    Plan blieb, wie er war.
+
+    WARUM ZULETZT IN DER KETTE. `illness` (Selbstauskunft) schlaegt alles,
+    und `sleep_hrv`/`missed_key`/`extra_load` sind enger gefasst und laenger
+    erprobt. Diese Regel greift genau dort, wo bisher NICHTS griff: ein
+    gedrueckter Bereitschaftswert ohne die Zwei-Signal-Konjunktion, die R2
+    verlangt. Genau der Fall, in dem ein Fahrer grau/54 sah und trotzdem ein
+    VO2-Intervall im Plan stand.
+
+    KEINE ZWEITE MEINUNG. Die Regel rechnet nichts nach, sondern wendet an,
+    was `compute_readiness_decision` entschieden hat -- zwei Stellen, die
+    dasselbe entscheiden, laufen in diesem Repo auseinander, und dann
+    widersprechen sich zwei Flaechen an genau den Morgen, auf die es ankommt.
+    """
+    from app.services.readiness_decision import compute_readiness_decision
+
+    try:
+        d = await compute_readiness_decision(db, snap.user_id, profile, locale="de")
+    except Exception:  # noqa: BLE001 — ein Urteilsfehler darf den Lauf nie kippen
+        logger.exception("readiness decision failed (user %s) — rule skipped", snap.user_id)
+        return None
+
+    # Zurueckgehalten heisst zurueckgehalten: ein Urteil auf veralteten Werten
+    # darf den Plan nicht anfassen, auch wenn es rechnerisch eines gibt.
+    if d.withheld or not d.changed or d.applied:
+        return None
+    nxt = d.session_now
+    if nxt is None or not nxt.template_id:
+        return None
+
+    # Nur heute, und nur solange der Tag nicht schon gefahren ist.
+    if snap.day_actual.get(snap.today, 0.0) >= DAY_DONE_TSS:
+        return None
+    target = next(
+        (r for r in snap.bike_on(snap.today)
+         if (r.blocks_source or "") not in PROTECTED_SOURCES),
+        None,
+    )
+    if target is None or target.template_id == nxt.template_id:
+        return None
+    if await already_adapted(
+        db, snap.user_id, target_date=target.date, signal="readiness_decision",
+        since=snap.start_of_day_utc,
+    ):
+        return None
+
+    before = _day_diff(target)
+    old_title = target.title
+    minutes = nxt.duration_minutes or int(round((target.duration_seconds_target or 3600) / 60)) or 60
+    _apply_template(target, nxt.template_id, snap.ftp, duration_min_target=minutes)
+    after = _day_diff(target)
+
+    treiber = (d.driver.text_de if d.driver else None) or "Deine Morgenwerte"
+    verdikt = d.verdict.text_de if d.verdict else nxt.title
+    message_de = f"{treiber} — aus {old_title} wird {nxt.title}. {verdikt}"
+    message_en = (
+        f"Today's measurements moved the session — {old_title} becomes {nxt.title}."
+    )
+    await log_adaptation(
+        db, snap.user_id,
+        target_date=target.date, source="hourly", signal="readiness_decision",
+        rule="readiness_applied",
+        message_de=message_de, message_en=message_en,
+        before=before, after=after,
+        evidence={
+            "readiness_score": d.readiness_score,
+            "readiness_tier": d.readiness_tier,
+            "state": d.verdict.state if d.verdict else None,
+            "driver_key": d.driver.key if d.driver else None,
+            "driver_text_de": d.driver.text_de if d.driver else None,
+            "driver_z": d.driver.z if d.driver else None,
+            "counterfactual_de": d.verdict.counterfactual_text_de if d.verdict else None,
+            "was": old_title,
+            "wird": nxt.title,
+        },
+        commit=False,
+    )
+    return {
+        "rule": "readiness_applied", "signal": "readiness_decision",
+        "dates": [target.date.isoformat()],
+        "message_de": message_de, "message_en": message_en,
+    }
+
+
 async def run_for_user(
     db: AsyncSession,
     user_id: int,
@@ -897,6 +990,10 @@ async def run_for_user(
         ease = await _rule_missed_key(db, snap)
     if ease is None:
         ease = await _rule_extra_load(db, snap)
+    if ease is None:
+        # ZULETZT: greift genau dort, wo bisher nichts griff -- ein gedrueckter
+        # Bereitschaftswert ohne die Zwei-Signal-Konjunktion aus R2.
+        ease = await _rule_readiness(db, snap, profile)
     if ease is not None:
         changes.append(ease)
 

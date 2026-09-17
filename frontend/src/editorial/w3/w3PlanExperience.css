@@ -154,3 +154,17 @@
 .w3-plan-vessel[data-over]{overflow:visible;box-shadow:0 0 0 1.7px #eaff8f,0 0 18px #bfff3c4d}
 .w3-plan-vessel[data-over]>i{border-radius:999px}
 @media(prefers-reduced-motion:reduce){.w3-plan-vessel,.w3-plan-vessel>i{transition:none}}
+
+/* ── DER BELEG ZU EINER ANPASSUNG ─────────────────────────────────────────
+   Ein Plan, der sich von selbst aendert, muss zeigen koennen, WAS er
+   geaendert hat und WORAUF hin. `before`/`after`/`evidence` lagen seit je in
+   jeder Zeile und wurden nie gerendert. Leise gehalten: der Satz darueber
+   traegt die Aussage, das hier ist der Nachweis darunter. */
+.w3-change-receipt{margin-top:10px;padding:10px 12px;border-radius:12px;background:#ffffff08;
+  display:flex;flex-direction:column;gap:7px}
+.w3-change-swap{display:flex;align-items:center;gap:8px;font-size:12.5px;color:#9ba0a6;flex-wrap:wrap}
+.w3-change-swap>span{text-decoration:line-through;text-decoration-color:#ffffff40}
+.w3-change-swap>strong{color:#fff;font-weight:550;letter-spacing:-.2px}
+.w3-change-swap>svg{color:var(--plan-acid);flex:none}
+.w3-change-driver{margin:0!important;font-size:12.5px;line-height:1.4;color:#b6b8b4}
+.w3-change-meta{margin:0!important;font-size:11px;color:#6E7379;font-variant-numeric:tabular-nums}
