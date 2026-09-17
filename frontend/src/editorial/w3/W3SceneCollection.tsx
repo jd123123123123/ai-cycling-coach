@@ -108,7 +108,21 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
   }
   const [sharing, setSharing] = useState(false); const [message, setMessage] = useState('')
   const dialog = useRef<HTMLDialogElement>(null)
-  const collected = data.stages.filter(s => s.owned && !s.starter)
+  /**
+   * EINE STARTKULISSE MIT EIGENEM RENDER GEHOERT IN DIE SAMMLUNG.
+   *
+   * Der Filter war `owned && !starter`. Startkulissen zaehlen zu Recht nicht
+   * als Verdienst -- sie werden geschenkt. Aber sobald eine davon ein ECHTES,
+   * persoenliches Bild traegt (das eigene Rad in dieser Kulisse, gerendert),
+   * besitzt der Fahrer sichtbar etwas, und die Sammlung zeigte trotzdem "0 von
+   * 10 -- die erste kommt mit deiner Fahrt". Gemessen in der Produktion: alle
+   * vier besessenen Kulissen sind Starter, eine davon mit fertigem Render, und
+   * die Sammlung war leer.
+   *
+   * `image` ist die Grenze, nicht `starter`: ein Starter OHNE Render bleibt
+   * draussen, weil es dort nichts zu sehen gibt.
+   */
+  const collected = data.stages.filter(s => s.owned && (!s.starter || !!s.image))
   const open = data.stages.filter(s => !s.owned && !s.starter).sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier) || (b.progress?.pct ?? -1) - (a.progress?.pct ?? -1))
   const cards = filter === 'owned' ? collected : open
   const openedOnce = useRef(false)

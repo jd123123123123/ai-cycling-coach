@@ -16,7 +16,13 @@
 .w3-scene-announcement-content li{display:flex;align-items:center;flex-direction:column;gap:8px;text-align:center;color:#bbb;font-size:11px;line-height:1.3}.w3-scene-announcement-content li svg{color:#BFFF3C}
 .w3-scene-announcement-content footer{display:grid;gap:2px;flex:none}.w3-scene-announcement-primary{height:54px;background:#BFFF3C;color:#0b0b0b;border-radius:28px;padding:0 20px;display:flex;align-items:center;justify-content:space-between;font-size:17px;font-weight:650}.w3-scene-announcement-later{height:44px;background:none;color:#aaa;font-size:14px}
 .w3-scene-announcement-content button:focus-visible{outline:2px solid #fff;outline-offset:3px}
-@media(max-width:600px){.w3-scene-announcement{width:100vw;height:100dvh;max-height:100dvh;margin:0;border:0;border-radius:0}.w3-scene-announcement-content{padding:calc(16px + env(safe-area-inset-top,0px)) 22px calc(6px + env(safe-area-inset-bottom,0px))}}
+@media(max-width:600px){/* VOLLBILD UEBER inset, NICHT UEBER vw/dvh. `100vw` rechnet die Scrollbar
+   mit und uebersteigt auf iOS den sichtbaren Viewport -- das Fenster wurde
+   breiter als der Schirm. Und `margin:0` hebt die UA-Vorgabe `margin:auto`
+   auf, mit der ein <dialog> zentriert wird: es klebte oben links statt
+   mittig. Ein fixiertes Element mit inset:0 fuellt den Viewport exakt,
+   ohne eine einzige Laengeneinheit zu raten. */
+.w3-scene-announcement{position:fixed;inset:0;width:auto;height:auto;max-width:none;max-height:none;margin:0;border:0;border-radius:0}.w3-scene-announcement-content{padding:calc(16px + env(safe-area-inset-top,0px)) 22px calc(6px + env(safe-area-inset-bottom,0px))}}
 @media(max-height:680px){.w3-scene-announcement-content{gap:10px;padding-top:12px}.w3-scene-announcement-copy h2{font-size:31px;margin:6px 0 8px}.w3-scene-announcement-copy p{font-size:13px}.w3-scene-announcement-content figure{min-height:100px}.w3-scene-announcement-content figcaption{padding:12px}.w3-scene-announcement-content figcaption strong{font-size:16px}.w3-scene-announcement-content li{gap:5px}.w3-scene-announcement-primary{height:48px}}
 @media(prefers-reduced-motion:no-preference){.w3-scene-announcement[open]{animation:w3-scene-intro-arrive .32s cubic-bezier(.2,.8,.2,1) both}@keyframes w3-scene-intro-arrive{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}}
 @media(max-height:480px){.w3-scene-announcement{overflow:auto}.w3-scene-announcement-content{height:auto;min-height:100%}.w3-scene-announcement-content figure{flex:none;height:140px}}

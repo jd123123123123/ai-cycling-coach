@@ -33,8 +33,22 @@ export interface BackdropArt {
   image?: string
 }
 
-/** Alpha suffixes, so the ramps read as light rather than as flat fills. */
-const a = (hex: string, aa: string) => `${hex}${aa}`
+/**
+ * Alpha suffixes, so the ramps read as light rather than as flat fills.
+ *
+ * ERSETZT, STATT ANZUHAENGEN. `T.d1`/`d2`/`d3` tragen SCHON eine Alpha-Stufe
+ * (`#FFFFFF33`); ein blindes Anhaengen ergab `#FFFFFF3399` -- zehn Hexstellen,
+ * und damit keine gueltige Farbe. Der Browser verwirft dann nicht nur diesen
+ * Farbstopp, sondern die GANZE `background`-Deklaration: die Kachel stand ohne
+ * jeden Hintergrund da. Gemessen in der Produktion an Passhoehe und
+ * Regenstrasse, beide mit `backgroundColor: rgba(0,0,0,0)`.
+ *
+ * Kein Test haette das gefunden -- ungueltiges CSS wirft nicht, es verschwindet.
+ */
+const a = (hex: string, aa: string) => {
+  const rumpf = hex.length === 9 ? hex.slice(0, 7) : hex   // #RRGGBBAA -> #RRGGBB
+  return `${rumpf}${aa}`
+}
 
 const ART: Record<string, BackdropArt> = {
   studio_black: {
