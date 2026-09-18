@@ -146,3 +146,42 @@ def test_das_eigene_signal_zaehlt_als_messung():
     assert "readiness_decision" in _MEASURED_SIGNALS
     # Selbstauskunft bleibt draussen: eine Krankmeldung hat kein Geraet gemessen.
     assert "illness" not in _MEASURED_SIGNALS
+
+
+@pytest.mark.asyncio
+async def test_der_satz_nennt_nur_den_grund_und_wiederholt_sich_nicht():
+    """Vorher: 156 Zeichen, zwei Formulierungen desselben Tauschs, zwei
+    Sprachen gemischt. Der Tausch wird GEZEIGT, nicht erzaehlt."""
+    snap, _ = _snap(HEUTE)
+    out, log = await _lauf(_entscheidung(), snap)
+    satz = out["message_de"]
+    assert satz == "Tiefschlaf 0,5 h, dein Schnitt ist 1,3 h."
+    assert len(satz) < 60
+    # Der Tausch gehoert in den Beleg, nicht in den Satz.
+    assert "wird" not in satz and "statt" not in satz
+
+
+@pytest.mark.asyncio
+async def test_der_beleg_nennt_deutsche_namen_auf_beiden_seiten():
+    """`session_planned.title` ist deutsch, der rohe Titel der Planzeile
+    englisch. Zwei Sprachen in einem Beleg lesen sich wie zwei Einheiten."""
+    snap, _ = _snap(HEUTE)
+    _, log = await _lauf(_entscheidung(), snap)
+    ev = log.await_args.kwargs["evidence"]
+    assert ev["was"] == "VO2max 5x4"      # aus session_planned, nicht aus der Planzeile
+    assert ev["wird"] == "Grundlage 60 min"
+
+
+@pytest.mark.asyncio
+async def test_der_beleg_traegt_den_grundsatz_und_erfindet_keinen():
+    snap, _ = _snap(HEUTE)
+    _, log = await _lauf(_entscheidung(), snap)
+    assert "Tiefschlaf" in log.await_args.kwargs["evidence"]["principle_de"]
+
+    # Unbekannter Treiber -> KEIN Grundsatz. Eine ausgedachte Begruendung
+    # waere schlimmer als gar keine.
+    snap2, _ = _snap(HEUTE)
+    e = _entscheidung(driver=SimpleNamespace(key="voellig_neues_signal",
+                                             text_de="Irgendwas.", z=-1.0))
+    _, log2 = await _lauf(e, snap2)
+    assert log2.await_args.kwargs["evidence"]["principle_de"] is None

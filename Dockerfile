@@ -17,7 +17,7 @@ RUN npm ci
 #   E=$(curl -s $HOST/e/w3-today | grep -o 'assets/index-[A-Za-z0-9_-]*\.js')
 #   curl -s "$HOST/$E" | grep -oE '[A-Za-z0-9._-]+-[A-Za-z0-9_-]{8}\.js' | sort -u
 #   curl -s "$HOST/assets/<the chunk>" | grep -c "<a string from your new code>"
-ARG SPA_CACHE_EPOCH=32
+ARG SPA_CACHE_EPOCH=33
 
 COPY frontend/ ./
 ENV VITE_API_URL=

@@ -7,7 +7,7 @@ import W3TopBar from './W3TopBar'
 import W3TabBar from './W3TabBar'
 import {PlanAdjustSheet,type W3PlanVm,type W3PlanActions} from './W3PlanView'
 import {usePlanAdaptations} from '../../hooks/usePlanAdaptations'
-import type {PlanAdaptation} from '../../api/plan'
+import W3AdaptationReceipt from './W3AdaptationReceipt'
 import {useProgressExplorer,W3ProgressAnalyticsView} from './W3ProgressAnalytics'
 import W3PlanIntro from './W3PlanIntro'
 import W3PowerProfile from './W3PowerProfile'
@@ -45,35 +45,6 @@ function Vessel({b,max,animate,reduced}:{b:{planned:number;fill:number|null;over
     ?<motion.i initial={false} animate={{height:fill}} transition={{duration:reduced?0:.35}}/>
     :<i style={{height:fill}}/>)}
  </span></span>
-}
-
-/**
- * DER BELEG ZU EINER ANPASSUNG.
- *
- * Jede `plan_adaptations`-Zeile traegt seit je `before`, `after` und
- * `evidence` -- und der Dialog zeigte davon NICHTS, nur Datum und Satz. Ein
- * Plan, der sich von selbst aendert, muss aber zeigen koennen, WAS er
- * geaendert hat und WORAUF hin; sonst ist er eine Blackbox, die dem Fahrer
- * sein Training umschreibt.
- *
- * Es wird nur gezeigt, was wirklich dasteht: fehlt der Beleg, faellt die
- * Zeile weg statt eine Begruendung zu erfinden.
- */
-function AdaptationReceipt({a}:{a:PlanAdaptation}){
- const ev=(a.evidence??{}) as Record<string,unknown>
- const txt=(k:string)=>typeof ev[k]==='string'&&ev[k]?String(ev[k]):null
- const num=(k:string)=>typeof ev[k]==='number'?ev[k] as number:null
- const was=txt('was')??(a.before?.title as string|undefined)??null
- const wird=txt('wird')??(a.after?.title as string|undefined)??null
- const treiber=txt('driver_text_de')
- const wert=num('readiness_score')
- const sonst=txt('counterfactual_de')
- if(!was&&!wird&&!treiber&&wert==null) return null
- return <div className="w3-change-receipt">
-  {was&&wird&&<div className="w3-change-swap"><span>{was}</span><ArrowRight size={14} aria-label="wird zu"/><strong>{wird}</strong></div>}
-  {treiber&&<p className="w3-change-driver">{treiber}</p>}
-  {(wert!=null||sonst)&&<p className="w3-change-meta">{wert!=null?`Bereitschaft ${wert}`:null}{wert!=null&&sonst?' · ':''}{sonst}</p>}
- </div>
 }
 
 export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSession,onCreatedDone,weekOffset,onWeekOffset,planEnd,planStart,goalDate,initialCompose=false,onComposeClose,onCancelPlan,priorPlanCompleted=false,priorPlanEnd=null,loading=false,previewProgress}:{vm:W3PlanVm;state:State;userId?:number;onRebuild:W3PlanActions['onRebuild'];onOpenSession:(iso:string)=>void;onCreatedDone:()=>void;planEnd?:string|null;planStart?:string|null;initialCompose?:boolean;onComposeClose?:()=>void;onCancelPlan?:()=>Promise<void>;priorPlanCompleted?:boolean;priorPlanEnd?:string|null;goalDate?:string|null;weekOffset:number;onWeekOffset:(offset:number)=>void;loading?:boolean;previewProgress?:ProgressExplorer}){
@@ -220,7 +191,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
       selbst kein neues Element bekommt. */
    onRestart={()=>{setSheet(null);setSkipAutoIntro(true);setCompose('choose')}}
    onCancelPlan={onCancelPlan}/>}
- {sheet==='adaptation'&&<PlanDialog title="Was sich verändert hat" onClose={()=>setSheet(null)}><div className="w3-plan-change-list">{adaptations?.adaptations.map(a=><article key={a.id}><time>{new Date(a.created_at).toLocaleDateString('de-DE',{day:'numeric',month:'short'})}</time><p>{a.message_de}</p><AdaptationReceipt a={a}/></article>)}</div></PlanDialog>}
+ {sheet==='adaptation'&&<PlanDialog title="Was sich verändert hat" onClose={()=>setSheet(null)}><div className="w3-plan-change-list">{adaptations?.adaptations.map(a=><article key={a.id}><time>{new Date(a.created_at).toLocaleDateString('de-DE',{day:'numeric',month:'short'})}</time><p>{a.message_de}</p><W3AdaptationReceipt a={a}/></article>)}</div></PlanDialog>}
  {sheet==='why'&&<PlanDialog title={hasWorkout?'Warum diese Einheit?':'Deine Woche'} onClose={()=>setSheet(null)}><p>{selected?.rationale??vm.weekWhy??'Zwischen den Belastungen steht Zeit für Erholung. Deine nächste Einheit siehst du in der Wochenübersicht.'}</p><button className="w3-plan-link" onClick={()=>nav('/e/w3-goal')}>Dein Ziel ansehen<ArrowUpRight size={18}/></button></PlanDialog>}
  {compose&&<W3PlanGoalComposer focus={compose} hours={vm.adjustHours} days={vm.adjustDays} previousPlanEnd={state==='ended'?planEnd:null} onClose={()=>{setCompose(null);onComposeClose?.()}}/>}
  {userId!=null&&<W3PlanIntro userId={userId} autoShow={!skipAutoIntro} force={intro} onClose={()=>setIntro(false)}/>}

@@ -16,6 +16,7 @@ import W3WrappedBolt from './W3WrappedBolt'
 import W3TabBar from './W3TabBar'
 import { useHeroPanel, useStageGround } from './W3HeroShell'
 import W3RecoveryNudge from './W3RecoveryNudge'
+import W3TodayAdapted from './W3TodayAdapted'
 import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3FormCard from './W3FormCard'
@@ -311,6 +312,10 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
       <div aria-hidden style={{ height: fadeH, marginBottom: -fadeH, pointerEvents: 'none', background: `linear-gradient(180deg, ${ground ?? T.heroBg}, ${T.bg})` }} />
       <W3ThresholdProposal />
       <W3RecoveryNudge />
+      {/* Der Nachweis lag nur auf der Planseite hinter einem Tipp. Wer morgens
+          hier schaut, sah eine Einheit, die gestern noch eine andere war --
+          ohne ein Wort dazu. */}
+      <W3TodayAdapted todayKey={new Date().toLocaleDateString('sv-SE')} />
       <W3TodayOverview vm={vm}
         weather={<W3WeatherNudge forecast={vm.weatherForecast} now={vm.weatherNow} locationState={vm.weatherLocationState} requestLocation={vm.requestWeatherLocation} />}
         selectedWeekDay={selDay} onSelectWeekDay={setSelDay}

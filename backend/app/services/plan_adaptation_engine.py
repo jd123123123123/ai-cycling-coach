@@ -51,6 +51,7 @@ from app.models.mesocycle_plan import MesocyclePlan
 from app.models.plan_adaptation import PlanAdaptation
 from app.models.planned_workout import PlannedWorkout
 from app.services.adaptive_readiness import build_adaptive_directive
+from app.services.training_principles import principle_for
 from app.services.hrv_state import estimate_hrv_state
 from app.services.athlete_time import (
     day_local_window,
@@ -914,12 +915,21 @@ async def _rule_readiness(db: AsyncSession, snap: _Snapshot, profile) -> dict | 
     _apply_template(target, nxt.template_id, snap.ftp, duration_min_target=minutes)
     after = _day_diff(target)
 
+    # DER SATZ NENNT NUR DEN GRUND. Der Tausch wird GEZEIGT (before/after und
+    # die Beleg-Zeile), nicht erzaehlt -- vorher stand beides im Satz UND im
+    # Verdict dahinter, also zweimal dasselbe in zwei Formulierungen, 156
+    # Zeichen lang und in zwei Sprachen gemischt ("Threshold — 2×15min" neben
+    # "Schwelle — 2×15 min").
     treiber = (d.driver.text_de if d.driver else None) or "Deine Morgenwerte"
-    verdikt = d.verdict.text_de if d.verdict else nxt.title
-    message_de = f"{treiber} — aus {old_title} wird {nxt.title}. {verdikt}"
-    message_en = (
-        f"Today's measurements moved the session — {old_title} becomes {nxt.title}."
-    )
+    message_de = treiber
+    message_en = "Today's measurements moved the session."
+
+    # DEUTSCHE NAMEN AUS DEM URTEIL, nicht der rohe Titel der Planzeile: der
+    # traegt die englische Vorlagenbezeichnung, und zwei Sprachen in einem
+    # Beleg lesen sich wie zwei verschiedene Einheiten.
+    was_de = (d.session_planned.title if d.session_planned else None) or old_title
+    wird_de = nxt.title
+    grundsatz = principle_for(d.driver.key if d.driver else None, locale="de")
     await log_adaptation(
         db, snap.user_id,
         target_date=target.date, source="hourly", signal="readiness_decision",
@@ -934,8 +944,12 @@ async def _rule_readiness(db: AsyncSession, snap: _Snapshot, profile) -> dict | 
             "driver_text_de": d.driver.text_de if d.driver else None,
             "driver_z": d.driver.z if d.driver else None,
             "counterfactual_de": d.verdict.counterfactual_text_de if d.verdict else None,
-            "was": old_title,
-            "wird": nxt.title,
+            "was": was_de,
+            "wird": wird_de,
+            # Der trainingswissenschaftliche Grundsatz -- uebernommen, nicht
+            # erfunden. `None`, wo keiner hinterlegt ist: eine ausgedachte
+            # Begruendung waere schlimmer als gar keine.
+            "principle_de": grundsatz,
         },
         commit=False,
     )
