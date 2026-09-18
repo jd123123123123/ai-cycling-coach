@@ -1,6 +1,7 @@
 import logging
 import threading
 from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -116,11 +117,26 @@ async def lifespan(app: FastAPI):
     # Hourly plan-adaptation loop (plan-engine v2): fresh signals reshape the
     # upcoming week within rails; every change lands in the adaptation feed.
     # Cheap when signals are unchanged (snapshot fingerprint short-circuit).
+    #
+    # ERSTER LAUF KURZ NACH DEM START, nicht erst eine Stunde spaeter. Ohne
+    # `next_run_time` legt APScheduler den ersten Lauf ein volles Intervall in
+    # die Zukunft: nach jedem Deploy fiel also genau ein Stundenlauf aus, und
+    # wer morgens deployt hat, dessen Fahrer bekamen ihre Anpassung eine Stunde
+    # zu spaet -- oder gar nicht, wenn der Tag bis dahin gefahren war.
+    #
+    # WARUM ZWEI MINUTEN UND NICHT SOFORT. Der Garmin-Sync laeuft im
+    # Minutentakt und ist beim Start noch nicht durch. Ein Planlauf in derselben
+    # Sekunde saehe die Werte von gestern; findet er damit eine Anpassung, dann
+    # sperrt `already_adapted` den spaeteren Lauf mit den frischen Werten fuer
+    # den Rest des Tages. Zwei Minuten geben dem Sync mindestens einen vollen
+    # Durchgang, und die Anpassung kommt trotzdem direkt nach dem Deploy statt
+    # eine Stunde danach.
     scheduler.add_job(
         run_hourly_plan_adaptation,
         "interval",
         hours=1,
         id="plan_adaptation",
+        next_run_time=datetime.now(timezone.utc) + timedelta(minutes=2),
         misfire_grace_time=600,
         coalesce=True,
         max_instances=1,
