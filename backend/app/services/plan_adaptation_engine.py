@@ -16,6 +16,8 @@ Stability principles (recon-science ADAPTATION RULE SET):
 
 Rules (science-file mapping):
   R4/R5 illness_interlock    athlete says sick → today + tomorrow become rest
+  R7    morning_health_downgrade  measured infection fingerprint (RHR + HRV +
+                             respiration + SpO2) → today eases or rests
   R2    sleep_hrv_downgrade  short sleep AND HRV below band → today's/
                              tomorrow's quality day eased to Z2, slot kept
   R3    missed_key_reflow    missed quality day → re-slotted onto the next
@@ -379,6 +381,120 @@ async def _rule_illness(db: AsyncSession, snap: _Snapshot) -> dict | None:
     return {
         "rule": "illness_interlock", "signal": "illness",
         "dates": [d["date"] for d in after_days],
+        "message_de": message_de, "message_en": message_en,
+    }
+
+
+async def _rule_morning_health(db: AsyncSession, snap: _Snapshot) -> dict | None:
+    """R7 — der GEMESSENE Infektbefund darf die heutige Einheit abschwaechen.
+
+    `morning_health_detector` rechnet die akute Infekt-Trias laengst aus:
+    erhoehter Ruhepuls, gedaempfte HRV, erhoehte Atemfrequenz, dazu SpO2 --
+    mit hinterlegter Evidenz (Hedelin 2000; Buchheit). Er haengt bisher nur an
+    `GET /health/morning`, also an einer Karte. Der Plan hat den Befund nie
+    gesehen: `_rule_illness` fragt ausschliesslich `status_state == "sick"`,
+    also die Selbstauskunft. Wer sich nicht krank meldet -- und in den Tagen,
+    in denen ein Infekt hochkommt, meldet sich kaum jemand krank -- bekam das
+    volle Intervall.
+
+    WARUM GLEICH HINTER DER SELBSTAUSKUNFT. Das hier ist kein Muedigkeits-,
+    sondern ein Krankheitssignal, und es stuetzt sich auf mehrere unabhaengige
+    Messgroessen. Es rangiert damit ueber R2 (kurzer Schlaf UND HRV unter Band),
+    das Ermuedung beschreibt. Unter der Selbstauskunft bleibt es, weil der
+    Fahrer mehr weiss als sein Armband.
+
+    WAS ES NICHT TUT. Es erklaert niemanden fuer krank und greift nicht auf
+    morgen vor -- das ist die Reichweite der Selbstauskunft. `high` macht heute
+    zum Ruhetag, `elevated` schwaecht auf Grundlage ab. `watch` fasst den Plan
+    nicht an: ein Beobachtungshinweis ist kein Grund, ein Training zu loeschen.
+    """
+    # Die Selbstauskunft hat bereits gehandelt -- kein zweiter Eingriff am
+    # selben Tag, und keine zwei Belege, die dasselbe erzaehlen.
+    if snap.status_state == "sick":
+        return None
+    if snap.day_actual.get(snap.today, 0.0) >= DAY_DONE_TSS:
+        return None
+
+    from app.services.morning_health_detector import verdict_for_rows
+
+    try:
+        verdict = verdict_for_rows(list(snap.metrics), today=snap.today)
+    except Exception:  # noqa: BLE001 -- ein Befundfehler darf den Lauf nie kippen
+        logger.exception("morning-health verdict failed (user %s) — rule skipped", snap.user_id)
+        return None
+
+    level = verdict.get("level")
+    if level not in ("elevated", "high"):
+        return None
+
+    target = next(
+        (r for r in snap.bike_on(snap.today)
+         if (r.blocks_source or "") not in PROTECTED_SOURCES),
+        None,
+    )
+    if target is None or (target.template_id or "") == "rest_day":
+        return None
+    if await already_adapted(
+        db, snap.user_id, target_date=target.date, signal="morning_health",
+        since=snap.start_of_day_utc,
+    ):
+        return None
+
+    before = _day_diff(target)
+    if level == "high":
+        _set_rest(target)
+    else:
+        duration_min = int(round((target.duration_seconds_target or 3600) / 60)) or 60
+        new_tid = endurance_for_duration(duration_min)
+        if new_tid == target.template_id:
+            return None
+        _apply_template(target, new_tid, snap.ftp, duration_min_target=duration_min)
+    after = _day_diff(target)
+
+    # DER SATZ NENNT DEN BEFUND, NICHT DIE DIAGNOSE. Die gemessenen Werte
+    # stehen im Beleg; hier steht, was sie zusammen bedeuten -- und dass der
+    # Fahrer entscheidet, nicht das Armband.
+    ausloeser = [
+        s for s in (verdict.get("signals") or [])
+        if s.get("metric") in ("rhr", "hrv", "respiration", "spo2")
+    ]
+    namen = {
+        "rhr": "Ruhepuls", "hrv": "HRV",
+        "respiration": "Atemfrequenz", "spo2": "Sauerstoffsaettigung",
+    }
+    genannt = ", ".join(namen[s["metric"]] for s in ausloeser[:3]) or "Deine Morgenwerte"
+    message_de = (
+        f"{genannt} weichen heute Morgen gemeinsam ab — das Muster, das einem "
+        "Infekt vorausgeht."
+    )
+    message_en = "This morning's vitals cluster the way they do before an infection."
+
+    await log_adaptation(
+        db, snap.user_id,
+        target_date=target.date, source="hourly", signal="morning_health",
+        rule="morning_health_downgrade",
+        message_de=message_de, message_en=message_en,
+        before=before, after=after,
+        evidence={
+            "level": level,
+            # Die Messwerte selbst, mit ihrer eigenen Basislinie -- der Beleg
+            # muss nachpruefbar sein, nicht bloss plausibel klingen.
+            "signals": [
+                {
+                    "metric": s.get("metric"), "value": s.get("value"),
+                    "baseline": s.get("baseline"), "delta": s.get("delta"),
+                    "severity": s.get("severity"),
+                }
+                for s in ausloeser
+            ],
+            "headline_de": verdict.get("headline_de"),
+            "principle_de": principle_for("morning_health", locale="de"),
+        },
+        commit=False,
+    )
+    return {
+        "rule": "morning_health_downgrade", "signal": "morning_health",
+        "dates": [target.date.isoformat()],
         "message_de": message_de, "message_en": message_en,
     }
 
@@ -998,6 +1114,11 @@ async def run_for_user(
 
     # EASE direction — first matching rule wins (≤ 1 material change/run).
     ease = await _rule_illness(db, snap)
+    if ease is None:
+        # Der gemessene Infektbefund rangiert ueber der Ermuedungsregel:
+        # mehrere unabhaengige Messgroessen schlagen die Zwei-Signal-
+        # Konjunktion aus R2, die Ermuedung beschreibt, keine Krankheit.
+        ease = await _rule_morning_health(db, snap)
     if ease is None:
         ease = await _rule_sleep_hrv(db, snap, directive)
     if ease is None:

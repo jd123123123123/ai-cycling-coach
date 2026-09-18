@@ -48,6 +48,17 @@ _PRINCIPLES: dict[str, tuple[str, str]] = {
         "A resting heart rate above your own baseline is an early sign of "
         "incomplete recovery or a starting infection.",
     ),
+    # Der Befund von R7: mehrere Morgenwerte weichen GEMEINSAM ab. Der Satz
+    # nennt genau das -- die Kombination, nicht der einzelne Wert, ist das
+    # Signal, und "Infekt" bleibt ein Verdacht, keine Diagnose.
+    "morning_health": (
+        "Steigen Ruhepuls und Atemfrequenz gemeinsam, während die HRV fällt, "
+        "ist das die typische Reaktion auf einen beginnenden Infekt — hartes "
+        "Training verlängert ihn, statt Form zu bringen.",
+        "A resting heart rate and respiration rate rising together while HRV "
+        "falls is the typical response to a starting infection — training hard "
+        "through it prolongs the infection rather than building fitness.",
+    ),
     "body_battery": (
         "Eine niedrige Körperbatterie am Morgen heißt, die Nacht hat die Reserven "
         "nicht aufgefüllt.",

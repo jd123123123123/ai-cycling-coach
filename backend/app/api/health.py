@@ -21,7 +21,7 @@ from app.models.daily_metric import DailyMetric
 from app.models.user import User
 from app.schemas.morning_health import MorningHealthCheck, MorningHealthSignal
 from app.services.athlete_time import set_athlete_tz_from_profile, today_local
-from app.services.morning_health_detector import detect_morning_health
+from app.services.morning_health_detector import verdict_for_rows
 
 logger = logging.getLogger(__name__)
 
@@ -68,53 +68,17 @@ async def get_morning_health_check(
         )
         rows = res.scalars().all()
 
-        # One reading per calendar day (latest row wins), ascending.
-        by_day: dict[date, DailyMetric] = {}
-        for m in rows:
-            d = m.date or (m.recorded_at.date() if m.recorded_at else None)
-            if d is not None:
-                by_day[d] = m
-        daily = [
-            {
-                "date": d,
-                "rhr": by_day[d].resting_hr,
-                "hrv": by_day[d].hrv_status,
-                "respiration": by_day[d].respiration_avg,
-                "spo2": by_day[d].spo2_avg,
-                "sleep_score": by_day[d].sleep_score,
-            }
-            for d in sorted(by_day)
-        ]
-
-        # ── Staleness gate ───────────────────────────────────────────────────
-        # `detect_morning_health` treats the LAST row it is given as "today"
-        # and has no way to know when that row is from. The window above is 30
-        # days wide with no recency filter, so a watch that stopped syncing
-        # leaves its final row permanently cast as this morning's vitals.
-        #
-        # The consequence here is worse than a wrong stat: level != 'none'
-        # renders a red/amber `role="alert"` early-warning card on the Today
-        # tab telling the athlete "Deine Morgenwerte weichen leicht ab" /
-        # "Rest today and listen to your body" — a live health warning derived
-        # from a vitals cluster that may be a week old and long since resolved.
-        # Observed live on 2026-07-27 against a newest row dated 2026-07-20.
-        #
-        # So: unless the newest reading is dated to the athlete's current local
-        # day, we return the honest "no warning" verdict. This does not
-        # suppress a genuine warning — a real cluster on a real today still
-        # fires; it only refuses to assert a warning about a day we have no
-        # data for. (The inverse risk — an athlete who IS ill today but whose
-        # watch didn't sync — was never detectable either way: we have no
-        # reading for today in that case.)
-        if not daily or daily[-1]["date"] != today:
-            last = daily[-1]["date"].isoformat() if daily else None
+        # Abbildung UND Aktualitaetssperre liegen jetzt in
+        # `verdict_for_rows`, weil derselbe Befund seit R7 auch heutige
+        # Einheiten umschreibt. Zwei Kopien der Sperre waeren irgendwann
+        # auseinandergelaufen -- und die Flaeche ohne Sperre waere die
+        # gewesen, die in Trainingsplaene schreibt.
+        verdict = verdict_for_rows(rows, today=today)
+        if verdict["level"] == "none" and not verdict["signals"]:
             logger.debug(
-                "morning-health: stale vitals for user_id=%s (last reading %s, today %s)",
-                current_user.id, last, today.isoformat(),
+                "morning-health: kein Befund fuer user_id=%s (heute %s)",
+                current_user.id, today.isoformat(),
             )
-            return MorningHealthCheck(level="none", polarity=None, signals=[], headline=None, recommendation=None)
-
-        verdict = detect_morning_health(daily)
     except Exception:  # pragma: no cover — never break the Today load
         logger.exception("morning-health check failed for user_id=%s", current_user.id)
         return MorningHealthCheck(level="none", polarity=None, signals=[], headline=None, recommendation=None)

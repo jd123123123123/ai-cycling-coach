@@ -46,7 +46,7 @@ from __future__ import annotations
 import math
 import statistics
 from datetime import date
-from typing import Literal
+from typing import Any, Literal
 
 Level = Literal["none", "watch", "elevated", "high"]
 
@@ -619,3 +619,58 @@ def _iso(d) -> str:
 
 
 __all__ = ["detect_morning_health", "Level"]
+
+
+def _empty_verdict() -> dict:
+    """The honest 'no warning' answer — same shape, no signals."""
+    return {
+        "level": "none", "signals": [],
+        "recommendation_de": None, "recommendation_en": None,
+        "headline_de": None, "headline_en": None,
+    }
+
+
+def rows_to_daily(rows: list) -> list[dict]:
+    """DailyMetric rows -> the ascending one-per-day shape the detector wants.
+
+    Latest row wins its calendar day, exactly as the morning-health endpoint
+    has always done it.
+    """
+    by_day: dict[date, Any] = {}
+    for m in rows:
+        d = getattr(m, "date", None) or (
+            m.recorded_at.date() if getattr(m, "recorded_at", None) else None
+        )
+        if d is not None:
+            by_day[d] = m
+    return [
+        {
+            "date": d,
+            "rhr": by_day[d].resting_hr,
+            "hrv": by_day[d].hrv_status,
+            "respiration": getattr(by_day[d], "respiration_avg", None),
+            "spo2": getattr(by_day[d], "spo2_avg", None),
+            "sleep_score": by_day[d].sleep_score,
+        }
+        for d in sorted(by_day)
+    ]
+
+
+def verdict_for_rows(rows: list, *, today: date) -> dict:
+    """The morning verdict for `rows`, with the staleness gate applied.
+
+    `detect_morning_health` treats the LAST row it is given as "today" and has
+    no way to know when that row is from, so a watch that stopped syncing
+    leaves its final row permanently cast as this morning's vitals. Observed
+    live on 2026-07-27 against a newest row dated 2026-07-20.
+
+    This gate is why the mapping lives here rather than at each call site: the
+    verdict drives a health warning on the Today card AND -- since R7 -- a
+    rewrite of today's session. Two copies of the gate would eventually
+    disagree, and the surface that lost the gate would be the one writing into
+    training plans.
+    """
+    daily = rows_to_daily(rows)
+    if not daily or daily[-1]["date"] != today:
+        return _empty_verdict()
+    return detect_morning_health(daily)
