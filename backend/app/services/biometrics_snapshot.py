@@ -293,3 +293,66 @@ def store_cached_snapshot(user_id: int, snapshot: TodaySnapshot) -> None:
 def invalidate_cached_snapshot(user_id: int) -> None:
     """Drop a user's cached snapshot — call after a sync writes new samples."""
     _snapshot_cache.pop(user_id, None)
+
+
+async def wake_values_for_days(
+    db: AsyncSession,
+    user_id: int,
+    days: list[date],
+    metrics_by_day: dict[date, DailyMetric] | None = None,
+    athlete_tz: ZoneInfo | None = None,
+) -> dict[date, dict[str, int | None]]:
+    """Sample-derived wake values for a span of days, in a single query.
+
+    The `body_battery_wake` / `stress_wake` columns on daily_metrics are
+    written by no ingestion path, and deliberately so: Garmin's daily payload
+    offers `charged` / `drained`, which are the amounts gained and lost over
+    the day, not the level at wake. Filing a delta as a level would read as a
+    measurement while being a different quantity.
+
+    The intraday sample stream does carry levels, and `compute_today_snapshot`
+    already derives a wake value from it for a single day. This is that same
+    derivation over a span, so the readiness drivers can compare today's wake
+    values against their own baseline instead of dropping out entirely.
+    """
+    if not days:
+        return {}
+    span_start = datetime.combine(min(days), dtime.min).replace(tzinfo=timezone.utc)
+    span_end = datetime.combine(max(days), dtime.max).replace(tzinfo=timezone.utc)
+    q = await db.execute(
+        sql_select(DailyMetricSample)
+        .where(
+            DailyMetricSample.user_id == user_id,
+            DailyMetricSample.recorded_at >= span_start,
+            DailyMetricSample.recorded_at <= span_end,
+            DailyMetricSample.metric_type.in_(("body_battery", "stress")),
+        )
+        .order_by(DailyMetricSample.recorded_at.asc())
+    )
+    # Group by the same UTC-day boundary `_fetch_samples` uses, so a value
+    # here and a value on the Today card cannot disagree about which day a
+    # sample belongs to.
+    grouped: dict[date, dict[str, list[DailyMetricSample]]] = {}
+    for row in q.scalars().all():
+        if row.recorded_at is None:
+            continue
+        bucket = grouped.setdefault(row.recorded_at.date(), {})
+        bucket.setdefault(row.metric_type, []).append(row)
+
+    out: dict[date, dict[str, int | None]] = {}
+    for day in days:
+        per_type = grouped.get(day)
+        if not per_type:
+            continue
+        wake_at = _resolve_wake_time(
+            (metrics_by_day or {}).get(day), day, athlete_tz
+        )
+        out[day] = {
+            "body_battery_wake": _pair_from_samples(
+                per_type.get("body_battery", []), wake_at
+            ).wake,
+            "stress_wake": _pair_from_samples(
+                per_type.get("stress", []), wake_at
+            ).wake,
+        }
+    return out

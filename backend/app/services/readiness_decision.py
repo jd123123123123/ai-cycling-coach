@@ -86,7 +86,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from statistics import mean, pstdev
 
@@ -844,6 +844,7 @@ async def _load_metric_days(
         .order_by(DailyMetric.recorded_at.asc())
     )
     by_day: dict[date, MetricDay] = {}
+    rows_by_day: dict[date, DailyMetric] = {}
     for row in res.scalars().all():
         day = row.date or (
             row.recorded_at.date() if row.recorded_at is not None else None
@@ -876,6 +877,33 @@ async def _load_metric_days(
             body_battery_wake=_i("body_battery_wake"),
             stress_wake=_i("stress_wake"),
         )
+        rows_by_day[day] = row
+
+    # The two wake columns are never written -- Garmin's daily payload has no
+    # honest value for them (see wake_values_for_days). Derive them from the
+    # intraday sample stream instead, which does carry levels, so these two
+    # drivers can rank alongside the rest rather than silently dropping out.
+    # Best-effort: a driver missing its value must read as "not measured",
+    # never take the whole decision down.
+    try:
+        from app.services.biometrics_snapshot import wake_values_for_days
+
+        derived = await wake_values_for_days(
+            db, user_id, sorted(by_day), rows_by_day
+        )
+        for day, vals in derived.items():
+            current = by_day.get(day)
+            if current is None:
+                continue
+            patch = {
+                k: v for k, v in vals.items()
+                if v is not None and getattr(current, k, None) is None
+            }
+            if patch:
+                by_day[day] = replace(current, **patch)
+    except Exception:  # pragma: no cover -- derivation is best-effort
+        logger.exception("wake-value derivation failed for user_id=%s", user_id)
+
     return sorted(by_day.values(), key=lambda d: d.day)
 
 
