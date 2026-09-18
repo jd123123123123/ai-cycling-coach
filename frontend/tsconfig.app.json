@@ -21,5 +21,13 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  // `src/review-plan` ist eine eigenstaendige Sandbox mit eigenem main.tsx --
+  // weder App.tsx noch index.html erreichen sie, sie wird also nicht
+  // ausgeliefert. Ihr FIT-Import zeigt auf ../../review-tools/node_modules,
+  // ein Verzeichnis, das in keinem Arbeitsbaum existiert; `tsc -b` pruefte sie
+  // trotzdem mit und liess damit den GESAMTEN Frontend-Build scheitern.
+  // (`editorial/__tests__/isolation.test.ts` fuehrt dieselben Dateien als
+  // unerlaubte Importeure von editorial/.)
+  "exclude": ["src/review-plan"]
 }
