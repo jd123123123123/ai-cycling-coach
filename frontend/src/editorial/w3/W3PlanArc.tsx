@@ -1,6 +1,6 @@
 import { useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { T, FONT, Display, Kicker, useInView } from './w3tokens'
+import { T, FONT, Display, HeadRow, Kicker, useInView } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
 import type { WeekBar, PhaseSeg } from './w3plan'
 import type { PlanDaySession } from './W3PlanView'
@@ -375,15 +375,9 @@ export default function W3PlanArc({
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
       {/* ── Kopf: die Zahl traegt die Orientierung, nicht ein Satz ──────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 14 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-          <Kicker>{phase ?? 'Plan'}</Kicker>
-          <Display>WOCHE {String(selectedIndex + 1).padStart(2, '0')}</Display>
-        </div>
-        <span style={{ ...TNUM, fontSize: 12, fontWeight: 600, color: T.quiet, flex: 'none' }}>
-          von {String(weeks.length).padStart(2, '0')}
-        </span>
-      </div>
+      <HeadRow label={phase ?? 'Plan'} counter={`von ${String(weeks.length).padStart(2, '0')}`}>
+        <Display>WOCHE {String(selectedIndex + 1).padStart(2, '0')}</Display>
+      </HeadRow>
 
       <div>
         <Bogen weeks={weeks} currentIndex={currentIndex}

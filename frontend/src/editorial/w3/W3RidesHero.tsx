@@ -1,6 +1,6 @@
 import { useReducedMotion } from 'motion/react'
 import { Minus, Plus } from 'lucide-react'
-import { T, FONT, Kicker, useInView } from './w3tokens'
+import { T, FONT, HeadRow, Kicker, useInView } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
 
 /**
@@ -149,7 +149,7 @@ function Messer({ pct }: { pct: number }) {
 }
 
 export default function W3RidesHero({
-  periods, period, onPeriod, km, deck, values, labels, selected, onSelect,
+  periods, period, onPeriod, km, deck, counter, values, labels, selected, onSelect,
   trendLabel, trendKicker, trendPct, ledger, goal, onSetGoal, open, onToggle, details,
 }: {
   periods?: { key: string; text: string }[]
@@ -161,6 +161,7 @@ export default function W3RidesHero({
   labels: (i: number) => string
   selected: number | null
   onSelect: (i: number | null) => void
+  counter?: string
   trendKicker: string
   trendLabel: string
   trendPct: number
@@ -214,14 +215,29 @@ export default function W3RidesHero({
       <Kurve values={values} labels={labels} selected={selected} onSelect={onSelect} />
 
       {/* DIE ZAHL IST DER GEGENSTAND. Sie war weiss, waehrend sieben kleinere
-          Dinge um sie herum leuchteten. */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginTop: 6 }}>
-        <span style={{ ...TNUM, fontSize: 64, fontWeight: 700, letterSpacing: -3,
-                       lineHeight: 0.92, color: T.acid }}>{km}</span>
-        <span style={{ fontSize: 19, fontWeight: 600, color: T.quiet }}>km</span>
+          Dinge um sie herum leuchteten.
+
+          DERSELBE AUFBAU WIE DER PLANSEITEN-KOPF (`HeadRow`): leises Etikett,
+          lauter Wert, leiser Zaehler rechts auf der Grundlinie. ABER NICHT
+          DIESELBE SCHRIFT -- Anton benennt, TNUM misst. "WOCHE 05" ist ein
+          Ordnungsschild und darf die Breite wechseln; "4 812" waechst mit
+          jeder Fahrt, und Anton hat keine Tabellenziffern, also wuerde die
+          Zahl bei jedem Wechsel springen. */}
+      <div style={{ marginTop: 6 }}>
+        {/* OHNE ZAEHLER. Die Leiste darunter fuehrt "FAHRTEN 142" bereits, und
+            neben der Ueberschrift steht es ein drittes Mal -- dieselbe Zahl
+            dreimal auf einem Bildschirm ist schlechter als eine fehlende.
+            `HeadRow` laesst den Zaehler deshalb weg, wenn es nichts Neues zu
+            sagen gibt; auf der Planseite sagt "von 12" etwas, das sonst
+            nirgends steht. */}
+        <HeadRow label={deck} counter={counter}>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ ...TNUM, fontSize: 64, fontWeight: 700, letterSpacing: -3,
+                           lineHeight: 0.92, color: T.acid }}>{km}</span>
+            <span style={{ fontSize: 19, fontWeight: 600, color: T.quiet }}>km</span>
+          </span>
+        </HeadRow>
       </div>
-      <p style={{ margin: '9px 0 0', fontSize: 12.5, fontWeight: 500,
-                  lineHeight: 1.35, color: T.mid }}>{deck}</p>
 
       <div style={{ ...hairline(), margin: '16px 0 14px' }} />
 

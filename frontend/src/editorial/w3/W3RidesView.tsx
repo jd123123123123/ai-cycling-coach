@@ -10,6 +10,7 @@ import { useHeroPanel } from './W3HeroShell'
 import { useActivityRhythm } from '../../hooks/useActivityRhythm'
 import W3TopBar from './W3TopBar'
 import {RideJournal, RideSummary} from './W3RideJournal'
+import './w3deck.css'
 import './w3.css'
 export type W3RideFilter = 'all' | 'outdoor' | 'indoor' | 'race'
 
@@ -96,7 +97,18 @@ export default function W3RidesView({vm}:{vm:W3RidesVm}){
  const content=<RideJournal vm={vm} period={period} windowStart={windowStart} windowLabel={rhythm?.[period]?.label??null} onOpen={id=>nav(`/e/w3-ride/${id}`)}/>
  const sheet=goalSheet?<SeasonGoalSheet onClose={()=>setGoalSheet(false)}/>:null
  if(inShell)return <>{portal}{content}{sheet}</>
- return <div className="w3-root"><div className="w3-frame" style={{fontFamily:FONT,minHeight:'100dvh',background:T.bg}}><W3StatusBar/><W3TopBar title="Fahrten"/><div style={{padding:'8px 20px 0'}}>{dock}</div>{content}<W3TabBar/>{sheet}</div></div>
+ // DAS DECK. Der Kopf steht als eigenes Kapitel und fuellt das Sichtfeld;
+ // die Liste kommt auf Zuruf. Siehe w3deck.css -- CSS-Snap, kein JS-Pager.
+ //
+ // NUR AUSSERHALB DER SHELL. Im Hero-Raum wird `dock` per Portal in die
+ // Shell gehaengt (`inShell` oben); dort besitzt die Shell das Layout, und
+ // ein zweiter Scroll-Container darin waere ein Scroller im Scroller.
+ return <div className="w3-root"><div className="w3-frame has-deck" style={{fontFamily:FONT,background:T.bg}}><W3StatusBar/><W3TopBar title="Fahrten"/>
+  <div className="w3-deck" tabIndex={-1}>
+   <section className="w3-deck-chapter is-hero"><div style={{padding:'8px 20px 0'}}>{dock}</div></section>
+   <section className="w3-deck-chapter is-flow">{content}</section>
+  </div>
+  <W3TabBar/>{sheet}</div></div>
 }
 /** The season-goal editor: one number, the rider's own. Writes
  *  `goals.season_km_goal` via PUT /athletes/me/goals and refreshes the

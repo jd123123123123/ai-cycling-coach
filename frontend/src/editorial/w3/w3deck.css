@@ -1,0 +1,82 @@
+/* frontend/src/editorial/w3/w3deck.css
+ *
+ * LAYOUT ONLY — keine Farbe. Jede Farbe kommt aus den Tokens, wie in
+ * morning.css und archive.css, und `isolation.test.ts` schuetzt das.
+ *
+ * DAS DECK: der Kopf steht, der Rest kommt auf Zuruf.
+ *
+ * Gemeldet: "make the heroes always locked in and then use scroll like in
+ * tiktok to get to the other content of the page". Genau das macht CSS-Snap --
+ * und zwar besser als ein JS-Pager: `scroll-snap-stop: always` laesst eine
+ * Wischbewegung auf GENAU einem Kapitel landen und nie eines ueberspringen,
+ * und der Browser behaelt Schwung, Gummiband-Effekt und
+ * Bedienhilfen-Verhalten, das ein eigener Pager alles schlecht nachbauen
+ * muesste. React faehrt hier nichts; es beobachtet hoechstens.
+ *
+ * Dasselbe Muster laeuft seit Monaten im Morgen-Deck. Es hier nachzubauen
+ * statt es zu uebernehmen waere die zweite Fassung derselben Sache.
+ */
+
+/* DER RAHMEN MUSS EINE HOEHE HABEN, nicht nur eine Mindesthoehe.
+   `.w3-frame` steht auf `min-height: 100dvh` und waechst damit mit seinem
+   Inhalt -- dann begrenzt `flex: 1` am Deck nichts, das Deck wird so hoch wie
+   die Liste (gemessen: 2062 px statt 844) und scrollt ueberhaupt nicht.
+   Erst gerendert gesehen; im Quelltext sieht beides gleich richtig aus.
+   Als Modifikator, damit Seiten ohne Deck unberuehrt bleiben. */
+.w3-frame.has-deck {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.w3-deck {
+  flex: 1;
+  /* OHNE `min-height: 0` waechst ein Flex-Kind an seinem Inhalt statt zu
+     scrollen -- dann rutscht die Tableiste aus dem Bild und das Deck scrollt
+     gar nicht. */
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  outline: none;
+}
+.w3-deck::-webkit-scrollbar { display: none; }
+
+.w3-deck-chapter {
+  /* min-height, nicht height: ein Kapitel, dessen Inhalt das Sichtfeld
+     wirklich uebersteigt (eine lange Liste, grosse Schrift), muss weiter
+     scrollen duerfen und danach weiterschnappen -- niemals abschneiden. */
+  min-height: 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  box-sizing: border-box;
+}
+
+/* DER GUCKSPALT. Ein Kapitel, das exakt das Sichtfeld fuellt, sieht aus wie
+   das Ende der Seite -- niemand wischt weiter. Die Einladung ist der Inhalt
+   selbst, kein Pfeil und kein Hinweistext.
+   
+   72 px UND NICHT 54: bei 54 lag der Schnitt MITTEN IN DER UEBERSCHRIFT des
+   naechsten Kapitels (26 px Innenabstand + halbe Zeile), direkt ueber der
+   Tableiste -- das liest sich wie ein Darstellungsfehler, nicht wie ein
+   Hinweis. 72 px zeigen den Innenabstand UND die ganze Zeile. Gemessen, nicht
+   geschaetzt: der Journal-Kopf steht auf 26 px Abstand und ~40 px Zeile. */
+.w3-deck-chapter.is-hero {
+  min-height: calc(100% - 72px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* Das letzte Kapitel traegt die Liste und darf beliebig lang werden. */
+.w3-deck-chapter.is-flow {
+  min-height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Schnappen IST Bewegung, und zwar eine, die der Fahrer nicht ausgeloest
+     hat. Wer sie abbestellt hat, bekommt eine normale Seite. */
+  .w3-deck { scroll-snap-type: none; }
+}

@@ -376,6 +376,18 @@ export const DASH = '—'
  * LAUT DURCH GROESSE, NIE DURCH FARBE. Die Objektschrift nimmt `T.ink` und
  * niemals Acid: sie ist ohnehin das groesste Element ihrer Flaeche, und Acid
  * daneben waere ein zweiter Ruf um dieselbe Aufmerksamkeit.
+ *
+ * ANTON BENENNT, TNUM MISST -- und das ist die Grenze, die beim Uebertragen
+ * des Planseiten-Kopfes auf den Fahrten-Kopf sichtbar wurde. "WOCHE 05" ist
+ * ein Ordnungsschild: es aendert sich in Schritten, steht allein und darf die
+ * Breite wechseln. "4 812" ist eine gemessene Groesse: sie waechst mit jeder
+ * Fahrt, und Anton hat KEINE Tabellenziffern -- die Zahl wuerde bei jedem
+ * Wechsel in der Breite springen. Gemessene Werte bleiben deshalb bei der
+ * Textschrift mit `TNUM`.
+ *
+ * Was beide Koepfe teilen, ist nicht die Schrift, sondern der AUFBAU:
+ * leises Etikett oben, lauter Wert darunter, leiser Zaehler rechts auf der
+ * Grundlinie. Den trennt `HeadRow` ab.
  */
 export type DisplaySize = 'sm' | 'md' | 'lg'
 
@@ -406,6 +418,38 @@ export const Display = ({ size = 'md', children, style }: {
   >
     {children}
   </span>
+)
+
+/**
+ * W3 · DER KOPF EINER FLAECHE — zwei Raenge links, ein Zaehler rechts.
+ *
+ * Der Aufbau, den der Planseiten-Kopf ("GRUNDLAGE / WOCHE 05 ... von 12")
+ * und der Fahrten-Kopf ("SAISON / 4 812 km ... 142 Fahrten") teilen. Vorher
+ * hat ihn jede Flaeche selbst nachgebaut, mit eigenen Abstaenden und eigener
+ * Ausrichtung.
+ *
+ * `alignItems: flex-end` ist die ganze Feinheit: der kleine Zaehler sitzt
+ * damit auf der Grundlinie des grossen Werts statt in dessen Mitte zu
+ * schweben.
+ */
+export const HeadRow = ({ label, counter, children }: {
+  label: ReactNode
+  counter?: ReactNode
+  children: ReactNode
+}) => (
+  <div style={{ display: 'flex', alignItems: 'flex-end',
+                justifyContent: 'space-between', gap: 14 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+      <Kicker>{label}</Kicker>
+      {children}
+    </div>
+    {counter != null && (
+      <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, flex: 'none',
+                     fontVariantNumeric: 'tabular-nums' }}>
+        {counter}
+      </span>
+    )}
+  </div>
 )
 
 export const Kicker = ({ children }: { children: ReactNode }) => (
