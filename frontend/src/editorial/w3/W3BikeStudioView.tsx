@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { Camera, Sparkles, RefreshCw, Download, Bike, Plus, Loader2 } from 'lucide-react'
-import { T, FONT, EASE, band, Kicker } from './w3tokens'
+import { Display, T, FONT, EASE, band, Kicker } from './w3tokens'
 import './w3.css'
 import { W3Coin } from './W3Coin'
 import W3StatusBar from './W3StatusBar'
@@ -227,7 +227,7 @@ export default function W3BikeStudioView(p: W3BikeStudioProps) {
             </motion.div>
 
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, textAlign: 'center', minWidth: 0 }}>
-              <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: -1.2, lineHeight: 1, color: T.ink }}>BIKE ENTSPERRT</span>
+              <Display>BIKE ENTSPERRT</Display>
               {/* ── THE RIDER NAMES IT ──────────────────────────────────
                   The vision pass reads a name off the frame and that is a good
                   default — but it is a GUESS about somebody's own bicycle, and

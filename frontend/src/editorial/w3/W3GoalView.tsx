@@ -4,7 +4,7 @@ import {
   Pencil, Mountain, Calendar, Flag, GitBranch, Route as RouteIcon,
   Timer, ChevronRight, Repeat, X, Check, Info,
 } from 'lucide-react'
-import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
+import { T, FONT, EASE, grow, Display, Kicker, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import './w3.css'
@@ -167,7 +167,12 @@ export default function W3GoalView({ vm, onBack, onSwitch, onRemove, onSave, onR
             <span style={{ padding: '6px 12px', borderRadius: 100, background: T.acid, fontSize: 11, fontWeight: 700, letterSpacing: 0.4, color: T.bg }}>{vm.priorityChip}</span>
             <span style={{ fontSize: 13, fontWeight: 600, color: T.mid }}>{vm.priorityLabel}</span>
           </div>
-          <span style={{ fontSize: 42, fontWeight: 700, letterSpacing: -1.5, lineHeight: 0.98, color: T.ink }}>{vm.eventName}</span>
+          {/* Der Eventname ist der Gegenstand dieses Bildschirms -- also die
+              Objektschrift. GEMISCHTE SCHREIBUNG, nicht versal: der Name
+              gehoert dem Fahrer, und "MEIN ERSTES RENNEN MIT PAPA" in Versalien
+              waere ein Ausruf, den er nicht gemacht hat. Nebenbei passt
+              "Harz Extrem Marathon" so auf EINE Zeile statt auf zwei. */}
+          <Display>{vm.eventName}</Display>
           <div style={{ display: 'flex', paddingTop: 6 }}>
             {[
               { big: vm.daysCol, sub: 'Tage', hue: T.acid },

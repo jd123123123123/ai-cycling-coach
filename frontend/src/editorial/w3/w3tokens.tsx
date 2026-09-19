@@ -339,6 +339,75 @@ export const EASE = [0.22, 1, 0.36, 1] as const
 export const grow = (delay: number) => ({ duration: 0.55, ease: EASE, delay })
 export const DASH = '—'
 
+/**
+ * W3 · DIE OBJEKTSCHRIFT — der Name einer Sache, nicht ein Satz ueber sie.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WARUM ES DIESE KOMPONENTE GIBT
+ *
+ * Jeder Bildschirm hat sich seine Ueberschrift selbst ausgedacht. Gemessen im
+ * editorial-Baum: 34/700/-1.4, 36/700/-1.2, 30/700/-1.0, 40/600/-1.6,
+ * 42/700/-1.5, 34/700/-1.4 -- und in den CSS-Dateien noch einmal 36/-1.5,
+ * 43/600/-1.9, 27/550 und 40/550. Zehn Varianten desselben Gedankens. Keine
+ * davon ist falsch; zusammen ergeben sie kein System.
+ *
+ * `DISPLAY` (Anton) stand daneben in GENAU EINER Datei -- dem Planbogen, fuer
+ * "WOCHE 05". Das ist die Behandlung, die traegt, und sie steht ab jetzt hier
+ * statt in einer Datei.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * DIE REGEL, UND SIE IST DIE HALBE ARBEIT
+ *
+ * Anton ist eine schmale Versalschrift. Sie traegt KURZE OBJEKTNAMEN:
+ *
+ *     WOCHE 05 · BIKE ENTSPERRT · DEINE FAHRTEN · SCHWELLE
+ *
+ * Sie traegt KEINE SAETZE. "Was der Plan von dir will" in Anton waere eng,
+ * laut und schlecht lesbar -- dafuer bleibt die Zwei-Gewichts-Ueberschrift des
+ * Hauses zustaendig (38-44/700/-1.4, der Satz in `ink`, das eine Wort in
+ * `acid`). Die beiden stehen NICHT in Konkurrenz, sie haben verschiedene
+ * Aufgaben:
+ *
+ *     Objektschrift  ->  wie heisst dieses Ding?
+ *     Satzschrift    ->  was ist gerade wahr?
+ *
+ * Wer hier einen Satz hineinschreibt, hat die falsche Komponente gewaehlt.
+ *
+ * LAUT DURCH GROESSE, NIE DURCH FARBE. Die Objektschrift nimmt `T.ink` und
+ * niemals Acid: sie ist ohnehin das groesste Element ihrer Flaeche, und Acid
+ * daneben waere ein zweiter Ruf um dieselbe Aufmerksamkeit.
+ */
+export type DisplaySize = 'sm' | 'md' | 'lg'
+
+//: Die Spur wird mit der Groesse enger -- Anton laeuft sonst bei 54 px
+//: sichtbar auseinander, waehrend dieselbe Spur bei 28 px die Buchstaben
+//: ineinanderschiebt.
+const DISPLAY_SCALE: Record<DisplaySize, { fontSize: number; letterSpacing: number }> = {
+  sm: { fontSize: 26, letterSpacing: -0.2 },
+  md: { fontSize: 40, letterSpacing: -0.5 },
+  lg: { fontSize: 54, letterSpacing: -0.9 },
+}
+
+export const Display = ({ size = 'md', children, style }: {
+  size?: DisplaySize
+  children: ReactNode
+  style?: CSSProperties
+}) => (
+  <span
+    style={{
+      fontFamily: DISPLAY,
+      lineHeight: 0.92,
+      color: T.ink,
+      display: 'block',
+      textWrap: 'balance',
+      ...DISPLAY_SCALE[size],
+      ...style,
+    }}
+  >
+    {children}
+  </span>
+)
+
 export const Kicker = ({ children }: { children: ReactNode }) => (
   <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: 'uppercase', color: T.quiet }}>{children}</span>
 )
