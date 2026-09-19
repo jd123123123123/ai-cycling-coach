@@ -212,3 +212,33 @@ def test_ein_leeres_profil_ist_erlaubt():
     # Verhalten zurueck.
     w = WorkRhythm()
     assert w.work_days == [] and w.commute is None
+
+
+# ── Wechselnde Arbeitszeiten ────────────────────────────────────────────────
+# "Manche arbeiten jeden Tag gleich, manche nicht." Der Regelfall bleibt EIN
+# Zeitpaar; wer wechselnde Zeiten hat, gibt sie je Tag an.
+
+def test_tageszeiten_werden_gelesen():
+    a = aus_profil(_profil(day_hours={'mon': {'start': '06:00', 'end': '14:00'}}))
+    assert a is not None
+    assert a.tageszeiten[0] == (time(6, 0), time(14, 0))
+
+
+def test_ohne_tageszeiten_bleibt_es_bei_einem_zeitpaar():
+    a = aus_profil(_profil())
+    assert a is not None and a.tageszeiten == {}
+
+
+def test_das_fenster_deckt_den_weitesten_tag_ab():
+    # Ein Fenster, das nur den Regeltag abdeckt, sortiert die Fruehschicht als
+    # Nicht-Pendelfahrt aus -- also genau die Tage, fuer die es die Angabe gibt.
+    a = aus_profil(_profil(start='09:00', end='17:00',
+                           day_hours={'mon': {'start': '06:00', 'end': '14:00'}}))
+    von, bis = pendelfenster(a)
+    assert von == time(4, 0)    # 06:00 minus zwei Stunden Puffer
+    assert bis == time(19, 0)   # 17:00 plus zwei Stunden Puffer
+
+
+def test_ein_unbekannter_wochentag_in_den_tageszeiten_wird_ignoriert():
+    a = aus_profil(_profil(day_hours={'montag': {'start': '06:00', 'end': '14:00'}}))
+    assert a is not None and a.tageszeiten == {}

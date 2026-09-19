@@ -42,6 +42,61 @@ async def update_my_profile(
     return profile
 
 
+# ─── Pendelbefund — der Arbeitsweg aus den Fahrten, nicht aus einer Frage ────
+
+
+class CommutePatternRead(BaseModel):
+    """Was die Fahrten ueber den Arbeitsweg sagen.
+
+    `detected=False` heisst: zu wenig Substanz fuer eine Aussage. Dann bleibt
+    das Formular leer, statt mit geratenen Werten vorbelegt zu werden -- ein
+    falsch vorausgefuelltes Feld prueft niemand nach.
+    """
+
+    detected: bool = False
+    work_days: list[str] = []
+    commute_minutes: int | None = None
+    earliest: str | None = None
+    latest: str | None = None
+    rides: int = 0
+    pair_ratio: float = 0.0
+    confidence: Literal["hoch", "mittel", "niedrig"] = "niedrig"
+
+
+@router.get("/me/commute-pattern", response_model=CommutePatternRead)
+async def my_commute_pattern(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> CommutePatternRead:
+    """Den Arbeitsweg aus den letzten Wochen lesen.
+
+    Read-only und folgenlos: der Befund wird NICHT gespeichert. Er fuellt nur
+    das Formular vor, und erst die Bestaetigung des Fahrers schreibt etwas --
+    was die Maschine erkannt hat, bleibt ein Vorschlag.
+    """
+    from app.services.commute_detection import detect_commute_pattern
+
+    profile = await get_or_create_profile(db, current_user.id)
+    ftp = getattr(profile, "ftp_watts", None)
+    try:
+        befund = await detect_commute_pattern(db, current_user.id, ftp)
+    except Exception:  # noqa: BLE001 — ein Erkennungsfehler darf nichts kippen
+        logger.exception("Pendelerkennung fehlgeschlagen (user_id=%s)", current_user.id)
+        return CommutePatternRead()
+    if befund is None:
+        return CommutePatternRead()
+    return CommutePatternRead(
+        detected=True,
+        work_days=befund.wochentage_kuerzel,
+        commute_minutes=befund.minuten_je_richtung,
+        earliest=befund.frueheste.strftime("%H:%M") if befund.frueheste else None,
+        latest=befund.spaeteste.strftime("%H:%M") if befund.spaeteste else None,
+        rides=befund.fahrten,
+        pair_ratio=befund.paar_anteil,
+        confidence=befund.sicherheit,
+    )
+
+
 # ─── Athlete status — forgiving-streak + plan input ─────────────────────────
 # "sick" / "injured" / "break" pause the streak (never break it) and push the
 # adaptive directive to rest, which in turn mutes competitive surfaces via the

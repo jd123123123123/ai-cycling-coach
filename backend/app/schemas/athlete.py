@@ -154,6 +154,31 @@ class WorkRhythm(BaseModel):
     #: Je Richtung. Ein Arbeitsweg ueber zwei Stunden je Richtung ist kein
     #: Arbeitsweg mehr, sondern eine Ausfahrt -- und fast sicher ein Vertipper.
     commute_minutes: int | None = Field(default=None, ge=1, le=120)
+    #: NUR wenn die Tage unterschiedlich sind: {"mon": {"start","end"}, ...}.
+    #: Sonst gelten `start`/`end` fuer alle Arbeitstage. Ohne dieses Feld haette
+    #: Pydantic die Angabe still verworfen -- ein Bedienelement, dessen Wert nie
+    #: ankommt, ist schlimmer als keins.
+    day_hours: dict[str, dict[str, str]] | None = None
+
+    @field_validator("day_hours")
+    @classmethod
+    def _tageszeiten(cls, v: dict | None) -> dict | None:
+        if v is None:
+            return v
+        for tag, paar in v.items():
+            if tag not in WEEKDAY_KEYS:
+                raise ValueError(f"Unbekannter Wochentag: {tag!r}")
+            for teil in ("start", "end"):
+                wert = paar.get(teil)
+                if wert in (None, ""):
+                    continue
+                try:
+                    h, m = str(wert).split(":")[:2]
+                    if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59):
+                        raise ValueError
+                except (ValueError, TypeError, AttributeError):
+                    raise ValueError(f"Uhrzeit muss HH:MM sein, nicht {wert!r}")
+        return v
 
     @field_validator("work_days")
     @classmethod

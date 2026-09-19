@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { T, FONT, Kicker } from './w3tokens'
 import { luxTile, hairline, TNUM } from './w3surfaces'
-import { getProfile, updateProfile } from '../../api/athletes'
+import { getCommutePattern, getProfile, updateProfile } from '../../api/athletes'
 import type { WorkRhythm } from '../../types/athlete'
 
 /**
@@ -11,111 +11,161 @@ import type { WorkRhythm } from '../../types/athlete'
  * WARUM ES DAS GIBT
  *
  * Der Plan erfuhr von einer Pendelfahrt bisher erst, wenn sie gefahren UND
- * synchronisiert war. Er reagierte also immer nachtraeglich: Er sah eine
- * erhoehte Wochenlast, suchte ein Opfer und fand -- sobald die Grundlagentage
- * aufgebraucht waren -- die Qualitaetseinheit. Wer taeglich zur Arbeit radelt,
- * verbraucht genau diese Grundlagentage zuerst. Der Athlet sammelte Umfang und
- * verlor den einen Reiz, den Umfang nicht erzeugen kann.
- *
- * Mit Arbeitstagen, Zeiten und Pendeldauer ist diese Last VORHERSEHBAR. Sie
- * wird eingeplant, statt hinterher etwas zu verdraengen.
+ * synchronisiert war -- er reagierte nachtraeglich, suchte ein Opfer und fand,
+ * sobald die Grundlagentage aufgebraucht waren, die Qualitaetseinheit. Wer
+ * taeglich zur Arbeit radelt, verbraucht genau diese Tage zuerst.
  *
  * `docs/2026-09-19-pendlerfehler-reizkonten.md`, Abschnitt 6.
  *
  * ───────────────────────────────────────────────────────────────────────────
- * DIESER REGLER SPEICHERT SELBST — und das ist kein Detail.
+ * ZWEI SIEBENER-PILLENREIHEN UNTEREINANDER WAREN DER FEHLER.
  *
- * In `W3PlanView` steht die Warnung, warum zwei fruehere Regler entfernt
- * wurden: Ihre Werte erreichten `RebuildPayload` nie, also taten zwei von fuenf
- * Bedienelementen in einem Formular namens "Plan neu berechnen" still gar
- * nichts. `/plan/change/apply` kennt kein Feld fuer den Alltag und soll auch
- * keines bekommen -- der Alltag ist keine Planoption, sondern eine Tatsache
- * ueber den Fahrer. Also geht er direkt an `PATCH /athletes/me` und meldet
- * sichtbar, ob er angekommen ist.
+ * Die erste Fassung setzte "Arbeitstage" als MO DI MI DO FR SA SO -- direkt
+ * unter die "Trainingstage" des Blattes, in derselben Pillenform. Zwei
+ * identisch aussehende Wochenreihen, die Verschiedenes bedeuten: man musste
+ * die Ueberschrift lesen, um zu wissen, welche man gerade bedient. Das ist
+ * genau die Sorte Oberflaeche, die man zweimal falsch bedient und danach
+ * nicht mehr anfasst.
  *
- * VIER ANGABEN, NICHT MEHR. Ein Formular, das laenger ist als eine Minute,
- * fuellt niemand aus, und ein leeres Profil ist schlechter als ein grobes.
- * Alles ist optional: Ohne Angaben verhaelt sich der Plan exakt wie bisher.
+ * Jetzt beantwortet eine Vorgabe die Frage fuer fast alle: `Mo–Fr`,
+ * `Jeden Tag`, `Andere`. Nur `Andere` klappt die Wochenreihe ueberhaupt auf.
+ * Im Normalfall steht hier also gar keine zweite Pillenreihe mehr.
+ *
+ * WECHSELNDE ZEITEN. Manche arbeiten jeden Tag gleich, manche nicht. Der
+ * Regelfall ist EIN Zeitpaar; wer "Unterschiedlich" waehlt, bekommt eine
+ * Zeile je Arbeitstag. Die Alternative -- immer sieben Zeilen -- haette den
+ * Aufwand aller an der Ausnahme ausgerichtet.
+ *
+ * DIE BESTE MASKE IST DIE, DIE NIEMAND AUSFUELLT. `GET /athletes/me/
+ * commute-pattern` liest den Arbeitsweg aus den Fahrten der letzten acht
+ * Wochen. Wird er erkannt, steht er als BEFUND da und muss nur bestaetigt
+ * werden. Wird er es nicht -- und in den heutigen Produktionsdaten wird er bei
+ * keinem Fahrer erkannt -- bleibt das Formular leer statt geraten vorbelegt.
+ * Ein falsch vorausgefuelltes Feld prueft niemand nach.
+ *
+ * DER REGLER SPEICHERT SELBST, ueber `PATCH /athletes/me`. Nicht ueber
+ * `onRebuild`: dessen Payload kennt kein Feld fuer den Alltag. Genau daran
+ * sind die Rhythmus- und Indoor-Regler in `W3PlanView` schon einmal still
+ * gescheitert.
  */
 
 const TAGE = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
 const KUERZEL = ['MO', 'DI', 'MI', 'DO', 'FR', 'SA', 'SO']
 const NAMEN = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag', 'Sonntag']
 
-const MODI: { id: NonNullable<WorkRhythm['commute']>; label: string; sub: string }[] = [
-  { id: 'bike', label: 'Mit dem Rad', sub: 'Jeden Arbeitstag' },
-  { id: 'partly', label: 'Manchmal', sub: 'Nicht jeden Tag' },
-  { id: 'none', label: 'Anders', sub: 'Kein Rad' },
+const WERKTAGS = ['mon', 'tue', 'wed', 'thu', 'fri']
+const TAEGLICH = [...TAGE]
+
+type Vorgabe = 'werktags' | 'taeglich' | 'andere'
+
+const MODI: { id: NonNullable<WorkRhythm['commute']>; label: string }[] = [
+  { id: 'bike', label: 'Mit dem Rad' },
+  { id: 'partly', label: 'Manchmal' },
+  { id: 'none', label: 'Anders' },
 ]
+
+const gleich = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join() === [...b].sort().join()
+
+function vorgabeFuer(tage: string[]): Vorgabe {
+  if (gleich(tage, WERKTAGS)) return 'werktags'
+  if (gleich(tage, TAEGLICH)) return 'taeglich'
+  return 'andere'
+}
 
 export default function W3WorkRhythm({ onSaved }: {
   onSaved?: (w: WorkRhythm) => void
 } = {}) {
-  // LAEDT SICH SELBST. Den Anfangswert durch W3PlanPage -> W3PlanExperience ->
-  // PlanAdjustSheet zu faedeln waere genau die Art Verdrahtung, die in diesem
-  // Repo regelmaessig auf halbem Weg abreisst -- und dann stuende hier ein
-  // Formular, das die gespeicherten Angaben des Fahrers nicht kennt und sie
-  // beim naechsten Speichern ueberschreibt.
-  const [tage, setTage] = useState<string[]>(['mon', 'tue', 'wed', 'thu', 'fri'])
+  const [tage, setTage] = useState<string[]>(WERKTAGS)
+  const [vorgabe, setVorgabe] = useState<Vorgabe>('werktags')
   const [beginn, setBeginn] = useState('')
   const [ende, setEnde] = useState('')
+  const [proTag, setProTag] = useState(false)
+  const [zeiten, setZeiten] = useState<Record<string, { start: string; end: string }>>({})
   const [modus, setModus] = useState<WorkRhythm['commute']>(null)
-  const [minuten, setMinuten] = useState<string>('')
+  const [minuten, setMinuten] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [zustand, setZustand] = useState<'offen' | 'gespeichert' | 'fehler'>('offen')
+  const [befund, setBefund] = useState<{
+    tage: string[]; minuten: number | null; fahrten: number
+    frueh: string | null; spaet: string | null; sicherheit: string
+  } | null>(null)
+  const [befundGenutzt, setBefundGenutzt] = useState(false)
 
+  // LAEDT SICH SELBST. Den Anfangswert durch drei Ebenen zu faedeln waere die
+  // Art Verdrahtung, die hier regelmaessig auf halbem Weg abreisst -- und dann
+  // stuende ein Formular da, das die gespeicherten Angaben nicht kennt und sie
+  // beim naechsten Speichern ueberschreibt.
   useEffect(() => {
     let lebt = true
     getProfile().then(p => {
       const w = p.work_rhythm
       if (!lebt || !w) return
-      if (w.work_days?.length) setTage(w.work_days)
+      if (w.work_days?.length) { setTage(w.work_days); setVorgabe(vorgabeFuer(w.work_days)) }
       if (w.start) setBeginn(w.start)
       if (w.end) setEnde(w.end)
       if (w.commute) setModus(w.commute)
       if (w.commute_minutes != null) setMinuten(String(w.commute_minutes))
+      const pt = (w as { day_hours?: Record<string, { start: string; end: string }> }).day_hours
+      if (pt && Object.keys(pt).length) { setZeiten(pt); setProTag(true) }
     }).catch(() => { /* ohne Profil bleiben die Vorgaben stehen */ })
+    getCommutePattern().then(c => {
+      if (!lebt || !c.detected) return
+      setBefund({
+        tage: c.work_days, minuten: c.commute_minutes, fahrten: c.rides,
+        frueh: c.earliest, spaet: c.latest, sicherheit: c.confidence,
+      })
+    }).catch(() => { /* ohne Befund bleibt es bei der Handeingabe */ })
     return () => { lebt = false }
   }, [])
-  const [busy, setBusy] = useState(false)
-  const [zustand, setZustand] = useState<'offen' | 'gespeichert' | 'fehler'>('offen')
+
+  const befundUebernehmen = () => {
+    if (!befund) return
+    if (befund.tage.length) { setTage(befund.tage); setVorgabe(vorgabeFuer(befund.tage)) }
+    if (befund.minuten) setMinuten(String(befund.minuten))
+    if (befund.frueh) setBeginn(befund.frueh)
+    if (befund.spaet) setEnde(befund.spaet)
+    setModus('bike')
+    setBefundGenutzt(true)
+  }
+
+  const setzeVorgabe = (v: Vorgabe) => {
+    setVorgabe(v)
+    if (v === 'werktags') setTage(WERKTAGS)
+    if (v === 'taeglich') setTage(TAEGLICH)
+  }
 
   const mitRad = modus === 'bike' || modus === 'partly'
   const min = Number(minuten)
   const minutenGueltig = !minuten || (Number.isFinite(min) && min >= 1 && min <= 120)
 
-  // Die erwartete Wochenlast, live. Sie ist eine PLANUNGSGROESSE, keine
-  // Messung -- TSS = Dauer_h · IF² · 100 mit IF 0,60 fuer lockeres Pendeln.
-  // Sobald echte Fahrten vorliegen, ersetzt die gemessene Intensitaet die
-  // Annahme; deshalb steht "geschätzt" daran und keine Nachkommastelle.
+  // Die erwartete Wochenlast, live. PLANUNGSGROESSE, keine Messung:
+  // TSS = Dauer_h · IF² · 100 mit IF 0,60 fuer lockeres Pendeln.
   //
-  // DIESE FORMEL STEHT ZWEIMAL, und das soll hier offen stehen, statt still
-  // auseinanderzulaufen: `work_rhythm.erwartete_pendellast_tss` im Backend
-  // rechnet dasselbe. Die Doppelung ist bewusst -- eine Vorschau, die erst
-  // nach dem Speichern erscheint, ist keine Vorschau, und ein Netzaufruf pro
-  // Tastendruck waere der falsche Preis dafuer. Wer eine Seite aendert
-  // (IF-Annahme, Hin-und-Rueckweg), MUSS die andere mitaendern; der Test
-  // `test_erwartete_wochenlast_ist_eine_planungsgroesse` haelt die Zahl fest.
+  // DIESE FORMEL STEHT ZWEIMAL, und das soll offen stehen statt still
+  // auseinanderzulaufen: `work_rhythm.erwartete_pendellast_tss` rechnet im
+  // Backend dasselbe. Eine Vorschau, die erst nach dem Speichern erscheint,
+  // ist keine Vorschau; ein Netzaufruf je Tastendruck waere der falsche Preis.
+  // Wer eine Seite aendert, MUSS die andere mitaendern.
   const erwartet = mitRad && min >= 1 && tage.length
     ? Math.round(((min * 2) / 60) * tage.length * 0.6 * 0.6 * 100)
     : null
 
   const speichern = async () => {
     if (busy || !minutenGueltig) return
-    setBusy(true)
-    setZustand('offen')
+    setBusy(true); setZustand('offen')
     const w: WorkRhythm = {
       work_days: tage,
-      start: beginn || null,
-      end: ende || null,
+      start: proTag ? null : (beginn || null),
+      end: proTag ? null : (ende || null),
       commute: modus ?? null,
       commute_minutes: mitRad && min >= 1 ? min : null,
+      ...(proTag ? { day_hours: zeiten } : {}),
     }
     try {
       await updateProfile({ work_rhythm: w })
-      setZustand('gespeichert')
-      onSaved?.(w)
-    } catch {
-      setZustand('fehler')
-    } finally { setBusy(false) }
+      setZustand('gespeichert'); onSaved?.(w)
+    } catch { setZustand('fehler') } finally { setBusy(false) }
   }
 
   const pille = (an: boolean) => ({
@@ -131,6 +181,10 @@ export default function W3WorkRhythm({ onSaved }: {
     fontFamily: FONT, minWidth: 0, width: '100%',
   }
 
+  const zeileFuer = (tag: string) => zeiten[tag] ?? { start: beginn, end: ende }
+  const setzeZeile = (tag: string, teil: 'start' | 'end', wert: string) =>
+    setZeiten(z => ({ ...z, [tag]: { ...zeileFuer(tag), [teil]: wert } }))
+
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 14, fontFamily: FONT }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -141,31 +195,102 @@ export default function W3WorkRhythm({ onSaved }: {
         </span>
       </div>
 
+      {/* DER BEFUND AUS DEN FAHRTEN. Er steht ueber allem anderen, weil er die
+          Fragen darunter meistens beantwortet -- und er behauptet nichts, er
+          schlaegt vor. */}
+      {befund && !befundGenutzt && (
+        <div style={{ ...luxTile(16), padding: '12px 13px', gap: 8 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: T.mid, lineHeight: 1.45 }}>
+            In deinen Fahrten sieht das nach einem Arbeitsweg aus:{' '}
+            <span style={{ fontWeight: 700, color: T.ink }}>
+              {befund.tage.map(t => KUERZEL[TAGE.indexOf(t as typeof TAGE[number])]).join(' · ')}
+            </span>
+            {befund.minuten ? <>, rund{' '}
+              <span style={{ ...TNUM, fontWeight: 700, color: T.ink }}>{befund.minuten} min</span>
+              {' '}je Richtung</> : null}.
+          </span>
+          <span style={{ fontSize: 10.5, fontWeight: 500, color: T.quiet, lineHeight: 1.4 }}>
+            Aus {befund.fahrten} Fahrten der letzten acht Wochen · Sicherheit {befund.sicherheit}
+          </span>
+          <button type="button" onClick={befundUebernehmen}
+                  style={{ alignSelf: 'flex-start', marginTop: 2, padding: '8px 14px',
+                           borderRadius: 100, border: `1px solid ${T.acid}`,
+                           background: T.acidDim, color: T.acid, fontFamily: FONT,
+                           fontSize: 12.5, fontWeight: 600, cursor: 'pointer' }}>
+            Stimmt — übernehmen
+          </button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <Kicker>Arbeitstage</Kicker>
+        {/* VORGABEN STATT EINER ZWEITEN WOCHENREIHE. Die Wochenreihe erscheint
+            nur unter "Andere" -- sonst stuenden hier zwei identisch aussehende
+            Sieben-Tage-Zeilen untereinander, die Verschiedenes bedeuten. */}
         <div style={{ display: 'flex', gap: 6 }}>
-          {KUERZEL.map((k, i) => {
-            const an = tage.includes(TAGE[i])
-            return (
-              <button key={k} type="button" style={pille(an)} aria-pressed={an}
-                      aria-label={`${NAMEN[i]} ${an ? 'ist Arbeitstag' : 'ist frei'}`}
-                      onClick={() => setTage(p => an ? p.filter(t => t !== TAGE[i]) : [...p, TAGE[i]])}>
-                {k}
+          {([['werktags', 'Mo–Fr'], ['taeglich', 'Jeden Tag'], ['andere', 'Andere']] as const)
+            .map(([id, text]) => (
+              <button key={id} type="button" style={pille(vorgabe === id)}
+                      aria-pressed={vorgabe === id} onClick={() => setzeVorgabe(id)}>
+                {text}
               </button>
-            )
-          })}
+            ))}
         </div>
+        {vorgabe === 'andere' && (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {KUERZEL.map((k, i) => {
+              const an = tage.includes(TAGE[i])
+              return (
+                <button key={k} type="button" style={pille(an)} aria-pressed={an}
+                        aria-label={`${NAMEN[i]} ${an ? 'ist Arbeitstag' : 'ist frei'}`}
+                        onClick={() => setTage(p => an ? p.filter(t => t !== TAGE[i]) : [...p, TAGE[i]])}>
+                  {k}
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <Kicker>Arbeitszeit</Kicker>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input type="time" value={beginn} onChange={e => setBeginn(e.target.value)}
-                 aria-label="Arbeitsbeginn" style={feld} />
-          <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, flex: 'none' }}>bis</span>
-          <input type="time" value={ende} onChange={e => setEnde(e.target.value)}
-                 aria-label="Arbeitsende" style={feld} />
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
+          <Kicker>Arbeitszeit</Kicker>
+          {/* Der Regelfall ist EIN Zeitpaar. Sieben Zeilen fuer alle haetten
+              den Aufwand aller an der Ausnahme ausgerichtet. */}
+          <button type="button" onClick={() => setProTag(v => !v)}
+                  aria-pressed={proTag}
+                  style={{ background: 'none', border: 0, padding: '4px 0', cursor: 'pointer',
+                           fontFamily: FONT, fontSize: 11.5, fontWeight: 600,
+                           color: proTag ? T.ink : T.quiet, textDecoration: 'underline' }}>
+            {proTag ? 'Jeden Tag gleich' : 'Tage unterschiedlich?'}
+          </button>
         </div>
+        {!proTag ? (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="time" value={beginn} onChange={e => setBeginn(e.target.value)}
+                   aria-label="Arbeitsbeginn" style={feld} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, flex: 'none' }}>bis</span>
+            <input type="time" value={ende} onChange={e => setEnde(e.target.value)}
+                   aria-label="Arbeitsende" style={feld} />
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+            {TAGE.filter(t => tage.includes(t)).map(t => {
+              const i = TAGE.indexOf(t), z = zeileFuer(t)
+              return (
+                <div key={t} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ width: 30, flex: 'none', fontSize: 11, fontWeight: 700,
+                                 letterSpacing: 0.4, color: T.quiet }}>{KUERZEL[i]}</span>
+                  <input type="time" value={z.start} aria-label={`${NAMEN[i]} Beginn`}
+                         onChange={e => setzeZeile(t, 'start', e.target.value)} style={feld} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, flex: 'none' }}>bis</span>
+                  <input type="time" value={z.end} aria-label={`${NAMEN[i]} Ende`}
+                         onChange={e => setzeZeile(t, 'end', e.target.value)} style={feld} />
+                </div>
+              )
+            })}
+          </div>
+        )}
         <span style={{ fontSize: 11, fontWeight: 500, color: T.quiet, lineHeight: 1.4 }}>
           Sagt dem Plan, wann überhaupt ein Fenster für eine lange oder harte
           Einheit bleibt.
@@ -199,8 +324,6 @@ export default function W3WorkRhythm({ onSaved }: {
         )}
       </div>
 
-      {/* Was der Plan daraus macht -- sichtbar, bevor gespeichert wird. Eine
-          Eingabe, deren Wirkung man nicht sieht, fuellt niemand zweimal aus. */}
       {erwartet != null && (
         <>
           <div style={hairline()} />
@@ -218,18 +341,14 @@ export default function W3WorkRhythm({ onSaved }: {
         </>
       )}
 
+      {/* LEISE, NICHT ACID. Das Blatt hat bereits eine Hauptaktion
+          ("Plan neu berechnen") in Acid; ein zweiter Acid-Knopf macht zwei
+          Hauptaktionen auf. */}
       <button type="button" onClick={speichern} disabled={busy || !minutenGueltig}
-              // LEISE, NICHT ACID. Das Blatt, in dem dieser Abschnitt steht,
-              // hat bereits eine Hauptaktion ("Plan neu berechnen") in Acid.
-              // Ein zweiter Acid-Knopf macht zwei Hauptaktionen auf, und der
-              // Hausstil gibt das Budget genau einmal aus. Die Tages-Pillen
-              // oben sind Acid, weil das Blatt seine Pillen schon so setzt --
-              // eine zweite Pillen-Sprache daneben saehe kaputt aus.
               style={{
                 padding: '13px 18px', borderRadius: 100,
                 border: `1px solid ${T.stroke}`, background: 'transparent',
-                color: T.ink,
-                fontSize: 15, fontWeight: 600, fontFamily: FONT,
+                color: T.ink, fontSize: 15, fontWeight: 600, fontFamily: FONT,
                 cursor: busy ? 'default' : 'pointer', opacity: busy ? 0.6 : 1,
               }}>
         {busy ? 'Speichert …' : 'Alltag speichern'}

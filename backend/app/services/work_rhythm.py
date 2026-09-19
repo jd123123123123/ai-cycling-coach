@@ -14,7 +14,7 @@ bisherige Verhalten zurueck.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import time, timedelta
 
 #: Wochentagskuerzel wie in `days_available` und `hard_day_blackouts`.
@@ -33,6 +33,9 @@ class Alltag:
     ende: time | None
     pendelt_mit_rad: bool
     pendelminuten: int | None
+    #: Nur bei wechselnden Zeiten: Wochentag -> (Beginn, Ende). Leer heisst,
+    #: `beginn`/`ende` gelten fuer alle Arbeitstage.
+    tageszeiten: dict[int, tuple[time | None, time | None]] = field(default_factory=dict)
 
     @property
     def pendellast_pro_tag_minuten(self) -> int | None:
@@ -65,10 +68,21 @@ def aus_profil(profile: object) -> Alltag | None:
         return None
     modus = roh.get("commute")
     minuten = roh.get("commute_minutes")
+    # Wechselnde Zeiten: je Arbeitstag ein eigenes Paar. Fehlt der Tag, gelten
+    # die allgemeinen Zeiten -- niemand muss sieben Zeilen ausfuellen.
+    tageszeiten: dict[int, tuple[time | None, time | None]] = {}
+    roh_tz = roh.get("day_hours")
+    if isinstance(roh_tz, dict):
+        for kuerzel, paar in roh_tz.items():
+            if kuerzel not in _TAGE or not isinstance(paar, dict):
+                continue
+            tageszeiten[_TAGE[kuerzel]] = (_uhr(paar.get("start")), _uhr(paar.get("end")))
+
     return Alltag(
         arbeitstage=tage,
         beginn=_uhr(roh.get("start")),
         ende=_uhr(roh.get("end")),
+        tageszeiten=tageszeiten,
         pendelt_mit_rad=modus in ("bike", "partly"),
         pendelminuten=int(minuten) if isinstance(minuten, (int, float)) and minuten > 0 else None,
     )
@@ -82,8 +96,22 @@ def pendelfenster(alltag: Alltag | None) -> tuple[time, time] | None:
     eine Mittagsrunde am Samstag ist kein Arbeitsweg, eine Fahrt um 7:40 vor
     einem 8:30-Beginn schon.
     """
-    if alltag is None or alltag.beginn is None or alltag.ende is None:
+    if alltag is None:
         return None
+    # Bei wechselnden Zeiten den WEITESTEN Tag nehmen. Ein Fenster, das nur den
+    # Regeltag abdeckt, wuerde die Fruehschicht als Nicht-Pendelfahrt aussortieren
+    # -- und damit genau die Tage verlieren, fuer die es die Angabe ueberhaupt gibt.
+    beginne = [t for t, _ in alltag.tageszeiten.values() if t] + \
+              ([alltag.beginn] if alltag.beginn else [])
+    enden = [t for _, t in alltag.tageszeiten.values() if t] + \
+            ([alltag.ende] if alltag.ende else [])
+    if not beginne or not enden:
+        return None
+    alltag = Alltag(
+        arbeitstage=alltag.arbeitstage, beginn=min(beginne), ende=max(enden),
+        pendelt_mit_rad=alltag.pendelt_mit_rad, pendelminuten=alltag.pendelminuten,
+        tageszeiten=alltag.tageszeiten,
+    )
     heute = timedelta()
 
     def _minus(t: time, d: timedelta) -> time:

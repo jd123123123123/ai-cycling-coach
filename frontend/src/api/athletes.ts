@@ -1,6 +1,24 @@
 import { apiClient } from './client'
 import type { AthleteProfile, AthleteProfileUpdate, TrainingGoals } from '../types/athlete'
 
+/** Was die Fahrten ueber den Arbeitsweg sagen. `detected:false` heisst: zu
+ *  wenig Substanz -- dann bleibt das Formular leer statt geraten vorbelegt. */
+export interface CommutePattern {
+  detected: boolean
+  work_days: string[]
+  commute_minutes: number | null
+  earliest: string | null
+  latest: string | null
+  rides: number
+  pair_ratio: number
+  confidence: 'hoch' | 'mittel' | 'niedrig'
+}
+
+export async function getCommutePattern(): Promise<CommutePattern> {
+  const { data } = await apiClient.get<CommutePattern>('/athletes/me/commute-pattern')
+  return data
+}
+
 export async function getProfile(): Promise<AthleteProfile> {
   const { data } = await apiClient.get<AthleteProfile>('/athletes/me')
   return data

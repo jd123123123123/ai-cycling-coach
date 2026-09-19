@@ -6,6 +6,10 @@ export interface WorkRhythm {
   commute?: 'bike' | 'partly' | 'none' | null
   /** Je Richtung, in Minuten. */
   commute_minutes?: number | null
+  /** Nur wenn die Tage UNTERSCHIEDLICH sind. Sonst gelten start/end fuer alle
+   *  Arbeitstage -- der Regelfall, und sieben Zeilen fuer alle haetten den
+   *  Aufwand aller an der Ausnahme ausgerichtet. */
+  day_hours?: Record<string, { start: string; end: string }>
 }
 
 export interface AthleteProfile {
