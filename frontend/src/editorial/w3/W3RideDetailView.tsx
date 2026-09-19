@@ -6,6 +6,7 @@ import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
+import W3SwipeDeck from './W3SwipeDeck'
 import { TNUM } from './w3surfaces'
 import './w3.css'
 
@@ -517,8 +518,23 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
           ))}
         </div>
 
-        {/* 01 Did you hold it */}
-        {vm.repeats.length > 0 && (
+        {/* ── DIE BELEGE, NEBENEINANDER ───────────────────────────────────
+            Fuenf Kapitel untereinander machten diese Seite 4701 px lang --
+            fuenfeinhalb Bildschirmhoehen, und jedes Kapitel hatte dieselbe
+            Form wie das davor: Ueberschrift, Balkenreihe, Fussnote. Wer den
+            Beleg fuer die Wiederholungen sehen wollte, scrollte an drei
+            anderen vorbei.
+
+            Nebeneinander kostet dieselbe Information EINE Bildschirmhoehe,
+            und das Blaettern wird zur Geste statt zur Strecke.
+
+            DIE REIHENFOLGE BLEIBT die alte, und die bedingten Kapitel fallen
+            weiterhin ganz weg statt leer dazustehen -- eine Karte ohne Inhalt
+            waere schlimmer als eine fehlende. */}
+        {(() => {
+          const karten: { label: string; node: ReactNode }[] = []
+          if (vm.repeats.length > 0) karten.push({ label: 'Wiederholungen', node: (
+
           <div style={{ ...band(28), gap: 12 }}>
             <SectionHead n={ch('repeats')} eyebrow="Die Wiederholungen"
               finding={vm.repeatsScore ? `${vm.repeatsScore} auf oder über Ziel.` : 'Jede Wiederholung gegen ihr Ziel.'}
@@ -554,9 +570,8 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
               })}
             </div>
           </div>
-        )}
-
-        {/* 02 What it asked of you */}
+          ) })
+          karten.push({ label: 'Zonen', node: (
         <div style={{ ...band(28), gap: 12 }}>
           <SectionHead n={ch('zones')} eyebrow="Was sie dir abverlangt hat" {...splitFinding(vm.zonesSub)} />
           <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -588,8 +603,8 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
             </div>
           </div>
         </div>
-
-        {/* 03 Where it ranks */}
+          ) })
+          karten.push({ label: 'Rang', node: (
         <div style={{ ...band(28), gap: 12 }}>
           <SectionHead n={ch('ranks')} eyebrow="Wo sie steht" {...splitFinding(vm.ranksSub)} />
           <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
@@ -641,8 +656,8 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
             )})}
           </div>
         </div>
-
-        {/* 04 What this changes */}
+          ) })
+          karten.push({ label: 'Wirkung', node: (
         <div style={{ ...band(28), gap: 12 }}>
           <SectionHead n={ch('changes')} eyebrow="Was das verändert" {...splitFinding(vm.changesBody)} />
           <div style={{ ...card(), gap: 14 }}>
@@ -708,9 +723,9 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
             <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.changesBody}</span>
           </div>
         </div>
+          ) })
+          if (vm.moved.length > 0) karten.push({ label: 'Saison', node: (
 
-        {/* 05 What it moved you toward — this ride's push toward the season goals */}
-        {vm.moved.length > 0 && (
           <div style={{ ...band(44), gap: 12 }}>
             <SectionHead n={ch('moved')} eyebrow="Worauf sie dich zubewegt hat" {...splitFinding(vm.movedSub)} />
             <div style={{ ...card(), gap: 18 }}>
@@ -735,7 +750,13 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
               <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{vm.movedFoot}</span>
             </div>
           </div>
-        )}
+          ) })
+          return (
+            <W3SwipeDeck labels={karten.map(k => k.label)}>
+              {karten.map(k => k.node)}
+            </W3SwipeDeck>
+          )
+        })()}
 
         {/* ── Nochmal fahren ────────────────────────────────────────────
             The archive's one outbound loop, from memory back into the plan:

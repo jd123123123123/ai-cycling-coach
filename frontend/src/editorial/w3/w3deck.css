@@ -80,3 +80,9 @@
      hat. Wer sie abbestellt hat, bekommt eine normale Seite. */
   .w3-deck { scroll-snap-type: none; }
 }
+
+/* Das waagerechte Deck (W3SwipeDeck) -- Leiste weg, Snap bleibt. */
+.w3-swipe::-webkit-scrollbar { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .w3-swipe { scroll-snap-type: none; }
+}
