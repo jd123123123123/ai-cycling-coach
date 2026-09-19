@@ -57,6 +57,27 @@ _REST_IDS = {"rest_day"}
 _FILLER_CATEGORIES = frozenset({"endurance", "recovery"})
 
 
+
+def choose_victim(remaining: list, protected: frozenset | set) -> object | None:
+    """Welche Einheit darf fuer Mehrbelastung weichen — und welche nie.
+
+    DIE INVARIANTE: Grundlagenlast darf niemals Qualitaetslast kuerzen. Ist kein
+    Fuellertag mehr da, ist NICHTS TUN die richtige Antwort, nicht die
+    Intervalleinheit zu opfern.
+
+    Rein und ohne Datenbank, weil genau diese Regel den Pendlerfehler ausmacht
+    und eine Invariante ohne Test nur ein Vorsatz ist.
+    """
+    fresh = [p for p in remaining if p.blocks_source not in protected]
+    if not fresh:
+        return None
+    filler_pool = [
+        p for p in fresh if _category_of(p.template_id) in _FILLER_CATEGORIES
+    ]
+    if not filler_pool:
+        return None
+    return max(filler_pool, key=lambda p: _tss_of(p.template_id))
+
 def _is_rest(template_id: str | None) -> bool:
     return (template_id or "").lower() in _REST_IDS
 
@@ -291,14 +312,32 @@ async def _rebalance_week(
     # ever touching the week's key/quality session, and never re-ease a day
     # absorption already eased (one downgrade per day, one swap per ride —
     # the pre-cb0b702 death-spiral serially ate the biggest session).
-    fresh = [p for p in remaining if p.blocks_source not in PROTECTED]
-    if not fresh:
+    # DER PENDLERFEHLER SASS IM RUECKFALL `filler_pool or fresh`.
+    #
+    # Der Kommentar hier versprach, die Qualitaetseinheit zu verschonen -- aber
+    # nur, SOLANGE EIN FUELLER UEBRIG WAR. Der Rueckfall nahm das Versprechen
+    # zurueck, und `max(_tss_of)` griff dann zwangslaeufig zur groessten
+    # Einheit: zur VO2max- oder Schwelleneinheit, denn die haben die hoechste
+    # TSS-Dichte.
+    #
+    # Wer taeglich zur Arbeit radelt, verbraucht genau die Grundlagentage, die
+    # als Opfer gedacht waren. Danach war die Qualitaetseinheit nicht die
+    # Ausnahme, sondern der Regelfall -- der Schutz versagte strukturell bei
+    # der Gruppe, fuer die er am wichtigsten gewesen waere.
+    #
+    # Grundlagenumfang und hohe Intensitaet sind keine Skalierungen desselben
+    # Reizes, sondern verschiedene Reize: ein gestrichenes Intervall laesst sich
+    # innerhalb der Woche nicht durch Umfang ersetzen, ueberschuessiger Umfang
+    # dagegen ist ein Ermuedungsproblem mit hoher Toleranz.
+    #
+    # `docs/2026-09-19-pendlerfehler-reizkonten.md`, Abschnitt 5.2.
+    victim = choose_victim(remaining, PROTECTED)
+    if victim is None:
+        logger.info(
+            "absorption: kein Fuellertag fuer user_id=%s — die Qualitaetseinheit "
+            "bleibt stehen (frueher war sie hier das Opfer)", user_id,
+        )
         return None
-    filler_pool = [
-        p for p in fresh if _category_of(p.template_id) in _FILLER_CATEGORIES
-    ]
-    pool = filler_pool or fresh
-    victim = max(pool, key=lambda p: _tss_of(p.template_id))
     victim_tss = _tss_of(victim.template_id)
     overage = projected - week_target
 

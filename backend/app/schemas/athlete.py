@@ -136,6 +136,47 @@ class AthleteProfileCreate(BaseModel):
     secondary_sports: list[str] | None = None
 
 
+class WorkRhythm(BaseModel):
+    """Der Alltag, den der Plan bisher nicht kannte.
+
+    Vier Angaben. Mehr fuellt niemand aus, und weniger traegt nicht:
+    Arbeitstage sagen, WANN Pendellast anfaellt; die Uhrzeiten sagen, welches
+    Trainingsfenster uebrig bleibt und ob eine Fahrt ein Arbeitsweg sein kann;
+    Modus und Dauer sagen, WIE VIEL Grundlagenlast der Weg bringt.
+
+    `docs/2026-09-19-pendlerfehler-reizkonten.md`, Abschnitt 6.
+    """
+
+    work_days: list[str] = Field(default_factory=list)
+    start: str | None = None
+    end: str | None = None
+    commute: Literal["bike", "partly", "none"] | None = None
+    #: Je Richtung. Ein Arbeitsweg ueber zwei Stunden je Richtung ist kein
+    #: Arbeitsweg mehr, sondern eine Ausfahrt -- und fast sicher ein Vertipper.
+    commute_minutes: int | None = Field(default=None, ge=1, le=120)
+
+    @field_validator("work_days")
+    @classmethod
+    def _tage(cls, v: list[str]) -> list[str]:
+        for tag in v:
+            if tag not in WEEKDAY_KEYS:
+                raise ValueError(f"Unbekannter Wochentag: {tag!r}")
+        return v
+
+    @field_validator("start", "end")
+    @classmethod
+    def _uhrzeit(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            h, m = v.split(":")[:2]
+            if not (0 <= int(h) <= 23 and 0 <= int(m) <= 59):
+                raise ValueError
+        except (ValueError, TypeError):
+            raise ValueError(f"Uhrzeit muss HH:MM sein, nicht {v!r}")
+        return v
+
+
 class AthleteProfileUpdate(BaseModel):
     ftp_watts: int | None = None
     lthr_cycling: int | None = None
@@ -168,6 +209,7 @@ class AthleteProfileUpdate(BaseModel):
     variety_dial: VarietyDial | None = None
     experience_level: ExperienceLevel | None = None
     hard_day_blackouts: list[str] | None = None
+    work_rhythm: WorkRhythm | None = None
 
     # V3 Settings — suppress coach push notices on rest days (default ON).
     quiet_on_rest_days: bool | None = None
@@ -251,6 +293,7 @@ class AthleteProfileRead(BaseModel):
     variety_dial: VarietyDial | None = None
     experience_level: ExperienceLevel | None = None
     hard_day_blackouts: list[str] | None = None
+    work_rhythm: dict | None = None
 
     # V3 Settings — suppress coach push notices on rest days
     quiet_on_rest_days: bool = True

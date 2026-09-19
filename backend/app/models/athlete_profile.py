@@ -68,6 +68,22 @@ class AthleteProfile(Base):
     #   WHY: affect-based prescription — a hard day colliding with life
     #   stress is the classic silent-churn trigger.
     hard_day_blackouts: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    # work_rhythm — der Alltag, den der Plan bisher nicht kannte:
+    #   {"work_days": ["mon","tue","wed","thu","fri"],
+    #    "start": "08:30", "end": "17:00",
+    #    "commute": "bike" | "partly" | "none",
+    #    "commute_minutes": 28}
+    #   WARUM: Ohne diese Angaben erfaehrt der Plan von einer Pendelfahrt erst,
+    #   wenn sie gefahren UND synchronisiert ist -- er reagiert also immer
+    #   nachtraeglich und beschneidet die Woche hinterher. Mit ihnen ist die
+    #   Grundlagenlast des Arbeitswegs VORHERSAGBAR und wird von vornherein
+    #   eingeplant, statt Qualitaetseinheiten zu verdraengen. Zweitens macht
+    #   das Zeitfenster eine Fahrt als Arbeitsweg erkennbar (zusammen mit ihrer
+    #   gemessenen Intensitaet), und drittens sagt `end` + `commute_minutes`,
+    #   ab wann ueberhaupt ein Trainingsfenster existiert -- eine Frage, die
+    #   der Planer bisher gar nicht gestellt hat.
+    #   `docs/2026-09-19-pendlerfehler-reizkonten.md`, Abschnitt 6.
+    work_rhythm: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     # quiet_on_rest_days — V3 Settings toggle: when True, coach push notices
     #   (plan-adaptation pushes, morning brief) are suppressed on days whose

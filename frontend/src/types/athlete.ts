@@ -1,5 +1,16 @@
+export interface WorkRhythm {
+  /** 'mon' | 'tue' | ... — wie days_available und hard_day_blackouts. */
+  work_days: string[]
+  start?: string | null
+  end?: string | null
+  commute?: 'bike' | 'partly' | 'none' | null
+  /** Je Richtung, in Minuten. */
+  commute_minutes?: number | null
+}
+
 export interface AthleteProfile {
   id: number
+  work_rhythm?: WorkRhythm | null
   user_id: number
   ftp_watts: number | null
   weight_kg: number | null
@@ -69,6 +80,7 @@ export interface TrainingGoals {
 }
 
 export interface AthleteProfileUpdate {
+  work_rhythm?: WorkRhythm
   ftp_watts?: number
   weight_kg?: number
   max_heart_rate?: number

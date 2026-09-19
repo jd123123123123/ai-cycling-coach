@@ -156,13 +156,31 @@ async def test_rebalance_trims_endurance_filler_not_the_key_session():
 
 
 @pytest.mark.asyncio
-async def test_rebalance_quality_only_touched_when_no_filler_remains():
+async def test_ohne_fueller_bleibt_die_qualitaetseinheit_stehen():
+    """UMGEKEHRTE ENTSCHEIDUNG (19.09.2026). Dieser Test hiess
+    `test_rebalance_quality_only_touched_when_no_filler_remains` und sicherte
+    ab, dass die Qualitaetseinheit das Opfer wird, sobald kein Fuellertag mehr
+    da ist. Genau daraus entstand der Pendlerfehler.
+
+    Wer taeglich zur Arbeit radelt, verbraucht die Grundlagentage zuerst.
+    Danach war die Qualitaetseinheit nicht mehr die Ausnahme, sondern der
+    Regelfall -- der Schutz versagte strukturell bei der Gruppe, fuer die er
+    gedacht war. Der Athlet sammelte Umfang und verlor genau den Reiz, den
+    Umfang nicht erzeugen kann.
+
+    Neue Invariante: Grundlagenlast darf niemals Qualitaetslast kuerzen. Ist
+    kein Fuellertag da, ist NICHTS TUN die richtige Antwort.
+
+    `docs/2026-09-19-pendlerfehler-reizkonten.md`, Abschnitt 5.2.
+    """
     ss = _plan(TODAY + timedelta(days=2), "sweet_spot_2x20", "Sweet spot — 2×20min")
     week = [_plan(TODAY - timedelta(days=1), "z2_progressive_90"), ss]
     db = _db([_act(1, 250.0)], [], [], week, [(250.0,)])
     out = await absorb_new_activities(db, 1)
-    rb = out[0]["rebalance"]
-    assert rb is not None and rb["from"] == "sweet_spot_2x20"
+    rb = out[0]["rebalance"] if out else None
+    assert rb is None, "die Qualitaetseinheit darf fuer Umfang nicht weichen"
+    assert ss.template_id == "sweet_spot_2x20"
+    assert ss.blocks_source == "ai_prescribed"
 
 
 @pytest.mark.asyncio

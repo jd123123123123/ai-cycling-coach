@@ -135,6 +135,15 @@ def _tss_of(template_id: str | None) -> float:
     return float(t.base_tss) if t else 0.0
 
 
+#: Was durch Umfang NICHT ersetzbar ist. Eine gestrichene Einheit aus dieser
+#: Menge ist ein Reizverlust, den die Woche nicht mehr einholt -- Grundlagen-
+#: umfang dagegen ist ein Ermuedungsproblem mit hoher Toleranz.
+QUALITAETSKATEGORIEN = frozenset({"tempo", "sweet_spot", "threshold", "vo2", "anaerobic"})
+
+#: Ab welchem Anteil am Wochenumfang der Arbeitsweg als Erklaerung taugt.
+PENDELANTEIL_SCHWELLE = 0.20
+
+
 def _category_of(template_id: str | None) -> str | None:
     t = TEMPLATES.get(template_id or "")
     return t.category if t else None
@@ -1024,6 +1033,58 @@ async def _rule_readiness(db: AsyncSession, snap: _Snapshot, profile) -> dict | 
         since=snap.start_of_day_utc,
     ):
         return None
+
+    # ── PENDLERSCHUTZ ───────────────────────────────────────────────────────
+    #
+    # Die Klage, die diesen Block ausgeloest hat: "Wenn mein Plan VO2max
+    # vorsieht und die Einheit reduziert wird, weil ich zur Arbeit gefahren
+    # bin -- dann habe ich doch keinen echten Trainingsreiz mehr."
+    #
+    # Sie trifft zu, wenn DREI Dinge zusammenkommen: der Treiber der
+    # Entscheidung ist die Last (`tsb`, Gewicht 0,28 im Bereitschaftswert),
+    # die betroffene Einheit ist eine Qualitaetseinheit, und ein nennenswerter
+    # Teil der Wochenlast stammt aus Arbeitswegen. Dann beschreibt der
+    # gesunkene Wert Ermuedung aus Umfang -- und die Antwort darauf darf nicht
+    # sein, den einen Reiz zu streichen, den Umfang nicht erzeugen kann.
+    #
+    # WAS DER SCHUTZ NICHT TUT. Er greift nur beim Lasttreiber. Ist der Treiber
+    # Schlaf, HRV, Ruhepuls oder ein Morgenbefund, bleibt die Regel unveraendert:
+    # das sind Erholungs- und Gesundheitssignale, keine Umfangsfolgen.
+    #
+    # `docs/2026-09-19-pendlerfehler-reizkonten.md`, Abschnitt 5.4.
+    if (
+        d.driver is not None
+        and d.driver.key == "tsb"
+        and _category_of(target.template_id) in QUALITAETSKATEGORIEN
+    ):
+        try:
+            from app.services.load_accounts import wochenkonten
+            from app.services.work_rhythm import aus_profil, pendelfenster
+
+            # Mit Alltagsprofil wird die Erkennung scharf (Arbeitstage +
+            # Zeitfenster); ohne faellt sie auf die schwaechere Heuristik
+            # zurueck (Werktag, Dauer, niedrige Intensitaet). Beides ist
+            # nutzbar, das Profil ist nur genauer.
+            alltag = aus_profil(profile)
+            konten = await wochenkonten(
+                db, snap.user_id, snap.ftp, monday=snap.monday,
+                arbeitstage=alltag.arbeitstage if alltag else None,
+                fenster=pendelfenster(alltag),
+            )
+        except Exception:  # noqa: BLE001 -- ein Kontofehler darf den Lauf nie kippen
+            logger.exception("Reizkonten fehlgeschlagen (user %s) — Schutz uebersprungen", snap.user_id)
+            konten = None
+        if (
+            konten is not None
+            and konten.gesamt > 0
+            and konten.pendeln / konten.gesamt >= PENDELANTEIL_SCHWELLE
+        ):
+            logger.info(
+                "Pendlerschutz: %s bleibt fuer user_id=%s stehen "
+                "(Arbeitsweg %.0f von %.0f TSS, Treiber tsb)",
+                target.template_id, snap.user_id, konten.pendeln, konten.gesamt,
+            )
+            return None
 
     before = _day_diff(target)
     old_title = target.title

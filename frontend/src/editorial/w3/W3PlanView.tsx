@@ -5,6 +5,7 @@ import {
   SlidersHorizontal, Pencil, Flag, ChevronRight, Activity,
   Zap, ArrowRight, RefreshCw, Repeat, ChevronDown, ChevronUp, X, Minus, Plus, Check,
 } from 'lucide-react'
+import W3WorkRhythm from './W3WorkRhythm'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 
 import W3StatusBar from './W3StatusBar'
@@ -441,6 +442,21 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild, onRestart, onCancelPla
         style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
         <RefreshCw size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{busy ? 'Rechne…' : 'Plan neu berechnen'}</span>
       </button>
+
+      {/* ── DEIN ALLTAG ────────────────────────────────────────────────────
+          Steht hier, weil man ohnehin hierher kommt, um an Zeit und Tagen zu
+          drehen -- und weil der Arbeitsweg genau das ist: eine Tatsache ueber
+          die Woche, keine Planoption.
+
+          ER SPEICHERT SELBST, ueber `PATCH /athletes/me`. Nicht ueber
+          `onRebuild`: `RebuildPayload` traegt weekly_hours, days_available,
+          blackouts, experience, motivation und variety -- und nichts sonst.
+          Ein Regler, dessen Wert dort nicht ankommt, taete still gar nichts;
+          genau daran sind die Rhythmus- und Indoor-Regler gescheitert, siehe
+          den Kommentar oben in dieser Datei. */}
+      <div style={{ borderTop: `1px solid ${T.rule}`, paddingTop: 16 }}>
+        <W3WorkRhythm />
+      </div>
 
       {/* ── WAS MIT DEM BLOCK SELBST PASSIERT ──────────────────────────────
           Beide Wege gab es nicht: ein anderes Ziel war nur aus dem LEEREN
