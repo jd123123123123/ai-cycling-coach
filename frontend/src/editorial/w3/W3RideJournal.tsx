@@ -1,8 +1,10 @@
 import {useMemo, useState} from 'react'
-import {ArrowDownUp,ArrowUpRight, Bike, Search, X, Plus, Minus} from 'lucide-react'
+import {ArrowDownUp,ArrowUpRight, Bike, Search, X} from 'lucide-react'
 import {motion, useReducedMotion} from 'motion/react'
 import type {W3RideCard, W3RidesVm, W3RideFilter, W3RidePeriod} from './W3RidesView'
 import type {ActivityRhythm} from '../../api/rhythm'
+import W3RidesHero from './W3RidesHero'
+import {T} from './w3tokens'
 import './w3RideJournal.css'
 const nf=new Intl.NumberFormat('de-DE',{maximumFractionDigits:1})
 const number=(s:string)=>s==='—'?s:s.replace('.',',')
@@ -30,22 +32,6 @@ function RideCard({ride,hero,onOpen}:{ride:W3RideCard;hero?:boolean;onOpen:(id:n
   </div>
   {hero&&ride.note&&<p className="w3-journal-ride-note">{ride.note}</p>}
  </button>
-}
-function RhythmGraph({values,labels,selected,onSelect}:{values:number[];labels:(i:number)=>string;selected:number|null;onSelect:(index:number|null)=>void}){
- const width=280,height=86,pad=7,max=Math.max(1,...values),step=values.length>1?(width-pad*2)/(values.length-1):0
- const points=values.map((value,index)=>[pad+index*step,height-pad-(value/max)*(height-pad*2)] as const)
- const line=points.length?`M ${points[0][0]} ${points[0][1]} ${points.slice(1).map((p,i)=>{const prev=points[i],mid=(prev[0]+p[0])/2;return `Q ${mid} ${prev[1]} ${p[0]} ${p[1]}`}).join(' ')}`:''
- const area=line?`${line} L ${points.at(-1)![0]} ${height-pad} L ${points[0][0]} ${height-pad} Z`:''
- // EIN FENSTER OHNE KILOMETER HAT KEINE FORM. Bei lauter Nullen lag die
- // flache Linie am Boden einer hohen Flaeche, darueber nichts -- genau der
- // leere Bildschirm, der auf dieser Seite gerade behoben wurde. Dann schrumpft
- // die Flaeche auf die Linie zusammen, statt Platz fuer eine Aussage zu
- // reservieren, die es nicht gibt.
- const leer=!values.some(v=>v>0)
- return <div className="w3-summary-graph" data-empty={leer||undefined} role="group" aria-label="Kilometertrend">
-  <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="w3-summary-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#c6f53c" stopOpacity=".38"/><stop offset="1" stopColor="#c6f53c" stopOpacity="0"/></linearGradient></defs><path d={area} fill="url(#w3-summary-fill)"/><path d={line} fill="none" stroke="#c6f53c" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
-  {points.map(([x,y],index)=><button key={index} aria-label={`${labels(index)}: ${nf.format(values[index])} Kilometer`} aria-pressed={selected===index} className="w3-summary-point" style={{left:`${x/width*100}%`,top:`${y/height*100}%`}} onClick={()=>onSelect(selected===index?null:index)}><i/></button>)}
- </div>
 }
 /**
  * W3 - FAHRTEN, DIE LISTE.
@@ -83,30 +69,37 @@ export function RideJournal({vm,period,windowStart,windowLabel,onOpen}:{vm:W3Rid
 }
 /** Der Kopf. Den Zeitraum BESITZT er nicht mehr -- er bekommt ihn und meldet
  *  den Wechsel nach oben, damit die Liste denselben Ausschnitt zeigt. */
+/** Ein Detailwert in der aufgeklappten Zeile. */
+function Detail({v,t}:{v:string;t:string}){
+ return <span style={{display:'flex',alignItems:'baseline',gap:4}}>
+  <strong style={{fontSize:16,fontWeight:700,letterSpacing:-.3,color:T.ink,fontVariantNumeric:'tabular-nums'}}>{v}</strong>
+  <span style={{fontSize:11.5,fontWeight:500,color:T.quiet}}>{t}</span>
+ </span>
+}
+
 export function RideSummary({vm,rhythm,period,onPeriod,onSetGoal}:{vm:W3RidesVm;rhythm?:ActivityRhythm|null;period:W3RidePeriod;onPeriod:(p:W3RidePeriod)=>void;onSetGoal:()=>void}){
  const [selected,setSelected]=useState<number|null>(null),[open,setOpen]=useState(false)
  const win=rhythm?.[period],buckets=win?.buckets??vm.barMonths.map(m=>({km:m.km})),values=buckets.map(b=>b.km),picked=selected==null?null:buckets[selected]
  const label=(i:number)=>win?new Date(`${win.buckets[i].start}T12:00:00`).toLocaleDateString('de-DE',period==='season'?{month:'short'}:{day:'numeric',month:'short'}):`${vm.barMonths[i].label} ${vm.barMonths[i].year}`
  const meta=picked&&win?[['FAHRTEN',String(win.buckets[selected!].rides),''],['ZEIT',nf.format(win.buckets[selected!].hours),' h'],['HÖHENMETER',nf.format(win.buckets[selected!].elevation_m),' hm']]:win?[['FAHRTEN',String(win.rides),''],['ZEIT',nf.format(win.hours),' h'],['HÖHENMETER',nf.format(win.elevation_m),' hm']]:[['FAHRTEN',vm.count.replace(/\s*Fahrten.*$/,''),''],['SATTELZEIT',vm.saddleTime,' h'],['Ø LEISTUNG',vm.avgPower,' W']]
  const previous=values.length>1?values[values.length-2]:values[0]??0,current=values.at(-1)??0,trendDelta=previous?Math.round((current-previous)/previous*100):0,trend=trendDelta>3?'Aufbauend':trendDelta<-3?'Ruhiger':'Stabil'
- return <section className="w3-ride-summary" aria-label="Deine Kilometer"><header>{rhythm?<div role="group" aria-label="Zeitraum">{([['season','Saison'],['month','Monat'],['week','Woche']]as const).map(([key,text])=><button aria-pressed={period===key} key={key} onClick={()=>{onPeriod(key);setSelected(null)}}>{text}</button>)}</div>:<span>Letzte 12 Monate</span>}<button className="w3-journal-icon is-small" aria-label={open?'Kilometerdetails schließen':'Kilometerdetails öffnen'} aria-expanded={open} onClick={()=>setOpen(!open)}>{open?<Minus size={17}/>:<Plus size={17}/>}</button></header>
- {/* DIE KURVE STAND NEBEN DER ZAHL und bekam 38 % der Breite -- beide
-     gedraengt, keins von beidem gross. Jetzt die Hausform, die Heute und Plan
-     benutzen: die Flaeche oben ueber die volle Breite, die Zahl darunter in
-     Hero-Groesse, das Fenster als Zeile darunter. Die antippbaren Punkte
-     bleiben, was sie waren -- eine Kurve, die man nicht befragen kann, waere
-     Dekoration. */}
- <div className="w3-summary-main is-hero"><RhythmGraph values={values} labels={label} selected={selected} onSelect={index=>setSelected(index)}/><div><strong>{picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}</strong><span>km</span><p>{selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}</p></div></div>
- <div className={`w3-summary-trend trend-${trend.toLowerCase()}`}><span>{period==='season'?'SAISON-TREND':period==='month'?'30-TAGE-TREND':'7-TAGE-TREND'}</span><strong>{trend}</strong><em>{trendDelta>=0?'+':''}{trendDelta}%</em></div>
- <div className="w3-summary-meta" aria-label="Zusammenfassung">{meta.map(([label,value,unit])=><span key={label}><small>{label}</small><strong>{value}<em>{unit}</em></strong></span>)}</div>
- {period==='season'&&selected==null&&<div className="w3-summary-goal-card" aria-label="Saisonziel">
-   {vm.goal?<>
-    <div className="w3-summary-goal-head"><span>SAISONZIEL</span><strong>{nf.format(vm.goal.currentKm)} / {nf.format(vm.goal.targetKm)} km</strong></div>
-    <div className="w3-summary-goal-track" aria-hidden="true"><i style={{width:`${Math.min(100,vm.goal.progress*100)}%`}}/></div>
-    <div className="w3-summary-goal-read"><strong>{vm.goal.realityLabel}</strong><span>{vm.goal.projectionLabel}</span></div>
-   </>:<button className="w3-summary-goal-cta" onClick={onSetGoal}><span><b>Dein Saisonziel</b><small>Setze eine Marke, die zu dir gehört.</small></span><ArrowUpRight size={16}/></button>}
- </div>}
- {open&&<div className="w3-summary-details">{picked&&win?<><span><strong>{win.buckets[selected!].rides}</strong> Fahrten</span><span><strong>{nf.format(win.buckets[selected!].hours)}</strong> h</span><span><strong>{nf.format(win.buckets[selected!].elevation_m)}</strong> hm</span></>:win?<><span><strong>{win.rides}</strong> Fahrten</span><span><strong>{nf.format(win.hours)}</strong> h</span><span><strong>{nf.format(win.elevation_m)}</strong> hm</span></>:!picked?<><span><strong>{vm.avgSpeed}</strong> km/h Ø</span><span><strong>{vm.avgPower}</strong> W Ø</span><span><strong>{vm.saddleTime}</strong> h</span></>:<span>Monatsdistanz: {nf.format(picked.km)} km</span>}</div>}
- {open&&period==='season'&&selected==null&&vm.goal&&<button className="w3-summary-goal" onClick={onSetGoal}>{vm.goal.chip} · {vm.goal.ofGoalPct}<ArrowUpRight size={16}/></button>}
- </section>
+ const details=<div style={{display:'flex',flexWrap:'wrap',gap:16,fontSize:12.5,color:'inherit'}}>
+  {picked&&win?<><Detail v={String(win.buckets[selected!].rides)} t="Fahrten"/><Detail v={nf.format(win.buckets[selected!].hours)} t="h"/><Detail v={nf.format(win.buckets[selected!].elevation_m)} t="hm"/></>
+   :win?<><Detail v={String(win.rides)} t="Fahrten"/><Detail v={nf.format(win.hours)} t="h"/><Detail v={nf.format(win.elevation_m)} t="hm"/></>
+   :<><Detail v={vm.avgSpeed} t="km/h Ø"/><Detail v={vm.avgPower} t="W Ø"/><Detail v={vm.saddleTime} t="h"/></>}
+ </div>
+ return <W3RidesHero
+  periods={rhythm?[{key:'season',text:'Saison'},{key:'month',text:'Monat'},{key:'week',text:'Woche'}]:undefined}
+  period={rhythm?period:undefined}
+  onPeriod={k=>{onPeriod(k as W3RidePeriod);setSelected(null)}}
+  km={picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}
+  deck={selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}
+  values={values} labels={label} selected={selected} onSelect={setSelected}
+  trendKicker={period==='season'?'Saison-Trend':period==='month'?'30-Tage-Trend':'7-Tage-Trend'}
+  trendLabel={trend} trendPct={trendDelta}
+  ledger={meta.map(([l,v,u])=>({label:l,value:v,unit:u.trim()||undefined}))}
+  goal={period==='season'&&selected==null&&vm.goal?vm.goal:null}
+  onSetGoal={period==='season'&&selected==null?onSetGoal:undefined}
+  open={open} onToggle={()=>setOpen(!open)} details={details}/>
+
 }

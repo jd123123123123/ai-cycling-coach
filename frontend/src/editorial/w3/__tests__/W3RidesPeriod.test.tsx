@@ -90,14 +90,18 @@ describe('Fahrten: der Zeitraum schneidet die Liste', () => {
     // derselbe leere Bildschirm, der auf dieser Seite gerade behoben wurde.
     const { container } = view()
     fireEvent.click(screen.getByRole('button', { name: 'Woche' }))
-    const graph = container.querySelector('.w3-summary-graph')
+    // Der Griff heisst jetzt `data-w3-graph`: die Karte liegt seit dem Umbau
+    // auf Token statt auf einer CSS-Datei mit festen Hex-Werten. Die
+    // ZUSICHERUNG ist unveraendert -- ein Fenster ohne Kilometer darf keine
+    // hohe leere Flaeche reservieren.
+    const graph = container.querySelector('[data-w3-graph]')
     expect(graph).toBeTruthy()
     expect(graph!.hasAttribute('data-empty')).toBe(true)
   })
 
   it('zeichnet eine Flaeche, sobald das Fenster Kilometer hat', () => {
     const { container } = view()   // Saison: die Fixture hat Kilometer
-    expect(container.querySelector('.w3-summary-graph')!.hasAttribute('data-empty')).toBe(false)
+    expect(container.querySelector('[data-w3-graph]')!.hasAttribute('data-empty')).toBe(false)
   })
 
   it('nennt in der Ueberschrift das Fenster des Servers und zaehlt, was dasteht', () => {
