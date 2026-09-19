@@ -1,5 +1,6 @@
 import {render,screen,fireEvent,cleanup} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
+import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
 import {afterEach,describe,it,expect,vi} from 'vitest'
 import W3PlanExperience from '../W3PlanExperience'
 import {beforeVm} from '../../../review-plan/data'
@@ -14,7 +15,11 @@ afterEach(cleanup)
 describe('plan invitation navigation',()=>{
  it('opens a composer when the invitation changes the query on the mounted plan page',()=>{
   const close=vi.fn()
-  const view=(choose:boolean)=><MemoryRouter><W3PlanExperience vm={beforeVm} state="empty" userId={7} onRebuild={async()=>true} onOpenSession={()=>{}} onCreatedDone={()=>{}} weekOffset={0} onWeekOffset={()=>{}} initialCompose={choose} onComposeClose={close}/></MemoryRouter>
+  // W3PlanExperience ruft seit dem Tagestausch useQueryClient(), um nach einem
+  // Tausch die Planabfrage zu entwerten. EIN Client ueber alle rerender hinweg:
+  // ein neuer je Durchlauf wuerde den Baum verwerfen und den Test sinnlos machen.
+  const qc=new QueryClient({defaultOptions:{queries:{enabled:false},mutations:{retry:false}}})
+  const view=(choose:boolean)=><QueryClientProvider client={qc}><MemoryRouter><W3PlanExperience vm={beforeVm} state="empty" userId={7} onRebuild={async()=>true} onOpenSession={()=>{}} onCreatedDone={()=>{}} weekOffset={0} onWeekOffset={()=>{}} initialCompose={choose} onComposeClose={close}/></MemoryRouter></QueryClientProvider>
   const result=render(view(false))
   expect(screen.queryByText('Close composer')).toBeNull()
   result.rerender(view(true))
