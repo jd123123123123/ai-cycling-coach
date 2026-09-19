@@ -94,8 +94,26 @@ export async function repairStreak(): Promise<StreakRepairResult> {
   return data
 }
 
-export async function setAthleteStatus(state: AthleteState): Promise<{ state: AthleteState; since: string | null }> {
-  const { data } = await apiClient.put<{ state: AthleteState; since: string | null }>('/athletes/me/status', { state })
+export interface AthleteStatus {
+  state: AthleteState
+  since: string | null
+  /** Tage, die der Plan wegen dieses Status schon ruht. */
+  days_paused: number | null
+  /** Heute noch nicht bestaetigt -- die Oberflaeche soll nachfragen. */
+  needs_reask: boolean
+  /** Der fertige Satz vom Server, damit es nicht zwei Fassungen gibt. */
+  prompt_de: string | null
+}
+
+export async function setAthleteStatus(state: AthleteState): Promise<AthleteStatus> {
+  const { data } = await apiClient.put<AthleteStatus>('/athletes/me/status', { state })
+  return data
+}
+
+/** Den Lebensstatus lesen. Gab es nicht -- es existierte nur ein PUT, und
+ *  deshalb konnte die App nie nachfragen. */
+export async function getAthleteStatus(): Promise<AthleteStatus> {
+  const { data } = await apiClient.get<AthleteStatus>('/athletes/me/status')
   return data
 }
 

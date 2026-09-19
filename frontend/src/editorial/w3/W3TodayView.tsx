@@ -17,6 +17,7 @@ import W3TabBar from './W3TabBar'
 import { useHeroPanel, useStageGround } from './W3HeroShell'
 import W3RecoveryNudge from './W3RecoveryNudge'
 import W3TodayAdapted from './W3TodayAdapted'
+import W3StatusReask from './W3StatusReask'
 import W3ThresholdProposal from './W3ThresholdProposal'
 import W3WorkshopNudge from './W3WorkshopNudge'
 import W3FormCard from './W3FormCard'
@@ -310,6 +311,10 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
   const content = (
     <div className="w3-today-content">
       <div aria-hidden style={{ height: fadeH, marginBottom: -fadeH, pointerEvents: 'none', background: `linear-gradient(180deg, ${ground ?? T.heroBg}, ${T.bg})` }} />
+      {/* GANZ OBEN, und das ist die Entscheidung: ein pausierender Status
+          haelt den ganzen Plan an. Die Frage danach gehoert vor alles, was
+          dieser Plan sonst noch zu sagen haette. */}
+      <W3StatusReask />
       <W3ThresholdProposal />
       <W3RecoveryNudge />
       {/* Der Nachweis lag nur auf der Planseite hinter einem Tipp. Wer morgens

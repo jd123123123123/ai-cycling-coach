@@ -13,6 +13,8 @@ from app.models.garmin_credential import GarminCredential
 from app.models.user import User
 from app.schemas.athlete import AthleteProfileRead, AthleteProfileUpdate
 from app.services.athlete_service import get_or_create_profile, update_profile
+from app.services.athlete_status import lage as status_lage, satz as status_satz
+from app.services.athlete_time import today_local
 from app.services.garmin_sync_service import sync_user_garmin
 from app.services.streak import build_streak, repair_streak
 
@@ -112,6 +114,33 @@ class AthleteStatusUpdate(BaseModel):
 class AthleteStatusRead(BaseModel):
     state: AthleteState
     since: date_type | None = None
+    #: Tage, die der Plan wegen dieses Status schon ruht.
+    days_paused: int | None = None
+    #: Heute noch nicht bestaetigt -- die Oberflaeche soll nachfragen.
+    needs_reask: bool = False
+    #: Der fertige Satz dazu, damit Server und App nicht zwei Fassungen fuehren.
+    prompt_de: str | None = None
+
+
+@router.get("/me/status", response_model=AthleteStatusRead)
+async def get_my_status(
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db_for_user),
+) -> AthleteStatusRead:
+    """Der Lebensstatus und ob er heute zur Bestaetigung ansteht.
+
+    Es gab bisher nur ein PUT. Die Oberflaeche konnte den Status also gar nicht
+    abfragen -- und damit auch nicht nachfragen.
+    """
+    profile = await get_or_create_profile(db, current_user.id)
+    lage = status_lage(profile.goals, heute=today_local())
+    return AthleteStatusRead(
+        state=lage.state,  # type: ignore[arg-type]
+        since=lage.since,
+        days_paused=lage.tage_pausiert,
+        needs_reask=lage.nachfragen,
+        prompt_de=status_satz(lage),
+    )
 
 
 @router.put("/me/status", response_model=AthleteStatusRead)
@@ -135,8 +164,23 @@ async def set_my_status(
             if existing.get("state") == payload.state and existing.get("since")
             else date_type.today().isoformat()
         )
-        goals["athlete_status"] = {"state": payload.state, "since": since}
-        result = AthleteStatusRead(state=payload.state, since=date_type.fromisoformat(since))
+        # `confirmed_on` IST DIE ANTWORT AUF DIE TAGESFRAGE. Ohne sie stand ein
+        # Status unbefristet und ungefragt: in der Produktion lag ein Fahrer
+        # seit dem 17.09. auf krank, waehrend seine Bereitschaft wieder bei 72
+        # war -- der Plan wartete auf eine Entwarnung, die niemand je erbeten
+        # hatte. Auch ein "noch nicht" ist eine Antwort und setzt den Tag neu.
+        heute = today_local()
+        goals["athlete_status"] = {
+            "state": payload.state,
+            "since": since,
+            "confirmed_on": heute.isoformat(),
+        }
+        lage = status_lage(goals, heute=heute)
+        result = AthleteStatusRead(
+            state=payload.state, since=date_type.fromisoformat(since),
+            days_paused=lage.tage_pausiert, needs_reask=lage.nachfragen,
+            prompt_de=status_satz(lage),
+        )
     profile.goals = goals
     flag_modified(profile, "goals")
     await db.commit()
