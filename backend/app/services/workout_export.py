@@ -64,6 +64,38 @@ def _block_kind(block: Block) -> Literal["warmup", "cooldown", "steady"]:
     return "steady"
 
 
+
+def _fit_intensity(block: Block):
+    """Die Schritt-Intensitaet fuer FIT — mit EIGENER Einstufung.
+
+    WARUM NICHT `_block_kind`. Das ist der Zwift-Klassifikator, und sein
+    Docstring sagt das auch ("Classify a block for .zwo XML emission"). Seine
+    letzte Regel lautet `watts_low < watts_high -> warmup`: fuer Zwift sinnvoll,
+    weil dort ein steigender Bereich eine Rampe ist. Fuer FIT ist es falsch --
+    JEDER Block mit einem Wattbereich wurde damit zum Aufwaermen. In einer
+    typischen Einheit (Warmup 130-145, Schwelle 240-250, Recovery 110-125,
+    Cooldown 110-125) trugen drei von vier Schritten `Intensity.WARMUP`; nur
+    der Cooldown kam ueber seinen Namen richtig durch.
+
+    Auf dem Geraet heisst das: die Uhr fuehrt eine Schwellenwiederholung als
+    Aufwaermen, und die Schrittfarben und Rundenlogik stimmen nicht mehr.
+
+    Hier entscheidet der Name, dann die Intensitaet -- nie die Richtung des
+    Wattbereichs. Ein Bereich ist bei strukturierten Einheiten die Regel, keine
+    Rampe.
+    """
+    from fit_tool.profile.profile_type import Intensity
+
+    n = block.name.lower()
+    if "warm" in n:
+        return Intensity.WARMUP
+    if "cool" in n or "ramp down" in n:
+        return Intensity.COOLDOWN
+    if ("recovery" in n or "rest" in n or "pause" in n) and block.pct_ftp < 0.75:
+        return Intensity.REST
+    return Intensity.ACTIVE
+
+
 def _pct(watts: int, ftp: int) -> float:
     """Fraction-of-FTP, 4-decimal precision so int round-tripping is exact
     enough for downstream apps. Guards FTP=0 with a sane default."""
@@ -307,16 +339,7 @@ def to_fit(
             transfer.duration_type = WorkoutStepDuration.OPEN
             transfer.target_type = WorkoutStepTarget.OPEN
             builder.add(transfer)
-        kind = _block_kind(block)
-        intensity = {
-            "warmup": Intensity.WARMUP,
-            "cooldown": Intensity.COOLDOWN,
-            "steady": Intensity.ACTIVE,
-        }[kind]
-        # Recovery / rest blocks are typically named "Recovery" or "Rest" and
-        # come back as "steady" with low watts — re-classify by FTP fraction.
-        if kind == "steady" and block.pct_ftp < 0.6 and "recovery" in block.name.lower():
-            intensity = Intensity.REST
+        intensity = _fit_intensity(block)
 
         step = WorkoutStepMessage()
         step.message_index = idx + (1 if lap_start and idx >= first_work else 0)
@@ -357,35 +380,65 @@ def to_fit(
 # ----------------------------------------------------------------------
 
 
-def blocks_from_dicts(rows: Iterable[dict]) -> list[Block]:
-    """Lift the JSON-shape blocks (as stored on PrescribedWorkout.blocks)
-    into the dataclass the serializers consume. Tolerant of the
-    `target_watts_low/high` naming used by ResolvedBlock and the
-    `watts_low/high` naming used internally."""
+def _erste(row: dict, *namen: str):
+    """Der erste Schluessel, der wirklich einen Wert traegt."""
+    for n in namen:
+        v = row.get(n)
+        if v is not None:
+            return v
+    return None
+
+
+def blocks_from_dicts(rows: Iterable[dict], ftp: int | None = None) -> list[Block]:
+    """Die gespeicherten JSON-Bloecke in die Dataclass heben, die die
+    Serialisierer lesen.
+
+    ZWEI FORMEN, UND NUR EINE WURDE GELESEN. In der Produktion stehen zwei
+    Blockformen nebeneinander:
+
+        652x  {"name", "duration_seconds", "power_target_pct_ftp", "zone", "rpe"}
+         56x  {"name", "duration_s", "on_s", "off_s", "reps",
+               "target_watts_low", "target_watts_high", "target_pct_ftp", ...}
+
+    Diese Funktion las ausschliesslich die zweite Schreibweise:
+    `duration_s`, `target_watts_low/high`, `target_pct_ftp`. Fuer die haeufigere
+    erste Form lieferte jedes `row.get(...)` None, und `or 0` machte daraus
+    stillschweigend eine NULL. Ergebnis: ein Block mit Dauer 0, Watt 0 und
+    0 % FTP -- nur der Name ueberlebte.
+
+    Was der Fahrer davon sah: Garmin lehnte die exportierte .fit-Datei ab mit
+    "Einheit enthaelt einen ungueltigen Zeitblock". Das stimmte woertlich --
+    jeder Schritt war null Sekunden lang. Betroffen waren 92 % aller
+    gespeicherten Einheiten; funktioniert hat der Export nur fuer die
+    Intervallform.
+
+    `ftp` ist optional und nur fuer die erste Form noetig: sie traegt keine
+    Wattwerte, sondern einen FTP-Anteil. Ohne FTP bleiben die Wattziele 0 --
+    dann wird der Schritt als offener Block (freie Fahrt) exportiert, was
+    ehrlich ist: eine erfundene Wattzahl waere schlimmer als keine.
+    """
     out: list[Block] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
-        watts_low = (
-            row.get("target_watts_low")
-            if row.get("target_watts_low") is not None
-            else row.get("watts_low")
-        )
-        watts_high = (
-            row.get("target_watts_high")
-            if row.get("target_watts_high") is not None
-            else row.get("watts_high")
-        )
-        pct = row.get("target_pct_ftp") or 0.0
+        watts_low = _erste(row, "target_watts_low", "watts_low")
+        watts_high = _erste(row, "target_watts_high", "watts_high")
+        pct = float(_erste(row, "target_pct_ftp", "power_target_pct_ftp", "pct_ftp") or 0.0)
+
+        # Die haeufige Form nennt nur den FTP-Anteil. Mit FTP laesst er sich in
+        # Watt aufloesen; ohne bleibt es ein offener Schritt.
+        if watts_low is None and watts_high is None and pct > 0 and ftp and ftp > 0:
+            watts_low = watts_high = round(pct * ftp)
+
         c_low = row.get("cadence_low")
         c_high = row.get("cadence_high")
         out.append(
             Block(
                 name=str(row.get("name") or "Block"),
-                duration_s=int(row.get("duration_s") or 0),
+                duration_s=int(_erste(row, "duration_s", "duration_seconds") or 0),
                 watts_low=int(watts_low or 0),
                 watts_high=int(watts_high or 0),
-                pct_ftp=float(pct),
+                pct_ftp=pct,
                 cadence_low=int(c_low) if isinstance(c_low, (int, float)) else None,
                 cadence_high=int(c_high) if isinstance(c_high, (int, float)) else None,
             )

@@ -1083,7 +1083,9 @@ async def export_workout(
             detail="Set your FTP first — workout export needs an FTP anchor.",
         )
 
-    blocks = blocks_from_dicts(pw["blocks"])
+    # FTP mitgeben: die haeufige Blockform traegt nur den FTP-Anteil,
+    # keine Wattwerte.
+    blocks = blocks_from_dicts(pw["blocks"], ftp=ftp)
     title = str(pw.get("title") or pw.get("template_id") or "workout")
     description = str(pw.get("why_this_workout") or pw.get("purpose") or "")
     category = pw.get("category") if isinstance(pw.get("category"), str) else None
