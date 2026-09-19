@@ -443,3 +443,95 @@ async def apply_change(
         profile_updates=applied.updates,
         carried=carried,
     )
+
+
+# ── Tage tauschen ───────────────────────────────────────────────────────────
+# Der Plan liess sich bisher nur NEU BERECHNEN, nicht umstellen. Wer wusste,
+# dass er Donnerstag keine Zeit hat, konnte die Einheit nicht auf Freitag
+# ziehen -- er konnte nur den ganzen Block neu bauen lassen und hoffen. Das ist
+# der Unterschied zwischen einem Plan, den man liest, und einem, der einem
+# gehoert.
+#
+# WARUM TAUSCHEN UND NICHT VERSCHIEBEN. Ein Verschieben auf einen belegten Tag
+# muesste entscheiden, was mit dem dortigen Training passiert -- und jede
+# Antwort darauf waere geraten. Ein Tausch ist umkehrbar, erhaelt die
+# Wochenlast exakt und braucht keine Annahme.
+#
+# BEIDE TAGE WERDEN `user_modified`. Das ist eine PROTECTED-Quelle: Die
+# stuendliche Anpassung fasst sie nicht mehr von sich aus an. Wer seinen Plan
+# selbst ordnet, soll ihn am naechsten Morgen nicht umgeraeumt vorfinden.
+
+class PlanDaySwapRequest(BaseModel):
+    a: date = Field(description="Erster Tag (ISO)")
+    b: date = Field(description="Zweiter Tag (ISO)")
+
+
+class PlanDaySwapResponse(BaseModel):
+    swapped: bool
+    a_title: str | None = None
+    b_title: str | None = None
+    detail: str | None = None
+
+
+@router.post("/day/swap", response_model=PlanDaySwapResponse,
+             summary="Zwei geplante Tage gegeneinander tauschen")
+async def swap_plan_days(
+    payload: PlanDaySwapRequest,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> PlanDaySwapResponse:
+    """Tauscht den Inhalt zweier Plantage. Vergangenes bleibt unangetastet."""
+    from app.models.planned_workout import PlannedWorkout
+    from app.services.athlete_time import set_athlete_tz_from_profile, today_local
+
+    if payload.a == payload.b:
+        raise HTTPException(status_code=400, detail="Gleicher Tag.")
+
+    prof = await db.execute(
+        select(AthleteProfile).where(AthleteProfile.user_id == current_user.id)
+    )
+    set_athlete_tz_from_profile(prof.scalar_one_or_none())
+    heute = today_local()
+    # Was gefahren ist, ist gefahren. Ein Tausch in die Vergangenheit wuerde
+    # eine Trainingshistorie umschreiben, die so nie stattgefunden hat.
+    if payload.a < heute or payload.b < heute:
+        raise HTTPException(
+            status_code=400, detail="Vergangene Tage lassen sich nicht tauschen."
+        )
+
+    res = await db.execute(
+        select(PlannedWorkout).where(
+            PlannedWorkout.user_id == current_user.id,
+            PlannedWorkout.date.in_([payload.a, payload.b]),
+            PlannedWorkout.sport == "cycling",
+        )
+    )
+    rows = {r.date: r for r in res.scalars().all()}
+    ra, rb = rows.get(payload.a), rows.get(payload.b)
+    if ra is None and rb is None:
+        raise HTTPException(status_code=404, detail="An beiden Tagen steht nichts.")
+
+    # Nur der INHALT wandert, nicht die Zeile: `date` bleibt, wo sie ist, damit
+    # kein Index und keine Fremdbeziehung nachgezogen werden muss.
+    felder = ("title", "duration_seconds_target", "description", "interval_structure",
+              "indoor", "template_id")
+
+    if ra is not None and rb is not None:
+        for f in felder:
+            va, vb = getattr(ra, f), getattr(rb, f)
+            setattr(ra, f, vb)
+            setattr(rb, f, va)
+        ra.blocks_source = "user_modified"
+        rb.blocks_source = "user_modified"
+        neu_a, neu_b = ra.title, rb.title
+    else:
+        # Ein Tag ist ein Ruhetag ohne Zeile: die vorhandene Zeile zieht um.
+        # `rows` ist danach veraltet -- die Titel werden VOR dem Umzug gemerkt.
+        quelle = ra if ra is not None else rb
+        war_a = quelle is ra
+        quelle.date = payload.b if war_a else payload.a
+        quelle.blocks_source = "user_modified"
+        neu_a, neu_b = (None, quelle.title) if war_a else (quelle.title, None)
+
+    await db.commit()
+    return PlanDaySwapResponse(swapped=True, a_title=neu_a, b_title=neu_b)

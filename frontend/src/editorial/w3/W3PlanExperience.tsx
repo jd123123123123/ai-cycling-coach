@@ -1,6 +1,6 @@
 import {useEffect,useId,useRef,useState,type CSSProperties,type ReactNode} from 'react'
 import {useNavigate} from 'react-router-dom'
-import {ArrowRight,ArrowUpRight,Check,Flag,SlidersHorizontal,Wind,X,HelpCircle,Upload,ChevronLeft,ChevronRight,Activity,Route,Clock3,Bike} from 'lucide-react'
+import {ArrowRight,ArrowUpRight,Check,Flag,SlidersHorizontal,X,HelpCircle,Upload,Activity,Route,Clock3,Bike} from 'lucide-react'
 import {motion,useReducedMotion} from 'motion/react'
 import {T,FONT} from './w3tokens'
 import W3TopBar from './W3TopBar'
@@ -8,6 +8,9 @@ import W3TabBar from './W3TabBar'
 import {PlanAdjustSheet,type W3PlanVm,type W3PlanActions} from './W3PlanView'
 import {usePlanAdaptations} from '../../hooks/usePlanAdaptations'
 import W3AdaptationReceipt from './W3AdaptationReceipt'
+import W3PlanArc from './W3PlanArc'
+import { useQueryClient } from '@tanstack/react-query'
+import { swapPlanDays } from '../../api/plan'
 import {useProgressExplorer,W3ProgressAnalyticsView} from './W3ProgressAnalytics'
 import W3PlanIntro from './W3PlanIntro'
 import W3PowerProfile from './W3PowerProfile'
@@ -72,6 +75,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const planAdherence=Math.max(0,Math.min(100,compareSeries?.adherence??100))
  const compareMax=Math.max(1,...(compareSeries?.planned??[]),...(compareSeries?.actual??[]).map(v=>v??0))
  const curvePoints=(values:(number|null)[])=>values.map((value,i)=>value==null?null:`${10+(i/Math.max(1,values.length-1))*300},${78-(value/compareMax)*60}`).filter(Boolean).join(' ')
+ const qc=useQueryClient()
  const sessions=vm.daySessions??[]
  const identity=sessions.map(s=>s.dateISO).join(',')
  useEffect(()=>{setDay(Math.max(0,sessions.findIndex(s=>s.isToday)))},[identity])
@@ -166,19 +170,32 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
    <p className="w3-plan-development-note">Dein Leistungsprofil im Vergleich zum Planstart.</p>
    <W3PowerProfile data={progressData}/>
  </section>
- <section className="w3-plan-journey"><div className="w3-plan-card-head"><strong>Dein aktueller Block</strong><span>{vm.totalWeeks} Wochen · TSS</span></div>
- <div className="w3-plan-week-beams">{vm.weekBars.map((b,i)=><button key={i} aria-label={vesselLabel(b)} aria-pressed={currentBar===i} data-selected={currentBar===i} data-past={i<currentIndex} disabled={i-currentIndex>12} onClick={()=>onWeekOffset(i-currentIndex)}><Vessel b={b} max={max} animate reduced={reduced}/><span>{String(i+1).padStart(2,'0')}</span></button>)}</div>
- <div className="w3-plan-phase-labels">{vm.phases.map(p=>{const [a,b]=p.weeks.replace('W','').split('–').map(Number);return <span key={p.name} data-current={p.active} style={{flex:(b||a)-a+1}}>{p.name}</span>})}</div>
- <div className="w3-plan-selected-week"><button aria-label="Vorherige Woche" disabled={weekOffset===0} onClick={()=>onWeekOffset(weekOffset-1)}><ChevronLeft size={17}/></button><span>{vm.weekRangeLabel}</span><button aria-label="Nächste Woche" disabled={weekOffset>=Math.min(12,vm.totalWeeks-progress)} onClick={()=>onWeekOffset(weekOffset+1)}><ChevronRight size={17}/></button></div>
- </section>
- {state==='active'&&<section className="w3-plan-session" aria-busy={loading}>
- <div className="w3-plan-card-head"><span>{selected?.isToday?'Heute':selected?.weekday} · {selected?.dateLabel??vm.weekRangeLabel}</span><span>{selected?.dur??'Frei'}</span></div>
- <h2>{selected?.title??'Raum für Erholung.'}</h2>
- <div className="w3-plan-workout" role="img" aria-label={hasWorkout?`${selected?.title}, ${selected?.targetW}, ${selected?.tss} TSS`:'Ruhetag'}>{hasWorkout?<><span className="w3-plan-ftp-line">100 % FTP</span><div className="w3-plan-intervals">{selected!.bars.map((b,i)=><i key={i} data-work={b.work} style={{height:`${Math.min(100,Math.max(8,b.w*100))}%`}}/>)}</div></>:<Wind size={72} strokeWidth={1}/>}</div>
- {hasWorkout&&<div className="w3-plan-measures"><span><strong>{selected?.targetW}</strong> Ø Ziel</span><span><strong>{selected?.tss}</strong> TSS</span><span><strong>{selected?.ftpPct}</strong> FTP</span></div>}
- <div className="w3-plan-days" aria-label="Trainingstag">{sessions.map((s,i)=><button key={s.dateISO??i} aria-label={`${s.weekday} ${s.dateLabel}: ${s.title??'Ruhetag'}`} aria-pressed={day===i} onClick={()=>setDay(i)}><span>{s.weekday.slice(0,2)}</span><i data-work={!!s.title} data-ridden={s.ridden}/></button>)}</div>
- <button className="w3-plan-primary" disabled={loading||!selected} onClick={openSession}>{hasWorkout?'Einheit ansehen':'Warum heute Pause?'}<ArrowRight size={19}/></button>
- </section>}
+ {/* DER BOGEN ersetzt Gefaess-Leiste, Phasenleiste, Wochenblaetterer UND
+     Tagesreihe. Das waren vier Darstellungen desselben Plans, die nichts
+     voneinander wussten: Man konnte ablesen, dass Woche 5 laeuft, aber nicht
+     SEHEN, wo sie im Ganzen liegt und worauf sie zulaeuft. */}
+ <W3PlanArc
+   weeks={vm.weekBars} phases={vm.phases}
+   currentIndex={currentIndex} selectedIndex={currentBar}
+   onSelectWeek={i=>onWeekOffset(Math.min(12,Math.max(0,i-currentIndex)))}
+   days={sessions} selectedDay={day} onSelectDay={setDay}
+   onSwapDays={async(a,b)=>{await swapPlanDays(a,b);await qc.invalidateQueries()}}
+   unitFooter={state==='active'?<>
+     {/* OHNE UEBERLAGERTE FTP-LINIE. Sie stand als absolut positionierte
+         Beschriftung IN der Grafik und wurde von den Intervallbalken
+         ueberdeckt ("00 % FTP" statt "100 % FTP") -- in der alten, flacheren
+         Karte kollidierte das nicht. Sie war ohnehin doppelt: die Messzeile
+         darunter nennt den FTP-Anteil bereits. */}
+     {hasWorkout&&<div className="w3-plan-workout" role="img" aria-label={`${selected?.title}, ${selected?.targetW}, ${selected?.tss} TSS`}><div className="w3-plan-intervals">{selected!.bars.map((b,i)=><i key={i} data-work={b.work} style={{height:`${Math.min(100,Math.max(8,b.w*100))}%`}}/>)}</div></div>}
+     {hasWorkout&&<div className="w3-plan-measures"><span><strong>{selected?.targetW}</strong> Ø Ziel</span><span><strong>{selected?.ftpPct}</strong> FTP</span></div>}
+     <button className="w3-plan-primary" disabled={loading||!selected} onClick={openSession}>{hasWorkout?'Einheit ansehen':'Warum heute Pause?'}<ArrowRight size={19}/></button>
+   </>:undefined}
+ />
+ {/* DIE ALTE SESSION-KARTE IST WEG. Sie zeigte exakt dieselbe Einheit ein
+     zweites Mal -- inklusive einer eigenen Tagesreihe (Mo..So), die neben dem
+     Wochenband des Bogens stand und dieselbe Auswahl noch einmal traf. Ihr
+     Inhalt (Intervallprofil, Messwerte, CTA) lebt jetzt IN der Einheitskarte
+     des Bogens, damit es eine Einheit gibt und nicht zwei Meinungen darueber. */}
  {latest?<button className="w3-plan-adaptation" onClick={()=>setSheet('adaptation')}><span><Check size={17}/></span><strong>Dein Plan hat sich angepasst.</strong><ArrowUpRight size={18}/></button>:<button className="w3-plan-link slim" onClick={()=>setSheet('why')}><span><strong>Warum diese Woche?</strong></span><ArrowUpRight size={18}/></button>}
  </>}
  </>}

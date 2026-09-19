@@ -195,3 +195,23 @@ export async function cancelPlan(): Promise<PlanCancelResponse> {
   const res = await apiClient.post<PlanCancelResponse>('/plan/cancel')
   return res.data
 }
+
+export interface PlanDaySwapResponse {
+  swapped: boolean
+  a_title: string | null
+  b_title: string | null
+  detail?: string | null
+}
+
+/**
+ * Zwei Plantage gegeneinander tauschen.
+ *
+ * Der Plan liess sich bisher nur NEU BERECHNEN, nicht umstellen: Wer wusste,
+ * dass er Donnerstag keine Zeit hat, konnte die Einheit nicht auf Freitag
+ * ziehen. Beide Tage werden serverseitig `user_modified` -- eine geschuetzte
+ * Quelle, die die stuendliche Anpassung nicht mehr von sich aus umraeumt.
+ */
+export async function swapPlanDays(a: string, b: string): Promise<PlanDaySwapResponse> {
+  const { data } = await apiClient.post<PlanDaySwapResponse>('/plan/day/swap', { a, b })
+  return data
+}
