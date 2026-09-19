@@ -96,6 +96,42 @@ def _fit_intensity(block: Block):
     return Intensity.ACTIVE
 
 
+
+def _erster_hauptteil(blocks: Sequence[Block]) -> int:
+    """Wo der Hauptteil beginnt -- dort gehoert der offene LAP-Schritt hin.
+
+    WOFUER. Bei einer Einheit fuer draussen faehrt man erst zu der Stelle, an
+    der die Intervalle Sinn ergeben: ein Anstieg, ein windgeschuetzter
+    Abschnitt, eine ampelfreie Gerade. Der offene Schritt haelt die Uhr genau
+    dort an, bis der Fahrer LAP drueckt.
+
+    WAS HIER VORHER SCHIEFGING. Der Rueckfall verglich `blocks[0].name` woertlich
+    mit "Warmup" -- die gespeicherten Bloecke heissen aber "Warm-up", mit
+    Bindestrich. Der Vergleich schlug also immer fehl und der LAP-Schritt landete
+    auf Index 0, VOR dem Aufwaermen: die Uhr wartete sofort nach dem Start auf
+    einen Tastendruck, und der Hauptteil lag irgendwo dahinter.
+
+    Verschaerft wurde das dadurch, dass `pct_ftp` fuer 92 % der gespeicherten
+    Bloecke als 0.0 ankam (siehe `blocks_from_dicts`), womit die erste Regel nie
+    griff und IMMER der kaputte Rueckfall entschied.
+
+    Jetzt zwei Stufen, beide ohne woertlichen Namensvergleich:
+      1. der erste Block mit echter Intensitaet (>= 75 % FTP)
+      2. sonst der erste Block, der kein Aufwaermen ist
+
+    Die zweite Stufe faengt die Einheiten ab, deren haertester Block unter 75 %
+    liegt -- eine lange Grundlagenfahrt zum Beispiel, und genau die faehrt man
+    draussen.
+    """
+    for i, b in enumerate(blocks):
+        if b.pct_ftp >= 0.75:
+            return i
+    for i, b in enumerate(blocks):
+        if "warm" not in b.name.lower():
+            return i
+    return 0
+
+
 def _pct(watts: int, ftp: int) -> float:
     """Fraction-of-FTP, 4-decimal precision so int round-tripping is exact
     enough for downstream apps. Guards FTP=0 with a sane default."""
@@ -325,8 +361,7 @@ def to_fit(
     workout = WorkoutMessage()
     workout.workout_name = title[:15]  # FIT cap
     workout.sport = Sport.CYCLING
-    first_work = next((i for i, b in enumerate(blocks) if b.pct_ftp >= .75),
-                      1 if len(blocks)>1 and blocks[0].name == "Warmup" else 0)
+    first_work = _erster_hauptteil(blocks)
     workout.num_valid_steps = len(blocks) + (1 if lap_start else 0)
     builder.add(workout)
 
