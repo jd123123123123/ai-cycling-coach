@@ -356,6 +356,9 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
   const pMax = Math.max(1, ...vm.power)
   const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
   const [hov, setHov] = useState<number | null>(null)
+  //: Der beste Wert dieser Fahrt -- oder nichts. Steht oben auf der
+  //: Rang-Karte, statt als eine Zeile unter fuenf unterzugehen.
+  const rekord = vm.ranks.find(r => r.pr) ?? null
 
   return (
     <div className="w3-root">
@@ -558,7 +561,7 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
                     </div>
                     <div style={{ flex: 1, height: 24, display: 'flex', alignItems: 'center', position: 'relative' }}>
                       <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{!held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'right', width: `${mag * 100}%`, height: 14, borderRadius: '3px 0 0 3px', background: T.d3 }} />}</div>
-                      <div style={{ width: 1, height: 24, background: '#FFFFFF8C' }} />
+                      <div style={{ width: 1, height: 24, background: T.d4 }} />
                       <div style={{ flex: 1 }}>{held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'left', width: `${mag * 100}%`, height: 14, borderRadius: '0 3px 3px 0', background: T.acid }} />}</div>
                     </div>
                     <div style={{ width: 56, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
@@ -607,6 +610,37 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
           karten.push({ label: 'Rang', node: (
         <div style={{ ...band(28), gap: 12 }}>
           <SectionHead n={ch('ranks')} eyebrow="Wo sie steht" {...splitFinding(vm.ranksSub)} />
+          {/* ── DER BESTWERT STEHT OBEN, WENN ES EINEN GIBT ─────────────────
+              Ein neuer Bestwert ist die staerkste Tatsache dieser Seite -- und
+              er lag als EINE Zeile unter fuenf, unterschieden nur durch Farbe.
+              Wer die Karte ueberfliegt, sieht fuenf gleich gebaute Zeilen und
+              muss die eine finden, auf die es ankommt.
+
+              Nur wenn es ihn gibt. Ohne Bestwert steht hier nichts -- eine
+              leere Auszeichnungsflaeche waere eine Enttaeuschung mit
+              Ankuendigung.
+
+              UND DANN NUR HIER IN ACID: die Zeile unten behaelt ihre gefuellte
+              Bahn, aber ihre Zahl geht auf `ink`. Dieselbe Tatsache zweimal in
+              Acid waeren zwei Rufe um dieselbe Aufmerksamkeit -- der Hausstil
+              gibt eine Heldenzahl je Flaeche aus. */}
+          {rekord && (
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12,
+                          padding: '2px 2px 6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
+                <Kicker>Neuer Bestwert</Kicker>
+                {/* KEINE EIGENE EINHEIT. `watts` ist bereits formatiert und
+                    traegt das W -- eine zweite daneben las sich als "342 W W".
+                    Erst im gerenderten Bild gesehen. */}
+                <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2,
+                               lineHeight: 0.92, color: T.acid }}>{rekord.watts}</span>
+              </div>
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, flex: 'none',
+                             paddingBottom: 5 }}>
+                über {rekord.dur}
+              </span>
+            </div>
+          )}
           <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
             {/* ── EACH DURATION AS A BEAM AGAINST THE RECORD ──────────────
                 This was a table: duration, watts, and a sentence saying what
@@ -627,7 +661,7 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
                   <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
                     <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet, width: 42, flex: 'none' }}>{r.dur}</span>
-                    <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: -0.5, color: r.pr ? T.acid : T.ink, ...TNUM }}>{r.watts}</span>
+                    <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: -0.5, color: r.pr && !rekord ? T.acid : T.ink, ...TNUM }}>{r.watts}</span>
                   </div>
                   <span style={{ flex: 'none', fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: r.pr ? T.acid : T.mid, ...TNUM }}>{r.note}</span>
                 </div>
