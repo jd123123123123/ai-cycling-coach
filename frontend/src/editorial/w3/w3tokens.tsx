@@ -432,6 +432,52 @@ export const Display = ({ size = 'md', children, style }: {
  * damit auf der Grundlinie des grossen Werts statt in dessen Mitte zu
  * schweben.
  */
+/**
+ * W3 · DAS HERO-FELD — beleuchtet, nicht gerahmt, und ohne Unterkante.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WARUM NICHT EINFACH EINE KARTE
+ *
+ * Der Fahrten-Kopf stand in einem `lux(28)`-Kasten mit vier durch Haarlinien
+ * getrennten Baendern darin. Das liest sich als Datenblatt, nicht als
+ * Titelseite. Also raus damit -- und dann hob sich der Kopf ueberhaupt nicht
+ * mehr vom Rest ab, weil er auf demselben Grund lag wie alles darunter.
+ *
+ * Beides war falsch, und zwar auf dieselbe Weise: Eine Karte trennt durch eine
+ * KANTE, und der Hausstil trennt durch LICHT. Diese Komponente wendet
+ * "Karten sind beleuchtet, nicht gerahmt" auf Seitenebene an.
+ *
+ * ───────────────────────────────────────────────────────────────────────────
+ * WIE ES TRENNT
+ *
+ * Ein randloses Feld ueber die volle Breite, einen Tonwert ueber dem Grund,
+ * das nach unten IN den Grund auslaeuft. Kein Radius, keine Linie, keine
+ * Unterkante -- der Kopf hoert nicht auf, er loest sich auf. Genau deshalb
+ * traegt er, ohne wie ein Kasten auszusehen: der Tonsprung oben ist die
+ * Trennung, das Ausblenden unten verhindert eine zweite.
+ *
+ * KEIN ACID IM FELD. Der Kopf hat bereits eine Heldenzahl; ein farbiger
+ * Schimmer dahinter waere ein zweiter Ruf um dieselbe Aufmerksamkeit.
+ */
+export const HeroField = ({ children, style }: {
+  children: ReactNode
+  style?: CSSProperties
+}) => (
+  <div
+    style={{
+      position: 'relative',
+      // Randlos ueber die ganze Spaltenbreite -- der Rand des Feldes ist der
+      // Rand des Bildschirms, nicht eine Kante im Inhalt.
+      margin: '0 -20px',
+      padding: '10px 20px 34px',
+      background: `linear-gradient(180deg, ${T.heroDock} 0%, ${T.heroDock} 58%, ${T.bg} 100%)`,
+      ...style,
+    }}
+  >
+    {children}
+  </div>
+)
+
 export const HeadRow = ({ label, counter, children }: {
   label: ReactNode
   counter?: ReactNode

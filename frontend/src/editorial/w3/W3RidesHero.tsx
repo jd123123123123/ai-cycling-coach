@@ -1,6 +1,6 @@
 import { useReducedMotion } from 'motion/react'
 import { Minus, Plus } from 'lucide-react'
-import { T, FONT, HeadRow, Kicker, useInView } from './w3tokens'
+import { T, FONT, HeadRow, HeroField, Kicker, useInView } from './w3tokens'
 import { hairline, TNUM } from './w3surfaces'
 
 /**
@@ -184,6 +184,10 @@ export default function W3RidesHero({
     <section aria-label="Deine Kilometer"
              style={{ display: 'flex', flexDirection: 'column', gap: 0,
                       fontFamily: FONT, padding: '2px 0 0' }}>
+      {/* NUR ETIKETT, ZAHL UND KURVE STEHEN IM FELD. Trend, Leiste und
+          Saisonziel sind Belege -- sie gehoeren auf den Grund, sonst ist das
+          Feld wieder der alte Kasten, nur ohne Rand. */}
+      <HeroField>
       <header style={{ display: 'flex', alignItems: 'center',
                        justifyContent: 'space-between', gap: 12, minHeight: 40 }}>
         {periods && period ? (
@@ -260,8 +264,9 @@ export default function W3RidesHero({
       <div style={{ marginTop: 14 }}>
         <Kurve values={values} labels={labels} selected={selected} onSelect={onSelect} />
       </div>
+      </HeroField>
 
-      <div style={{ ...hairline(), margin: '16px 0 14px' }} />
+      <div style={{ ...hairline(), margin: '18px 0 14px' }} />
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
         <Kicker>{trendKicker}</Kicker>

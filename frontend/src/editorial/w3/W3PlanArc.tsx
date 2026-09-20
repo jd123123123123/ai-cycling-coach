@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from 'react'
 import { useReducedMotion } from 'motion/react'
-import { T, FONT, Display, HeadRow, Kicker, useInView } from './w3tokens'
-import { lux, hairline, TNUM } from './w3surfaces'
+import { T, FONT, Display, HeadRow, HeroField, Kicker, useInView } from './w3tokens'
+import { lux, TNUM } from './w3surfaces'
 import type { WeekBar, PhaseSeg } from './w3plan'
 import type { PlanDaySession } from './W3PlanView'
 
@@ -34,7 +34,11 @@ import type { PlanDaySession } from './W3PlanView'
  * sie zu einem Kasten unter Kaesten.
  */
 
-const H = 92          // Hoehe der Bogenflaeche
+const H = 132         // Hoehe der Bogenflaeche
+//: 92 waren zu wenig. Der graue Wochenblock darunter ist rund 85 px hoch und
+//: flaechig -- damit dominierte die WOCHENUEBERSICHT den Bildschirm, waehrend
+//: die Kurve als duenne Linie darueber lag. Der Bogen ist aber die Antwort auf
+//: "wo stehe ich", und das gehoert dem Helden.
 const PAD = 14        // Innenabstand, damit Punkte am Rand nicht anschneiden
 
 export interface W3PlanArcProps {
@@ -384,17 +388,22 @@ export default function W3PlanArc({
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 18, fontFamily: FONT }}>
       {/* ── Kopf: die Zahl traegt die Orientierung, nicht ein Satz ──────── */}
-      <HeadRow label={phase ?? 'Plan'} counter={`von ${String(weeks.length).padStart(2, '0')}`}>
-        <Display>WOCHE {String(selectedIndex + 1).padStart(2, '0')}</Display>
-      </HeadRow>
+      {/* DER GRAPH IST DER HELD, nicht die Wochenuebersicht.
+          Kopf, Kurve und Phasenleiste stehen zusammen in einem beleuchteten
+          Feld, das nach unten in den Grund auslaeuft -- so hebt sich der Kopf
+          ab, ohne wie ein Kasten auszusehen. Was darunter kommt (die Woche,
+          die Einheit) liegt auf dem Grund und ordnet sich damit unter. */}
+      <HeroField style={{ marginTop: -8 }}>
+        <HeadRow label={phase ?? 'Plan'} counter={`von ${String(weeks.length).padStart(2, '0')}`}>
+          <Display>WOCHE {String(selectedIndex + 1).padStart(2, '0')}</Display>
+        </HeadRow>
 
-      <div>
-        <Bogen weeks={weeks} currentIndex={currentIndex}
-               selectedIndex={selectedIndex} onSelectWeek={onSelectWeek} />
-        <Phasen phases={phases} />
-      </div>
-
-      <div style={hairline()} />
+        <div style={{ marginTop: 10 }}>
+          <Bogen weeks={weeks} currentIndex={currentIndex}
+                 selectedIndex={selectedIndex} onSelectWeek={onSelectWeek} />
+          <Phasen phases={phases} />
+        </div>
+      </HeroField>
 
       {/* ── Die Woche als Form, nicht als Tabelle ───────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
