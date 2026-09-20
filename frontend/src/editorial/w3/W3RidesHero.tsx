@@ -1,7 +1,7 @@
 import { useReducedMotion } from 'motion/react'
 import { Minus, Plus } from 'lucide-react'
 import { T, FONT, HeadRow, Kicker, useInView } from './w3tokens'
-import { lux, hairline, TNUM } from './w3surfaces'
+import { hairline, TNUM } from './w3surfaces'
 
 /**
  * W3 · DER FAHRTEN-KOPF — die Kilometer als Gegenstand, nicht als Kulisse.
@@ -173,8 +173,17 @@ export default function W3RidesHero({
   details?: React.ReactNode
 }) {
   return (
+    /* KEINE KARTE MEHR.
+       Der Kopf stand in einem `lux(28)`-Kasten und darin vier durch Haarlinien
+       getrennte Baender: Zahl, Trend, Leiste, Saisonziel. Das liest sich als
+       Datenblatt, nicht als Titelseite -- und neben dem Plan-Hero, der seine
+       Typo direkt auf den Grund stellt, wirkte es wie ein Fremdkoerper aus
+       einer anderen App.
+       Auf dem Grund bekommt die Zahl die Luft, die sie traegt; die Haarlinien
+       bleiben als Gliederung, aber ohne Kastenrand und ohne zweiten Ton. */
     <section aria-label="Deine Kilometer"
-             style={{ ...lux(28), padding: '16px 18px 20px', gap: 0, fontFamily: FONT }}>
+             style={{ display: 'flex', flexDirection: 'column', gap: 0,
+                      fontFamily: FONT, padding: '2px 0 0' }}>
       <header style={{ display: 'flex', alignItems: 'center',
                        justifyContent: 'space-between', gap: 12, minHeight: 40 }}>
         {periods && period ? (
@@ -200,7 +209,13 @@ export default function W3RidesHero({
               )
             })}
           </div>
-        ) : <Kicker>Letzte 12 Monate</Kicker>}
+        ) : (
+          /* KEIN ZWEITES ETIKETT. Hier stand der Zeitraum als Kicker -- und
+             seit die Zahl ihr eigenes Etikett traegt, stand "LETZTE 12 MONATE"
+             zweimal untereinander. Ohne Zeitraum-Reiter bleibt die Kopfzeile
+             leer und traegt nur den Schalter. */
+          <span />
+        )}
         <button type="button" onClick={onToggle} aria-expanded={open}
                 aria-label={open ? 'Details schließen' : 'Details öffnen'}
                 style={{
@@ -212,8 +227,6 @@ export default function W3RidesHero({
         </button>
       </header>
 
-      <Kurve values={values} labels={labels} selected={selected} onSelect={onSelect} />
-
       {/* DIE ZAHL IST DER GEGENSTAND. Sie war weiss, waehrend sieben kleinere
           Dinge um sie herum leuchteten.
 
@@ -223,7 +236,12 @@ export default function W3RidesHero({
           Ordnungsschild und darf die Breite wechseln; "4 812" waechst mit
           jeder Fahrt, und Anton hat keine Tabellenziffern, also wuerde die
           Zahl bei jedem Wechsel springen. */}
-      <div style={{ marginTop: 6 }}>
+      {/* ETIKETT → ZAHL → KURVE, wie auf der Planseite.
+          Vorher standen ZWEI Etiketten uebereinander: der Zeitraum ganz oben,
+          dann die Kurve, dann "Deine gefahrenen Kilometer" ueber der Zahl.
+          Eines davon beschrieb nur, was die Einheit "km" ohnehin sagt.
+          Der Plan-Hero hat ein Etikett; jetzt hat dieser auch eines. */}
+      <div>
         {/* OHNE ZAEHLER. Die Leiste darunter fuehrt "FAHRTEN 142" bereits, und
             neben der Ueberschrift steht es ein drittes Mal -- dieselbe Zahl
             dreimal auf einem Bildschirm ist schlechter als eine fehlende.
@@ -237,6 +255,10 @@ export default function W3RidesHero({
             <span style={{ fontSize: 19, fontWeight: 600, color: T.quiet }}>km</span>
           </span>
         </HeadRow>
+      </div>
+
+      <div style={{ marginTop: 14 }}>
+        <Kurve values={values} labels={labels} selected={selected} onSelect={onSelect} />
       </div>
 
       <div style={{ ...hairline(), margin: '16px 0 14px' }} />

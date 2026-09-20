@@ -93,7 +93,7 @@ export function RideSummary({vm,rhythm,period,onPeriod,onSetGoal}:{vm:W3RidesVm;
   period={rhythm?period:undefined}
   onPeriod={k=>{onPeriod(k as W3RidePeriod);setSelected(null)}}
   km={picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}
-  deck={selected!=null?label(selected):win?.label??'Deine gefahrenen Kilometer'}
+  deck={selected!=null?label(selected):win?.label??'Letzte 12 Monate'}
   values={values} labels={label} selected={selected} onSelect={setSelected}
   trendKicker={period==='season'?'Saison-Trend':period==='month'?'30-Tage-Trend':'7-Tage-Trend'}
   trendLabel={trend} trendPct={trendDelta}

@@ -219,9 +219,18 @@ function Phasen({ phases }: { phases: PhaseSeg[] }) {
                   fontSize: 9.5, fontWeight: p.active ? 700 : 500,
                   letterSpacing: 0.8, textTransform: 'uppercase',
                   color: p.active ? T.ink : T.quiet,
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  overflow: 'hidden', textOverflow: 'clip', whiteSpace: 'nowrap',
                 }}>
-            {p.name}
+            {/* NUR DIE AKTIVE PHASE NENNT IHREN NAMEN.
+                Die Breite kommt hier aus der DAUER der Phase -- eine
+                einwoechige Erholung bekommt ein Achtel der Zeile und konnte
+                ihren Namen nie zeigen: erst "ERHOL…", nach einem Versuch mit
+                Umbruch "ERHOLU/NG". Beides liest sich als Fehler.
+                Die Zeitspanne passt dagegen IMMER, und sie sagt etwas, das
+                der Name nicht sagt: wie lang die Phase ist.
+                Den Namen liefert der Bogen ohnehin -- seine Ueberschrift
+                zeigt beim Scrubben die Phase der gewaehlten Woche. */}
+            {p.active ? p.name : p.weeks}
           </span>
         )
       })}

@@ -133,7 +133,26 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  {state!=='ended'&&<W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={previewProgress?false:results.isPending} error={previewProgress?false:results.isError}/>} 
  {state==='ended'&&!missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Was baust du als Nächstes?<ArrowRight size={20}/></button>}
  </>:<>
- <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1><p>{state==='created'?'Gespeichert · dein Weg ist klar':`${vm.block?.phase??'Training'} · ${vm.planWeekLabel}${goalDate?' · Ziel '+new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'short'}):''}`}</p></div><div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div></header>
+ <header className="w3-plan-heading"><div><h1>{state==='created'?<>Dein Plan<br/>steht.</>:title}</h1>{(state!=='active'||goalDate)&&<p>{state==='created'
+      ? 'Gespeichert · dein Weg ist klar'
+      /* IM AKTIVEN ZUSTAND NUR DAS ZIEL. Hier stand
+         "${phase} · ${planWeekLabel}" -- und genau das fuehrt der Bogen
+         direkt darunter als seine Ueberschrift: "INTENSIV / WOCHE 05 /
+         von 08". Zwei Zeilen Abstand, dieselbe Auskunft, zweimal.
+         Das Ziel dagegen sagt der Bogen NICHT. */
+      : (goalDate
+          ? `Ziel ${new Date(goalDate+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'long'})}`
+          /* OHNE ZIEL GAR NICHTS. Der Rueckfall lautete
+             "${phase} · ${planWeekLabel}" -- also wieder die Auskunft des
+             Bogens. Eine Zeile, die nichts Neues sagt, ist keine Zeile
+             weniger wert als eine leere: sie kostet Platz UND liest sich
+             wie ein Fehler ("warum steht das zweimal da?"). */
+          : null)}</p>}</div>{/* KEINE WOCHENZAHL IM AKTIVEN ZUSTAND. Der Bogen darunter fuehrt
+     "WOCHE 05 ... von 08" als seine Ueberschrift; oben stand dieselbe
+     Auskunft ein zweites Mal als "05/08" -- dieselbe Tatsache in zwei
+     verschiedenen typografischen Systemen auf einem Bildschirm.
+     In `created` gibt es keinen Bogen, dort bleibt sie. */}
+{state!=='active'&&<div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div>}</header>
  {state==='created'?<>
  <section className="w3-plan-overview">
    <div className="w3-plan-card-head"><strong>Dein Weg auf einen Blick</strong><span>{vm.totalWeeks} Wochen</span></div>
@@ -165,11 +184,14 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <section className="w3-plan-rhythm"><div><strong>{vm.adjustHours} h</strong><span>pro Woche verfügbar</span></div><div><strong>{vm.adjustDays.filter(Boolean).length}</strong><span>Trainingstage möglich</span></div><button aria-label="Trainingswoche anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button></section>
  <button className="w3-plan-primary" onClick={onCreatedDone}>Zum ersten Training<ArrowRight size={20}/></button>
  </>:<>
- <section className="w3-plan-development" aria-labelledby="w3-plan-development-active-title">
-   <div className="w3-plan-card-head"><h2 id="w3-plan-development-active-title">Start → jetzt</h2><span>Was sich bewegt</span></div>
-   <p className="w3-plan-development-note">Dein Leistungsprofil im Vergleich zum Planstart.</p>
-   <W3PowerProfile data={progressData}/>
- </section>
+ {/* DER BOGEN STEHT OBEN, und das war er vorher nicht.
+     Zwischen der Kopfzeile und ihm lag der Start-jetzt-Vergleich: ein
+     Radardiagramm von rund 430 px, das bei fehlenden Messungen selbst sagt,
+     dass es nichts zu vergleichen gibt. Damit war das groesste Element des
+     Bildschirms eine Leermeldung -- und der Bogen, der die Orientierung
+     traegt, lag darunter ausserhalb des Sichtfelds.
+     Der Vergleich ist interessant, aber er ist nicht die Antwort auf
+     "wo stehe ich"; er steht jetzt dahinter. */}
  {/* DER BOGEN ersetzt Gefaess-Leiste, Phasenleiste, Wochenblaetterer UND
      Tagesreihe. Das waren vier Darstellungen desselben Plans, die nichts
      voneinander wussten: Man konnte ablesen, dass Woche 5 laeuft, aber nicht
@@ -191,6 +213,15 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
      <button className="w3-plan-primary" disabled={loading||!selected} onClick={openSession}>{hasWorkout?'Einheit ansehen':'Warum heute Pause?'}<ArrowRight size={19}/></button>
    </>:undefined}
  />
+ {/* DER VERGLEICH, HINTER DEM BOGEN. Er beantwortet "was hat sich bewegt",
+     nicht "wo stehe ich" -- und bei fehlenden Messungen sagt er das selbst.
+     Als groesstes Element ueber dem Bogen war er eine Leermeldung an der
+     Stelle, an der die Orientierung stehen muss. */}
+ <section className="w3-plan-development" aria-labelledby="w3-plan-development-active-title">
+   <div className="w3-plan-card-head"><h2 id="w3-plan-development-active-title">Start → jetzt</h2><span>Was sich bewegt</span></div>
+   <p className="w3-plan-development-note">Dein Leistungsprofil im Vergleich zum Planstart.</p>
+   <W3PowerProfile data={progressData}/>
+ </section>
  {/* DIE ALTE SESSION-KARTE IST WEG. Sie zeigte exakt dieselbe Einheit ein
      zweites Mal -- inklusive einer eigenen Tagesreihe (Mo..So), die neben dem
      Wochenband des Bogens stand und dieselbe Auswahl noch einmal traf. Ihr
