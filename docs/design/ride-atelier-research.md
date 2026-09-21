@@ -29,3 +29,24 @@ One independent synthetic design review, source-based, not real customer testing
 Inspected actual React screens in a 390 × 844 iframe, including summary and comparative record curve. Six focused tests cover GPS orientation/missing GPS, actual-zone selection, absent plan references, absent zone data and historical attribution. TypeScript and production build pass. Existing build warns about large maplibre chunks; this proposal adds no library.
 
 This is not yet the complete production ride page: the deeper existing review and map remain available, but full production navigation, every metadata field and authenticated live data integration remain for a separately approved implementation. Small viewports may scroll within a chapter to preserve legibility. No claim of universal one-screen fit, actual athlete feedback, a 10/10 score or measured emotional response.
+
+## Second iteration: deeper analysis and shareable evidence
+
+User liked the overall direction but asked for the data people seek in Strava and shareable views. Research extended to these primary sources:
+
+- [Strava Heart Rate](https://support.strava.com/en-us/articles/15401762-heart-rate): time-series heart rate paired with elevation, averages/maxima and personal zones. Transfer: keep one shared time cursor across power, pulse, elevation, cadence and speed; give elevation its own labeled scale rather than superimposing incomparable units.
+- [Strava Power](https://support.strava.com/en-us/articles/15402161-power): power analysis and FTP reference. Transfer: a ride's watts over time and the athlete's FTP over calendar dates are distinct views. FTP history uses stored observations, never a claimed gain from this single ride.
+- [Strava's April 2025 update](https://press.strava.com/ea/articles/strava-updates-features-to-help-users-easily-plan-and-share-their-activities): full-screen activity detail and downloadable share stickers. Transfer: create a dedicated poster, leaving controls out, with the metric, period and comparison understandable outside the app.
+- [Apple: Design app experiences with charts](https://developer.apple.com/videos/play/wwdc2022/110342/): clear self-contained reading, context and progressive exploration. A foundational design reference, not presented as newly published guidance.
+
+Added to the isolated proposal:
+
+- Analysis selectors: power, heart rate, altitude, cadence and speed. Color-coded FTP / HRmax bands, synchronized elevation and grade context. Keyboard range control and direct curve inspection. Time-weighted averages ignore missing intervals, zero remains a real measurement.
+- Best efforts retain the existing measured power-duration curve and can now be controlled by the preview so the selected duration matches the export. Existing consumers retain their original behavior.
+- FTP history for 30/90/180 days, actual calendar spacing, explicit recorded-source labels, dates and differences. No future observations in a historical window.
+- Every ride chapter has a share action. SVG-based branded posters render to PNG at 1080 × 1350 or 1080 × 1920. Native share is user-triggered when supported; otherwise the local PNG can be saved. No posts are sent automatically. The GPS silhouette is opt-in on the ride poster. SVG text is escaped by React, with no external assets or HTML injection.
+- These new streams and FTP values are intentionally synthetic fixtures. They are explicitly marked in the app preview and the exported image. They do not fetch or overwrite real athlete records. Production integration still requires mapping real stream timestamps (the existing crew telemetry contract contains normalized position but no elapsed seconds) and the rider's historical FTP/HR references. Do not infer clock time by multiplying sample position by ride duration.
+
+No claim that share cards create virality, improve retention, or have been tested with real customers. The design makes the underlying personal evidence portable; growth impact needs measurement after an approved implementation.
+
+Validation of the second iteration: 14 focused tests pass, including known/unknown HR-zone references, calendar filtering, irregular-interval averages, synchronized sample selection, controlled best-effort selection and safe SVG exports. Inspected the actual analysis, FTP period switch (90-day +16 W to 30-day +6 W with fixtures), and 4:5/9:16 export dialog. PNG rendering completed in the browser; the save action was exercised. Native OS share-sheet behavior is dependent on platform support and was not posted to any social platform. The Today workout preview also offers a share poster labeled as a planned session. No production deployment performed.

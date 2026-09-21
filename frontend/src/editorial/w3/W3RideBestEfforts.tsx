@@ -6,10 +6,10 @@ import { smoothCurve } from './w3SmoothCurve'
 const watts = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 })
 
 /** Measured best efforts share a zero-based power axis; duration is logarithmic. */
-export default function W3RideBestEfforts({ ranks }: { ranks: W3Rank[] }) {
+export default function W3RideBestEfforts({ ranks, selectedDuration, onSelectDuration }: { ranks: W3Rank[]; selectedDuration?: number; onSelectDuration?: (duration:number)=>void }) {
   const sorted = [...ranks].filter(r => r.durationSeconds > 0).sort((a,b) => a.durationSeconds-b.durationSeconds)
   const [chosen, setChosen] = useState<number | null>(null)
-  const selected = sorted.find(r => r.durationSeconds === chosen) ?? sorted.find(r => r.pr) ?? sorted[0]
+  const selected = sorted.find(r => r.durationSeconds === (selectedDuration ?? chosen)) ?? sorted.find(r => r.pr) ?? sorted[0]
   if (!selected) return null
   const ceiling = Math.max(1, ...sorted.flatMap(r => [r.wattsValue, r.bestWattsValue ?? 0]))
   const lo = Math.log(sorted[0].durationSeconds), hi = Math.log(sorted.at(-1)!.durationSeconds)
@@ -30,7 +30,7 @@ export default function W3RideBestEfforts({ ranks }: { ranks: W3Rank[] }) {
       {prior != null && <circle cx={x(selected.durationSeconds)} cy={y(prior)} r="4" fill={T.bg} stroke={T.mid} strokeWidth="1.5"/>}
       {sorted.map(r => <circle key={r.durationSeconds} cx={x(r.durationSeconds)} cy={y(r.wattsValue)} r={r===selected?5:3} fill={T.acid} stroke={T.bg} strokeWidth="2"/>)}
     </svg>
-    <div className="w3-effort-durations" role="group" aria-label="Leistungsdauer auswählen">{sorted.map(r => <button key={r.durationSeconds} type="button" aria-pressed={r===selected} onClick={()=>setChosen(r.durationSeconds)}>{r.dur.toLowerCase()}</button>)}</div>
+    <div className="w3-effort-durations" role="group" aria-label="Leistungsdauer auswählen">{sorted.map(r => <button key={r.durationSeconds} type="button" aria-pressed={r===selected} onClick={()=>{setChosen(r.durationSeconds);onSelectDuration?.(r.durationSeconds)}}>{r.dur.toLowerCase()}</button>)}</div>
     <div className="w3-effort-legend"><span><i/>Diese Fahrt</span><span><i/>Bisheriger Bestwert</span></div>
   </div>
 }
