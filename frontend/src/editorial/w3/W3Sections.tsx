@@ -1,7 +1,7 @@
-import { useRef, useState, type CSSProperties } from 'react'
+import { createContext, useContext, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
+import { Info, CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 import W3WhyButton from './W3WhyButton'
 import W3DayRoute from './W3DayRoute'
@@ -426,6 +426,60 @@ export function IntervalBars({ blocks, ftpTag, h = 96, editorial = false }: { bl
   )
 }
 
+export const TrainingSelectionContext = createContext<{
+  selection: { key: string; index: number | null } | null;
+  setSelection: (value: { key: string; index: number | null }) => void;
+} | null>(null)
+
+/** The same prescription instrument in the quick view and its open detail.
+ * Blocks retain their provided relative heights. Equal horizontal slots are
+ * schematic sections: W3Block does not carry a reliable duration or axis unit. */
+export function TrainingInstrument({ title, blocks, duration, target, tss, ftpPct, ftpTag, accessory }: {
+  title: string; blocks: W3Block[]; duration?: string | null; target?: string | null;
+  tss?: number | null; ftpPct?: string | null; ftpTag?: string | null; accessory?: ReactNode;
+}) {
+  const [localSelected, setLocalSelected] = useState<number | null>(null)
+  const [showBasis, setShowBasis] = useState(false)
+  const basisId = useId()
+  const shared = useContext(TrainingSelectionContext)
+  const selectionKey = `${title}|${blocks.map(b => `${b.label}:${b.w}`).join('|')}`
+  const selected = shared ? (shared.selection?.key === selectionKey ? shared.selection.index : null) : localSelected
+  const setSelected = (index: number | null) => shared ? shared.setSelection({ key: selectionKey, index }) : setLocalSelected(index)
+  const phases = blocks.reduce((count, block, i) => count + (block.work && !blocks[i - 1]?.work ? 1 : 0), 0)
+  const selectedBlock = selected == null ? null : blocks[selected]
+  const phaseReading = phases > 1 ? `${phases} Belastungsphasen mit Erholung` : phases === 1 ? 'Eine zusammenhängende Belastungsphase' : 'Deine geplanten Abschnitte'
+  const power = target && target !== DASH ? target : null
+  const percent = ftpPct && ftpPct !== DASH ? `${ftpPct} FTP` : null
+  return <div className="w3-training-instrument" style={{
+    '--instrument-ink': T.ink, '--instrument-mid': T.mid, '--instrument-acid': T.acid,
+    '--instrument-off': T.heroOff, '--instrument-rule': T.rule,
+  } as CSSProperties}>
+    <div className="w3-training-instrument-heading"><div className="w3-training-instrument-title">{title}</div>{accessory}</div>
+    {(power || duration) && <div className="w3-training-instrument-readings">
+      {power && <div><strong>{power}</strong><span>Ziel{percent ? ` · ${percent}` : ''}</span></div>}
+      {duration && <div><strong>{duration}</strong><span>Dauer{tss != null ? ` · ${numTraining(tss)} TSS` : ''}</span></div>}
+    </div>}
+    {(!duration && tss != null || !power && percent) && <div className="w3-training-instrument-extra">{[!duration && tss != null ? `${numTraining(tss)} TSS` : null, !power ? percent : null].filter(Boolean).join(' · ')}</div>}
+    {blocks.length > 0 && <>
+      <div className="w3-training-instrument-profile" role="group" aria-description="Schematische Abschnitte, keine Zeitachse. Balkenbreite ist keine Dauer." aria-label={`Trainingsprofil: ${blocks.map(b => b.label).join(', ')}`}>
+        {blocks.map((block, i) => <button type="button" key={i} aria-pressed={selected === i}
+          aria-label={`Abschnitt ${i + 1}: ${block.label}`} title={block.label}
+          onClick={() => setSelected(selected === i ? null : i)}
+          className="w3-training-instrument-block" data-work={block.work}
+          style={{ '--block-height': `${Math.max(2, Math.min(100, block.w * 100))}%` } as CSSProperties}>
+          <span aria-hidden />
+        </button>)}
+      </div>
+      <div className="w3-training-instrument-caption" aria-live="polite">
+        <span>{selectedBlock?.label ?? phaseReading}</span>
+        <button type="button" className="w3-training-instrument-info" aria-label="Profil erklären" aria-expanded={showBasis} aria-controls={basisId} onClick={() => setShowBasis(!showBasis)} title="Schematische Abschnitte, keine Zeitachse"><Info size={16} /></button>
+      </div>
+    </>}
+    {showBasis && <p id={basisId} className="w3-training-instrument-basis">{ftpTag ? `${ftpTag}. ` : ''}Abschnitte schematisch; Balkenbreite ist keine Dauer. Tippe einen Abschnitt für seine Vorgabe an.</p>}
+  </div>
+}
+const numTraining = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 1 })
+
 export type Adapt = 'none' | 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
 
 /** A real coach re-plan result. For the intensity/exchange options `onAdapt`
@@ -481,7 +535,7 @@ const asWord = (label: string) => SENTENCE_LABEL[label] ?? label
  * still reads as an em dash in `T.quiet` — an adapted-but-unknown number can
  * never look like a real one.
  */
-function SessionNumbers({ stats, editorial = false }: { stats: DayStat[]; editorial?: boolean }) {
+function SessionNumbers({ stats }: { stats: DayStat[] }) {
   if (!stats.length) return null
   // The lead is the target if there is one, else whatever came first: the
   // prescription's headline number, never an arbitrary slot.
@@ -489,20 +543,6 @@ function SessionNumbers({ stats, editorial = false }: { stats: DayStat[]; editor
   const rest = stats.filter((s) => s !== lead && s.v !== DASH)
   const has = lead.v !== DASH
 
-  if (editorial) return (
-    <div className="w3-today-training-numbers">
-      <div className="w3-today-training-target">
-        <span style={{ color: has ? (lead.hue ?? T.ink) : T.quiet }}>{lead.v}</span>
-        <span className="w3-today-training-target-label">{asWord(lead.l)}</span>
-      </div>
-      {rest.length > 0 && <div className="w3-today-training-facts" style={{ gridTemplateColumns: `repeat(${rest.length}, minmax(0, 1fr))` }}>
-        {rest.map(s => <div key={s.l}>
-          <span style={{ color: s.hue ?? T.ink }}>{s.v}</span>
-          <span>{asWord(s.l)}</span>
-        </div>)}
-      </div>}
-    </div>
-  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
@@ -655,6 +695,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   const curFtp = result ? (parseInt(result.ftpPct) || baseFtp) : baseFtp
   const isRest = adapt === 'rest'
   const adapted = adapt !== 'none'
+  const profileStale = !!result?.title && result.title !== day.title
   // The four supporting numbers. Duration is today-only (the view only knows
   // today's session length), so other days show three and the last card spans
   // the row rather than leaving a hole in the grid.
@@ -667,7 +708,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   ]
   // How to ride it + fuelling (the 60 g/h is standard endurance guidance, not a
   // fabricated per-ride number).
-  const tw = day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
+  const tw = editorial && curT ? `${curT} W` : day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
   const workDesc = `Intervalle bei ${tw} halten · locker ein- und ausfahren · ~60 g Kohlenhydrate pro Stunde`
 
   // Run the real coach adapt (or clear it when the same option is tapped off).
@@ -756,19 +797,27 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
 
   return (
     <motion.div className={editorialClass} key={adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
-      style={{ ...editorialTokens, display: 'flex', flexDirection: 'column', gap: editorial ? 20 : 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
+      style={{ ...editorialTokens, display: 'flex', flexDirection: 'column', gap: 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
       {!editorial && <Rule />}
-      {header}
+      {!editorial && header}
 
-      <div style={{ ...(editorial ? { minWidth: 0, overflowWrap: 'anywhere' as const } : {}), fontSize: editorial ? 28 : 22, fontWeight: editorial ? 600 : 700, letterSpacing: editorial ? -0.9 : -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
-        {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
-      </div>
+      {editorial ? <TrainingInstrument
+        title={result?.title ?? day.title ?? 'Noch nicht festgelegt'}
+        blocks={day.title && !profileStale ? session.blocks : []}
+        duration={day.title && !profileStale ? session.dur : null}
+        target={day.title && curT ? `${curT} W` : null}
+        tss={day.title ? curTss || null : null}
+        ftpPct={curFtp ? `${curFtp}%` : null}
+        ftpTag={session.ftpTag}
+        accessory={isToday ? <W3WhyButton /> : undefined}
+      /> : <>
+        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
+          {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
+        </div>
+        {(day.title != null && (curTss > 0 || curT > 0)) && <SessionNumbers stats={stats} />}
+      </>}
 
-      {/* Stats only when there's a real prescription (title + a number). A
-          future day with no plan yet hides the empty dash row. */}
-      {(day.title != null && (curTss > 0 || curT > 0)) && (
-        <SessionNumbers stats={stats} editorial={editorial} />
-      )}
+      {isToday && editorial && <SessionLink editorial label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />}
 
       {/* the coach's own explanation of the re-plan (real AI rationale) */}
       {isToday && adapted && (result || error) && (
@@ -781,7 +830,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
         </div>
       )}
 
-      {isToday && (
+      {isToday && !editorial && (
         <>
           {/* Guarded like the future-day branch below: with no prescribed
               session there are no bars to draw, and an empty chart frame is
@@ -790,6 +839,8 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{workDesc}</span>
         </>
       )}
+
+      {isToday && editorial && <details className="w3-training-support"><summary>Durchführung & Verpflegung</summary><p>{day.dateLabel}</p><p>{workDesc}</p></details>}
 
       {isFuture && (
         <>
@@ -800,15 +851,11 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
         </>
       )}
 
-      {/* ── WHERE TO RIDE THIS ONE ────────────────────────────────────────
-           On today AND on every planned day, because "where do I ride this?"
-           is a question about a SESSION and the session is what this card is.
-           It follows the adaptation: take the session indoors and the answer
-           becomes a trainer route, because a mountain road for a 2x20 on the
-           rollers is not a worse suggestion, it is an unusable one.
-
-           Never on a rest day, and never before there is history to draw on —
-           see `W3DayRoute`, which renders nothing rather than guessing. ── */}
+      {editorial ? <details className="w3-training-support"><summary>Strecken & Wetter</summary>
+        <W3DayRoute caption="Draußen" targetTss={result?.tss ?? day.planned} durationMinutes={durMinutes} indoor={false} onOpen={() => navigate('/e/w3-rides')} />
+        <W3DayRoute caption="Drinnen" targetTss={result?.tss ?? day.planned} durationMinutes={durMinutes} indoor onOpen={() => navigate('/e/w3-rides')} />
+        <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
+      </details> : <>
       {(isToday || isFuture) && day.status !== 'rest' && (
         <>
           {/* BOTH answers, not the one the app guessed. Whether this session
@@ -834,6 +881,8 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
         </>
       )}
 
+      </>}
+
       {isPast && day.status !== 'rest' && (
         day.status === 'missed' ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -846,7 +895,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
       )}
 
       {/* ── Weather: the selected DATE's line. Real numbers for today only. ── */}
-      {!isPast && (
+      {!isPast && !editorial && (
         <>
           <Rule />
           <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
@@ -863,7 +912,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
               <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
             </div>
           )}
-          <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
+          {!editorial && <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />}
           {showAdapt
             ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
             : <AdjustButton editorial={editorial} onOpen={() => setShowAdapt(true)} />}

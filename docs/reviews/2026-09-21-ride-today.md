@@ -40,3 +40,21 @@ Ride variants: ?free&historical and ?limited
 Before app components: http://127.0.0.1:5181/ (git archive of base frontend source, same review fixtures).
 
 The preview host and baseline source live outside this repository. This document is a review record, not a deployment approval or gate packet.
+
+## Second iteration — visual explanation, not more copy
+
+The user rejected the first candidate as insufficiently visual and insightful. The three synthetic reviewers were reconvened for specific issues and a second check; no real-user validation or objective 10/10 rating is claimed.
+
+Implemented:
+- Recorded and prescribed power share one time axis and one FTP axis. The longer activity remains visible past the prescription. Aggregated intervals extend to supported boundaries; missing intervals remain gaps. Touch/keyboard inspection follows elapsed time, not array index, and respects each recording's end.
+- The most material proportional duration/load difference leads. Unplanned rides lead with their longest measured power band. These are observations, not claims that a single ride increased fitness.
+- The attributed, dated plan adjustment follows immediately, with its reason on demand. Historical pending/limited checks never masquerade as completed adaptations.
+- Best efforts form a smooth, zero-based power-duration curve with a prior-record reference. Selecting a duration shows measured watts and the signed difference. No string parsing or invented performance score.
+- Today uses one interactive workout instrument in quick and expanded views. Section selection survives expansion. The CTA follows the plot; optional execution, weather and route information sits in compact disclosure rows.
+- Stable color roles: lime actual, white plan, zone colors only for power-zone distribution. Scoped W3 tokens and black surfaces retained.
+
+Second-pass findings addressed: swapped comparison colors; low-value generic headline; irregular-time scrubbing; hidden interval tails; historical pending wording; readout after plan end; empty expanded-card spacing; repeated explanation labels; selection lost during expansion. The design reviewer found no remaining P1 issues and recommended user preview after the final boundary correction. This is not deployment approval.
+
+Validation: TypeScript and production build pass. 27 review behavior tests, 20 ride evidence/history/no-power/repeats tests, and 18 Today/adaptation tests pass. Actual browser checks included Today section selection retained through expansion, CTA placement and disclosure spacing, planned/shared-axis ride review, best-effort selection and signed differences, and historical ride without a saved plan. Existing map bundle size and test-environment canvas warnings remain.
+
+Current comparison: http://127.0.0.1:8781/?page=ride — before is commit 1179273, the previously rejected preview; after is this iteration. This supersedes the first iteration's live-base comparison above. On narrow review windows, use the Before/After toggle; both frames remain real app components with explicitly labeled example data. No new libraries or backend changes were necessary. Not deployed.

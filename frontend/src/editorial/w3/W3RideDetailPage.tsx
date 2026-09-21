@@ -257,6 +257,7 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     const best = e.best_watts ?? null
     const gap = best != null ? e.ride_watts - best : null
     return {
+      durationSeconds: e.duration_s,
       dur: e.duration_s < 60 ? `${e.duration_s} SEK` : `${Math.round(e.duration_s / 60)} MIN`,
       watts: `${e.ride_watts} W`,
       wattsValue: e.ride_watts,

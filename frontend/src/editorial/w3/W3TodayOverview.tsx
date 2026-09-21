@@ -9,6 +9,7 @@ import { T, FONT, EASE } from './w3tokens'
 import W3PlanPhaseProgress from './W3PlanPhaseProgress'
 import W3PlanPhaseRoad from './W3PlanPhaseRoad'
 import W3ProgressCompact from './W3ProgressCompact'
+import { TrainingInstrument, TrainingSelectionContext } from './W3Sections'
 import type { W3Vm } from './W3TodayView'
 import './w3TodayTrainingEditorial.css'
 
@@ -39,6 +40,7 @@ function FormSpark({ points, metric, color }: { points: FormPoint[]; metric: 'ct
 export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selectedWeekDay, onSelectWeekDay, persistentForm, progressSummary, goalSummary, ridesSummary, weather, ...details }: { vm: W3Vm; data: OverviewData } & Sections) {
   const [open, setOpen] = useState<Section | null>(null)
   const [planOpen,setPlanOpen]=useState(false)
+  const [trainingSelection, setTrainingSelection] = useState<{key: string; index: number | null} | null>(null)
   const [localWeekDay, setLocalWeekDay] = useState<number | null>(null)
   const selected = selectedWeekDay ?? localWeekDay ?? Math.max(0,vm.weekDays.findIndex(d=>d.status==='today'))
   const uid = useId()
@@ -47,11 +49,6 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
   const hasTodaySession = vm.hasPlan && !!today?.title && !today.rest
   const blocks = hasTodaySession ? (today?.blocks?.length ? today.blocks : vm.sessionBlocks ?? []) : []
   const todayTitle = !vm.hasPlan ? 'Noch kein Training geplant' : today?.rest ? 'Ruhetag' : today?.title || 'Noch kein Training geplant'
-  const todayFacts = hasTodaySession ? [
-    vm.sessionDur,
-    today?.targetW && today.targetW !== '—' ? today.targetW : null,
-    today?.planned != null ? `${num(today.planned)} TSS` : null,
-  ].filter(Boolean).join(' · ') : ''
   const todayTokens = {
     '--today-training-surface': T.surface,
     '--today-training-mid': T.mid,
@@ -68,7 +65,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
     goals:'', rides:'',
     progress: data.ftp == null ? (vm.weekGoal?.name ?? 'Dein nächstes Ziel') : data.ftpGoal != null ? `FTP ${num(data.ftp)} von ${num(data.ftpGoal)} W` : `FTP ${num(data.ftp)} W`,
   }
-  return <div className="w3-today-overview" style={{ fontFamily: FONT }}>
+  return <TrainingSelectionContext.Provider value={{ selection: trainingSelection, setSelection: setTrainingSelection }}><div className="w3-today-overview" style={{ fontFamily: FONT }}>
     {(['today', 'week', 'form', 'crew', 'rides', 'progress', 'goals'] as const).filter(key=>key!=='rides'||(details.rides!==undefined&&data.crew!=null)).map(key => <Fragment key={key}><section data-today-card={key} className="w3-overview-card" data-open={open === key} style={key === 'today' ? todayTokens : undefined}>
       <div className="w3-overview-header">
         <h2 id={`${uid}-${key}-title`} className="w3-overview-title">{titles[key]}</h2>
@@ -80,13 +77,12 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
       <motion.div initial={false} animate={{height:open === key && key !== 'week' ? 0 : 'auto',opacity:open === key && key !== 'week' ? 0 : 1}} transition={{duration:reduce ? 0 : 0.26,ease:EASE}} aria-hidden={open === key && key !== 'week'} inert={open === key && key !== 'week'} style={{overflow:'hidden'}}>
       <div className="w3-overview-summary">
           {key !== 'today' && <span className="w3-overview-copy">{key!=='goals'&&key!=='progress'&&subtitle[key]}</span>}{key==='goals'&&<div className="w3-overview-goals-summary">{goalSummary??'Dein nächstes Ziel'}</div>}
-          {key === 'today' && <>
-            <span className="w3-today-training-summary-title">{todayTitle}</span>
-            {todayFacts && <span className="w3-today-training-summary-facts">{todayFacts}</span>}
-            {blocks.length > 0 && <span className="w3-today-training-summary-profile" role="img" aria-label={`Trainingsprofil: ${blocks.map(b => b.label).join(', ')}`}>
-              {blocks.map((b, i) => <span key={i} style={{ flex: 1, minWidth: 0, height: `${Math.max(4, Math.min(100, b.w * 100))}%`, borderRadius: '3px 3px 0 0', background: b.work ? T.acid : T.heroOff }} />)}
-            </span>}
-          </>}
+          {key === 'today' && <TrainingInstrument title={todayTitle} blocks={blocks}
+            duration={hasTodaySession ? vm.sessionDur : null}
+            target={hasTodaySession ? today?.targetW : null}
+            tss={hasTodaySession ? today?.planned : null}
+            ftpPct={hasTodaySession ? today?.ftpPct : null}
+          />}
           {key === 'week' && <div aria-label="Trainingsbelastung der Woche" className="w3-overview-week">
             {vm.weekDays.map((d, i) => {
               const expanded=open==='week'
@@ -151,7 +147,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
       </div>
     </section>}
     </Fragment>)}
-  </div>
+  </div></TrainingSelectionContext.Provider>
 }
 
 export default function W3TodayOverview(props: { vm: W3Vm } & Sections) {

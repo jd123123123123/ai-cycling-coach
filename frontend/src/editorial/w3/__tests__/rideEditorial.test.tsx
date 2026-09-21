@@ -5,7 +5,7 @@ vi.mock('../W3StatusBar',()=>({default:()=>null}))
 vi.mock('../W3TopBar',()=>({default:()=>null}))
 vi.mock('../W3RideMapHero',()=>({default:()=>null}))
 afterEach(cleanup)
-const vm={hero:{dateLine:'12.08.2026 · 16:53',sceneImage:null},stats:[{l:'TSS',v:'92',s:'Berechnet'}],ranks:[{dur:'5 MIN',watts:'342 W',bestWatts:'335 W',wattsValue:342,bestWattsValue:335,pr:true,note:'+7 W',fill:1}],zones:[{z:'2',name:'Ausdauer',min:'35 min',pct:100,peak:true}],shifts:[],moved:[{label:'Distanz',value:'4.812 km',delta:'+54 km',goal:'',pct:0,beforePct:0}],movedFoot:'Bis zum Tag der Fahrt.',repeats:[],verdictBody:'',power:[]} as unknown as W3RideVm
+const vm={hero:{dateLine:'12.08.2026 · 16:53',sceneImage:null},stats:[{l:'TSS',v:'92',s:'Berechnet'}],ranks:[{durationSeconds:300,dur:'5 MIN',watts:'342 W',bestWatts:'335 W',wattsValue:342,bestWattsValue:335,pr:true,note:'+7 W',fill:1}],zones:[{z:'2',name:'Ausdauer',min:'35 min',pct:100,peak:true}],shifts:[],moved:[{label:'Distanz',value:'4.812 km',delta:'+54 km',goal:'',pct:0,beforePct:0}],movedFoot:'Bis zum Tag der Fahrt.',repeats:[],verdictBody:'',power:[]} as unknown as W3RideVm
 
 describe('Editorial ride evidence',()=>{
  it('has a keyboard-selectable evidence panel and keeps goal-less totals factual',()=>{
@@ -17,17 +17,22 @@ describe('Editorial ride evidence',()=>{
   expect(screen.queryByText(/12.?000/)).toBeNull();
   expect(screen.queryByText('Wirkung')).toBeNull();
  });
- it('preserves decimal watt measurements on comparison bars',()=>{
+ it('preserves decimal watt measurements and the measured difference',()=>{
   render(<W3RideDetailView vm={{...vm,ranks:[{...vm.ranks[0],watts:'299.5 W',bestWatts:'300 W',wattsValue:299.5,bestWattsValue:300,pr:false}]}}/>);
-  const bar=screen.getByRole('img',{name:/299.5 W gefahren/}).querySelector('i');
-  expect(parseFloat(bar!.style.width)).toBeCloseTo(299.5/300*100,2);
+  expect(screen.getByRole('img',{name:/299,5 Watt gefahren, bisher 300 Watt/})).toBeTruthy();
+  expect(screen.getByText('-0,5')).toBeTruthy();
  });
- it('compares records on a zero-based scale and does not invent a coach score',()=>{
-  render(<W3RideDetailView vm={vm}/>);
-  const graph=screen.getByRole('img',{name:/Balken beginnt bei null/});
-  expect(graph.querySelector('i')?.style.width).toBe('100%');
-  expect(parseFloat(graph.querySelector('b')!.style.left)).toBeCloseTo(335/342*100,2);
-  expect(screen.queryByText(/Ausführung|COACH-READ|LIVE AUS/)).toBeNull();
+ it('compares records on one zero-based power axis with selectable durations',()=>{
+  render(<W3RideDetailView vm={{...vm,ranks:[{...vm.ranks[0],durationSeconds:5,dur:'5 SEK',wattsValue:1000,bestWattsValue:1100,pr:false},...vm.ranks]}}/>);
+  expect(screen.getByRole('img',{name:/Leistungskurve ab null Watt.*342 Watt gefahren/})).toBeTruthy();
+  expect(screen.getByText('+7')).toBeTruthy();
+  fireEvent.click(screen.getByRole('button',{name:'5 sek'}));
+  expect(screen.getByRole('img',{name:/5 SEK: 1.000 Watt gefahren, bisher 1.100 Watt/})).toBeTruthy();
+  expect(screen.getByText('-100')).toBeTruthy();
   expect(screen.getByText('Weitere Messwerte').closest('details')?.open).toBe(false);
+ });
+ it('does not repeat the zone analysis when the training review already owns it',()=>{
+  render(<W3RideDetailView vm={vm} trainingReview={<div>Training review</div>}/>);
+  expect(screen.queryByRole('tab',{name:'Zonen'})).toBeNull();
  });
 });

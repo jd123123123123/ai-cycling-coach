@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import W3RideDetailView, { type W3RideVm } from './W3RideDetailView'
 import W3TrainingReview from './W3TrainingReview'
 import type { TrainingReview } from '../../api/trainingReview'
@@ -30,15 +31,18 @@ const FIXTURE:W3RideVm = {
   execScore:'72',execTotal:'100',verdictHeadline:'Deine Dolomitenrunde.',verdictBody:'Die längere Fahrt erzeugte mehr Belastung als empfohlen.',aiModel:null,
   repeatsScore:'',repeatsSub:'',repeats:[],
   zonesSub:'285 Minuten mit Leistungsmessung.',zones:zones.map((z,i)=>({z:`ZONE ${i+1}`,name:z.label,min:`${z.minutes} min`,pct:z.minutes/285*100,peak:i===1})),
-  ranksSub:'Diese Fahrt gegen bisherige Bestwerte.',ranks:[{dur:'5 SEK',watts:'1.180 W',bestWatts:'1.240 W',wattsValue:1180,bestWattsValue:1240,note:'−60 W',pr:false,fill:1180/1240},{dur:'1 MIN',watts:'598 W',bestWatts:'620 W',wattsValue:598,bestWattsValue:620,note:'−22 W',pr:false,fill:598/620},{dur:'5 MIN',watts:'342 W',bestWatts:'335 W',wattsValue:342,bestWattsValue:335,note:'+7 W',pr:true,fill:1},{dur:'20 MIN',watts:'268 W',bestWatts:'276 W',wattsValue:268,bestWattsValue:276,note:'−8 W',pr:false,fill:268/276}],
+  ranksSub:'Diese Fahrt gegen bisherige Bestwerte.',ranks:[{durationSeconds:5,dur:'5 SEK',watts:'1.180 W',bestWatts:'1.240 W',wattsValue:1180,bestWattsValue:1240,note:'−60 W',pr:false,fill:1180/1240},{durationSeconds:60,dur:'1 MIN',watts:'598 W',bestWatts:'620 W',wattsValue:598,bestWattsValue:620,note:'−22 W',pr:false,fill:598/620},{durationSeconds:300,dur:'5 MIN',watts:'342 W',bestWatts:'335 W',wattsValue:342,bestWattsValue:335,note:'+7 W',pr:true,fill:1},{durationSeconds:1200,dur:'20 MIN',watts:'268 W',bestWatts:'276 W',wattsValue:268,bestWattsValue:276,note:'−8 W',pr:false,fill:268/276}],
   onYouDelta:'+7',ceilingLabel:'5 min',ceilingBefore:'335',ceilingAfter:'342',
   shifts:[{key:'fitness',label:'Fitness',value:'78',delta:'+2',up:true,good:true,fill:.65,was:.63},{key:'fatigue',label:'Ermüdung',value:'88',delta:'+14',up:true,good:false,fill:.73,was:.62},{key:'form',label:'Form',value:'−10',delta:'−12',up:false,good:false,fill:.4,was:.52}],
   fitness:'78',fitnessD:'+2',fatigue:'88',fatigueD:'+14',form:'−10',formD:'−12',changesBody:'Vergleich mit dem 14. September. Das Modell berücksichtigt alle Trainingsbelastungen dieser Woche.',
 }
 export default function W3RideDetailPreview(){
+  useEffect(()=>{if(window.location.hash==='#review'){const frame=requestAnimationFrame(()=>document.querySelector('.w3-training-review')?.scrollIntoView({block:'start'}));return()=>cancelAnimationFrame(frame)}},[])
+
   const search=new URLSearchParams(window.location.search)
   const free=search.has('free'),limited=search.has('limited'),historical=search.has('historical')
   const review:TrainingReview=free?{...REVIEW,score:null,status:'unplanned',planned_title:null,pairs:REVIEW.pairs.map(p=>({...p,planned:null})),zones:REVIEW.zones.map(z=>({...z,planned_seconds:null})),trace:REVIEW.trace.map(p=>({...p,planned_pct:null})),impact:[],changes:[],adaptation:{state:'unchanged',automatic:true,reason:'Die Fahrt wurde im Belastungsverlauf berücksichtigt.'}}:REVIEW
   const shown=limited?{...review,score:null,coverage:null,trace:[],zones:[],impact:[],stimulus:'Fahrt erfasst',limitations:['Keine vollständige Leistungsaufzeichnung vorhanden.']}:review
-  return <><div style={{textAlign:'center',fontSize:12,padding:8,color:'var(--w3-mid)',background:'var(--w3-bg)'}}>Vorschau · Beispieldaten</div><W3RideDetailView vm={limited?{...FIXTURE,ranks:[],zones:[],shifts:[],hero:{...FIXTURE.hero,watts:'—',ifValue:'—',ifFill:0}}:FIXTURE} trainingReview={<W3TrainingReview review={shown} rideDate={historical?'2026-08-12':new Date().toISOString()} onOpenPlan={()=>{window.location.href='/e/w3-plan-experience-preview?state=active'}}/>} onBack={()=>history.back()}/></>
+  const vm={...FIXTURE,...(historical?{hero:{...FIXTURE.hero,dateLine:'12.08.2026 · 09:12'},movedFoot:'Aufgezeichnete Radfahrten bis zum 12. August 2026.',changesBody:'Vergleich mit dem 5. August. Das Modell berücksichtigt alle Trainingsbelastungen dieser Woche.'}:{})}
+  return <><div style={{textAlign:'center',fontSize:12,padding:8,color:'var(--w3-mid)',background:'var(--w3-bg)'}}>Vorschau · Beispieldaten</div><W3RideDetailView vm={limited?{...vm,ranks:[],zones:[],shifts:[],hero:{...vm.hero,watts:'—',ifValue:'—',ifFill:0}}:vm} trainingReview={<W3TrainingReview review={shown} rideDate={historical?'2026-08-12':new Date().toISOString()} onOpenPlan={()=>{window.location.href='/e/w3-plan-experience-preview?state=active'}}/>} onBack={()=>history.back()}/></>
 }

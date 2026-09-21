@@ -1,3 +1,4 @@
+import W3RideBestEfforts from './W3RideBestEfforts'
 import type { ReactNode, CSSProperties } from 'react'
 import { useId, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
@@ -28,6 +29,7 @@ export interface W3Shift {
 }
 
 export interface W3Rank {
+  durationSeconds: number
   dur: string
   /** The ride's own figure. */
   watts: string
@@ -129,7 +131,7 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
   const reduce = useReducedMotion()
   const tabs: Evidence[] = [
     ...(vm.ranks.length ? ['Bestwerte' as const] : []),
-    ...(vm.zones.length ? ['Zonen' as const] : []),
+    ...(vm.zones.length && !trainingReview ? ['Zonen' as const] : []),
     ...(vm.shifts.length ? ['Belastung' as const] : []),
     ...(vm.moved.length ? ['Jahr' as const] : []),
     ...(vm.repeats.length ? ['Anstiege' as const] : []),
@@ -145,7 +147,7 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
     <W3RideMapHero editorial vm={vm.hero} onExpandMap={onExpandMap}/>
 
     {record && <button className="w3-report-record" type="button" onClick={()=>{setChosen('Bestwerte');document.getElementById(`${uid}-analysis`)?.scrollIntoView({behavior:reduce?'instant':'smooth',block:'start'})}}>
-      <Trophy size={22} strokeWidth={1.5}/><span><small>Neuer persönlicher Bestwert</small><strong>{record.watts}<span>über {record.dur.toLowerCase()}</span></strong></span><ArrowUpRight size={18}/>
+      <Trophy size={22} strokeWidth={1.5}/><span><small>Neuer persönlicher Bestwert</small><strong>{record.bestWattsValue!=null&&record.wattsValue>record.bestWattsValue?`+${(record.wattsValue-record.bestWattsValue).toLocaleString('de-DE',{maximumFractionDigits:1})} W`:record.watts}<span>{record.bestWattsValue!=null?`${record.watts} · `:''}{record.dur.toLowerCase()}</span></strong></span><ArrowUpRight size={18}/>
     </button>}
 
     {trainingReview ?? <section className="w3-report-fallback"><span className="w3-report-label">Dein Rückblick</span><h2>Deine Fahrt ist erfasst.</h2><p>Strecke, Belastung und Bestwerte findest du hier im Detail.</p>{vm.verdictBody && <details><summary>Coaching-Auswertung <ChevronDown size={16}/></summary><p>{vm.verdictBody}</p><small>Automatische Interpretation deiner Aufzeichnung.</small></details>}</section>}
@@ -155,17 +157,7 @@ export default function W3RideDetailView({ stageRewards, vm, trainingReview, sce
       <div className="w3-report-section-heading"><h2>Deine Analyse</h2><span>{vm.hero.dateLine.split(' · ')[0]}</span></div>
       <div className="w3-report-tabs" role="tablist" aria-label="Analyse auswählen">{tabs.map((tab,i)=><button id={`${uid}-${tab}`} key={tab} type="button" role="tab" aria-selected={active===tab} aria-controls={`${uid}-panel`} tabIndex={active===tab?0:-1} onClick={()=>setChosen(tab)} onKeyDown={e=>{const delta=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(delta||e.key==='Home'||e.key==='End'){e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+delta+tabs.length)%tabs.length;setChosen(tabs[next]);document.getElementById(`${uid}-${tabs[next]}`)?.focus()}}}>{tab}</button>)}</div>
       <motion.div key={active} id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${active}`} initial={reduce?false:{opacity:0,y:4}} animate={{opacity:1,y:0}} transition={{duration:.2}} className="w3-report-panel">
-        {active==='Bestwerte' && <>
-          <p className="w3-report-panel-intro">Diese Fahrt im Vergleich zu deinen bisherigen Bestwerten.</p>
-          {vm.ranks.map(r=>{
-            const watts=r.wattsValue
-            const prior=r.bestWattsValue
-            const maximum=Math.max(1,watts,prior??0)
-            return <div className="w3-report-effort" key={r.dur}>
-            <div className="w3-report-effort-top"><span>{r.dur.toLowerCase()}</span><strong>{r.watts}</strong><span className={r.pr?'is-record':''}>{r.pr?'Bestwert':r.note}</span></div>
-            {r.bestWatts != null && <><div className="w3-report-track" role="img" aria-label={`${r.dur}: ${r.watts} gefahren, bisheriger Bestwert ${r.bestWatts}; Balken beginnt bei null`}><i style={{width:`${watts/maximum*100}%`,background:r.pr?T.acid:T.ink}}/>{prior!=null&&<b style={{left:`${Math.min(99.5,prior/maximum*100)}%`}}/>}</div><div className="w3-report-effort-baseline"><span>0 W</span><span>Bisher {r.bestWatts}</span></div></>}
-          </div>})}
-        </>}
+        {active==='Bestwerte' && <W3RideBestEfforts ranks={vm.ranks}/>}
         {active==='Zonen' && <>
           <p className="w3-report-panel-intro">Zeit in deinen Leistungsbereichen.</p>
           <div className="w3-report-zone-spectrum" role="img" aria-label={vm.zones.map(z=>`${z.name}: ${z.min}`).join(', ')}>{vm.zones.map((z,i)=>({z,i})).filter(({z})=>z.pct>0).map(({z,i})=><i key={z.z} style={{flex:z.pct,background:ZONE_TINT[Math.min(i,5)]}}/>)}</div>
