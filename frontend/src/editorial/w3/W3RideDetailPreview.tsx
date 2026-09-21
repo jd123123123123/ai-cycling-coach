@@ -37,7 +37,7 @@ const FIXTURE:W3RideVm = {
   fitness:'78',fitnessD:'+2',fatigue:'88',fatigueD:'+14',form:'−10',formD:'−12',changesBody:'Vergleich mit dem 14. September. Das Modell berücksichtigt alle Trainingsbelastungen dieser Woche.',
 }
 export default function W3RideDetailPreview(){
-  useEffect(()=>{if(window.location.hash==='#review'){const frame=requestAnimationFrame(()=>document.querySelector('.w3-training-review')?.scrollIntoView({block:'start'}));return()=>cancelAnimationFrame(frame)}},[])
+  useEffect(()=>{if(window.location.hash==='#review'){const frame=requestAnimationFrame(()=>{const target=document.querySelector('.w3-training-review');if(target)window.scrollTo({top:target.getBoundingClientRect().top+window.scrollY-64})});return()=>cancelAnimationFrame(frame)}},[])
 
   const search=new URLSearchParams(window.location.search)
   const free=search.has('free'),limited=search.has('limited'),historical=search.has('historical')
