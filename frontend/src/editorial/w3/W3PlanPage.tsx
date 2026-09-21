@@ -8,6 +8,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { fetchCurrentPlan, applyPlanChange, cancelPlan, type InterviewAnswers } from '../../api/plan'
 import { listRehearsals, getRehearsal } from '../../api/rehearsal'
 import type { DayPlan } from '../../api/weeks'
+import { recordedPlanDay } from './w3PlanHistory'
 import { sessionBars } from './W3PlanFocus'
 import {
   parseISO, addDays, daysBetween, fmtRange, fmtDE, fmtDEShort, weeksDaysLabel, fmtHoursHM,
@@ -238,8 +239,11 @@ export default function W3PlanPage() {
       const iff = isSess ? planIF(d) : null
       const w = isSess ? planTargetWatts(d, ftp) : null
       const dt = parseISO(d.date)
+      const recorded=recordedPlanDay(acts,d.date)
       return {
-        actualTss: d.actual_tss, actualDuration: d.actual_duration_seconds,
+        actualKnown:weekOffset<0 || seasonActs!=null,
+        actualTss:weekOffset<0?d.actual_tss:recorded.actualTss,
+        actualDuration:weekOffset<0?d.actual_duration_seconds:recorded.actualDuration,
         title: isSess ? (d.title ?? 'Einheit') : null,
         weekday: dt ? DE_WD[(dt.getDay() + 6) % 7] : '',
         dateLabel: dt ? fmtDEShort(dt) : '',
@@ -247,7 +251,7 @@ export default function W3PlanPage() {
         isPast: !!dt && !d.is_today && dt < today,
         // "GEFAHREN" is a claim about a ride, not about the calendar — checked
         // against the rider's actual activities, never asserted from `isPast`.
-        ridden: acts.some((a) => a.started_at.slice(0, 10) === d.date),
+        ridden: weekOffset<0 ? d.actual_duration_seconds!=null : recorded.ridden,
         // The server's own per-day WHY — fetched all along, rendered nowhere.
         rationale: isSess && d.rationale ? d.rationale : null,
         dateISO: d.date,
@@ -456,7 +460,7 @@ export default function W3PlanPage() {
       adjustLongDays,
       goalOptions,
     }
-  }, [week, profile, plan, rehearsals, targetCourse, seasonActs, ftp, streak])
+  }, [week, weekOffset, profile, plan, rehearsals, targetCourse, seasonActs, ftp, streak])
 
   // ── den Block beenden (Plan anpassen → /plan/cancel) ──
   // Es LOESCHT nichts: der Server setzt den Abbruchtag, `status` wird

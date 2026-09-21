@@ -74,6 +74,7 @@ export interface ActiveBlockVm {
  *  null title and no bars — the panel then says so rather than drawing an
  *  empty chart. */
 export interface PlanDaySession {
+  actualKnown?: boolean
   actualTss?: number | null
   actualDuration?: number | null
   title: string | null
