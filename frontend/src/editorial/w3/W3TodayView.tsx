@@ -327,6 +327,7 @@ export default function W3TodayView({ vm, onAdapt, onOpenChest, onOpenWrapped }:
         onOpenPlan={() => navigate('/e/w3-plan')}
         onPickGoal={intent => navigate(intent ? `/e/w3-goal-set?intent=${intent}` : '/e/w3-goal-set')}
         today={vm.weekDays[todayIdx] && vm.hasPlan ? <DayTraining
+          appearance="editorial"
           day={vm.weekDays[todayIdx]}
           session={{ dur: vm.sessionDur, blocks: vm.weekDays[todayIdx].blocks?.length ? vm.weekDays[todayIdx].blocks! : vm.sessionBlocks, ftpTag: vm.sessionFtpTag, earn: vm.sessionEarn }}
           weather={vm.weather} onAdapt={onAdapt}

@@ -1,31 +1,17 @@
-import type { ReactNode } from 'react'
+import type { ReactNode, CSSProperties } from 'react'
+import { useId, useState } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { useState, type CSSProperties } from 'react'
-import { ArrowUpRight, ChevronRight, Flame, Gauge, HeartPulse, RefreshCw, Share2, Sparkles, Timer, TrendingUp, Waves, Zap, type LucideIcon } from 'lucide-react'
-import { T, FONT, EASE, grow, Kicker, band, card, DASH } from './w3tokens'
+import { ArrowUpRight, ChevronDown, RefreshCw, Share2, Trophy } from 'lucide-react'
+import { T, FONT } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
 import W3RideMapHero, { type W3RideHeroVm } from './W3RideMapHero'
-import W3SwipeDeck from './W3SwipeDeck'
-import { TNUM } from './w3surfaces'
 import './w3.css'
-
-/**
- * W3 · 07 RIDE DETAIL — 1:1 code rebuild of `w3.pen` frame `zaZ4s`. Pure
- * function of `vm`; `W3RideDetailPage` builds it from `fetchActivityDebrief`
- * + `usePMC`. Every number is REAL post-ride data: header, stat cards, zone
- * split, power PRs, the AI execution verdict, the 5-min ceiling change from
- * the effort matches, and the fitness/fatigue/form (CTL/ATL/TSB) trend from
- * the PMC series. The per-repeat "held it" rows come from the ride's climb
- * segments (this is a hill-repeat ride); the section is omitted when the ride
- * has no repeatable climbs. Absent signals render as an honest "—".
- */
+import './w3RideReport.css'
 
 export interface W3Repeat { label: string; watts: string; delta: number; verdict: string }
 export interface W3Zone { z: string; name: string; min: string; pct: number; peak: boolean }
-/** One of fitness, fatigue and form, as a position on its own scale plus where
- *  it stood a week ago — so the section can draw the move this ride caused
- *  rather than printing a signed number beside a bare figure. */
+/** Modelled load at the ride date, compared with the preceding week. */
 export interface W3Shift {
   key: string
   label: string
@@ -47,6 +33,8 @@ export interface W3Rank {
   watts: string
   /** The record for that duration, or null when there is no history yet. */
   bestWatts: string | null
+  wattsValue: number
+  bestWattsValue: number | null
   /** "−22 W" · "NEUER BESTWERT" — the distance to the record, already signed. */
   note: string
   pr: boolean
@@ -131,699 +119,85 @@ export interface W3RideDetailProps {
   onExpandMap?: () => void
 }
 
-/**
- * THE ZONES, IN THE COLOURS EVERY CYCLIST ALREADY KNOWS.
- *
- * These were a ramp of white at rising alpha, with the ride's biggest zone in
- * acid — so the chart's only colour marked "the one you spent most time in",
- * which is the thing the bar lengths already say. A rider looking at a power
- * distribution arrives knowing what the colours mean: grey is recovery, blue is
- * endurance, green is tempo, yellow is threshold, orange is VO2, red is
- * anaerobic. Spending the palette on that is spending it on comprehension.
- *
- * TOKENS, NOT TRAFFIC-LIGHT HEX. Every one of these is a colour the app already
- * owns, so the chart belongs to this product rather than to a generic zone
- * chart — `isolation.test` enforces it, and it is right to.
- */
-const ZONE_TINT = [T.d3, T.cool, T.training, T.acid, T.warn, T.bad] as const
 
-/** Where the record beam starts. Efforts at these durations sit between about
- *  three-quarters and all of a rider's best; a zero-based bar would jam every
- *  one of them against the right-hand end and draw no difference at all. */
-const RANK_FLOOR = 0.7
-const zoneTint = (i: number) => ZONE_TINT[Math.min(i, ZONE_TINT.length - 1)]
+const ZONE_TINT = [T.d3, T.cool, T.training, T.acid, T.warn, T.bad]
+type Evidence = 'Bestwerte' | 'Zonen' | 'Belastung' | 'Jahr' | 'Anstiege'
 
-/**
- * THE TITLE IS THE FINDING, NOT THE FILE NAME.
- *
- * Every chapter head on this page said what the section WAS — "Was sie dir
- * abverlangt hat", "Wo sie steht", "Was das verändert" — at 21px, while the
- * thing the section had actually found sat underneath it at 10.5 in the quiet
- * grey: "Zone 4 nahm ein Drittel der Fahrt." "Zwanzig Sekunden bis zum Rekord."
- *
- * The finding was already written. It was set five sizes smaller than the
- * filing label above it. So a rider skimming this page read four category names
- * and learned nothing, and had to stop and read a caption to find out that they
- * came within twenty seconds of a personal record.
- *
- * Swapped. The category becomes the chapter's eyebrow, where a category
- * belongs; the finding is the headline; the method drops to the caption. Read
- * only the four titles now and you have the ride.
- */
-const SectionHead = ({ n, eyebrow, finding, method }: {
-  n: string; eyebrow: string; finding: string; method?: string
-}) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: 7, paddingBottom: 4 }}>
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.acid, ...TNUM }}>{n}</span>
-      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 1.2, color: T.quiet }}>
-        — {eyebrow.toUpperCase()}
-      </span>
-    </div>
-    {/* Set essentially solid, at the semibold ceiling. Every heading in the
-        shipped w3:ride app uses a ~1.056 line-height ratio and no weight above
-        SemiBold — a poster-like tightness that is most of why its screens look
-        designed rather than assembled. */}
-    <span style={{ fontSize: 25, fontWeight: 600, letterSpacing: -1, lineHeight: 1.06, color: T.ink }}>
-      {finding}
-    </span>
-    {method && (
-      <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>{method}</span>
-    )}
-  </div>
-)
-
-/** "Method sentence. The finding." — the finding is the last sentence, which is
- *  where these were already written; everything before it is how it was
- *  measured. A single-sentence caption is all finding and has no method. */
-function splitFinding(sub: string): { finding: string; method?: string } {
-  const parts = sub.trim().split(/(?<=\.)\s+/).filter(Boolean)
-  if (parts.length < 2) return { finding: sub.trim() }
-  return { finding: parts[parts.length - 1], method: parts.slice(0, -1).join(' ') }
-}
-
-
-
-// Icon per stat card, matched by its label keyword — supports the storytelling.
-// The tiles are German and this matched on English words, so three of the four
-// fell through to the same fallback icon and the grid read as one repeated
-// shape. Matched on what the tile IS about, in the language it is written in.
-const STAT_ICON = (label: string): LucideIcon => {
-  const l = label.toLowerCase()
-  if (l.includes('leistung') || l.includes('watt') || l.includes('power')) return Zap
-  if (l.includes('arbeit') || l.includes('kj')) return Flame
-  if (l.includes('hf') || l.includes('herz') || l.includes('bpm') || l.includes('heart')) return HeartPulse
-  if (l.includes('variab')) return Waves
-  if (l.includes('zeit') || l.includes('time') || l.includes('dauer')) return Timer
-  return Gauge // Belastung / TSS / everything else
-}
-
-/**
- * The ride's answer, before the report's evidence.
- *
- * This is deliberately a composition of the debrief and the PMC rather than
- * another paragraph generated by the client. The model's verdict says what
- * happened; the three signals show why it matters to this rider now. A small
- * amount of type, a single luminous track, and one next-step sentence make it
- * feel like a coach's read rather than an AI transcript.
- */
-function RideInsightNudge({ vm }: { vm: W3RideVm }) {
-  const tss = vm.stats.find((s) => s.l.includes('TSS'))?.v
-  const leadZone = vm.zones.find((z) => z.peak)
-  const prCount = vm.ranks.filter((r) => r.pr).length
-  const fitnessShift = vm.shifts.find((s) => s.key === 'fitness')
-  const fatigueShift = vm.shifts.find((s) => s.key === 'fatigue')
-  const formShift = vm.shifts.find((s) => s.key === 'form')
-  const signals = [
-    leadZone && { label: 'REIZ', value: leadZone.name, note: `${leadZone.min} · Schwerpunkt`, tone: T.acid },
-    tss && tss !== DASH && { label: 'KOSTEN', value: `${tss} TSS`, note: vm.changesBody.split('—')[0]?.trim() || 'Belastung verbucht', tone: T.warn },
-    fitnessShift && fitnessShift.value !== DASH && { label: 'RICHTUNG', value: fitnessShift.delta ? `${fitnessShift.delta} Fitness` : `${fitnessShift.value} Fitness`, note: formShift && formShift.value !== DASH ? `Form ${formShift.value}` : 'Trend wird aufgebaut', tone: fitnessShift.good ? T.acid : T.cool },
-  ].filter(Boolean) as Array<{ label: string; value: string; note: string; tone: string }>
-
-  const next = fatigueShift?.value !== DASH && Number(fatigueShift?.value) > Number(fitnessShift?.value ?? 0)
-    ? 'Heute zählt Erholung: der Reiz ist gesetzt, die Anpassung passiert jetzt.'
-    : vm.movedFoot || 'Der Reiz ist gesetzt und fließt in deinen weiteren Aufbau ein.'
-
-  return (
-    <div style={{ ...band(26), gap: 14 }}>
-      <div style={{ position: 'relative', overflow: 'hidden', padding: '20px 20px 18px', borderRadius: 24, background: `linear-gradient(135deg, ${T.surface} 0%, ${T.surface2} 100%)`, border: `1px solid ${T.rule}` }}>
-        <div style={{ position: 'absolute', width: 180, height: 180, right: -70, top: -86, borderRadius: '50%', background: `${T.acid}18`, filter: 'blur(3px)', pointerEvents: 'none' }} />
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 8, marginBottom: 13 }}>
-          <span style={{ width: 28, height: 28, display: 'grid', placeItems: 'center', borderRadius: 10, background: T.acidDim }}><Sparkles size={14} color={T.acid} /></span>
-          <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: 1.3, color: T.acid }}>DEIN RIDE · COACH-READ</span>
-          <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 600, color: T.quiet }}>LIVE AUS DEINEM VERLAUF</span>
-        </div>
-        <div style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <span style={{ maxWidth: 310, fontSize: 26, fontWeight: 650, letterSpacing: -1.1, lineHeight: 1.08, color: T.ink }}>{vm.verdictHeadline || 'Diese Fahrt hat einen Reiz gesetzt.'}</span>
-          <span style={{ maxWidth: 350, fontSize: 12.5, fontWeight: 500, lineHeight: 1.45, color: T.mid }}>{vm.verdictBody || 'Deine Fahrt wurde mit deinem bisherigen Verlauf verglichen.'}</span>
-        </div>
-        <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: `repeat(${Math.max(1, Math.min(3, signals.length))}, minmax(0, 1fr))`, gap: 8, marginTop: 18 }}>
-          {signals.map((s) => (
-            <div key={s.label} style={{ minWidth: 0, padding: '11px 11px 10px', borderRadius: 15, background: `${T.bg}72`, border: `1px solid ${T.rule}` }}>
-              <span style={{ display: 'block', fontSize: 8, fontWeight: 700, letterSpacing: 1, color: T.quiet }}>{s.label}</span>
-              <span style={{ display: 'block', marginTop: 5, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 15, fontWeight: 650, letterSpacing: -0.3, color: s.tone }}>{s.value}</span>
-              <span style={{ display: 'block', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 9.5, fontWeight: 600, color: T.mid }}>{s.note}</span>
-            </div>
-          ))}
-        </div>
-        <div style={{ position: 'relative', display: 'flex', alignItems: 'flex-start', gap: 9, marginTop: 15, paddingTop: 13, borderTop: `1px solid ${T.rule}` }}>
-          <ArrowUpRight size={15} color={T.acid} style={{ flex: 'none', marginTop: 1 }} />
-          <span style={{ fontSize: 11, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{next}</span>
-          {prCount > 0 && <span style={{ marginLeft: 'auto', flex: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 8px', borderRadius: 100, background: T.acid, color: T.bg, fontSize: 8.5, fontWeight: 800, letterSpacing: 0.5 }}><TrendingUp size={11} /> {prCount} PR</span>}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-/** The wait while the scene composes — W3Loading's language (acid bloom,
- *  spinning arc, the ✱ mark), sized down to live inside the cover. Never a dead
- *  frame: it says what is being made and roughly how long it takes. */
-function SceneComposing() {
-  const reduce = useReducedMotion()
-  return (
-    <div style={{ position: 'absolute', inset: 0, zIndex: 3, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, paddingBottom: 46, background: `${T.bg}D9` }}>
-      <div style={{ position: 'relative', width: 56, height: 56, display: 'grid', placeItems: 'center' }}>
-        <motion.div
-          animate={reduce ? undefined : { scale: [1, 1.35, 1], opacity: [0.5, 0.15, 0.5] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ position: 'absolute', width: 56, height: 56, borderRadius: 100, background: T.acid, filter: 'blur(16px)', opacity: 0.4 }} />
-        <motion.svg width={56} height={56} viewBox="0 0 76 76"
-          animate={reduce ? undefined : { rotate: 360 }} transition={{ duration: 1.1, repeat: Infinity, ease: 'linear' }}
-          style={{ position: 'absolute' }}>
-          <circle cx={38} cy={38} r={32} fill="none" stroke={T.rule} strokeWidth={4} />
-          <path d="M38 6 a32 32 0 0 1 32 32" fill="none" stroke={T.acid} strokeWidth={4} strokeLinecap="round" />
-        </motion.svg>
-        <motion.span
-          animate={reduce ? undefined : { scale: [1, 1.08, 1] }}
-          transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-          style={{ fontSize: 19, fontWeight: 600, color: T.acid, letterSpacing: -1 }}>✱</motion.span>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, padding: '0 30px', textAlign: 'center' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, letterSpacing: -0.2, color: T.ink }}>Wir malen dich auf diese Straße…</span>
-        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1.35, color: T.quiet }}>Dein Fahrer, dein Rad, das Terrain dieser Fahrt. Bis zu zwei Minuten.</span>
-      </div>
-    </div>
-  )
-}
-
-/** The one affordance that composes the scene. Acid on black, top-right of the
- *  cover so it never fights the hero card overlapping the bottom. */
-const ScenePill = ({ label, onClick }: { label: string; onClick?: () => void }) => (
-  <button onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px 7px 10px', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT }}>
-    <Sparkles size={12} color={T.bg} />
-    <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 0.7, textTransform: 'uppercase', color: T.bg }}>{label}</span>
-  </button>
-)
-
-/** A quiet line in the cover: what is missing, and the studio that fixes it. */
-function SceneNote({ text, action, onClick }: { text: string; action?: string; onClick?: () => void }) {
-  const box: CSSProperties = {
-    position: 'absolute', top: 48, left: 20, zIndex: 4, maxWidth: 272, textAlign: 'left',
-    display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6,
-    padding: '9px 12px', borderRadius: 14, background: '#000000A6', border: 0, fontFamily: FONT,
-  }
-  const body = (
-    <>
-      <span style={{ fontSize: 10.5, fontWeight: 600, lineHeight: 1.35, color: T.mid }}>{text}</span>
-      {action && (
-        <span style={{ display: 'flex', alignItems: 'center', gap: 2, fontSize: 9.5, fontWeight: 600, letterSpacing: 0.7, textTransform: 'uppercase', color: T.acid }}>
-          {action}<ChevronRight size={12} color={T.acid} />
-        </span>
-      )}
-    </>
-  )
-  return onClick
-    ? <button onClick={onClick} style={{ ...box, cursor: 'pointer' }}>{body}</button>
-    : <div style={box}>{body}</div>
-}
-
+/** Facts from the selected activity; interpretation and model assumptions stay disclosed. */
 export default function W3RideDetailView({ stageRewards, vm, trainingReview, scene = SCENE_IDLE, onCompose, onOpenStudio, onBack, onShare, onExpandMap, onRehearse, rehearsePending, rehearseError }: W3RideDetailProps) {
-  // ── THE CHAPTERS ARE NUMBERED BY WHAT ACTUALLY RENDERS ──────────────────
-  // These ordinals were hardcoded "01".."05", and two of the five are
-  // conditional — the repeat set and the season push. So a free outdoor ride,
-  // which is most rides, opened at chapter 02 with no 01 anywhere on the page.
-  // A sequence with a hole in it is worse than no sequence: it reads as a
-  // section that failed to load rather than one that was never relevant.
-  const chapters = [
-    vm.repeats.length > 0 && 'repeats',
-    'zones', 'ranks', 'changes',
-    vm.moved.length > 0 && 'moved',
-  ].filter(Boolean) as string[]
-  const ch = (key: string) => String(chapters.indexOf(key) + 1).padStart(2, '0')
-
+  const uid = useId()
   const reduce = useReducedMotion()
-  const pMax = Math.max(1, ...vm.power)
-  const pAvg = vm.power.length ? vm.power.reduce((a, b) => a + b, 0) / vm.power.length : 0
-  const [hov, setHov] = useState<number | null>(null)
-  //: Der beste Wert dieser Fahrt -- oder nichts. Steht oben auf der
-  //: Rang-Karte, statt als eine Zeile unter fuenf unterzugehen.
-  const rekord = vm.ranks.find(r => r.pr) ?? null
+  const tabs: Evidence[] = [
+    ...(vm.ranks.length ? ['Bestwerte' as const] : []),
+    ...(vm.zones.length ? ['Zonen' as const] : []),
+    ...(vm.shifts.length ? ['Belastung' as const] : []),
+    ...(vm.moved.length ? ['Jahr' as const] : []),
+    ...(vm.repeats.length ? ['Anstiege' as const] : []),
+  ]
+  const [chosen, setChosen] = useState<Evidence>('Bestwerte')
+  const active = tabs.includes(chosen) ? chosen : tabs[0]
+  const record = vm.ranks.find(r => r.pr)
+  const hasSceneAction = !vm.hero.sceneImage && (scene.pending || scene.failed || ['not_generated', 'needs_rider', 'needs_bike'].includes(scene.status))
+  const css = {fontFamily:FONT, '--report-bg':T.bg, '--report-surface':T.surface, '--report-ink':T.ink, '--report-mid':T.mid, '--report-line':T.rule, '--report-acid':T.acid, '--report-track':T.d1} as CSSProperties
+  return <div className="w3-root"><div className="w3-frame w3-ride-report" style={css}>
+    <W3StatusBar />
+    <W3TopBar title="Fahrt" onBack={onBack} extra={onShare ? <button className="w3-report-icon" type="button" aria-label="Fahrt teilen" onClick={onShare}><Share2 size={18}/></button> : undefined}/>
+    <W3RideMapHero editorial vm={vm.hero} onExpandMap={onExpandMap}/>
 
-  return (
-    <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
-        <W3StatusBar />
+    {record && <button className="w3-report-record" type="button" onClick={()=>{setChosen('Bestwerte');document.getElementById(`${uid}-analysis`)?.scrollIntoView({behavior:reduce?'instant':'smooth',block:'start'})}}>
+      <Trophy size={22} strokeWidth={1.5}/><span><small>Neuer persönlicher Bestwert</small><strong>{record.watts}<span>über {record.dur.toLowerCase()}</span></strong></span><ArrowUpRight size={18}/>
+    </button>}
 
-        {/* THE APP'S HEADER, ON THE STATE A RIDER LANDS IN MOST. This screen
-            got its navigation from the hero's floating glass arrow, which is a
-            back button and nothing else — no avatar, no menu. So the full ride
-            report was the one W3 screen with no route to the profile or to
-            settings, and after the debrief learned to build a report without
-            power it became the COMMON path rather than an edge. Share moves
-            into the bar with it: two back dialects on one screen was how the
-            other eight screens went wrong. */}
-        <W3TopBar
-          title="Fahrt"
-          onBack={onBack}
-          extra={onShare ? (
-            <button type="button" onClick={onShare} aria-label="Fahrt teilen" style={{
-              width: 44, height: 44, borderRadius: 100, background: T.heroChip,
-              border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none',
-            }}><Share2 size={18} color={T.ink} /></button>
-          ) : undefined}
-        />
+    {trainingReview ?? <section className="w3-report-fallback"><span className="w3-report-label">Dein Rückblick</span><h2>Deine Fahrt ist erfasst.</h2><p>Strecke, Belastung und Bestwerte findest du hier im Detail.</p>{vm.verdictBody && <details><summary>Coaching-Auswertung <ChevronDown size={16}/></summary><p>{vm.verdictBody}</p><small>Automatische Interpretation deiner Aufzeichnung.</small></details>}</section>}
+    {stageRewards}
 
-        {/* ── THE HERO: map, then the ride's own portrait, then the numbers ──
-             Rebuilt from pen frame `XqpcX`. The route is now a REAL basemap
-             rather than a bare SVG trace over a wash — a rider recognises the
-             roads they took, and recognising them is most of what a ride
-             summary is for. The scene render moved INSIDE the card and
-             dissolves into the numbers, so the picture is the card's material
-             rather than a photograph with a card under it.
+    {!!tabs.length && <section className="w3-report-analysis" id={`${uid}-analysis`} aria-label="Fahrtanalyse">
+      <div className="w3-report-section-heading"><h2>Deine Analyse</h2><span>{vm.hero.dateLine.split(' · ')[0]}</span></div>
+      <div className="w3-report-tabs" role="tablist" aria-label="Analyse auswählen">{tabs.map((tab,i)=><button id={`${uid}-${tab}`} key={tab} type="button" role="tab" aria-selected={active===tab} aria-controls={`${uid}-panel`} tabIndex={active===tab?0:-1} onClick={()=>setChosen(tab)} onKeyDown={e=>{const delta=e.key==='ArrowRight'?1:e.key==='ArrowLeft'?-1:0;if(delta||e.key==='Home'||e.key==='End'){e.preventDefault();const next=e.key==='Home'?0:e.key==='End'?tabs.length-1:(i+delta+tabs.length)%tabs.length;setChosen(tabs[next]);document.getElementById(`${uid}-${tabs[next]}`)?.focus()}}}>{tab}</button>)}</div>
+      <motion.div key={active} id={`${uid}-panel`} role="tabpanel" aria-labelledby={`${uid}-${active}`} initial={reduce?false:{opacity:0,y:4}} animate={{opacity:1,y:0}} transition={{duration:.2}} className="w3-report-panel">
+        {active==='Bestwerte' && <>
+          <p className="w3-report-panel-intro">Diese Fahrt im Vergleich zu deinen bisherigen Bestwerten.</p>
+          {vm.ranks.map(r=>{
+            const watts=r.wattsValue
+            const prior=r.bestWattsValue
+            const maximum=Math.max(1,watts,prior??0)
+            return <div className="w3-report-effort" key={r.dur}>
+            <div className="w3-report-effort-top"><span>{r.dur.toLowerCase()}</span><strong>{r.watts}</strong><span className={r.pr?'is-record':''}>{r.pr?'Bestwert':r.note}</span></div>
+            {r.bestWatts != null && <><div className="w3-report-track" role="img" aria-label={`${r.dur}: ${r.watts} gefahren, bisheriger Bestwert ${r.bestWatts}; Balken beginnt bei null`}><i style={{width:`${watts/maximum*100}%`,background:r.pr?T.acid:T.ink}}/>{prior!=null&&<b style={{left:`${Math.min(99.5,prior/maximum*100)}%`}}/>}</div><div className="w3-report-effort-baseline"><span>0 W</span><span>Bisher {r.bestWatts}</span></div></>}
+          </div>})}
+        </>}
+        {active==='Zonen' && <>
+          <p className="w3-report-panel-intro">Zeit in deinen Leistungsbereichen.</p>
+          <div className="w3-report-zone-spectrum" role="img" aria-label={vm.zones.map(z=>`${z.name}: ${z.min}`).join(', ')}>{vm.zones.map((z,i)=>({z,i})).filter(({z})=>z.pct>0).map(({z,i})=><i key={z.z} style={{flex:z.pct,background:ZONE_TINT[Math.min(i,5)]}}/>)}</div>
+          {vm.zones.map((z,i)=><div className="w3-report-zone" key={z.z}><i style={{background:ZONE_TINT[Math.min(i,5)]}}/><span>{z.name}</span><strong>{z.min}</strong></div>)}
+          <details><summary>Einordnung <ChevronDown size={16}/></summary><p>{vm.zonesSub}</p></details>
+        </>}
+        {active==='Belastung' && <>
+          <p className="w3-report-panel-intro">Modellierter Stand am Tag dieser Fahrt.</p>
+          <div className="w3-report-model">{vm.shifts.map(sh=><div key={sh.key}><span>{sh.label.toLowerCase()}</span><strong>{sh.value}</strong>{sh.delta&&<small>{sh.delta} zur Vorwoche</small>}</div>)}</div>
+          <p className="w3-report-explanation">{vm.changesBody}</p>
+          <details><summary>Was diese Werte bedeuten <ChevronDown size={16}/></summary><p>Fitness, Ermüdung und Form beschreiben deine modellierte Trainingsbelastung. Die Veränderung umfasst die gesamte Woche bis zu dieser Fahrt. Sie belegt keinen Leistungsgewinn durch eine einzelne Einheit.</p></details>
+        </>}
+        {active==='Jahr' && <>
+          <p className="w3-report-panel-intro">Dein Jahr bis zu dieser Fahrt.</p>
+          {vm.moved.map(m=><div className="w3-report-year" key={m.label}><div><span>{m.label}</span><strong>{m.value}{m.goal&&<small> / {m.goal}</small>}</strong></div><span>{m.delta}</span></div>)}
+          {vm.movedFoot&&<p className="w3-report-explanation">{vm.movedFoot}</p>}
+        </>}
+        {active==='Anstiege' && <>
+          <p className="w3-report-panel-intro">Ähnliche Anstiege im Vergleich zu ihrem eigenen Schnitt.</p>
+          {vm.repeats.map((r,i)=><div className="w3-report-repeat" key={i}><span>{r.label}</span><strong>{r.watts}</strong><span>{r.delta>0?'+':''}{r.delta} W</span></div>)}
+          <p className="w3-report-explanation">{vm.repeatsSub}</p>
+        </>}
+      </motion.div>
+    </section>}
 
-             The old cover's intensity chip and the big distance figure are not
-             lost, they moved: intensity is now the beam at the bottom of the
-             card (a proportion of threshold, which is what IF actually is,
-             instead of a word in a pill), and distance is the first of the
-             three stats under the duration. See `W3RideMapHero`. ── */}
-        {stageRewards}
-        <W3RideMapHero
-          vm={vm.hero}
-          onExpandMap={onExpandMap}
-          sceneOverlay={(() => {
-            const canCompose = scene.status === 'not_generated' && !scene.pending
-            const note = scene.pending ? null
-              : scene.failed ? { text: 'Das Bild kam nicht durch. Deine Straße ist noch da — versuch es nochmal.' }
-              : scene.status === 'needs_rider' ? { text: 'Digitalisiere deinen Fahrer einmal, und jede Fahrt bekommt ein Titelbild mit dir darauf.', action: 'Avatar erstellen', onClick: () => onOpenStudio?.('rider') }
-              : scene.status === 'needs_bike' ? { text: 'Stell dein Rad in die Garage, und diese Straße wird vom echten Rad gefahren.', action: 'Rad hinzufügen', onClick: () => onOpenStudio?.('bike') }
-              : scene.status === 'image_model_unavailable' ? { text: 'Das Studio ist gerade nicht verbunden. Deine Route hält das Titelbild.' }
-              : null
-            if (!canCompose && !note && !scene.pending) return null
-            return (
-              // Over a picture it floats in the corner; with no picture it is an
-              // ordinary row at the top of the card (the hero places it there),
-              // so it never has to hover in an empty rectangle.
-              <div style={vm.hero.sceneImage ? {
-                position: 'absolute', top: 18, left: 20, right: 20, zIndex: 4,
-                display: 'flex', justifyContent: 'flex-end',
-              } : { display: 'flex', justifyContent: 'flex-start' }}>
-                {canCompose && <ScenePill label={scene.failed ? 'Nochmal versuchen' : 'Sieh dich hier'} onClick={onCompose} />}
-                {note && <SceneNote {...note} />}
-                {scene.pending && <SceneComposing />}
-              </div>
-            )
-          })()}
-        />
-
-
-        {/* ── Leistung · ganze Fahrt ────────────────────────────────────
-             This lived inside the old hero card. It is a section of its own
-             now, which is where it belonged: the hero answers "what was this
-             ride", and the trace answers "how did you ride it" — a different
-             question, and one worth the width. Interactive: a pointer over any
-             bar reads out its watts, and the Ø rule is the ride's own average
-             so a bar above it is above average BY EYE, with no legend. ── */}
-        {vm.power.length > 1 && (
-          <div style={{ ...band(26), gap: 6 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <Kicker>Leistung · ganze Fahrt</Kicker>
-              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.acid }}>
-                {hov != null ? `${Math.round(vm.power[hov])} W` : vm.powerNote}
-              </span>
-            </div>
-            <div style={{ position: 'relative', height: 56, display: 'flex', gap: 2, alignItems: 'flex-end' }}
-              onPointerLeave={() => setHov(null)}>
-              <div style={{ position: 'absolute', left: 0, right: 0, bottom: Math.round((pAvg / pMax) * 56), height: 1, background: `${T.ink}55`, zIndex: 1, pointerEvents: 'none' }}>
-                <span style={{ position: 'absolute', right: 0, top: -12, fontSize: 8, fontWeight: 600, color: T.mid }}>Ø</span>
-              </div>
-              {vm.power.map((p, i) => {
-                const on = hov === i
-                return (
-                  <motion.div key={i} onPointerEnter={() => setHov(i)}
-                    initial={reduce ? false : { scaleY: 0 }} animate={{ scaleY: 1 }} transition={grow(i * 0.012)}
-                    style={{ flex: 1, height: Math.max(3, Math.round((p / pMax) * 56)), transformOrigin: 'bottom', borderRadius: 1, cursor: 'pointer',
-                      background: on ? T.ink : p / pMax > 0.7 ? T.acid : T.d2 }} />
-                )
-              })}
-            </div>
-          </div>
-        )}
-
-        <RideInsightNudge vm={vm} />
-
-        {/* ── THE ANSWER, BEFORE THE EVIDENCE ─────────────────────────────
-            Pyramid principle, and this page had it upside down: the coach's
-            sentence — the one thing on the screen that says what the ride WAS —
-            sat below four stat tiles, which are the supporting detail for it.
-            A rider had to read the evidence to reach the conclusion, which is
-            the order you write an investigation in and the opposite of the
-            order you present one in.
-
-            Answer first. Then the numbers that back it, then the chapters that
-            take it apart. */}
-        {/* Execution + AI verdict.
-
-            THE SCORE IS A GRADE AGAINST A PRESCRIPTION, so it appears on the
-            same terms as "Hast du gehalten?" — a free outdoor ride was not
-            executed WELL or BADLY, it was just ridden, and a 94/100 stamped on
-            it is a mark out of nothing. The coach's sentence stays either way;
-            that one is about the ride rather than about compliance. */}
-        {trainingReview ?? <div style={{ ...band(28), gap: 12 }}>
-          {vm.repeats.length > 0 && (
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-            <span style={{ fontSize: 100, fontWeight: 600, letterSpacing: -4.5, lineHeight: 0.86, color: T.acid }}>{vm.execScore}</span>
-            <div style={{ display: 'flex', flexDirection: 'column', paddingBottom: 12 }}>
-              <span style={{ fontSize: 16, fontWeight: 600, color: T.quiet }}>/ {vm.execTotal}</span>
-              <Kicker>Ausführung</Kicker>
-            </div>
-          </div>
-          )}
-          {vm.repeats.length > 0 && (
-          <div style={{ height: 6, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
-            <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${(Number(vm.execScore) / Number(vm.execTotal)) * 100}%` }} transition={{ duration: 0.9 }} style={{ height: '100%', background: T.acid, borderRadius: 100 }} />
-          </div>
-          )}
-          <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: -1.1, lineHeight: 1.06, color: T.ink }}>{vm.verdictHeadline}</span>
-          <span style={{ fontSize: 13, fontWeight: 400, lineHeight: 1.5, color: T.mid }}>{vm.verdictBody}</span>
-          {vm.aiModel && <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet }}>KI-Urteil · {vm.aiModel}</span>}
-        </div>
-
-        }
-
-        {/* Hero stats */}
-        <div style={{ ...band(26), gap: 8 }}>
-          {[[0, 1], [2, 3]].map((row, ri) => (
-            <div key={ri} style={{ display: 'flex', gap: 8 }}>
-              {row.map((i) => {
-                const s = vm.stats[i]
-                const Ic = STAT_ICON(s.l)
-                return (
-                  <div key={i} style={{ flex: 1, padding: '15px 16px', borderRadius: 18, background: T.surface, display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 9, background: T.acidDim, display: 'grid', placeItems: 'center' }}><Ic size={16} color={T.acid} /></div>
-                    <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.7, color: s.v === DASH ? T.quiet : T.ink }}>{s.v}</span>
-                    <Kicker>{s.l}</Kicker>
-                    <span style={{ fontSize: 9.5, fontWeight: 600, color: T.quiet }}>{s.s}</span>
-                  </div>
-                )
-              })}
-            </div>
-          ))}
-        </div>
-
-        {/* ── DIE BELEGE, NEBENEINANDER ───────────────────────────────────
-            Fuenf Kapitel untereinander machten diese Seite 4701 px lang --
-            fuenfeinhalb Bildschirmhoehen, und jedes Kapitel hatte dieselbe
-            Form wie das davor: Ueberschrift, Balkenreihe, Fussnote. Wer den
-            Beleg fuer die Wiederholungen sehen wollte, scrollte an drei
-            anderen vorbei.
-
-            Nebeneinander kostet dieselbe Information EINE Bildschirmhoehe,
-            und das Blaettern wird zur Geste statt zur Strecke.
-
-            DIE REIHENFOLGE BLEIBT die alte, und die bedingten Kapitel fallen
-            weiterhin ganz weg statt leer dazustehen -- eine Karte ohne Inhalt
-            waere schlimmer als eine fehlende. */}
-        {(() => {
-          const karten: { label: string; node: ReactNode }[] = []
-          if (vm.repeats.length > 0) karten.push({ label: 'Wiederholungen', node: (
-
-          <div style={{ ...band(28), gap: 12 }}>
-            <SectionHead n={ch('repeats')} eyebrow="Die Wiederholungen"
-              finding={vm.repeatsScore ? `${vm.repeatsScore} auf oder über Ziel.` : 'Jede Wiederholung gegen ihr Ziel.'}
-              method="Rechts der Linie heißt über Ziel." />
-            <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', paddingBottom: 4 }}>
-              <span style={{ fontSize: 38, fontWeight: 600, letterSpacing: -1.5, color: T.acid }}>{vm.repeatsScore}</span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, paddingBottom: 4 }}>
-                <Kicker>Wdh. auf oder über Ziel</Kicker>
-                <span style={{ fontSize: 11.5, fontWeight: 600, color: T.ink }}>{vm.repeatsSub}</span>
-              </div>
-            </div>
-            <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
-              {vm.repeats.map((r, i) => {
-                const held = r.delta >= 0
-                const mag = Math.min(1, Math.abs(r.delta) / 12)
-                return (
-                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'center', padding: '13px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                    <div style={{ width: 66, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                      <span style={{ fontSize: 8.5, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>{r.label}</span>
-                      <span style={{ fontSize: 14, fontWeight: 600, letterSpacing: -0.3, color: T.ink }}>{r.watts}</span>
-                    </div>
-                    <div style={{ flex: 1, height: 24, display: 'flex', alignItems: 'center', position: 'relative' }}>
-                      <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>{!held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'right', width: `${mag * 100}%`, height: 14, borderRadius: '3px 0 0 3px', background: T.d3 }} />}</div>
-                      <div style={{ width: 1, height: 24, background: T.d4 }} />
-                      <div style={{ flex: 1 }}>{held && <motion.div initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.04)} style={{ transformOrigin: 'left', width: `${mag * 100}%`, height: 14, borderRadius: '0 3px 3px 0', background: T.acid }} />}</div>
-                    </div>
-                    <div style={{ width: 56, display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                      <span style={{ fontSize: 12.5, fontWeight: 600, color: held ? T.acid : T.mid }}>{r.delta >= 0 ? '+' : ''}{r.delta} W</span>
-                      <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: 0.8, color: T.quiet }}>{r.verdict}</span>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
-          ) })
-          karten.push({ label: 'Zonen', node: (
-        <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n={ch('zones')} eyebrow="Was sie dir abverlangt hat" {...splitFinding(vm.zonesSub)} />
-          <div style={{ padding: 18, borderRadius: 22, background: T.surface, display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 1, height: 16 }}>
-              {vm.zones.map((z, i) => (
-                <motion.div key={z.z} initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: 1 }} transition={grow(i * 0.06)}
-                  style={{ flexGrow: Math.max(0.4, z.pct), transformOrigin: 'left', height: 16, background: zoneTint(i),
-                    borderRadius: i === 0 ? '4px 0 0 4px' : i === vm.zones.length - 1 ? '0 4px 4px 0' : 0 }} />
-              ))}
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {vm.zones.map((z, i) => (
-                <div key={z.z} style={{ display: 'flex', gap: 9, alignItems: 'center', padding: '9px 0' }}>
-                  <span style={{ width: 9, height: 9, borderRadius: 2, background: zoneTint(i) }} />
-                  <span style={{ width: 48, fontSize: 9, fontWeight: 600, letterSpacing: 1, color: T.quiet }}>{z.z}</span>
-                  {/* The zone the ride lived in is still called out — by WEIGHT
-                      now, not by colour, because colour has a job here. */}
-                  <span style={{ width: 74, fontSize: 11.5, fontWeight: z.peak ? 800 : 600, color: z.peak ? T.ink : T.mid }}>{z.name}</span>
-                  <div style={{ flex: 1, height: 1, background: T.rule }} />
-                  {/* MINUTES, NOT MINUTES AND PERCENT. The stacked bar directly
-                      above this list is the proportion — that is the only thing
-                      a stacked bar is — so printing the same split again as
-                      percentages made five rows carry two numbers where one was
-                      new. Minutes stay because they are the part the bar cannot
-                      tell you: how long, in units a rider feels. */}
-                  <span style={{ fontSize: 11, fontWeight: 600, color: T.mid, ...TNUM }}>{z.min}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-          ) })
-          karten.push({ label: 'Rang', node: (
-        <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n={ch('ranks')} eyebrow="Wo sie steht" {...splitFinding(vm.ranksSub)} />
-          {/* ── DER BESTWERT STEHT OBEN, WENN ES EINEN GIBT ─────────────────
-              Ein neuer Bestwert ist die staerkste Tatsache dieser Seite -- und
-              er lag als EINE Zeile unter fuenf, unterschieden nur durch Farbe.
-              Wer die Karte ueberfliegt, sieht fuenf gleich gebaute Zeilen und
-              muss die eine finden, auf die es ankommt.
-
-              Nur wenn es ihn gibt. Ohne Bestwert steht hier nichts -- eine
-              leere Auszeichnungsflaeche waere eine Enttaeuschung mit
-              Ankuendigung.
-
-              UND DANN NUR HIER IN ACID: die Zeile unten behaelt ihre gefuellte
-              Bahn, aber ihre Zahl geht auf `ink`. Dieselbe Tatsache zweimal in
-              Acid waeren zwei Rufe um dieselbe Aufmerksamkeit -- der Hausstil
-              gibt eine Heldenzahl je Flaeche aus. */}
-          {rekord && (
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12,
-                          padding: '2px 2px 6px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
-                <Kicker>Neuer Bestwert</Kicker>
-                {/* KEINE EIGENE EINHEIT. `watts` ist bereits formatiert und
-                    traegt das W -- eine zweite daneben las sich als "342 W W".
-                    Erst im gerenderten Bild gesehen. */}
-                <span style={{ ...TNUM, fontSize: 46, fontWeight: 700, letterSpacing: -2,
-                               lineHeight: 0.92, color: T.acid }}>{rekord.watts}</span>
-              </div>
-              <span style={{ fontSize: 11.5, fontWeight: 600, color: T.mid, flex: 'none',
-                             paddingBottom: 5 }}>
-                über {rekord.dur}
-              </span>
-            </div>
-          )}
-          <div style={{ padding: '4px 18px 12px', borderRadius: 22, background: T.surface }}>
-            {/* ── EACH DURATION AS A BEAM AGAINST THE RECORD ──────────────
-                This was a table: duration, watts, and a sentence saying what
-                the record was — which left the rider subtracting two numbers in
-                their head, five times, to answer the only question they came
-                with. The track IS the record and the lit part is this ride, so
-                the gap between them is the answer, drawn.
-
-                The scale is deliberately NOT zero-based: at threshold a rider
-                is never at 20% of their record, so a zero-based bar would put
-                every effort against the right-hand wall and show nothing. The
-                beam starts where the efforts live and the tick marks the
-                record — see `RANK_FLOOR`. */}
-            {vm.ranks.map((r, i) => {
-              const lit = Math.max(0, Math.min(1, (r.fill - RANK_FLOOR) / (1 - RANK_FLOOR)))
-              return (
-              <div key={r.dur} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '15px 0', borderTop: i === 0 ? 'none' : `1px solid ${T.rule}` }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                  <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
-                    <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.5, color: T.quiet, width: 42, flex: 'none' }}>{r.dur}</span>
-                    <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: -0.5, color: r.pr && !rekord ? T.acid : T.ink, ...TNUM }}>{r.watts}</span>
-                  </div>
-                  <span style={{ flex: 'none', fontSize: 10, fontWeight: 600, letterSpacing: 0.4, color: r.pr ? T.acid : T.mid, ...TNUM }}>{r.note}</span>
-                </div>
-
-                <div style={{ position: 'relative', height: 10, borderRadius: 100, background: T.d1, overflow: 'hidden' }}>
-                  <motion.div
-                    initial={reduce ? false : { width: 0 }}
-                    animate={{ width: `${Math.round(lit * 100)}%` }}
-                    transition={grow(0.05 + i * 0.05)}
-                    style={{ height: '100%', borderRadius: 100, background: r.pr ? T.acid : T.d4 }} />
-                  {/* The record, standing at the end of the track. A PR has
-                      passed it, so it is not drawn against its own beam. */}
-                  {!r.pr && (
-                    <div style={{ position: 'absolute', right: 0, top: -2, bottom: -2, width: 2, background: T.acid, opacity: 0.9 }} />
-                  )}
-                </div>
-
-                {/* NO "BESTWERT 1.240 W" LINE. The tick at the end of the beam
-                    IS the record and "−60 W" is the distance to it: printing the
-                    record as well gives the rider the same fact a third time and
-                    costs a line of type under every one of five rows. Anyone who
-                    wants the absolute number can add sixty to what they rode —
-                    and the ones who care about that number are looking at the
-                    Bestwerte page, not at this ride. */}
-              </div>
-            )})}
-          </div>
-        </div>
-          ) })
-          karten.push({ label: 'Wirkung', node: (
-        <div style={{ ...band(28), gap: 12 }}>
-          <SectionHead n={ch('changes')} eyebrow="Was das verändert" {...splitFinding(vm.changesBody)} />
-          <div style={{ ...card(), gap: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <Kicker>An dir</Kicker>
-                <span style={{ fontSize: 42, fontWeight: 600, letterSpacing: -2, color: T.acid }}>{vm.onYouDelta}<span style={{ fontSize: 16, letterSpacing: 0 }}> W</span></span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'flex-end' }}>
-                <Kicker>{vm.ceilingLabel}</Kicker>
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>{vm.ceilingBefore} → {vm.ceilingAfter}</span>
-              </div>
-            </div>
-            <div style={{ height: 1, background: T.rule }} />
-
-            {/* ── THE THREE, DRAWN AS MOVEMENTS ──────────────────────────────
-                These were three bare figures with a signed number beside each.
-                A "+3" does not show a rider that their fatigue now stands above
-                their fitness, which is the thing you look at this for. Each one
-                sits on its own fixed scale with a tick where it stood a week
-                ago, so the ride's effect is the distance between the tick and
-                the bar — and the three bars can be read against each other.
-
-                Colour says what the direction MEANS, not which way it went:
-                fitness gaining is acid, form falling is cool, and fatigue is
-                always the warn tint because it is the price, never a win. */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
-              {vm.shifts.map((sh, i) => {
-                const tint = sh.key === 'fatigue' ? T.warn : sh.good ? T.acid : T.cool
-                return (
-                  <div key={sh.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1.1, color: T.quiet }}>{sh.label}</span>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                        <span style={{ fontSize: 19, fontWeight: 600, letterSpacing: -0.5, color: T.ink, ...TNUM }}>{sh.value}</span>
-                        {sh.delta && (
-                          <span style={{ fontSize: 10.5, fontWeight: 600, color: tint, ...TNUM }}>{sh.delta}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div style={{ position: 'relative', height: 9, borderRadius: 100, background: T.d1, overflow: 'visible' }}>
-                      <motion.div
-                        initial={reduce ? false : { width: 0 }}
-                        animate={{ width: `${Math.round(sh.fill * 100)}%` }}
-                        transition={grow(0.06 + i * 0.06)}
-                        style={{ height: '100%', borderRadius: 100, background: tint }} />
-                      {sh.was != null && (
-                        <div
-                          title="vor einer Woche"
-                          style={{
-                            position: 'absolute', left: `${Math.round(sh.was * 100)}%`, top: -3, bottom: -3,
-                            width: 2, marginLeft: -1, background: T.ink, opacity: 0.55, borderRadius: 2,
-                          }} />
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
-              <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: 0.4, color: T.quiet }}>
-                Die helle Marke ist der Stand vor einer Woche.
-              </span>
-            </div>
-            <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.4, color: T.mid }}>{vm.changesBody}</span>
-          </div>
-        </div>
-          ) })
-          if (vm.moved.length > 0) karten.push({ label: 'Saison', node: (
-
-          <div style={{ ...band(44), gap: 12 }}>
-            <SectionHead n={ch('moved')} eyebrow="Worauf sie dich zubewegt hat" {...splitFinding(vm.movedSub)} />
-            <div style={{ ...card(), gap: 18 }}>
-              <span style={{ fontSize: 9.5, fontWeight: 600, letterSpacing: 1, color: T.acid }}>AUF DAS JAHR</span>
-              {vm.moved.map((m, i) => (
-                <div key={m.label} style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, letterSpacing: 0.8, textTransform: 'uppercase', color: T.quiet }}>{m.label}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 600, color: T.bg, padding: '3px 8px', borderRadius: 100, background: T.acid }}>{m.delta}</span>
-                    </div>
-                    <span style={{ fontSize: 15, fontWeight: 600, color: T.ink }}>{m.value} <span style={{ color: T.quiet, fontWeight: 600 }}>/ {m.goal}</span></span>
-                  </div>
-                  <div style={{ height: 8, borderRadius: 100, background: T.surface2, overflow: 'hidden', display: 'flex' }}>
-                    <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(m.beforePct * 100)}%` }} transition={{ duration: 0.7, ease: EASE, delay: i * 0.08 }}
-                      style={{ height: '100%', background: T.acidDeep }} />
-                    <motion.div initial={reduce ? false : { width: 0 }} animate={{ width: `${Math.round(Math.max(0, m.pct - m.beforePct) * 100)}%` }} transition={{ duration: 0.7, ease: EASE, delay: i * 0.08 + 0.25 }}
-                      style={{ height: '100%', background: T.acid, boxShadow: `0 0 8px ${T.acid}` }} />
-                  </div>
-                </div>
-              ))}
-              <span style={{ fontSize: 11.5, fontWeight: 600, lineHeight: 1.45, color: T.mid }}>{vm.movedFoot}</span>
-            </div>
-          </div>
-          ) })
-          return (
-            <W3SwipeDeck labels={karten.map(k => k.label)}>
-              {karten.map(k => k.node)}
-            </W3SwipeDeck>
-          )
-        })()}
-
-        {/* ── Nochmal fahren ────────────────────────────────────────────
-            The archive's one outbound loop, from memory back into the plan:
-            the same route, forecast against TODAY's physiology. Only for a
-            ride that actually has a track. */}
-        {onRehearse && (
-          <div style={{ ...band(44), gap: 8 }}>
-            <button type="button" onClick={onRehearse} disabled={rehearsePending}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 13, width: '100%',
-                padding: '15px 16px', borderRadius: 22, background: T.surface, border: 0,
-                cursor: rehearsePending ? 'default' : 'pointer', fontFamily: FONT, textAlign: 'left',
-                opacity: rehearsePending ? 0.7 : 1,
-              }}>
-              <span style={{ width: 36, height: 36, borderRadius: 100, flex: 'none', display: 'grid', placeItems: 'center', background: T.acidDim }}>
-                <RefreshCw size={16} color={T.acid} />
-              </span>
-              <span style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>
-                  {rehearsePending ? 'Wird vorbereitet…' : 'Nochmal fahren'}
-                </span>
-                <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, lineHeight: 1.3 }}>
-                  Dieselbe Strecke, gegen deine heutige Form geprobt
-                </span>
-              </span>
-            </button>
-            {rehearseError && (
-              <span style={{ fontSize: 11, fontWeight: 600, color: T.warn }}>{rehearseError}</span>
-            )}
-          </div>
-        )}
-
-      </div>
-    </div>
-  )
+    {!!vm.stats.length && <details className="w3-report-metrics"><summary>Weitere Messwerte <ChevronDown size={18}/></summary><dl>{vm.stats.map(s=><div key={s.l}><dt>{s.l}</dt><dd>{s.v}</dd><p>{s.s}</p></div>)}</dl></details>}
+    {hasSceneAction&&<details className="w3-report-metrics"><summary>Dein Fahrtbild <ChevronDown size={18}/></summary>
+      {scene.pending?<p role="status">Dein Bild wird erstellt…</p>:<>
+        {scene.failed&&<p>Das Bild konnte nicht erstellt werden. Du kannst es erneut versuchen.</p>}
+        {scene.status==='needs_rider'?<button className="w3-report-text-action" type="button" onClick={()=>onOpenStudio?.('rider')}>Avatar erstellen <ArrowUpRight size={18}/></button>:scene.status==='needs_bike'?<button className="w3-report-text-action" type="button" onClick={()=>onOpenStudio?.('bike')}>Rad hinzufügen <ArrowUpRight size={18}/></button>:<button className="w3-report-text-action" type="button" onClick={onCompose}>Fahrtbild erstellen <ArrowUpRight size={18}/></button>}
+      </>}
+    </details>}
+    {onRehearse&&<div className="w3-report-repeat-route"><button type="button" disabled={rehearsePending} onClick={onRehearse}><RefreshCw size={20}/><span><strong>{rehearsePending?'Wird vorbereitet…':'Diese Strecke nochmal fahren'}</strong><small>Mit deiner aktuellen Form planen</small></span><ArrowUpRight size={18}/></button>{rehearseError&&<p role="alert">{rehearseError}</p>}</div>}
+  </div></div>
 }

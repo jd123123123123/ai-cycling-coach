@@ -5,7 +5,8 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useRaceDebrief } from '../../hooks/useRaceDebrief'
 import { usePMC } from '../../hooks/usePMC'
-import { useActivitiesRange } from '../../hooks/useActivitiesRange'
+import { fetchActivitiesRange } from '../../api/dashboard'
+import { rideCalendarDate, ridePmcWindow, rideYearActivities, rideZoneDose } from './rideHistoricalContext'
 import { useActivity } from '../../hooks/useActivity'
 import type { RaceDebrief, EffortMatch } from '../../api/debrief'
 import type { PMCResponse, ActivityRead } from '../../api/dashboard'
@@ -72,15 +73,13 @@ const ZONE_NAMES = ['Erholung', 'Ausdauer', 'Tempo', 'Schwelle', 'VO2max', 'Anae
 const sgn = (n: number) => `${n >= 0 ? '+' : ''}${Math.round(n)}`
 const durLabel = (s: number) => (s < 60 ? `${s} Sek` : `${Math.round(s / 60)} Min`)
 
-/** Fitness / fatigue / form from the PMC series: latest CTL/ATL/TSB plus the
- *  7-day change. Honest "—" when the series is missing or too short. */
-function pmcTriplet(pmc: PMCResponse | undefined) {
-  const e = pmc?.entries ?? []
-  if (e.length === 0) {
+/** Model context on the selected ride day, with an exact seven-day comparison.
+ *  Missing historical observations stay absent. */
+function pmcTriplet(pmc: PMCResponse | undefined, rideDate: string | null | undefined) {
+  const { current: last, previous: prev } = ridePmcWindow(pmc, rideDate)
+  if (!last) {
     return { fitness: DASH, fitnessD: '', fatigue: DASH, fatigueD: '', form: DASH, formD: '', shifts: [], hasTrend: false, ctlDelta: 0, tsbDelta: 0 }
   }
-  const last = e[e.length - 1]
-  const prev = e.length > 7 ? e[e.length - 8] : null
   const ctlDelta = prev ? last.ctl - prev.ctl : 0
   const atlDelta = prev ? last.atl - prev.atl : 0
   const tsbDelta = prev ? last.tsb - prev.tsb : 0
@@ -132,22 +131,8 @@ function pmcTriplet(pmc: PMCResponse | undefined) {
   }
 }
 
-/**
- * HILL REPEATS, AND ONLY WHEN THE RIDE ACTUALLY WAS SOME.
- *
- * This asked "Hast du gehalten?" of every ride with two climbs in it, and
- * judged each one against a target that was THE AVERAGE OF THOSE SAME CLIMBS.
- * On a free ride outdoors that is a self-referential question — the target is
- * made of the answer, so about half the efforts are "over target" by
- * construction and the section says nothing. Worse, it says it first: it was
- * chapter 01 on a screen about a ride nobody prescribed.
- *
- * A repeat SET has a shape that an ordinary ride does not: the same hill, done
- * again, so the efforts are alike in length. Two unequal climbs on a Sunday loop
- * are not repeats and are not asked about. The test is the spread of their
- * durations — tight means one hill repeated, loose means a ride with hills in
- * it — plus at least three of them, because two of anything is a coincidence.
- */
+/** Similar-duration climbs are descriptive comparisons, not proven repeats.
+ * Their own average is a reference, never a prescribed target. */
 function toRepeats(d: RaceDebrief): { repeats: W3Repeat[]; score: string; sub: string; note: string } {
   const climbs = d.segments
     .filter((s) => s.kind === 'climb' && s.avg_power != null && s.duration_s >= 60)
@@ -161,23 +146,22 @@ function toRepeats(d: RaceDebrief): { repeats: W3Repeat[]; score: string; sub: s
   const maxIdx = deltas.reduce((mi, dlt, i) => (dlt > deltas[mi] ? i : mi), 0)
 
   const repeats: W3Repeat[] = climbs.map((c, i) => ({
-    label: `WDH. ${i + 1}`,
+    label: `ANSTIEG ${i + 1}`,
     watts: `${c.w} W`,
     delta: deltas[i],
-    verdict: i === maxIdx && deltas[i] >= 0 ? 'STÄRKSTE' : deltas[i] >= 0 ? 'GEHALTEN' : 'ABGEBAUT',
+    verdict: i === maxIdx && deltas[i] > 0 ? 'HÖCHSTER WERT' : deltas[i] > 0 ? 'ÜBER SCHNITT' : deltas[i] < 0 ? 'UNTER SCHNITT' : 'IM SCHNITT',
   }))
 
   const held = deltas.filter((x) => x >= 0).length
   const slipped = deltas.map((x, i) => ({ x, i })).filter((o) => o.x < 0)
   const sub =
     slipped.length === 0
-      ? 'Jede Wiederholung auf oder über dem Schnitt.'
+      ? 'Alle Anstiege auf oder über ihrem gemeinsamen Schnitt.'
       : slipped.length === 1
-        ? `Nur Wiederholung ${slipped[0].i + 1} fiel ab, um ${Math.abs(slipped[0].x)} W.`
-        : `${slipped.length} Wiederholungen fielen unter den Schnitt.`
+        ? `Anstieg ${slipped[0].i + 1}: ${Math.abs(slipped[0].x)} W unter dem gemeinsamen Schnitt.`
+        : `${slipped.length} Anstiege unter ihrem gemeinsamen Schnitt.`
 
-  const dropped = climbs.filter((c) => c.w < target * 0.9).length
-  const note = `${climbs.length} WDH. · ${dropped === 0 ? 'KEINE ABGEBAUT' : `${dropped} ABGEBAUT`}`
+  const note = `${climbs.length} ÄHNLICHE ANSTIEGE · SCHNITT ${target} W`
 
   return { repeats, score: `${held} von ${climbs.length}`, sub, note }
 }
@@ -196,9 +180,6 @@ function toCeiling(efforts: EffortMatch[]): { label: string; before: string; aft
   return { label, before: `${ceiling}`, after: `${ceiling}`, delta: '+0' }
 }
 
-// fixture: the app has no season-goal model yet, so "toward the year" tracks
-// real season totals against placeholder targets (mirrors the Rides page).
-const KM_GOAL = 12000, M_GOAL = 100000, RIDES_GOAL = 200
 const spaceK = (n: number) => Math.round(n).toLocaleString('en-US').replace(/,/g, ' ')
 
 function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRead | null, season: ActivityRead[]): W3RideVm {
@@ -225,27 +206,23 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     ? h.if_
     : hadPower && h.tss > 0 && hrs > 0 ? Math.sqrt(h.tss / (hrs * 100)) : null
 
-  // "What it moved you toward" — real season totals + this ride's contribution.
-  const cyc = season.filter((a) => a.sport === 'cycling')
+  // Recorded year-to-ride totals; no personal target has been supplied.
+  const rideDate = activity?.started_at ?? h.date
+  const cyc = rideYearActivities(season, rideDate)
   const totalKm = cyc.reduce((s, a) => s + (a.distance_meters ?? 0), 0) / 1000
   const totalM = cyc.reduce((s, a) => s + (a.elevation_gain_m ?? 0), 0)
   const totalRides = cyc.length
   const thisKm = h.distance_km ?? (activity?.distance_meters ?? 0) / 1000
   const thisM = h.elevation_m ?? activity?.elevation_gain_m ?? 0
-  const clamp = (x: number) => Math.max(0, Math.min(1, x))
-  const moved: MovedRow[] = totalRides > 0 ? [
-    { label: 'Saison-Distanz', delta: `+${Math.round(thisKm)} km`, value: spaceK(totalKm), goal: `${spaceK(KM_GOAL)} km`, beforePct: clamp((totalKm - thisKm) / KM_GOAL), pct: clamp(totalKm / KM_GOAL) },
-    { label: 'Höhenmeter', delta: `+${spaceK(thisM)} m`, value: spaceK(totalM), goal: `${spaceK(M_GOAL)} m`, beforePct: clamp((totalM - thisM) / M_GOAL), pct: clamp(totalM / M_GOAL) },
-    { label: 'Fahrten erfasst', delta: '+1', value: String(totalRides), goal: String(RIDES_GOAL), beforePct: clamp((totalRides - 1) / RIDES_GOAL), pct: clamp(totalRides / RIDES_GOAL) },
+  const includesRide = activity != null && cyc.some(a => a.id === activity.id)
+  // The range endpoint is capped at 500. Do not present a capped page as year totals.
+  const moved: MovedRow[] = includesRide && season.length < 500 ? [
+    { label: 'Erfasste Distanz', delta: `+${Math.round(thisKm)} km`, value: `${spaceK(totalKm)} km`, goal: '', beforePct: 0, pct: 0 },
+    { label: 'Erfasste Höhenmeter', delta: `+${spaceK(thisM)} m`, value: `${spaceK(totalM)} m`, goal: '', beforePct: 0, pct: 0 },
+    { label: 'Erfasste Fahrten', delta: '+1', value: String(totalRides), goal: '', beforePct: 0, pct: 0 },
   ] : []
-  const remainKm = Math.max(0, KM_GOAL - totalKm)
-  const moreRides = thisKm > 0 ? Math.ceil(remainKm / thisKm) : null
-  const movedSub = `${Math.round(thisKm)} km und ${spaceK(thisM)} Höhenmeter, auf dein Jahr gerechnet.`
-  const movedFoot = remainKm <= 0
-    ? 'Saisonziel erreicht — alles ab hier ist Zugabe.'
-    : moreRides != null
-      ? `Noch etwa ${moreRides} Fahrten wie diese, dann stehen die ${spaceK(KM_GOAL)} km.`
-      : `Noch ${spaceK(remainKm)} km bis zum Saisonziel.`
+  const movedSub = `Beitrag dieser Fahrt: ${Math.round(thisKm)} km und ${spaceK(thisM)} Höhenmeter.`
+  const movedFoot = `Erfasste Radfahrten ${rideCalendarDate(rideDate)?.slice(0, 4) ?? ''} bis zu dieser Fahrt (${fmtDate(rideDate)}).`
 
   const zones: W3Zone[] = (() => {
     const pct = d.pacing?.zone_time_pct ?? {}
@@ -260,8 +237,8 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     // Six, not five: `ZONE_TINT` carries six colours and the server sends six
     // buckets, so the anaerobic zone was being sliced off the end.
     const rows = keys.slice(0, 6).map((k, i) => {
-      const p = Math.round((pct[k] ?? 0) * (pct[k] > 1 ? 1 : 100))
-      const min = Math.round(((pct[k] > 1 ? pct[k] / 100 : pct[k]) * h.moving_time_s) / 60)
+      const {percent:p,minutes} = rideZoneDose(pct[k] ?? 0, h.moving_time_s)
+      const min = minutes.toLocaleString('de-DE', {maximumFractionDigits:1})
       return { z: `ZONE ${i + 1}`, name: ZONE_NAMES[i] ?? k, min: `${min} Min`, pct: p, peak: false }
     })
     // A tie leaves the first one lit rather than lighting two; ">" not ">=".
@@ -282,6 +259,8 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
     return {
       dur: e.duration_s < 60 ? `${e.duration_s} SEK` : `${Math.round(e.duration_s / 60)} MIN`,
       watts: `${e.ride_watts} W`,
+      wattsValue: e.ride_watts,
+      bestWattsValue: best,
       bestWatts: best != null ? `${best} W` : null,
       pr: e.is_pr,
       // The ride against the record. A new best fills the beam; anything else
@@ -297,13 +276,13 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
 
   const rep = toRepeats(d)
   const ceil = toCeiling(d.efforts)
-  const pmcT = pmcTriplet(pmc)
+  const pmcT = pmcTriplet(pmc, rideDate)
 
-  // A factual line about the 7-day fitness/form window (never a fabricated
-  // narrative); falls back to the AI verdict's watch-out when PMC is absent.
   const changesBody = pmcT.hasTrend
-    ? `In den letzten sieben Tagen: Fitness ${sgn(pmcT.ctlDelta)}, Form ${sgn(pmcT.tsbDelta)} — der Preis der Arbeit, und wo er dich jetzt hinstellt.`
-    : (v.watch_out[0] ?? '')
+    ? `Belastungsmodell am ${fmtDate(rideDate)}: Fitness ${sgn(pmcT.ctlDelta)}, Form ${sgn(pmcT.tsbDelta)} gegenüber sieben Tagen zuvor. Veränderungen umfassen alle Einheiten und Erholungstage.`
+    : pmcT.shifts.length
+      ? `Belastungsmodell am ${fmtDate(rideDate)}. Kein vollständiger Vergleich zu sieben Tagen zuvor.`
+      : 'Für den Tag dieser Fahrt liegt kein Belastungsmodell vor.'
 
   // ── the hero ─────────────────────────────────────────────────────────
   // Distance, average speed and elevation, in that order: what you covered,
@@ -384,9 +363,9 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
           ? `${eff.decoupling_pct.toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} %`
           : DASH,
         l: 'HF-DRIFT',
-        // Coggan's rule of thumb: under 5 % the aerobic system held.
-        s: eff?.decoupling_pct == null ? 'ohne Herzfrequenz nicht messbar'
-          : eff.decoupling_pct < 5 ? 'aerob durchgehalten' : 'Ausdauer gab nach' },
+        // Describe the observed difference without assigning a physiological cause.
+        s: eff?.decoupling_pct == null ? 'nicht ausreichend auswertbar'
+          : Math.abs(eff.decoupling_pct) < 5 ? 'geringe HF-Entkopplung' : 'höhere HF-Entkopplung' },
       { v: d.pacing?.variability_index != null
           ? d.pacing.variability_index.toLocaleString('de-DE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
           : DASH,
@@ -394,7 +373,7 @@ function toVm(d: RaceDebrief, pmc: PMCResponse | undefined, activity: ActivityRe
         s: d.pacing?.variability_index == null ? ''
           : d.pacing.variability_index < 1.05 ? 'sehr gleichmäßig getreten' : 'viele Antritte' },
       { v: h.total_kj != null && h.total_kj > 0 ? `${Math.round(h.total_kj).toLocaleString('de-DE')}` : DASH, l: 'ARBEIT · KJ',
-        s: kcal != null && kcal > 0 ? `${Math.round(kcal).toLocaleString('de-DE')} kcal verbrannt` : '' },
+        s: kcal != null && kcal > 0 ? `${Math.round(kcal).toLocaleString('de-DE')} kcal geschätzt` : '' },
     ],
     // NO GRADE WITHOUT POWER. `grade_score` is null for a ride the scorer had
     // no inputs for, and `String(null)` is the word "null" set 100px high in
@@ -531,6 +510,7 @@ function toReducedHero(a: ActivityRead): W3RideHeroVm {
       { label: 'HÖHE', value: a.elevation_gain_m != null ? num(a.elevation_gain_m) : DASH, unit: 'hm' },
     ],
     watts: watts != null ? String(Math.round(watts)) : DASH,
+    powerLabel: a.normalized_power != null ? 'Normalisierte Leistung' : 'Ø Leistung',
     bpm: a.average_hr != null ? String(Math.round(a.average_hr)) : DASH,
     // IF is normalised power against FTP, and neither is on this row. Inverting
     // the ride's TSS would work arithmetically and lie in substance: on a ride
@@ -597,7 +577,7 @@ function W3RideReduced({ activity, onBack, onExpandMap, review }: {
         {/* SHARE IS DELIBERATELY NOT OFFERED. The share screen reads the same
             debrief this ride does not have, so the button would hand the rider
             to a page that cannot draw their card. */}
-        <W3RideMapHero vm={hero} onExpandMap={onExpandMap} />
+        <W3RideMapHero vm={hero} editorial onExpandMap={onExpandMap} />
         {review}
 
         <div style={{ ...band(S.section), gap: S.md }}>
@@ -693,13 +673,19 @@ export default function W3RideDetailPage() {
   const { data, isError: debriefFailed } = useRaceDebrief(activityId)
   const trainingReview = useQuery({queryKey:['training-review',activityId],queryFn:()=>fetchTrainingReview(activityId!),enabled:activityId!=null,staleTime:30_000,retry:1})
   const { data: pmc } = usePMC()
-  const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
-  const { data: season } = useActivitiesRange(seasonStart, new Date())
-  // THIS ride, from the endpoint that is about it — not found by scanning a
-  // year. The season list is still fetched, but only for the season TOTALS the
-  // "was es bewegt hat" section adds up; the route no longer waits on it.
   const { data: activityRow, isLoading: routePending } = useActivity(activityId)
-  const activity = activityRow ?? (season?.activities ?? []).find((a) => a.id === Number(id)) ?? null
+  const activity = activityRow ?? null
+  const rideDate = activity?.started_at ?? data?.header.date
+  const seasonWindow = useMemo(() => {
+    const day = rideCalendarDate(rideDate)
+    return day ? { start: new Date(`${day.slice(0, 4)}-01-01T12:00:00`), end: new Date(`${day}T12:00:00`) } : null
+  }, [rideDate])
+  const { data: season } = useQuery({
+    queryKey: ['ride-year-activities', seasonWindow?.start.getFullYear(), rideCalendarDate(rideDate)],
+    queryFn: () => fetchActivitiesRange(seasonWindow!.start, seasonWindow!.end),
+    enabled: seasonWindow != null,
+    staleTime: 30_000,
+  })
   const vm = useMemo(() => (data ? toVm(data, pmc, activity, season?.activities ?? []) : null), [data, pmc, activity, season])
 
   // The composed hero: a cheap cache read on open (it never generates), plus the
@@ -797,7 +783,7 @@ export default function W3RideDetailPage() {
       return (
         <W3RideReduced
           activity={activity}
-          review={trainingReview.data ? <W3TrainingReview review={trainingReview.data} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
+          review={trainingReview.data ? <W3TrainingReview review={trainingReview.data} rideDate={rideDate} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
           onBack={() => navigate(-1)}
           onExpandMap={activity.route_polyline ? () => navigate(`/e/w3-ride-map/${id}`) : undefined}
         />
@@ -812,7 +798,7 @@ export default function W3RideDetailPage() {
     <W3RideDetailView
       stageRewards={activityId ? <W3RideStageRewards activityId={activityId} /> : undefined}
       vm={{ ...vm, hero: heroVm }}
-      trainingReview={trainingReview.data ? <W3TrainingReview review={trainingReview.data} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
+      trainingReview={trainingReview.data ? <W3TrainingReview review={trainingReview.data} rideDate={rideDate} onOpenPlan={()=>navigate('/e/w3-plan')} /> : undefined}
       scene={scene}
       // The loop from memory back into the plan: this ride's own route,
       // forecast against today's physiology. Only with a real track.

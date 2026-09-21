@@ -1,4 +1,4 @@
-import { Fragment, useId, useState, type ReactNode } from 'react'
+import { Fragment, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { ArrowLeft, ArrowUpRight } from 'lucide-react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useMyCrew, useCrewStandings } from '../../hooks/useCrew'
@@ -10,6 +10,7 @@ import W3PlanPhaseProgress from './W3PlanPhaseProgress'
 import W3PlanPhaseRoad from './W3PlanPhaseRoad'
 import W3ProgressCompact from './W3ProgressCompact'
 import type { W3Vm } from './W3TodayView'
+import './w3TodayTrainingEditorial.css'
 
 type Section = 'today' | 'week' | 'form' | 'crew' | 'progress' | 'goals' | 'rides'
 interface Sections { weather?: ReactNode; rides?:ReactNode; ridesSummary?:ReactNode; progress?:ReactNode; progressSummary?:ReactNode; goalSummary?:ReactNode; persistentForm?: (expanded:boolean) => ReactNode; selectedWeekDay?: number; onSelectWeekDay?: (index:number) => void; onOpenPlan?: () => void; onPickGoal?: (intent: 'ftp' | 'event' | 'hours' | null) => void; today?: ReactNode; week: ReactNode; form: ReactNode; crew: ReactNode; goals: ReactNode }
@@ -43,7 +44,19 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
   const uid = useId()
   const reduce = useReducedMotion()
   const today = vm.weekDays.find(day => day.status === 'today')
-  const blocks = today?.rest ? [] : (today?.blocks?.length ? today.blocks : vm.sessionBlocks ?? [])
+  const hasTodaySession = vm.hasPlan && !!today?.title && !today.rest
+  const blocks = hasTodaySession ? (today?.blocks?.length ? today.blocks : vm.sessionBlocks ?? []) : []
+  const todayTitle = !vm.hasPlan ? 'Noch kein Training geplant' : today?.rest ? 'Ruhetag' : today?.title || 'Noch kein Training geplant'
+  const todayFacts = hasTodaySession ? [
+    vm.sessionDur,
+    today?.targetW && today.targetW !== '—' ? today.targetW : null,
+    today?.planned != null ? `${num(today.planned)} TSS` : null,
+  ].filter(Boolean).join(' · ') : ''
+  const todayTokens = {
+    '--today-training-surface': T.surface,
+    '--today-training-mid': T.mid,
+    '--today-training-ink': T.ink,
+  } as CSSProperties
   const weekMax = Math.max(1, ...vm.weekDays.map(d => Math.max(d.actual || 0, d.planned ?? 0)))
   const form = data.form
   const titles: Record<Section, string> = { today: 'Heute', week: 'Deine Woche', form: 'Deine Form', crew: 'Crew', rides:'Unterwegs', progress:'Fortschritt', goals: 'Ziele' }
@@ -56,7 +69,7 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
     progress: data.ftp == null ? (vm.weekGoal?.name ?? 'Dein nächstes Ziel') : data.ftpGoal != null ? `FTP ${num(data.ftp)} von ${num(data.ftpGoal)} W` : `FTP ${num(data.ftp)} W`,
   }
   return <div className="w3-today-overview" style={{ fontFamily: FONT }}>
-    {(['today', 'week', 'form', 'crew', 'rides', 'progress', 'goals'] as const).filter(key=>key!=='rides'||(details.rides!==undefined&&data.crew!=null)).map(key => <Fragment key={key}><section data-today-card={key} className="w3-overview-card" data-open={open === key}>
+    {(['today', 'week', 'form', 'crew', 'rides', 'progress', 'goals'] as const).filter(key=>key!=='rides'||(details.rides!==undefined&&data.crew!=null)).map(key => <Fragment key={key}><section data-today-card={key} className="w3-overview-card" data-open={open === key} style={key === 'today' ? todayTokens : undefined}>
       <div className="w3-overview-header">
         <h2 id={`${uid}-${key}-title`} className="w3-overview-title">{titles[key]}</h2>
         <motion.button id={`${uid}-${key}-toggle`} className="w3-overview-toggle" type="button" aria-label={`${titles[key]} ${open === key ? 'schließen' : 'öffnen'}`} aria-expanded={open === key} aria-controls={`${uid}-${key}`} onClick={() => setOpen(open === key ? null : key)} whileTap={reduce ? undefined : {scale:0.93}}>
@@ -66,10 +79,14 @@ export function W3TodayOverviewView({ vm, data, onOpenPlan, onPickGoal, selected
       {key === 'form' && persistentForm ? <div id={`${uid}-${key}`} className="w3-overview-form-persistent" role="region" aria-labelledby={`${uid}-${key}-title`}>{persistentForm(open==='form')}</div> : <>
       <motion.div initial={false} animate={{height:open === key && key !== 'week' ? 0 : 'auto',opacity:open === key && key !== 'week' ? 0 : 1}} transition={{duration:reduce ? 0 : 0.26,ease:EASE}} aria-hidden={open === key && key !== 'week'} inert={open === key && key !== 'week'} style={{overflow:'hidden'}}>
       <div className="w3-overview-summary">
-          <span className="w3-overview-copy">{key!=='goals'&&key!=='progress'&&subtitle[key]}</span>{key==='goals'&&<div className="w3-overview-goals-summary">{goalSummary??'Dein nächstes Ziel'}</div>}
-          {key === 'today' && <span className="w3-overview-workout" role="img" aria-label={today?.rest ? 'Ruhetag, keine Trainingsbelastung geplant' : blocks.length ? `Trainingsprofil: ${blocks.map(b => b.label).join(', ')}` : 'Kein Trainingsprofil verfügbar'}>
-            {blocks.length ? blocks.map((b, i) => <span key={i} style={{ flex: 1, minWidth: 0, height: `${Math.max(4, Math.min(100, b.w * 100))}%`, borderRadius: '2px 2px 0 0', background: b.work ? `linear-gradient(180deg, ${T.acid}, ${T.acidDeep})` : T.heroOff }} />) : <span style={{ width: '100%', height: 2, background: T.rule }} />}
-          </span>}
+          {key !== 'today' && <span className="w3-overview-copy">{key!=='goals'&&key!=='progress'&&subtitle[key]}</span>}{key==='goals'&&<div className="w3-overview-goals-summary">{goalSummary??'Dein nächstes Ziel'}</div>}
+          {key === 'today' && <>
+            <span className="w3-today-training-summary-title">{todayTitle}</span>
+            {todayFacts && <span className="w3-today-training-summary-facts">{todayFacts}</span>}
+            {blocks.length > 0 && <span className="w3-today-training-summary-profile" role="img" aria-label={`Trainingsprofil: ${blocks.map(b => b.label).join(', ')}`}>
+              {blocks.map((b, i) => <span key={i} style={{ flex: 1, minWidth: 0, height: `${Math.max(4, Math.min(100, b.w * 100))}%`, borderRadius: '3px 3px 0 0', background: b.work ? T.acid : T.heroOff }} />)}
+            </span>}
+          </>}
           {key === 'week' && <div aria-label="Trainingsbelastung der Woche" className="w3-overview-week">
             {vm.weekDays.map((d, i) => {
               const expanded=open==='week'

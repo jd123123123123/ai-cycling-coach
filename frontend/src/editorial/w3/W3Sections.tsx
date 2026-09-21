@@ -5,6 +5,7 @@ import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight
 import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 import W3WhyButton from './W3WhyButton'
 import W3DayRoute from './W3DayRoute'
+import './w3TodayTrainingEditorial.css'
 
 // ────────────────────────────────────────────────────────────────────────
 // "Deine Woche" — ONE card: the week's day selector, the selected day's
@@ -376,7 +377,7 @@ export interface TodaySession {
   dur: string | null; blocks: W3Block[]; ftpTag: string; earn: string | null
 }
 
-export function IntervalBars({ blocks, ftpTag, h = 96 }: { blocks: W3Block[]; ftpTag: string; h?: number }) {
+export function IntervalBars({ blocks, ftpTag, h = 96, editorial = false }: { blocks: W3Block[]; ftpTag: string; h?: number; editorial?: boolean }) {
   const reduce = useReducedMotion()
   const [hov, setHov] = useState<number | null>(null)
   return (
@@ -400,14 +401,14 @@ export function IntervalBars({ blocks, ftpTag, h = 96 }: { blocks: W3Block[]; ft
               // runs light at the top into the deeper acid at the base, which is
               // the same direction the stage's key light falls — so a bar reads
               // as a solid with a lit face rather than as a filled rectangle.
-              background: b.work
+              background: editorial ? (b.work ? T.acid : T.heroOff) : b.work
                 ? `linear-gradient(180deg, ${T.acid} 0%, ${T.acid} 30%, ${T.acidDeep} 100%)`
                 : `linear-gradient(180deg, ${T.heroOff} 0%, ${T.heroDock} 100%)`,
               // The contact shadow that made the bike stand, at bar scale: a
               // dark pool where the column meets the floor, plus the thinnest
               // specular along its top edge. Work bars only — a recovery block
               // should sit BACK, and light is what puts it there.
-              boxShadow: b.work
+              boxShadow: !editorial && b.work
                 ? `inset 0 1px 0 ${T.ink}59, 0 2px 6px ${T.acidDeep}4D`
                 : 'none',
               outline: on ? `1px solid ${T.ink}` : 'none',
@@ -480,13 +481,28 @@ const asWord = (label: string) => SENTENCE_LABEL[label] ?? label
  * still reads as an em dash in `T.quiet` — an adapted-but-unknown number can
  * never look like a real one.
  */
-function SessionNumbers({ stats }: { stats: DayStat[] }) {
+function SessionNumbers({ stats, editorial = false }: { stats: DayStat[]; editorial?: boolean }) {
   if (!stats.length) return null
   // The lead is the target if there is one, else whatever came first: the
   // prescription's headline number, never an arbitrary slot.
   const lead = stats.find((s) => s.l === 'ZIEL') ?? stats[0]
   const rest = stats.filter((s) => s !== lead && s.v !== DASH)
   const has = lead.v !== DASH
+
+  if (editorial) return (
+    <div className="w3-today-training-numbers">
+      <div className="w3-today-training-target">
+        <span style={{ color: has ? (lead.hue ?? T.ink) : T.quiet }}>{lead.v}</span>
+        <span className="w3-today-training-target-label">{asWord(lead.l)}</span>
+      </div>
+      {rest.length > 0 && <div className="w3-today-training-facts" style={{ gridTemplateColumns: `repeat(${rest.length}, minmax(0, 1fr))` }}>
+        {rest.map(s => <div key={s.l}>
+          <span style={{ color: s.hue ?? T.ink }}>{s.v}</span>
+          <span>{asWord(s.l)}</span>
+        </div>)}
+      </div>}
+    </div>
+  )
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
@@ -592,7 +608,7 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
 /** The selected day's training, weather and actions — the lower two thirds of
  *  the week card. Mounted with a per-day key, so switching days resets the
  *  adapt state and replays the entrance. */
-export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt }) {
+export function DayTraining({ day, session, weather, onAdapt, appearance }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt; appearance?: 'editorial' }) {
   const [adapt, setAdapt] = useState<Adapt>('none')
   const [busy, setBusy] = useState<Adapt>('none')
   const [result, setResult] = useState<AdaptResult | null>(null)
@@ -601,6 +617,14 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
   const navigate = useNavigate()
   const reduce = useReducedMotion()
   const isToday = day.status === 'today'
+  // Opted in by the primary Today slot; week/session consumers stay unchanged.
+  const editorial = appearance === 'editorial'
+  const editorialClass = editorial ? 'w3-today-training-editorial' : undefined
+  const editorialTokens = editorial ? {
+    '--today-training-surface': T.surface,
+    '--today-training-mid': T.mid,
+    '--today-training-acid': T.acid,
+  } as CSSProperties : undefined
   // "1 Std. 15 min" / "45 min" → minutes. The session states its duration as
   // display copy, which is the only place it exists on this card; a route
   // matched on TSS alone would ignore whether the ride even fits the evening.
@@ -669,20 +693,20 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {isToday ? 'Heutige Einheit' : day.weekday}
+          <span style={{ minWidth: 0, fontSize: editorial ? 12.5 : 17, fontWeight: editorial ? 600 : 700, letterSpacing: editorial ? 0.5 : -0.4, color: editorial ? T.mid : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {editorial ? day.dateLabel : isToday ? 'Heutige Einheit' : day.weekday}
           </span>
           {/* The explanation, where the doubt is. Only on TODAY: the reasoning
               is about this morning's signals, and offering it beside Thursday
               would promise an answer nothing computed. */}
           {isToday && <W3WhyButton />}
         </div>
-        <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.dateLabel}</span>
+        {!editorial && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.dateLabel}</span>}
       </div>
-      <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: chipBg }}>
+      {(!editorial || !isToday) && <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: chipBg }}>
         <StIcon size={11} color={chipHue} />
         <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: chipHue }}>{st.label}</span>
-      </div>
+      </div>}
     </div>
   )
 
@@ -696,9 +720,9 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
   const restDay = isRest || day.rest === true || day.status === 'rest' || (isFuture && !day.title)
   if (restDay && !isPast) {
     return (
-      <motion.div initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
-        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Rule />
+      <motion.div className={editorialClass} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
+        style={{ ...editorialTokens, display: 'flex', flexDirection: 'column', gap: editorial ? 20 : 14 }}>
+        {!editorial && <Rule />}
         {header}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ width: 40, height: 40, flex: 'none', borderRadius: 13, background: `${T.rem}1F`, display: 'grid', placeItems: 'center' }}><Moon size={19} color={T.rem} /></div>
@@ -720,10 +744,10 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
         <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} compact />
         {isToday && (
           <>
-            <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
+            <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
             {showAdapt
               ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
-              : <AdjustButton onOpen={() => setShowAdapt(true)} />}
+              : <AdjustButton editorial={editorial} onOpen={() => setShowAdapt(true)} />}
           </>
         )}
       </motion.div>
@@ -731,19 +755,19 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
   }
 
   return (
-    <motion.div key={adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
-      style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
-      <Rule />
+    <motion.div className={editorialClass} key={adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
+      style={{ ...editorialTokens, display: 'flex', flexDirection: 'column', gap: editorial ? 20 : 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
+      {!editorial && <Rule />}
       {header}
 
-      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
+      <div style={{ ...(editorial ? { minWidth: 0, overflowWrap: 'anywhere' as const } : {}), fontSize: editorial ? 28 : 22, fontWeight: editorial ? 600 : 700, letterSpacing: editorial ? -0.9 : -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
         {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
       </div>
 
       {/* Stats only when there's a real prescription (title + a number). A
           future day with no plan yet hides the empty dash row. */}
       {(day.title != null && (curTss > 0 || curT > 0)) && (
-        <SessionNumbers stats={stats} />
+        <SessionNumbers stats={stats} editorial={editorial} />
       )}
 
       {/* the coach's own explanation of the re-plan (real AI rationale) */}
@@ -762,14 +786,14 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
           {/* Guarded like the future-day branch below: with no prescribed
               session there are no bars to draw, and an empty chart frame is
               better than the invented profile this used to fall back to. */}
-          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />}
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} editorial={editorial} />}
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{workDesc}</span>
         </>
       )}
 
       {isFuture && (
         <>
-          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />}
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} editorial={editorial} />}
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
             Eine Woche im Voraus geplant — festgezurrt wird am Morgen, sobald deine Nachtwerte da sind.
           </span>
@@ -839,10 +863,10 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
               <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
             </div>
           )}
-          <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
+          <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
           {showAdapt
             ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
-            : <AdjustButton onOpen={() => setShowAdapt(true)} />}
+            : <AdjustButton editorial={editorial} onOpen={() => setShowAdapt(true)} />}
         </>
       )}
 
@@ -855,7 +879,7 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
            owns one keeps a way into it. Past days keep planned-vs-done, which
            is their detail. ── */}
       {isFuture && day.title != null && (
-        <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
+        <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
       )}
     </motion.div>
   )
@@ -863,22 +887,22 @@ export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull
 
 /** The way into a training's own screen. One element, because the today CTA
  *  and the planned-day CTA are the same promise and must not drift apart. */
-function SessionLink({ label, onOpen }: { label: string; onOpen: () => void }) {
+function SessionLink({ label, onOpen, editorial = false }: { label: string; onOpen: () => void; editorial?: boolean }) {
   return (
-    <button onClick={onOpen}
-      style={{ height: 52, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
-      <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>{label}</span>
+    <button className={editorial ? 'w3-today-training-open' : undefined} onClick={onOpen}
+      style={{ height: 52, width: '100%', borderRadius: editorial ? 18 : 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
+      <span style={{ fontSize: editorial ? 14 : 16, fontWeight: editorial ? 600 : 700, letterSpacing: -0.2, color: T.bg }}>{label}</span>
       <div style={{ width: 38, height: 38, flex: 'none', borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
     </button>
   )
 }
 
-function AdjustButton({ onOpen }: { onOpen: () => void }) {
+function AdjustButton({ onOpen, editorial = false }: { onOpen: () => void; editorial?: boolean }) {
   return (
     <button onClick={onOpen}
-      style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: 42, width: '100%', borderRadius: 100, background: T.surface2, border: 0, cursor: 'pointer', fontFamily: FONT }}>
+      style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: editorial ? 44 : 42, width: '100%', borderRadius: editorial ? 16 : 100, background: editorial ? 'transparent' : T.surface2, border: 0, cursor: 'pointer', fontFamily: FONT }}>
       <SlidersHorizontal size={14} color={T.mid} />
-      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>Anpassen</span>
+      <span style={{ fontSize: 12.5, fontWeight: editorial ? 600 : 700, letterSpacing: 0.3, color: T.mid }}>Anpassen</span>
       <ChevronDown size={14} color={T.quiet} />
     </button>
   )

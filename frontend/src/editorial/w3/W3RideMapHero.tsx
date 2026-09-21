@@ -1,10 +1,11 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useState, type CSSProperties } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
 import { ChevronLeft, Share2, CircleCheck, Maximize2 } from 'lucide-react'
 import { T, FONT, EASE, DASH } from './w3tokens'
 import { W3_MAP } from './w3map'
 import { GRADE_LEGEND, gradeColours } from './gradeColours'
 import { S } from './w3surfaces'
+import './w3RideHeroEditorial.css'
 
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
 
@@ -69,6 +70,8 @@ export interface W3RideHeroVm {
   stats: { label: string; value: string; unit: string }[]
   /** The power strip: watts, heart rate, intensity factor. */
   watts: string
+  /** Reduced records can carry average power instead of normalized power. */
+  powerLabel?: string
   bpm: string
   ifValue: string
   /** 0..1 — how much of the beam is lit. The ride's IF against threshold. */
@@ -152,6 +155,8 @@ function NavButton({ label, onClick, children }: { label: string; onClick?: () =
 
 export interface W3RideMapHeroProps {
   vm: W3RideHeroVm
+  /** Compact completed-ride composition; other consumers retain their hero. */
+  editorial?: boolean
   onBack?: () => void
   onShare?: () => void
   /** Opens the full-screen, pannable map. The hero's own map is deliberately
@@ -189,7 +194,74 @@ function HeroStat({ label, value, unit }: { label: string; value: string; unit: 
   )
 }
 
-export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneOverlay }: W3RideMapHeroProps) {
+function EditorialRideHero({ vm, onBack, onShare, onExpandMap }: W3RideMapHeroProps) {
+  const [visual, setVisual] = useState<'route' | 'moment'>('route')
+  const [readyRoute, setReadyRoute] = useState<W3RideHeroVm['polyline']>(null)
+  const hasRoute = (vm.polyline?.length ?? 0) > 1
+  const showMoment = Boolean(vm.sceneImage) && (visual === 'moment' || (!hasRoute && !vm.routePending))
+  const showVisual = hasRoute || vm.routePending || Boolean(vm.sceneImage)
+  const ramp = gradeColours(vm.grades, vm.polyline?.length ?? 0)
+  const present = (value: string) => value.trim() !== '' && value !== DASH
+  const instruments = [
+    { label: vm.powerLabel ?? 'Normalisierte Leistung', value: vm.watts, unit: 'W' },
+    { label: 'Ø Herzfrequenz', value: vm.bpm, unit: 'bpm' },
+    { label: 'Intensitätsfaktor', value: vm.ifValue, unit: 'IF' },
+  ].filter(stat => present(stat.value))
+  const labels: Record<string, string> = { DISTANZ: 'Distanz', 'Ø TEMPO': 'Ø Tempo', HÖHE: 'Höhenmeter' }
+
+  return <section className="w3-ride-editorial" aria-label="Deine abgeschlossene Fahrt" style={{
+    fontFamily: FONT, '--ride-bg': T.bg, '--ride-surface': T.surface,
+    '--ride-ink': T.ink, '--ride-mid': T.mid, '--ride-acid': T.acid,
+    '--ride-overlay': `${T.bg}E6`,
+  } as CSSProperties}>
+    {showVisual && <div className="w3-ride-editorial-visual">
+      <div className="w3-ride-editorial-map" style={{ visibility: showMoment ? 'hidden' : 'visible' }} aria-hidden={showMoment}>
+        {hasRoute && <Suspense fallback={null}><RouteMap
+          polyline={vm.polyline!} styleKey="dark" interactive={false}
+          onReady={() => setReadyRoute(vm.polyline)} palette={W3_MAP}
+          fitPadding={{ top: 72, bottom: 70, left: 38, right: 38 }}
+          lineColors={ramp ?? undefined} lineColor={T.acid} lineWidth={6}
+          startColor={T.ink} endColor={T.acid} attributionBottom={8}
+          className="w3-ride-editorial-basemap" />
+        </Suspense>}
+        {hasRoute && readyRoute !== vm.polyline && <svg viewBox="0 0 390 290" role="img" aria-label="GPS-Verlauf dieser Fahrt" className="w3-ride-editorial-route">
+          <path d={fallbackPath(vm.polyline!, 390, 290, 52)} fill="none" stroke={T.acid} strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>}
+        {!hasRoute && vm.routePending && <span className="w3-ride-editorial-route-pending" role="status">Route wird geladen</span>}
+        {hasRoute && ramp && <div className="w3-ride-editorial-grades" aria-label="Steigung der Route">
+          {GRADE_LEGEND.map(grade => <span key={grade.label}><i style={{ background: grade.colour }} />{grade.label}</span>)}
+        </div>}
+      </div>
+      {showMoment && <img className="w3-ride-editorial-moment" src={vm.sceneImage!} alt="Generiertes Erinnerungsbild dieser Fahrt" />}
+      <div className="w3-ride-editorial-controls">
+        <div className="w3-ride-editorial-controls-start">
+          {onBack && <button type="button" className="w3-ride-editorial-icon" onClick={onBack} aria-label="Zurück"><ChevronLeft size={19} /></button>}
+          {hasRoute && vm.sceneImage && <div className="w3-ride-editorial-switch" role="group" aria-label="Ansicht der Fahrt">
+            <button type="button" aria-pressed={!showMoment} onClick={() => setVisual('route')}>Route</button>
+            <button type="button" aria-pressed={showMoment} onClick={() => setVisual('moment')}>Moment</button>
+          </div>}
+        </div>
+        <div className="w3-ride-editorial-controls-end">
+          {hasRoute && onExpandMap && <button type="button" className="w3-ride-editorial-icon" onClick={onExpandMap} aria-label="GPS-Karte öffnen"><Maximize2 size={18} /></button>}
+          {onShare && <button type="button" className="w3-ride-editorial-icon" onClick={onShare} aria-label="Fahrt teilen"><Share2 size={18} /></button>}
+        </div>
+      </div>
+    </div>}
+    <div className="w3-ride-editorial-summary">
+      <div className="w3-ride-editorial-meta"><span><CircleCheck size={14} aria-hidden />Abgeschlossen</span><span>{vm.dateLine}</span></div>
+      <div className="w3-ride-editorial-duration"><strong>{vm.duration}</strong><span>Fahrzeit</span></div>
+      <dl className="w3-ride-editorial-stats">{vm.stats.map(stat => <div key={stat.label}>
+        <dt>{labels[stat.label] ?? stat.label}</dt><dd>{stat.value}<small>{present(stat.value) ? stat.unit : ''}</small></dd>
+      </div>)}</dl>
+      {instruments.length > 0 && <dl className="w3-ride-editorial-instruments">{instruments.map(stat => <div key={stat.label}>
+        <dt>{stat.label}</dt><dd>{stat.value}<small>{stat.unit}</small></dd>
+      </div>)}</dl>}
+      {!hasRoute && !vm.routePending && <p className="w3-ride-editorial-no-route">Keine GPS-Route aufgezeichnet</p>}
+    </div>
+  </section>
+}
+
+export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneOverlay, editorial = false }: W3RideMapHeroProps) {
   const reduce = useReducedMotion()
   const [mapReady, setMapReady] = useState(false)
   const hasRoute = vm.polyline != null && vm.polyline.length > 1
@@ -200,6 +272,8 @@ export default function W3RideMapHero({ vm, onBack, onShare, onExpandMap, sceneO
   const showMap = hasRoute || vm.routePending === true
   const mapH = showMap ? MAP_H : 0
   const cardTop = showMap ? CARD_TOP : 0
+
+  if (editorial) return <EditorialRideHero vm={vm} onBack={onBack} onShare={onShare} onExpandMap={onExpandMap} />
 
   return (
     <div style={{ position: 'relative', fontFamily: FONT }}>
