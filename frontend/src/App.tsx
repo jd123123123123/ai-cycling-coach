@@ -94,6 +94,7 @@ const W3RankPreview = lazyWithRetry(() => import('./editorial/w3/W3RankPreview')
 const W3GarageHeroPreview = lazyWithRetry(() => import('./editorial/w3/W3GarageHeroPreview'))
 const W3HeroRoute = lazyWithRetry(() => import('./editorial/w3/W3HeroRoute'))
 const W3RoomPreview = lazyWithRetry(() => import('./editorial/w3/W3RoomPreview'))
+const W3RideAtelierPreview = lazyWithRetry(() => import('./editorial/w3/W3RideAtelierPreview'))
 const W3RideDetailPreview = lazyWithRetry(() => import('./editorial/w3/W3RideDetailPreview'))
 const W3ConnectCelebratePage = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePage'))
 const W3ConnectCelebratePreview = lazyWithRetry(() => import('./editorial/w3/W3ConnectCelebratePreview'))
@@ -514,6 +515,7 @@ function AppRoutes() {
           <Route path="/e/w3-bike-studio" element={<ProtectedRoute checkOnboarding><W3BikeStudioPage /></ProtectedRoute>} />
           <Route path="/e/w3-bike-studio-preview" element={preview(<W3BikeStudioPreview />)} />
           <Route path="/e/w3-ride/:id" element={<ProtectedRoute checkOnboarding><W3RideDetailPage /></ProtectedRoute>} />
+          <Route path="/e/w3-ride-atelier-preview" element={preview(<W3RideAtelierPreview />)} />
           <Route path="/e/w3-ride-preview" element={preview(<W3RideDetailPreview />)} />
           {/* The route, full screen and pannable. Separate from the summary
               because the summary's map is deliberately inert — see

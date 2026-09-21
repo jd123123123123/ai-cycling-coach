@@ -10,7 +10,7 @@ const zones = [
   {label:'Tempo',minutes:60,power:83}, {label:'Schwelle',minutes:30,power:100},
   {label:'VO₂-Bereich',minutes:12,power:115}, {label:'Anaerob',minutes:3,power:135},
 ]
-const REVIEW:TrainingReview = {
+export const REVIEW:TrainingReview = {
   version:'1',activity_id:1,headline:'Länger als empfohlen gefahren.',summary:'Die längere Fahrt hat mehr Belastung erzeugt als die geplante Ausdauereinheit.',
   score:72,score_label:'Planpassung',status:'different',planned_title:'Lange Ausdauer · 4 Stunden',actual_title:'Dolomitenrunde',coverage:1,
   stimulus:'VO₂-Bereich',stimulus_detail:'12 Minuten im VO₂-Leistungsbereich. Ob sich deine Leistungsfähigkeit verbessert hat, zeigen erst vergleichbare Folgemessungen.',
@@ -22,7 +22,7 @@ const REVIEW:TrainingReview = {
   action:'Die zusätzliche Belastung wird im weiteren Wochenplan berücksichtigt.',adaptation:{state:'adapted',automatic:true,reason:'Die nächste Einheit wurde erleichtert.'},
   limitations:['Demodaten zur Beurteilung der Oberfläche.'],method:'Planpassung vergleicht Dauer, Belastung und Zeitverteilung in Leistungsbereichen.',
 }
-const FIXTURE:W3RideVm = {
+export const FIXTURE:W3RideVm = {
   dateChip:'21. Sept. · 09:12',sportChip:'Outdoor',recordChip:'Neuer Bestwert',title:'Dolomitenrunde',bigStat:'138,6',bigStatUnit:'km',climb:'5.639 hm',avgSpeed:'29,2 km/h',
   power:[],powerNote:'',polyline:MARATONA,
   hero:{polyline:MARATONA,sceneImage:null,dateLine:'21.09.2026 · 09:12',duration:'04:44:48',stats:[{label:'DISTANZ',value:'138,6',unit:'km'},{label:'Ø TEMPO',value:'29,2',unit:'km/h'},{label:'HÖHE',value:'5.639',unit:'hm'}],watts:'241',bpm:'148',ifValue:'0,86',ifFill:.86,effortLabel:'86 % VON FTP',energyLabel:'3.640 kcal'},
