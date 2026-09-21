@@ -1,7 +1,11 @@
 import { Bike, Mountain, Route, Timer, Trophy, Zap } from 'lucide-react'
 import { T, FONT } from './w3tokens'
 import { W3WinsContent, type W3WinsVm } from './W3WinsView'
-import W3WinsDockPanel from './W3WinsDockPanel'
+import {useState} from 'react'
+import {SceneCollectionView} from './W3SceneCollection'
+import W3TopBar from './W3TopBar'
+import W3TabBar from './W3TabBar'
+import './w3FocusCollection.css'
 import './w3.css'
 
 /**
@@ -196,17 +200,12 @@ const EMPTY: W3WinsVm = {
 }
 
 export default function W3WinsPreview() {
-  const empty = typeof window !== 'undefined' && window.location.search.includes('empty')
-  const vm = empty ? EMPTY : FIXTURE
-  return (
-    <div className="w3-root">
-      <div className="w3-frame" style={{ fontFamily: FONT, background: T.bg, display: 'flex', flexDirection: 'column', minHeight: '100dvh', paddingTop: 18 }}>
-        {/* Stands in for the panel over the floor. */}
-        <div style={{ padding: '0 20px 26px' }}>
-          <W3WinsDockPanel vm={vm.dock} />
-        </div>
-        <W3WinsContent vm={vm} />
-      </div>
-    </div>
-  )
+  const empty = new URLSearchParams(window.location.search).has('empty')
+  const [section,setSection]=useState<'collection'|'performance'>('collection')
+  const stages=['startrampe','waschanlage','mond'].map((id,i)=>({id,name_de:['Startrampe','Waschanlage','Mond'][i],unlock_de:['200 km in einer Fahrt','Mehr als zwei Stunden im Regen','5.000 Höhenmeter in einer Fahrt'][i],owned:!empty&&i===0,starter:false,image:!empty&&i===0?`/w3/scenes/${id}.webp`:null,plate_url:`/w3/scenes/${id}.webp`,tier:i===0?'legendaer':'selten',selected:false,unlocked_at:null,activity_id:null,progress:null}))
+  return <div className="w3-root"><div className="w3-frame focus-collection" style={{background:T.bg,color:T.ink,fontFamily:FONT}}><W3TopBar title="Erfolge"/>
+    <nav className="w3-wins-tabs" aria-label="Erfolge-Bereich"><button aria-pressed={section==='collection'} onClick={()=>setSection('collection')}>Sammlung</button><button aria-pressed={section==='performance'} onClick={()=>setSection('performance')}>Leistung & Abzeichen</button></nav>
+    {section==='collection'?<SceneCollectionView data={{stages,owned_count:empty?0:1,total_count:3}} bike={null} onSelect={async()=>{}}/>:<W3WinsContent vm={empty?EMPTY:FIXTURE}/>}
+    <W3TabBar/>
+  </div></div>
 }

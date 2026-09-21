@@ -1,0 +1,61 @@
+.w3-plan-experience.focus-active{height:100dvh;min-height:0;max-width:430px;padding-top:var(--w3-header-safe-top,env(safe-area-inset-top,0px));box-sizing:border-box;overflow:auto}
+.focus-active .w3-plan-content{flex:1;min-height:0;padding:0 22px 12px;gap:10px}
+.focus-active .w3-plan-heading{min-height:0;margin:0}
+.focus-active .w3-plan-heading h1{font-size:25px;line-height:1.12;letter-spacing:-.9px;font-weight:550;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.focus-active .w3-plan-heading p{font-size:12px;margin-top:5px}
+.focus-active .w3-plan-view-switch{flex-shrink:0}
+.focus-active .w3-plan-view-switch>button{background:none;border-radius:0;padding:10px 0;margin-right:22px;font-size:14px;min-height:44px;border-bottom:2px solid transparent}
+.focus-active .w3-plan-view-switch>button[aria-pressed=true]{border-color:var(--plan-acid)}
+.focus-active .w3-plan-view-switch>.w3-plan-settings{margin-right:0;width:44px}
+.w3-focus-plan{flex:1;min-height:380px;display:flex;flex-direction:column;gap:10px}
+.focus-phase-title{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;color:var(--plan-muted);margin-top:4px}
+.focus-phase-title>span:first-child{font-size:19px;letter-spacing:-.4px;color:var(--plan-ink);font-weight:550}
+.focus-phase-title b{color:var(--plan-ink);font-weight:550}
+.focus-plan-weeks{display:flex;gap:7px;flex:1;min-height:68px;max-height:125px}
+.focus-plan-weeks button{position:relative;flex:1;min-width:0;background:none;padding:0;display:flex;flex-direction:column;align-items:center;gap:6px;color:var(--plan-muted);font-size:11px}
+.focus-week-track{height:100%;width:100%;display:flex;align-items:flex-end;min-height:35px}
+.focus-week-track>i{display:block;position:relative;width:100%;background:var(--plan-raised);border-radius:5px;overflow:hidden}
+.focus-week-track em{display:block;position:absolute;bottom:0;width:100%;background:var(--plan-muted);opacity:.42}
+.focus-plan-weeks [aria-pressed=true] .focus-week-track>i{background:var(--plan-acid)}
+.focus-plan-weeks [aria-pressed=true]{color:var(--plan-ink)}
+.focus-plan-weeks small{width:3px;height:3px;border-radius:50%;position:absolute;bottom:-5px;background:var(--plan-acid)}
+.focus-plan-phases{display:flex;gap:7px;flex-shrink:0}
+.focus-plan-phases button{background:none;border-top:1px solid var(--plan-stroke);border-radius:0;padding:10px 0;min-height:40px;min-width:0;font-size:11px;color:var(--plan-muted);text-align:center}
+.focus-plan-phases [aria-pressed=true]{color:var(--plan-acid);border-color:var(--plan-acid)}
+.focus-plan-week-caption{display:flex;justify-content:space-between;align-items:center;color:var(--plan-muted);font-size:11px;margin-top:-10px}
+.focus-plan-week-caption button{display:flex;align-items:center;gap:4px;min-height:36px;padding:0;background:none;color:var(--plan-ink);font-size:12px}
+.focus-plan-days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;padding:4px 0 8px}
+.focus-plan-days button{background:none;display:flex;flex-direction:column;align-items:center;gap:7px;min-height:68px;padding:4px 0;color:var(--plan-muted);font-size:11px}
+.focus-plan-days b{font-size:17px;font-weight:550;color:var(--plan-ink);width:30px;height:30px;display:grid;place-items:center;border-radius:50%}
+.focus-plan-days [aria-pressed=true] b{background:var(--plan-acid);color:var(--plan-bg)}
+.focus-plan-days i{display:flex;align-items:flex-end;height:13px;width:16px}
+.focus-plan-days em{display:block;width:100%;border-radius:2px;background:var(--plan-muted);opacity:.55}
+.focus-plan-days [aria-pressed=true] em{background:var(--plan-acid);opacity:1}
+.focus-session{padding:18px 18px 16px;background:var(--plan-card);border-radius:24px;display:flex;flex-direction:column;gap:12px}
+.focus-session-heading{display:flex;gap:12px;align-items:center;justify-content:space-between}
+.focus-session-heading>div{min-width:0}.focus-session-heading>div>span{font-size:11px;color:var(--plan-muted)}
+.focus-active .focus-session h2{font-size:23px;font-weight:550;letter-spacing:-.6px;line-height:1.08;margin-top:4px}
+.focus-session-duration{font-size:13px;color:var(--plan-muted);flex-shrink:0}
+.focus-session-graph{height:clamp(42px,8dvh,76px);display:flex;align-items:flex-end;gap:3px;border-bottom:1px solid var(--plan-stroke)}
+.focus-session-graph>i{background:var(--plan-muted);border-radius:4px 4px 0 0;min-width:1px;opacity:.5}
+.focus-session-graph>i[data-work=true]{background:var(--plan-acid);opacity:1}
+.focus-session[data-rest] .focus-session-graph{height:30px}
+.focus-session-facts{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--plan-muted)}
+.focus-session-facts>span:first-child{color:var(--plan-ink)}
+.focus-active .focus-session .w3-plan-primary{min-height:46px;margin:0;padding:12px 15px;font-size:14px}
+.focus-active .w3-plan-link.slim,.focus-active .w3-plan-adaptation{display:none}
+.focus-active>[aria-hidden]{flex-shrink:0;height:calc(92px + env(safe-area-inset-bottom))!important}
+@media(max-height:740px){.focus-active .w3-plan-content{gap:6px}.focus-session{padding:14px;gap:8px}.focus-plan-phases button{min-height:30px;padding:6px 0}.w3-focus-plan{gap:6px;min-height:350px}.focus-plan-days{padding:0}.focus-plan-days button{gap:3px;min-height:59px}.focus-active .w3-plan-heading h1{font-size:22px}.focus-plan-week-caption button{min-height:30px}.focus-plan-weeks{max-height:76px}}
+@media(max-height:620px){.w3-plan-experience.focus-active{height:auto;min-height:100dvh}.w3-focus-plan{min-height:360px}}
+.focus-active .w3-plan-view-switch>button[aria-pressed=true]{background:transparent}
+.focus-active .w3-plan-heading{flex-shrink:0}
+.focus-active .w3-plan-content{flex-shrink:1}
+.focus-active .w3-focus-plan{min-height:0;flex-shrink:1}
+.focus-active .focus-session{flex-shrink:0}
+.focus-active .focus-plan-weeks{min-height:48px;flex-shrink:1}
+.w3-plan-experience.focus-active .w3-plan-content{padding:0 22px 12px;gap:8px}
+.w3-plan-experience.focus-active .w3-plan-heading{min-height:0}
+.w3-plan-experience.focus-active .w3-plan-heading h1{font-size:25px;line-height:1.1}
+.w3-plan-experience.focus-active .w3-plan-view-switch>button[aria-pressed=true]{background:none}
+.w3-plan-experience.focus-active .focus-plan-days button{line-height:1.1}
+@media(max-height:740px){.w3-plan-experience.focus-active .w3-plan-content{gap:4px;padding-bottom:8px}.w3-plan-experience.focus-active .w3-plan-heading h1{font-size:22px}.focus-session-graph{height:40px}.focus-phase-title{line-height:1.1}.focus-plan-days button{min-height:56px}.focus-session-heading{line-height:1.15}.focus-session-duration{font-size:12px}.focus-plan-week-caption{font-size:10px}}

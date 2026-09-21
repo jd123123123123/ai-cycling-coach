@@ -54,7 +54,7 @@ import './w3.css'
 // ── view model ──
 export interface PlanStat { value: string; label: string }
 export interface PlanDayCell { letter: string; date: string; frac: number; isToday: boolean; isRest: boolean; ridden?: boolean }
-export interface PlanSessionBar { w: number; work: boolean }
+export interface PlanSessionBar { w: number; work: boolean; seconds?: number }
 export interface ActiveBlockVm {
   phase: string
   dateRange: string
@@ -74,6 +74,8 @@ export interface ActiveBlockVm {
  *  null title and no bars — the panel then says so rather than drawing an
  *  empty chart. */
 export interface PlanDaySession {
+  actualTss?: number | null
+  actualDuration?: number | null
   title: string | null
   weekday: string
   dateLabel: string

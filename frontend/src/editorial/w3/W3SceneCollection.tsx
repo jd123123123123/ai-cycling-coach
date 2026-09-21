@@ -7,7 +7,7 @@ import { useSelectStage } from '../../hooks/useGarage'
 import { useMyReferrals } from '../../hooks/useReferrals'
 import { fetchMyReferrals } from '../../api/referral'
 import { inviteUrl, inviteDisplay } from './w3invite'
-import { backdropArt, backdropImage } from './w3backdropArt'
+import { backdropImage } from './w3backdropArt'
 import { SCENE_COPY, TIER_ORDER } from './w3sceneCopy'
 import { motion } from 'motion/react'
 import W3RewardCase from './W3RewardCase'
@@ -20,9 +20,11 @@ const RARITY: Record<string,string> = { alltag:'Klassiker', ernsthaft:'Besonders
 
 export function ScenePortrait({ scene, obscured = false, fill = false }: { scene: Pick<StageCard, 'id' | 'plate_url' | 'image'>; bike: string | null; obscured?: boolean; fill?: boolean }) {
   const image = scene.image || scene.plate_url || backdropImage(scene.id)
-  return <div className={`w3-scene-portrait ${obscured ? 'is-obscured' : ''}`} style={{ background: backdropArt(scene.id).css, ...(fill ? { height: '100%', aspectRatio: 'auto' } : {}) }}>
-    {image && <img className="w3-scene-world" src={image} alt={scene.image ? "Dein Fahrrad in der Kulisse" : "Kulissenvorschau mit Referenzrad"} loading="lazy" />}
-
+  const canvas=useRef<HTMLCanvasElement>(null)
+  const [ready,setReady]=useState(false)
+  useEffect(()=>{setReady(false);if(!obscured||!image)return;let active=true;const img=new Image();img.onload=()=>{if(!active)return;const c=canvas.current?.getContext('2d');if(c){c.clearRect(0,0,24,43);c.drawImage(img,0,0,24,43);setReady(true)}};img.src=image;return()=>{active=false}},[image,obscured])
+  return <div className={`w3-scene-portrait ${obscured ? 'is-pixelated' : ''}`} style={{ background: T.surface2, ...(fill ? { height: '100%', aspectRatio: 'auto' } : {}) }}>
+    {obscured?<><canvas ref={canvas} width={24} height={43} aria-label="Verpixelte Vorschau der gesperrten Kulisse" style={{width:'100%',height:'100%',objectFit:'contain',imageRendering:'pixelated',opacity:ready?1:0}}/>{!ready&&<LockKeyhole size={26} style={{position:'absolute',inset:0,margin:'auto'}}/>}</>:image?<img className="w3-scene-world" src={image} alt={scene.image ? "Dein Fahrrad in der Kulisse" : "Kulissenvorschau mit Referenzrad"} loading="lazy" />:<LockKeyhole size={26}/>}
   </div>
 }
 
@@ -87,7 +89,7 @@ export async function scenePoster(scene: StageCard, _bike?: string | null, refer
 }
 
 export function SceneCollectionView({ data, bike, onSelect, selecting = false, onRide, loadOriginal, referralCode, loadReferralCode, reveal = false, revealOnly = false }: { referralCode?: string; loadReferralCode?: () => Promise<string>; reveal?: boolean; revealOnly?: boolean; data: StageGallery; bike: string | null; onSelect: (id: string) => Promise<unknown>; selecting?: boolean; onRide?: (id: number) => void; loadOriginal?: (id: string) => Promise<string> }) {
-  const [filter, setFilter] = useState<'owned' | 'open'>('owned')
+  const [filter, setFilter] = useState<'owned' | 'open' | 'all'>('all')
   const [selected, setSelected] = useState<StageCard | null>(null)
   const [sealed, setSealed] = useState(false)
   const [opening, setOpening] = useState(false)
@@ -124,7 +126,7 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
    */
   const collected = data.stages.filter(s => s.owned && (!s.starter || !!s.image))
   const open = data.stages.filter(s => !s.owned && !s.starter).sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier) || (b.progress?.pct ?? -1) - (a.progress?.pct ?? -1))
-  const cards = filter === 'owned' ? collected : open
+  const cards = filter === 'owned' ? collected : filter === 'open' ? open : [...collected,...open]
   const openedOnce = useRef(false)
   useEffect(() => {
     if (!openedOnce.current && reveal && data.stages.some(s => s.owned)) {
@@ -147,19 +149,19 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
     finally { setSharing(false) }
   }
   return <section className={`w3-scenes ${revealOnly ? 'is-reveal-only' : ''}`} style={{ fontFamily: FONT, color: T.ink }}>
-    <header className="w3-scenes-heading"><div><h2>Deine<br />Sammlung.</h2></div><div className="w3-scenes-count"><strong>{collected.length}</strong><span>von {data.stages.filter(s => !s.starter).length} Kulissen</span></div></header>
-    <div className="w3-scenes-switch" role="group" aria-label="Kulissen filtern"><button aria-pressed={filter === 'owned'} onClick={() => setFilter('owned')}>Verdient <span>{collected.length}</span></button><button aria-pressed={filter === 'open'} onClick={() => setFilter('open')}>Noch offen <span>{open.length}</span></button></div>
+    <header className="w3-scenes-heading"><div><h2>Deine<br />Sammlung.</h2></div><div className="w3-scenes-count"><strong>{collected.length}</strong><span>von {data.stages.filter(s => !s.starter || !!s.image).length} Kulissen</span></div></header>
+    <div className="w3-scenes-switch" role="group" aria-label="Kulissen filtern"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Alle</button><button aria-pressed={filter === 'owned'} onClick={() => setFilter('owned')}>Verdient <span>{collected.length}</span></button><button aria-pressed={filter === 'open'} onClick={() => setFilter('open')}>Noch offen <span>{open.length}</span></button></div>
     {cards.length === 0 && <div className="w3-scenes-empty"><h3>{filter === 'owned' ? 'Die erste kommt mit deiner Fahrt.' : 'Deine Sammlung ist komplett.'}</h3>{filter === 'owned' && <button onClick={() => setFilter('open')}>Kulissen entdecken <ChevronRight size={16} /></button>}</div>}
-    <div className={filter === 'owned' ? 'w3-scenes-grid' : 'w3-scenes-list'}>
+    <div className={'w3-scenes-grid'}>
       {cards.map(s => <button key={s.id} className={`w3-collectible tier-${s.tier} ${s.owned ? 'is-earned' : 'is-locked'}`} onClick={() => inspect(s)} aria-label={`${s.name_de} · ${RARITY[s.tier] ?? 'Klassiker'} · ${s.unlock_de}`}>
         <div className="w3-collectible-face">
-          <ScenePortrait scene={s} bike={bike} />
+          <ScenePortrait scene={s} bike={bike} obscured={!s.owned} />
           <div className="w3-collectible-grain" aria-hidden />
           <div className="w3-collectible-crown"><span className="w3-collectible-rarity"><i aria-hidden />{RARITY[s.tier] ?? 'Klassiker'}</span>{s.selected ? <Check size={14} aria-label="Aktiv" /> : !s.owned ? <LockKeyhole size={13} aria-label="Noch offen" /> : <RidrMark size={18} color="#ffffffb0" />}</div>
           
           <i className="w3-collectible-glint" aria-hidden />
         </div>
-        <div className="w3-collectible-title"><strong>{s.name_de.replace(/^Die |^Der |^Das /, '')}</strong><span>{s.unlock_de}</span></div>
+        <div className="w3-collectible-title"><strong>{SCENE_COPY[s.id]??s.name_de.replace(/^Die |^Der |^Das /, '')}</strong><span>{s.unlock_de}</span></div>
         {!s.owned && s.progress?.pct != null && <div className="w3-collectible-progress"><div><i style={{ width: `${s.progress.pct * 100}%` }} /></div><span>{progressText(s)}</span></div>}
       </button>)}
     </div>

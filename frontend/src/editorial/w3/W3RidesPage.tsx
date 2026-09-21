@@ -130,17 +130,15 @@ export default function W3RidesPage() {
     })
 
     // ── Goal tracking — ONLY against the rider's own target ──────────────────
-    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 864e5)
-    const expected = goalKm != null ? goalKm * (dayOfYear / 365) : 0
-    const paceDelta = totalKm - expected
+    const yearStart = new Date(now.getFullYear(), 0, 1)
+    const nextYear = new Date(now.getFullYear()+1, 0, 1)
+    const daysInYear = Math.round((nextYear.getTime()-yearStart.getTime())/864e5)
+    const dayOfYear = Math.max(1,Math.floor((now.getTime()-yearStart.getTime())/864e5)+1)
+    const seasonKm = acts.filter(a=>new Date(a.started_at)>=yearStart).reduce((sum,a)=>sum+(a.distance_meters??0)/1000,0)
+    const expected = goalKm != null ? goalKm * dayOfYear / daysInYear : 0
+    const paceDelta = seasonKm - expected
     const paceAhead = paceDelta >= 0
-    const firstRide = acts.at(-1)
-    const activeDays = firstRide
-      ? Math.max(30, Math.min(365, Math.round((now.getTime() - new Date(firstRide.started_at).getTime()) / 864e5) + 1))
-      : 365
-    const projectedKm = goalKm != null
-      ? Math.round((totalKm / activeDays * 365) / 10) * 10
-      : 0
+    const projectedKm = Math.round(seasonKm / dayOfYear * daysInYear)
     const realityLabel = goalKm == null ? ''
       : projectedKm >= goalKm ? 'Auf Kurs'
       : projectedKm >= goalKm * .85 ? 'Machbar mit kleinem Schub'
@@ -148,14 +146,14 @@ export default function W3RidesPage() {
     const goal = goalKm != null
       ? {
           chip: `ZIEL ${spaced(goalKm)} KM`,
-          ofGoalPct: `${Math.round(Math.min(1, totalKm / goalKm) * 100)}%`,
-          progress: Math.min(1, totalKm / goalKm),
-          currentKm: Math.round(totalKm),
+          ofGoalPct: `${Math.round(Math.min(1, seasonKm / goalKm) * 100)}%`,
+          progress: Math.min(1, seasonKm / goalKm),
+          currentKm: Math.round(seasonKm),
           targetKm: Math.round(goalKm),
           projectedKm,
           realityLabel,
           projectionLabel: `Hochrechnung · ${spaced(projectedKm)} km`,
-          toGoLabel: `NOCH ${spaced(Math.max(0, goalKm - totalKm))} KM`,
+          toGoLabel: `NOCH ${spaced(Math.max(0, goalKm - seasonKm))} KM`,
           paceLabel: `${spaced(Math.abs(paceDelta))} KM ${paceAhead ? 'VOR' : 'HINTER'} PLAN`,
           paceAhead,
         }
@@ -179,6 +177,7 @@ export default function W3RidesPage() {
       return {
         id: a.id,
         title: a.title ?? 'Fahrt',
+        elevation: a.elevation_gain_m, tss: a.tss,
         dateLabel: dateLabel(d),
         dateISO: a.started_at,
         km: km != null ? (km >= 100 ? km.toFixed(1) : km.toFixed(2)) : '—',

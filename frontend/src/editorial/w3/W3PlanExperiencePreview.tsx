@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo,useState } from 'react'
 import W3PlanExperience from './W3PlanExperience'
 import { beforeVm } from '../../review-plan/data'
 import type { ProgressExplorer } from '../../api/progressExplorer'
@@ -21,8 +21,10 @@ export default function W3PlanExperiencePreview() {
     const value = new URLSearchParams(window.location.search).get('state')
     return value === 'active' || value === 'ended' || value === 'empty' ? value : 'created'
   }, [])
+  const [offset,setOffset]=useState(0)
+  const previewVm={...beforeVm,daySessions:beforeVm.daySessions?.map((d,i)=>{const date=new Date(2026,8,14+offset*7+i);return {...d,dateISO:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,dateLabel:date.toLocaleDateString('de-DE',{day:'numeric',month:'short'}),isPast:offset<0,isToday:offset===0&&i===0}})}
   return <W3PlanExperience
-    vm={{...beforeVm, finishStats:{tss:'1.984',km:'642,0',hours:'26,4',rides:'18'}, finishAnalysis:{planned:[230,260,285,300,320,280,340,269],actual:[214,248,301,276,345,265,329,258],adherence:94,note:'94% der geplanten Belastung umgesetzt · dein tatsächlicher Weg lag nah am Plan',impact:'Die Belastungsdosis lag nah am Plan. Dadurch ist der Vergleich von Startwert und Abschluss besonders belastbar.'}}}
+    vm={{...previewVm, finishStats:{tss:'1.984',km:'642,0',hours:'26,4',rides:'18'}, finishAnalysis:{planned:[230,260,285,300,320,280,340,269],actual:[214,248,301,276,345,265,329,258],adherence:94,note:'94% der geplanten Belastung umgesetzt · dein tatsächlicher Weg lag nah am Plan',impact:'Die Belastungsdosis lag nah am Plan. Dadurch ist der Vergleich von Startwert und Abschluss besonders belastbar.'}}}
     state={state}
     previewProgress={PROGRESS}
     planStart="2026-08-17"
@@ -30,7 +32,7 @@ export default function W3PlanExperiencePreview() {
     onRebuild={async () => true}
     onOpenSession={() => {}}
     onCreatedDone={() => {}}
-    weekOffset={0}
-    onWeekOffset={() => {}}
+    weekOffset={offset}
+    onWeekOffset={setOffset}
   />
 }

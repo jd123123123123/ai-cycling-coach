@@ -28,6 +28,7 @@ from app.models.athlete_profile import AthleteProfile
 from app.models.planned_workout import PlannedWorkout
 from app.models.user import User
 from app.models.daily_metric import DailyMetric
+from app.models.mesocycle_plan import MesocyclePlan
 from app.schemas.weeks import (
     DayPlan,
     IntervalBlockOut,
@@ -37,6 +38,7 @@ from app.schemas.weeks import (
     PlanChanges,
     Projection,
     Readiness,
+    WeekComparison,
     WeekResponse,
 )
 from app.services.advanced_metrics import ctl_atl_tsb_snapshot
@@ -777,6 +779,143 @@ async def _future_week_preview(
     )
 
 
+async def _historical_week(
+    *,
+    db: AsyncSession,
+    current_user: User,
+    athlete: AthleteProfile,
+    primary_sport: str,
+    week_offset: int,
+    current_monday: date,
+    today: date,
+    language: Language,
+    locale: Literal["en", "de"],
+    fallback_meso,
+) -> WeekResponse:
+    """Build a read-only Mon–Sun historical week with a plan mirror.
+
+    Historical selection must never regenerate a plan. It reads the stored
+    prescriptions and joins them to activities in the athlete's local date
+    window, so the comparison is evidence rather than a guessed completion
+    state.
+    """
+    target_week_start = current_monday + timedelta(days=week_offset * 7)
+    target_week_end = target_week_start + timedelta(days=6)
+
+    pw_result = await db.execute(
+        select(PlannedWorkout)
+        .where(
+            PlannedWorkout.user_id == current_user.id,
+            PlannedWorkout.date >= target_week_start,
+            PlannedWorkout.date <= target_week_end,
+        )
+        .order_by(PlannedWorkout.date)
+    )
+    all_pws = pw_result.scalars().all()
+    pw_by_date: dict[date, PlannedWorkout] = {}
+    secondary_by_date: dict[date, PlannedWorkout] = {}
+    for pw in all_pws:
+        cur = pw_by_date.get(pw.date)
+        if cur is None:
+            pw_by_date[pw.date] = pw
+        elif (pw.sport or "cycling") == primary_sport and (cur.sport or "cycling") != primary_sport:
+            secondary_by_date[pw.date] = cur
+            pw_by_date[pw.date] = pw
+        else:
+            secondary_by_date[pw.date] = pw
+
+    # Match rides by the athlete-local calendar day. A ride may start in UTC
+    # on the adjacent date, so comparing raw ISO strings would be wrong.
+    actual_by_date: dict[date, dict] = {}
+    ride_count = 0
+    act_result = await db.execute(
+        select(Activity).where(
+            Activity.user_id == current_user.id,
+            Activity.started_at >= day_local_window(target_week_start)[0],
+            Activity.started_at < day_local_window(target_week_end + timedelta(days=1))[0],
+        )
+    )
+    for activity in act_result.scalars().all():
+        if activity.started_at is None or (activity.sport or "cycling") != primary_sport:
+            continue
+        ride_count += 1
+        local_day = local_date_of(activity.started_at)
+        row = actual_by_date.setdefault(local_day, {"tss": 0.0, "duration": 0.0, "complete_tss": True})
+        if activity.tss is None:
+            row["complete_tss"] = False
+        else:
+            row["tss"] += float(activity.tss)
+        row["duration"] += float(activity.duration_seconds or 0)
+
+    days: list[DayPlan] = []
+    for i in range(7):
+        day_date = target_week_start + timedelta(days=i)
+        dp = _build_day_plan(day_date, pw_by_date.get(day_date), today, primary_sport, language, locale)
+        _apply_secondary(dp, secondary_by_date.get(day_date), locale)
+        actual = actual_by_date.get(day_date)
+        if actual:
+            dp.actual_tss = round(actual["tss"], 1) if actual["complete_tss"] else None
+            dp.actual_duration_seconds = int(round(actual["duration"]))
+        days.append(dp)
+
+    planned_tss = planned_week_total(all_pws)
+    actual_tss = round(sum(row["tss"] for row in actual_by_date.values())) if all(row["complete_tss"] for row in actual_by_date.values()) else None
+    planned_days = [d for d in days if d.template_id and d.category != "rest"]
+    completed_days = sum(1 for d in planned_days if d.actual_duration_seconds is not None)
+    fit_pct = None
+    if planned_tss is not None and planned_tss > 0 and actual_tss is not None:
+        fit_pct = max(0, min(100, round(100 - abs(actual_tss - planned_tss) / planned_tss * 100)))
+
+    # Prefer the mesocycle that actually covered this week; fall back to the
+    # current one when old rows predate the periodization table.
+    meso_result = await db.execute(
+        select(MesocyclePlan)
+        .where(
+            MesocyclePlan.user_id == current_user.id,
+            MesocyclePlan.plan_start_date <= target_week_start,
+            MesocyclePlan.plan_end_date >= target_week_start,
+        )
+        .order_by(MesocyclePlan.plan_start_date.desc())
+        .limit(1)
+    )
+    meso = meso_result.scalar_one_or_none() or fallback_meso
+    block_index = max(0, min((target_week_start - meso.plan_start_date).days // 7, 3)) if meso else 0
+    targets = (meso.weekly_tss_targets or []) if meso else []
+    week_target = int(targets[block_index]) if block_index < len(targets) else (planned_tss or 0)
+    preface = "Gespeicherte Empfehlung und aufgezeichnete Fahrten dieser Woche." if locale == "de" else "Saved recommendations and recorded rides for this week."
+    meso_block_ctx = MesoBlockContext(
+        phase=meso.phase if meso else "unknown",
+        block_position=issurin_block_for_week(block_index) if meso else "unknown",
+        block_index_in_meso=block_index,
+        phase_schedule=[issurin_block_for_week(i) for i in range(MESO_LENGTH_WEEKS)] if meso else None,
+        weekly_tss_target=week_target,
+        days_to_event=None,
+        target_event_type=athlete.target_event_type,
+        hours_note=_meso_evidence_dict(meso, "hours_note") if meso else None,
+        progression=_meso_evidence_dict(meso, "progression") if meso else None,
+    )
+    return WeekResponse(
+        week_start=target_week_start,
+        week_end=target_week_end,
+        language=language,
+        preface=preface,
+        meso_block=meso_block_ctx,
+        days=days,
+        plan_changes=None,
+        projection=None,
+        readiness=None,
+        planned_tss_total=planned_tss,
+        week_comparison=WeekComparison(
+            planned_tss=planned_tss or None,
+            actual_tss=actual_tss,
+            fit_pct=fit_pct,
+            planned_sessions=len(planned_days),
+            completed_sessions=completed_days,
+            ride_count=ride_count,
+        ),
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 #  Endpoint
 # ──────────────────────────────────────────────────────────────────────────────
@@ -794,13 +933,13 @@ async def get_current_week(
     week_offset: Annotated[
         int,
         Query(
-            ge=0,
+            ge=-12,
             le=12,
             description=(
-                "Weeks ahead of the current week to preview. 0 (default) = the "
-                "today-anchored current week with all live extras (projection, "
-                "readiness, plan changes). >0 = a future Mon–Sun plan preview "
-                "with those now-only fields nulled."
+                "Weeks relative to the current week. 0 (default) = the "
+                "today-anchored current week with live extras; >0 previews a "
+                "future Mon–Sun plan; <0 reads a historical Mon–Sun week and "
+                "includes its recommended-vs-ridden comparison."
             ),
         ),
     ] = 0,
@@ -844,6 +983,21 @@ async def get_current_week(
 
     # FTP guard — cycling primary only
     primary_sport = athlete.primary_sport or "cycling"
+    # History is read-only: branch before current-plan generation or FTP validation.
+    if week_offset < 0:
+        return await _historical_week(
+            db=db,
+            current_user=current_user,
+            athlete=athlete,
+            primary_sport=primary_sport,
+            week_offset=week_offset,
+            current_monday=current_monday,
+            today=today,
+            language=language,
+            locale=locale,
+            fallback_meso=None,
+        )
+
     ftp_w = athlete.ftp_watts or 0
     if primary_sport == "cycling" and ftp_w < 100:
         raise HTTPException(

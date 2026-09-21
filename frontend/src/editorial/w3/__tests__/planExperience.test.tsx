@@ -21,13 +21,13 @@ describe('live plan experience',()=>{
  it('opens the selected real workout date',()=>{const {onOpenSession}=mount();// Die Tafel nennt seit dem Bogen auch ihre Last, also passt der Name nicht
  // mehr woertlich. Die ZUSICHERUNG ist unveraendert: der gewaehlte Tag ist als
  // Schaltflaeche erreichbar UND benannt.
- fireEvent.click(screen.getByRole('button',{name:/Dienstag 15\. Sept\.: Grundlage/}));fireEvent.click(screen.getByRole('button',{name:'Einheit ansehen'}));expect(onOpenSession).toHaveBeenCalledWith('2026-09-15')})
+ fireEvent.click(screen.getByRole('button',{name:/Dienstag, 15\. Sept\., Grundlage/}));fireEvent.click(screen.getByRole('button',{name:'Einheit ansehen'}));expect(onOpenSession).toHaveBeenCalledWith('2026-09-15')})
  it('uses a week offset, never rewrites the plan when browsing',()=>{
   // AUS ZWEI KNOEPFEN WURDE EIN SCHIEBER. Der Bogen traegt role="slider" mit
   // Pfeiltastensteuerung -- die Zusicherung ist dieselbe und bleibt die
   // wichtigere: Blaettern meldet einen OFFSET und schreibt den Plan nicht um.
   const {onWeekOffset,onRebuild}=mount()
-  fireEvent.keyDown(screen.getByRole('slider',{name:'Woche im Plan'}),{key:'ArrowRight'})
+  fireEvent.click(screen.getByRole('button',{name:/Woche 6:/}))
   expect(onWeekOffset).toHaveBeenCalledWith(1)
   expect(onRebuild).not.toHaveBeenCalled()
  })
@@ -40,9 +40,9 @@ describe('live plan experience',()=>{
   // dasselbe (wo im Plan stehe ich) und zeigt es, statt es zu benennen. Die
   // ZUSICHERUNG ist die Reihenfolge: erst der Ort im Plan, dann die Einheit.
   mount('active')
-  const ort=screen.getByRole('slider',{name:'Woche im Plan'})
+  const ort=screen.getByRole('group',{name:'Trainingswoche wählen'})
   // Die Ueberschrift der Einheit nennt jetzt auch Leistung und Last.
-  const workout=screen.getByLabelText(/^Schwelle, /)
+  const workout=screen.getByRole('heading',{name:'Schwelle'})
   expect(ort.compareDocumentPosition(workout)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  })
  it('lets the rider change hours, days and the long-ride day',async()=>{

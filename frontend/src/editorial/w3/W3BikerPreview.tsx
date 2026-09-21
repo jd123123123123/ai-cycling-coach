@@ -1,3 +1,4 @@
+import W3BikerFocus from './W3BikerFocus'
 import W3BikerView, { type W3BikerVm } from './W3BikerView'
 
 /**
@@ -46,6 +47,8 @@ export default function W3BikerPreview() {
   // `onCreateRider` the empty portrait renders without its one affordance, and
   // a preview that hides the action is previewing a dead end.
   return <W3BikerView
+      insights={<W3BikerFocus preview={{power:empty?{available:false}:{available:true,threshold_watts:292,mmp_curve:{'1':1248,'5':1180,'10':1040,'15':910,'60':530,'300':355,'1200':302,'3600':274},wkg_curve:{'1':16.6,'5':15.7,'10':13.9,'15':12.1,'60':7.1,'300':4.7,'1200':4.0,'3600':3.65}},activities:{activities:[],count:0},crew:{crew:null,members:[],pending_invites:[]}}}/>}
+
       season={[
         { label: 'Kilometer', value: '4.182', unit: 'km', note: '+18 % zum Vorjahr' },
         { label: 'Höhenmeter', value: '61.400', unit: 'hm', note: 'Ø 620 hm / Fahrt' },

@@ -33,8 +33,8 @@ describe('W3 profile review',()=>{
  })
  it('lets a rider inspect a month and return to the season total',()=>{
   render(<W3BikerView vm={vm} season={season} seasonBuckets={[{start:'2026-01-01',km:20,rides:1,elevation_m:100,hours:1},{start:'2026-02-01',km:80,rides:2,elevation_m:400,hours:3}]}/>)
-  fireEvent.click(screen.getByRole('button',{name:'Januar: 20 Kilometer'}))
-  expect(screen.getByRole('button',{name:'Januar: 20 Kilometer'}).getAttribute('aria-pressed')).toBe('true')
+  fireEvent.click(screen.getByRole('button',{name:/Jan.*: 20 km kumuliert/}))
+  expect(screen.getByRole('button',{name:/Jan.*: 20 km kumuliert/}).getAttribute('aria-pressed')).toBe('true')
   expect(screen.getByText('20')).toBeTruthy()
   fireEvent.click(screen.getByRole('button',{name:'Gesamte Saison'}))
   expect(screen.getByText('100')).toBeTruthy()
@@ -54,7 +54,7 @@ describe('W3 profile review',()=>{
  })
  it('explains CTL on demand without adding another permanent text block',()=>{
   render(<W3BikerView vm={vm} season={[...season,{label:'FTP',value:'292',unit:'W',note:null}]} curve={{value:50,delta:2,series:[44,46,48,50],months:['Juni','September']}}/>)
-  fireEvent.click(screen.getByRole('button',{name:'Leistung & Entwicklung FTP 292 W'}))
+  fireEvent.click(screen.getByRole('button',{name:'Deine Form FTP 292 W'}))
   expect(screen.queryByText(/CTL schätzt deine längerfristige/)).toBeNull()
   fireEvent.click(screen.getByRole('button',{name:'Trainingsbelastung erklären'}))
   expect(screen.getByText(/nicht automatisch bessere Fitness/)).toBeTruthy()

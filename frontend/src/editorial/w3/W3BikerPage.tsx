@@ -18,6 +18,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { fetchPMC } from '../../api/dashboard'
 import { useRiderLifetime } from './w3RiderStats'
 import { highlightRecords } from './w3RiderRecords'
+import W3BikerFocus from './W3BikerFocus'
 import W3BikerView, { type W3BikerVm, type W3Device } from './W3BikerView'
 
 /** The authenticated W3 profile. Existing endpoints provide identity, activity,
@@ -223,6 +224,7 @@ export default function W3BikerPage() {
   return (
     <W3BikerView
       vm={vm}
+      insights={<W3BikerFocus/>}
       season={season}
       seasonLabel={rhythm?.season?.label ? `Saison ${rhythm.season.label}` : `Saison ${new Date().getFullYear()}`}
       seasonBuckets={rhythm?.season?.buckets ?? []}

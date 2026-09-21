@@ -7,11 +7,12 @@ import { useRewardChallenges } from '../../hooks/useRewardChallenges'
 import { useAchievements } from '../../hooks/useAchievements'
 import W3LoadError from './W3LoadError'
 import { useFtpHistory } from '../../hooks/useFtpHistory'
-import { DASH } from './w3tokens'
-import { useHeroPanel } from './W3HeroShell'
+import { DASH, T, FONT } from './w3tokens'
+import W3TopBar from './W3TopBar'
+import W3TabBar from './W3TabBar'
+import './w3FocusCollection.css'
 import { W3WinsContent, type W3WinsVm, type W3Beam, type W3Medal, type W3Milestone } from './W3WinsView'
 import W3SceneCollection from './W3SceneCollection'
-import W3WinsDockPanel from './W3WinsDockPanel'
 
 /**
  * W3 · ERFOLGE, wired. Route /e/w3-wins, inside the hero room.
@@ -404,29 +405,16 @@ export default function W3WinsPage() {
     }
   }, [curveData, ach, ftp, nav, stillLoading, challengeFeed])
 
-  const { portal } = useHeroPanel(<W3WinsDockPanel vm={vm.dock} />)
+
 
   // A failed achievements read must say so and offer a retry, never fall
   // through to the "you have never ridden" sentence.
-  if (section === 'performance' && achError && !ach) {
-    return (
-      <>
-        {portal}
-        <W3LoadError
-          title="Deine Erfolge laden nicht"
-          detail="Wir konnten deine Abzeichen gerade nicht abrufen. Nichts davon geht verloren — das ist nur die Verbindung."
-          onRetry={() => void refetchAch()}
-          retrying={achFetching}
-        />
-      </>
-    )
-  }
 
   return (
-    <>
-      {portal}
+    <div className="w3-root"><div className="w3-frame focus-collection" style={{background:T.bg,color:T.ink,fontFamily:FONT}}><W3TopBar title="Erfolge"/>
+
       <nav className="w3-wins-tabs" aria-label="Erfolge-Bereich"><button aria-pressed={section === 'collection'} onClick={() => setSection('collection')}>Sammlung</button><button aria-pressed={section === 'performance'} onClick={() => setSection('performance')}>Leistung & Abzeichen</button></nav>
-      {section === 'collection' ? <W3SceneCollection /> : <W3WinsContent vm={vm} />}
-    </>
+      {section === 'collection' ? <W3SceneCollection /> : <>{achError && !ach ? <W3LoadError title="Deine Erfolge laden nicht" detail="Bitte versuche es noch einmal." onRetry={() => void refetchAch()} retrying={achFetching}/> : <W3WinsContent vm={vm} />}</>}
+    <W3TabBar/></div></div>
   )
 }

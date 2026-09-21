@@ -1,0 +1,38 @@
+.focus-collection{max-width:430px!important;padding-top:var(--w3-header-safe-top,env(safe-area-inset-top,0px))}
+.focus-collection .w3-wins-tabs{padding:4px 22px;gap:24px}.focus-collection .w3-wins-tabs button{font-size:13px;min-height:44px}
+.focus-collection .w3-scenes{padding:24px 22px 32px}
+.focus-collection .w3-scenes-heading{margin-bottom:22px;align-items:flex-end}
+.focus-collection .w3-scenes-heading h2{font-size:36px;letter-spacing:-1.5px;line-height:1.02;font-weight:550}
+.focus-collection .w3-scenes-count strong{font-weight:500;font-size:30px}
+.focus-collection .w3-scenes-count span{font-size:11px}
+.focus-collection .w3-scenes-switch{padding:0;background:none;gap:20px;margin-bottom:24px;border-radius:0}
+.focus-collection .w3-scenes-switch button{background:none!important;color:inherit!important;box-shadow:none!important;border-radius:0;min-height:44px;padding:8px 0;border-bottom:2px solid transparent;opacity:.6;font-size:13px}
+.focus-collection .w3-scenes-switch button[aria-pressed=true]{border-bottom-color:currentColor;opacity:1}
+.focus-collection .w3-scenes-grid{gap:22px 14px}
+.focus-collection .w3-collectible{background:none;border:0;padding:0;box-shadow:none;overflow:visible;border-radius:0}
+.focus-collection .w3-collectible:first-child{grid-column:1/-1}
+.focus-collection .w3-collectible-face{border-radius:18px;overflow:hidden;box-shadow:inset 0 0 0 1px #ffffff12}
+.focus-collection .w3-collectible:first-child .w3-collectible-face{max-height:42dvh;height:340px}
+.focus-collection .w3-collectible:first-child .w3-scene-portrait{height:100%;aspect-ratio:auto}
+.focus-collection .w3-collectible-crown{top:12px;left:12px;right:12px}
+.focus-collection .w3-collectible-rarity{font-size:10px;padding:6px 9px;border-radius:100px;letter-spacing:.2px;text-transform:none}
+.focus-collection .w3-collectible-title{padding:13px 0 0;gap:6px}
+.focus-collection .w3-collectible-title strong{font-weight:550;font-size:16px;line-height:1.15;letter-spacing:-.4px}
+.focus-collection .w3-collectible:first-child .w3-collectible-title strong{font-size:26px;letter-spacing:-.8px}
+.focus-collection .w3-collectible-title>span{font-size:12px;line-height:1.35}
+.focus-collection .w3-collectible-progress{padding:12px 0 0}
+.focus-collection .w3-collectible-grain,.focus-collection .w3-collectible-glint{display:none}
+.focus-collection .w3-scene-portrait{border-radius:inherit}
+
+.w3-frame.focus-collection{width:100%;min-width:0;max-width:390px!important}
+.focus-collection .w3-scenes-heading h2{font-size:30px;margin:0}
+.focus-collection .w3-scenes-heading h2 br{display:block}
+.focus-collection .w3-scenes-heading h2 br:after{content:' '}
+.focus-collection .w3-scenes-heading{gap:14px;margin-bottom:12px}
+.focus-collection .w3-scenes{padding-top:18px}
+.focus-collection .w3-scenes-count strong{font-size:25px}
+.focus-collection .w3-scenes-switch{border:0;border-bottom:1px solid #ffffff12;margin-bottom:18px;gap:20px;justify-content:flex-start}
+.focus-collection .w3-scenes-switch button{flex:none;font-weight:500}
+@media(max-height:740px){.focus-collection .w3-collectible:first-child .w3-collectible-face{height:31dvh}.focus-collection .w3-collectible:first-child .w3-collectible-title strong{font-size:23px}}
+
+.focus-collection .w3-scene-dialog:not(.is-sealed){height:auto;min-height:0;max-height:calc(100dvh - 24px)}

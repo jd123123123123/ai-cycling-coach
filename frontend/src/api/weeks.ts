@@ -41,6 +41,8 @@ export interface DayPlan {
   // dropping its load (usability audit P0-5).
   secondary_title: string | null
   secondary_target_tss: number | null
+  actual_tss?: number | null
+  actual_duration_seconds?: number | null
 }
 
 export interface MesoBlockContext {
@@ -118,6 +120,15 @@ export interface MissedRide {
   is_quality: boolean
 }
 
+export interface WeekComparison {
+  planned_tss: number | null
+  actual_tss: number | null
+  fit_pct: number | null
+  planned_sessions: number
+  completed_sessions: number
+  ride_count: number
+}
+
 export interface WeekResponse {
   week_start: string
   week_end: string
@@ -135,6 +146,7 @@ export interface WeekResponse {
   planned_tss_total: number | null
   // Yesterday's planned-but-unridden bike ride (honest, non-guilt), or null.
   missed_yesterday: MissedRide | null
+  week_comparison?: WeekComparison | null
 }
 
 export async function fetchCurrentWeek(

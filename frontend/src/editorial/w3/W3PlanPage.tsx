@@ -8,6 +8,7 @@ import { COACH_BRIEF_KEY_ROOT } from '../../hooks/useCoachBrief'
 import { fetchCurrentPlan, applyPlanChange, cancelPlan, type InterviewAnswers } from '../../api/plan'
 import { listRehearsals, getRehearsal } from '../../api/rehearsal'
 import type { DayPlan } from '../../api/weeks'
+import { sessionBars } from './W3PlanFocus'
 import {
   parseISO, addDays, daysBetween, fmtRange, fmtDE, fmtDEShort, weeksDaysLabel, fmtHoursHM,
   planDurSec, isSessionDay, planIF, planTargetWatts, blocksFromIntervals, enduranceEnvelope,
@@ -238,6 +239,7 @@ export default function W3PlanPage() {
       const w = isSess ? planTargetWatts(d, ftp) : null
       const dt = parseISO(d.date)
       return {
+        actualTss: d.actual_tss, actualDuration: d.actual_duration_seconds,
         title: isSess ? (d.title ?? 'Einheit') : null,
         weekday: dt ? DE_WD[(dt.getDay() + 6) % 7] : '',
         dateLabel: dt ? fmtDEShort(dt) : '',
@@ -254,7 +256,7 @@ export default function W3PlanPage() {
         targetW: w != null ? `${w} W` : DASH,
         ftpPct: iff != null ? `${Math.round(iff * 100)}%` : DASH,
         bars: isSess
-          ? (d.intervals.length > 0 ? blocksFromIntervals(d.intervals) : enduranceEnvelope())
+          ? sessionBars(d.intervals, iff, secs)
           : [],
       }
     })

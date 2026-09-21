@@ -3,10 +3,11 @@ import {ArrowDownUp,ArrowUpRight, Bike, Search, X} from 'lucide-react'
 import {motion, useReducedMotion} from 'motion/react'
 import type {W3RideCard, W3RidesVm, W3RideFilter, W3RidePeriod} from './W3RidesView'
 import type {ActivityRhythm} from '../../api/rhythm'
-import W3RidesHero from './W3RidesHero'
+import W3RidesFocus from './W3RidesFocus'
+import W3RideMap from './W3RideMap'
+import {Link} from 'react-router-dom'
 import {T} from './w3tokens'
 import './w3RideJournal.css'
-const nf=new Intl.NumberFormat('de-DE',{maximumFractionDigits:1})
 const number=(s:string)=>s==='—'?s:s.replace('.',',')
 export function routePath(points:[number,number][]){
  const good=points.filter(p=>p.every(Number.isFinite));if(good.length<2)return ''
@@ -22,16 +23,12 @@ function RouteArt({ride,hero=false}:{ride:W3RideCard;hero?:boolean}){
  return <div className={`w3-journal-route ${hero?'is-hero':''}`} aria-hidden>{path?<svg viewBox="0 0 100 100"><path d={path} fill="none" stroke="currentColor" strokeWidth={hero?5:4} opacity=".08"/><motion.path d={path} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" initial={reduce?false:{pathLength:0}} animate={{pathLength:1}} transition={{duration:.8}}/></svg>:<Bike size={hero?65:32} strokeWidth={1}/>}</div>
 }
 function RideCard({ride,hero,onOpen}:{ride:W3RideCard;hero?:boolean;onOpen:(id:number)=>void}){
- return <button type="button" disabled={ride.id==null} className={`w3-journal-ride ${hero?'is-hero':''}`} onClick={()=>ride.id!=null&&onOpen(ride.id)} aria-label={`${ride.title}, ${number(ride.km)} Kilometer, ${ride.dateLabel}`}>
-  <div className="w3-journal-ride-head"><time>{ride.dateLabel}</time><ArrowUpRight size={18}/></div>
-  <div className="w3-journal-ride-body"><div><h3>{ride.title}</h3><div className="w3-journal-distance"><strong>{number(ride.km)}</strong><span>km</span></div>{!ride.polyline?.length&&<span className="w3-journal-no-route">Ohne GPS-Spur</span>}</div><RouteArt ride={ride} hero={hero}/></div>
-  <div className="w3-journal-ride-stats" aria-label="Fahrtdaten">
-    <span><small>DAUER</small><strong>{ride.dur}<em> h</em></strong></span>
-    <span><small>Ø TEMPO</small><strong>{number(ride.speed)}<em> km/h</em></strong></span>
-    <span><small>Ø LEISTUNG</small><strong>{ride.power}<em> W</em></strong></span>
-  </div>
-  {hero&&ride.note&&<p className="w3-journal-ride-note">{ride.note}</p>}
- </button>
+ const [open,setOpen]=useState(false)
+ return <article className={`w3-journal-ride ${hero?'is-hero':''}`}>
+  <div className="focus-ride-cover"><span className="focus-ride-date">{ride.dateLabel}</span>{ride.polyline&&ride.polyline.length>1?<W3RideMap polyline={ride.polyline} w={350} h={210} tint={T.acid} distanceM={(Number(ride.km)||0)*1000}/>:<RouteArt ride={ride} hero/>}</div>
+  <div className="focus-ride-read"><button type="button" aria-expanded={open} onClick={()=>setOpen(!open)} aria-label={`${ride.title}, ${number(ride.km)} Kilometer, Details`}><div><h3>{ride.title}</h3><div className="focus-ride-meta"><strong>{number(ride.km)}<small> km</small></strong><span>{ride.dur} h</span>{ride.elevation!=null&&<span>{Math.round(ride.elevation).toLocaleString('de-DE')} m</span>}</div></div><ArrowUpRight size={18} style={{transform:open?'rotate(90deg)':undefined}}/></button>
+  {open&&<div className="focus-ride-detail"><div><span>{ride.power} W Ø</span><span>{number(ride.speed)} km/h</span>{ride.tss!=null&&<span>{Math.round(ride.tss)} TSS</span>}</div>{!ride.polyline?.length&&<p>{ride.indoor?'Indoorfahrt':'Keine GPS-Spur verfügbar'}</p>}{ride.id!=null&&<Link to={`/e/w3-ride/${ride.id}`} onClick={e=>{e.preventDefault();onOpen(ride.id!)}}>Fahrt analysieren<ArrowUpRight size={16}/></Link>}</div>}</div>
+ </article>
 }
 /**
  * W3 - FAHRTEN, DIE LISTE.
@@ -47,7 +44,7 @@ function RideCard({ride,hero,onOpen}:{ride:W3RideCard;hero?:boolean;onOpen:(id:n
  * Frage -- was fuer eine Fahrt --, und zwei Fragen duerfen zwei Regler haben.
  */
 export function RideJournal({vm,period,windowStart,windowLabel,onOpen}:{vm:W3RidesVm;period:W3RidePeriod;windowStart:string|null;windowLabel:string|null;onOpen:(id:number)=>void}){
- const [filter,setFilter]=useState<W3RideFilter>('all'),[query,setQuery]=useState(''),[search,setSearch]=useState(false),[limit,setLimit]=useState(12),[sort,setSort]=useState<'recent'|'distance'|'power'|'duration'>('recent')
+ const [filter,setFilter]=useState<W3RideFilter>('all'),[query,setQuery]=useState(''),[search,setSearch]=useState(false),[limit,setLimit]=useState(12),[sort,setSort]=useState<'recent'|'oldest'|'distance'|'power'|'duration'|'elevation'>('recent')
  const shown=useMemo(()=>{
   /** Ohne Fensteranfang wird nicht gefiltert: ein noch nicht geladener
    *  Rhythmus darf keine Fahrten verschwinden lassen. Eine Fahrt OHNE Datum
@@ -57,49 +54,16 @@ export function RideJournal({vm,period,windowStart,windowLabel,onOpen}:{vm:W3Rid
   const metric=(value:string)=>{const clean=value.replace(/\s/g,'').replace(',','.');if(clean.includes(':')){const [hours,minutes]=clean.split(':').map(Number);return (hours||0)+(minutes||0)/60}return Number.parseFloat(clean)||0}
   const rows=vm.rides.filter(r=>inWindow(r)&&(filter==='all'||filter==='indoor'&&r.indoor||filter==='outdoor'&&!r.indoor||filter==='race'&&r.race)&&`${r.title} ${r.dateLabel}`.toLocaleLowerCase('de').includes(query.trim().toLocaleLowerCase('de')))
   if(sort==='recent')return rows
+  if(sort==='oldest')return [...rows].reverse()
+  if(sort==='elevation')return [...rows].sort((a,b)=>(b.elevation??0)-(a.elevation??0))
   return [...rows].sort((a,b)=>metric(b[sort==='distance'?'km':sort==='power'?'power':'dur'])-metric(a[sort==='distance'?'km':sort==='power'?'power':'dur']))
  },[vm.rides,query,filter,sort,windowStart])
- return <section className="w3-ride-journal"><header className="w3-journal-heading"><div><h1>Deine Fahrten.</h1><span>{windowStart&&windowLabel?`${shown.length} ${shown.length===1?'Fahrt':'Fahrten'} \u00b7 ${windowLabel}`:vm.count}</span></div><button className="w3-journal-icon" aria-label={search?'Suche schließen':'Fahrten suchen'} onClick={()=>{setSearch(!search);setQuery('')}}>{search?<X size={20}/>:<Search size={20}/>}</button></header>
+ return <section id="focus-ride-archive" className="w3-ride-journal"><header className="w3-journal-heading"><div><h1>Deine Fahrten.</h1><span>{windowStart&&windowLabel?`${shown.length} ${shown.length===1?'Fahrt':'Fahrten'} \u00b7 ${windowLabel}`:vm.count}</span></div><button className="w3-journal-icon" aria-label={search?'Suche schließen':'Fahrten suchen'} onClick={()=>{setSearch(!search);setQuery('')}}>{search?<X size={20}/>:<Search size={20}/>}</button></header>
  {search&&<label className="w3-journal-search"><Search size={18}/><input autoFocus value={query} placeholder="Fahrt oder Datum suchen" aria-label="Fahrt oder Datum suchen" onChange={e=>{setQuery(e.target.value);setLimit(12)}}/></label>}
  <div className="w3-journal-filters" role="group" aria-label="Fahrten filtern">{([['all','Alle'],['outdoor','Outdoor'],['indoor','Indoor'],['race','Rennen']] as const).map(([key,label])=><button key={key} aria-pressed={filter===key} onClick={()=>{setFilter(key);setLimit(12)}}>{label}</button>)}</div>
- <div className="w3-journal-sort" role="group" aria-label="Fahrten sortieren"><ArrowDownUp size={14}/><span>Sortieren</span>{([['recent','Neueste'],['distance','Distanz'],['power','Leistung'],['duration','Dauer']] as const).map(([key,label])=><button key={key} aria-pressed={sort===key} onClick={()=>{setSort(key);setLimit(12)}}>{label}</button>)}</div>
+ <label className="w3-journal-sort"><ArrowDownUp size={16}/><select aria-label="Fahrten sortieren" value={sort} onChange={e=>{setSort(e.target.value as typeof sort);setLimit(12)}}>{([['recent','Neueste zuerst'],['oldest','Älteste zuerst'],['distance','Längste Strecke'],['elevation','Meiste Höhenmeter'],['power','Höchste Leistung'],['duration','Längste Dauer']] as const).map(([key,label])=><option key={key} value={key}>{label}</option>)}</select></label>
  {vm.prAnnounce&&<button className="w3-journal-record" onClick={()=>onOpen(vm.prAnnounce!.id)}><span>{vm.prAnnounce.title.replace(' · ',' — ')}</span><ArrowUpRight size={18}/></button>}
  {shown.length?<><RideCard ride={shown[0]} hero onOpen={onOpen}/>{shown.length>1&&<div className="w3-journal-archive"><h2>Weitere Fahrten</h2>{shown.slice(1,limit).map((r,i)=><RideCard key={r.id??i} ride={r} onOpen={onOpen}/>)}</div>}{shown.length>limit&&<button className="w3-journal-more" onClick={()=>setLimit(n=>n+20)}>Weitere Fahrten laden <span>{shown.length-limit}</span></button>}</>:<div className="w3-journal-empty"><Bike size={44} strokeWidth={1}/><h2>{vm.rides.length?'Keine passende Fahrt':'Hier beginnt deine Geschichte.'}</h2><p>{vm.rides.length?(period==='season'?'Wähle einen anderen Filter oder Suchbegriff.':`In diesem Zeitraum liegt keine Fahrt. Stelle oben auf Saison, oder wähle einen anderen Filter.`):'Deine synchronisierten Fahrten erscheinen hier.'}</p>{vm.rides.length>0&&<button onClick={()=>{setFilter('all');setQuery('')}}>Alle Fahrten zeigen</button>}</div>}
  </section>
 }
-/** Der Kopf. Den Zeitraum BESITZT er nicht mehr -- er bekommt ihn und meldet
- *  den Wechsel nach oben, damit die Liste denselben Ausschnitt zeigt. */
-/** Ein Detailwert in der aufgeklappten Zeile. */
-function Detail({v,t}:{v:string;t:string}){
- return <span style={{display:'flex',alignItems:'baseline',gap:4}}>
-  <strong style={{fontSize:16,fontWeight:700,letterSpacing:-.3,color:T.ink,fontVariantNumeric:'tabular-nums'}}>{v}</strong>
-  <span style={{fontSize:11.5,fontWeight:500,color:T.quiet}}>{t}</span>
- </span>
-}
-
-export function RideSummary({vm,rhythm,period,onPeriod,onSetGoal}:{vm:W3RidesVm;rhythm?:ActivityRhythm|null;period:W3RidePeriod;onPeriod:(p:W3RidePeriod)=>void;onSetGoal:()=>void}){
- const [selected,setSelected]=useState<number|null>(null),[open,setOpen]=useState(false)
- const win=rhythm?.[period],buckets=win?.buckets??vm.barMonths.map(m=>({km:m.km})),values=buckets.map(b=>b.km),picked=selected==null?null:buckets[selected]
- const label=(i:number)=>win?new Date(`${win.buckets[i].start}T12:00:00`).toLocaleDateString('de-DE',period==='season'?{month:'short'}:{day:'numeric',month:'short'}):`${vm.barMonths[i].label} ${vm.barMonths[i].year}`
- const meta=picked&&win?[['FAHRTEN',String(win.buckets[selected!].rides),''],['ZEIT',nf.format(win.buckets[selected!].hours),' h'],['HÖHENMETER',nf.format(win.buckets[selected!].elevation_m),' hm']]:win?[['FAHRTEN',String(win.rides),''],['ZEIT',nf.format(win.hours),' h'],['HÖHENMETER',nf.format(win.elevation_m),' hm']]:[['FAHRTEN',vm.count.replace(/\s*Fahrten.*$/,''),''],['SATTELZEIT',vm.saddleTime,' h'],['Ø LEISTUNG',vm.avgPower,' W']]
- const previous=values.length>1?values[values.length-2]:values[0]??0,current=values.at(-1)??0,trendDelta=previous?Math.round((current-previous)/previous*100):0,trend=trendDelta>3?'Aufbauend':trendDelta<-3?'Ruhiger':'Stabil'
- const details=<div style={{display:'flex',flexWrap:'wrap',gap:16,fontSize:12.5,color:'inherit'}}>
-  {picked&&win?<><Detail v={String(win.buckets[selected!].rides)} t="Fahrten"/><Detail v={nf.format(win.buckets[selected!].hours)} t="h"/><Detail v={nf.format(win.buckets[selected!].elevation_m)} t="hm"/></>
-   :win?<><Detail v={String(win.rides)} t="Fahrten"/><Detail v={nf.format(win.hours)} t="h"/><Detail v={nf.format(win.elevation_m)} t="hm"/></>
-   :<><Detail v={vm.avgSpeed} t="km/h Ø"/><Detail v={vm.avgPower} t="W Ø"/><Detail v={vm.saddleTime} t="h"/></>}
- </div>
- return <W3RidesHero
-  periods={rhythm?[{key:'season',text:'Saison'},{key:'month',text:'Monat'},{key:'week',text:'Woche'}]:undefined}
-  period={rhythm?period:undefined}
-  onPeriod={k=>{onPeriod(k as W3RidePeriod);setSelected(null)}}
-  km={picked?nf.format(picked.km):win?nf.format(win.km):vm.totalKm}
-  deck={selected!=null?label(selected):win?.label??'Letzte 12 Monate'}
-  values={values} labels={label} selected={selected} onSelect={setSelected}
-  trendKicker={period==='season'?'Saison-Trend':period==='month'?'30-Tage-Trend':'7-Tage-Trend'}
-  trendLabel={trend} trendPct={trendDelta}
-  ledger={meta.map(([l,v,u])=>({label:l,value:v,unit:u.trim()||undefined}))}
-  goal={period==='season'&&selected==null&&vm.goal?vm.goal:null}
-  onSetGoal={period==='season'&&selected==null?onSetGoal:undefined}
-  open={open} onToggle={()=>setOpen(!open)} details={details}/>
-
-}
+export function RideSummary(props:{vm:W3RidesVm;rhythm?:ActivityRhythm|null;period:W3RidePeriod;onPeriod:(p:W3RidePeriod)=>void;onSetGoal:()=>void}) {return <W3RidesFocus {...props}/>}

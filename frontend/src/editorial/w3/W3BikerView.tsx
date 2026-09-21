@@ -1,5 +1,5 @@
 import { useState, type CSSProperties, type ReactNode } from 'react'
-import { ArrowUpRight, ChevronDown, Pencil, UserRound, Bike, Watch, Users, UserPlus } from 'lucide-react'
+import { ArrowUpRight, ChevronDown, Pencil, UserRound, Watch, Users, UserPlus } from 'lucide-react'
 import { COACH_VOICES, coachVoiceById } from './w3coachVoices'
 import type { W3RiderHighlightsProps } from './W3RiderHighlights'
 import { W3FormCurve, type W3SeasonStat } from './W3ProfileBlocks'
@@ -10,6 +10,8 @@ import W3TabBar from './W3TabBar'
 import { T, FONT } from './w3tokens'
 import './w3.css'
 import './w3profile.css'
+import './w3BikerFocus.css'
+import W3FocusCurve from './W3FocusCurve'
 
 export interface W3Device { name: string; sub: string; icon: 'watch' | 'activity' | 'zap' | 'heart'; on: boolean }
 export interface W3BikerVm {
@@ -27,6 +29,7 @@ export interface W3ProfileExtras {
 type DataState = 'loading' | 'error' | 'ready'
 export interface W3BikerViewProps extends Partial<W3ProfileExtras> {
   vm: W3BikerVm
+  insights?: ReactNode
   seasonLabel?: string
   seasonBuckets?: RhythmBucket[]
   seasonState?: DataState
@@ -65,7 +68,7 @@ function Action({ children, onClick, icon }: { children: ReactNode; onClick?: ()
 export default function W3BikerView({ vm, season = [], curve = null, bike = null,
   seasonLabel = `Saison ${new Date().getFullYear()}`, seasonBuckets = [],
   seasonState = 'ready', garageState = 'ready', recordsState = 'ready',
-  onGarage, onCrew, onReferral, voice, onBadges, onRecord, onCreateRider,
+  onGarage, onCrew, onReferral, voice, onRecord, onCreateRider, insights,
   onEdit, onSettings, onDevice, onPower, onRides, onRetry,
 }: W3BikerViewProps) {
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null)
@@ -75,18 +78,19 @@ export default function W3BikerView({ vm, season = [], curve = null, bike = null
   const lead = vm.rider.records[0]
   const name = vm.rider.handle
   const selected = selectedMonth == null ? null : seasonBuckets[selectedMonth]
-  const maxKm = Math.max(1, ...seasonBuckets.map(b => b.km))
+  let cumulative=0
+  const kmCurve=seasonBuckets.map(b=>cumulative+=b.km)
   const hasRides = seasonBuckets.some(b => b.rides > 0) || (km != null && km.value !== '0')
   const style = {
     '--profile-bg': T.bg, '--profile-surface': T.surface, '--profile-surface2': T.surface2,
     '--profile-ink': T.ink, '--profile-mid': T.mid, '--profile-line': T.rule,
     '--profile-acid': T.acid, '--profile-acid-dim': T.acidDim,
-    '--profile-error': T.bad, fontFamily: FONT, background: T.bg,
+    '--profile-error': T.bad, '--focus-muted': T.mid, fontFamily: FONT, background: T.bg,
   } as CSSProperties
-  return <div className="w3-root"><div className="w3-frame w3-profile" style={style}>
+  return <div className="w3-root"><div className="w3-frame w3-profile focus-biker" style={style}>
     <W3StatusBar /><W3TopBar />
     <main>
-      <section className={`profile-identity ${!vm.rider.avatarUrl ? 'profile-identity-empty' : ''}`} aria-label="Dein Profil">
+      <div className="profile-editorial-hero"><section className={`profile-identity ${!vm.rider.avatarUrl ? 'profile-identity-empty' : ''}`} aria-label="Dein Profil">
         <div className="profile-name">
           <h1>{name || 'Dein Profil'}</h1>
           {vm.rider.role && <p>{vm.rider.role}</p>}
@@ -97,23 +101,16 @@ export default function W3BikerView({ vm, season = [], curve = null, bike = null
         </button> : <span className="profile-avatar-state" role="status">{garageState === 'loading' ? 'Rider lädt …' : <>Rider nicht geladen{onRetry && <button className="profile-inline" onClick={onRetry}>Erneut laden</button>}</>}</span>}
       </section>
 
+      {bike?.imageUrl&&<button className="profile-hero-bike" onClick={onGarage} aria-label="Dein Rad in der Garage öffnen"><img src={bike.imageUrl} alt={bike.name}/></button>}
+      </div>
       <section className="profile-season" aria-label={seasonLabel}>
         <header><h2>{seasonLabel}</h2>{onRides && <button className="profile-circle" aria-label="Deine Fahrten ansehen" onClick={onRides}><ArrowUpRight size={20} /></button>}</header>
         {seasonState === 'loading' && <p role="status">Deine Saison wird geladen …</p>}
         {seasonState === 'error' && <div role="status"><p>Deine Saison konnte nicht geladen werden.</p><button className="profile-inline" onClick={onRetry}>Erneut versuchen</button></div>}
         {seasonState === 'ready' && km && <>
-          <div className="profile-season-main"><strong>{selected ? nf.format(Math.round(selected.km)) : km.value}</strong><span>km</span></div>
-          <div className="profile-season-context">{selected ? new Date(`${selected.start}T12:00:00`).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }) : km.note ?? 'seit Januar'}{selected && <button onClick={() => setSelectedMonth(null)}>Gesamte Saison</button>}</div>
-          {seasonBuckets.length > 1 && <div className="profile-months" aria-label="Kilometer pro Monat">
-            {seasonBuckets.map((b, i) => {
-              const date = new Date(`${b.start}T12:00:00`)
-              const month = date.toLocaleDateString('de-DE', { month: 'long' })
-              return <button key={b.start} className="profile-month" aria-label={`${month}: ${nf.format(Math.round(b.km))} Kilometer`} aria-pressed={selectedMonth === i} onClick={() => setSelectedMonth(selectedMonth === i ? null : i)}>
-                <span className="profile-month-track"><i style={{ height: b.km > 0 ? `${Math.max(5, b.km / maxKm * 100)}%` : 2, background: selectedMonth === i ? T.acid : T.d3 }} /></span>
-                <span>{month.slice(0, 1)}</span>
-              </button>
-            })}
-          </div>}
+          <div className="profile-season-main"><strong>{selected ? nf.format(Math.round(kmCurve[selectedMonth!])) : km.value}</strong><span>km</span></div>
+          <div className="profile-season-context">{selected ? new Date(`${selected.start}T12:00:00`).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' }) + ' · kumuliert' : km.note ?? 'seit Januar'}{selected && <button onClick={() => setSelectedMonth(null)}>Gesamte Saison</button>}</div>
+          {seasonBuckets.length > 1 && <W3FocusCurve values={kmCurve} labels={seasonBuckets.map(b=>new Date(b.start+'T12:00:00').toLocaleDateString('de-DE',{month:'short'}))} selected={selectedMonth} onSelect={setSelectedMonth}/>}
           <div className="profile-season-facts">{selected ? <><span><b>{nf.format(selected.rides)}</b> Fahrten</span><span><b>{nf.format(selected.elevation_m)}</b> Höhenmeter</span></> : totals.map(s => <span key={s.label}><b>{s.value}</b> {s.label}</span>)}</div>
           {!hasRides && <p>Deine nächste Fahrt macht den Anfang.</p>}
         </>}
@@ -131,28 +128,8 @@ export default function W3BikerView({ vm, season = [], curve = null, bike = null
         </Disclosure>}
       </section>}
 
-      {bike ? <section className="profile-bike-card profile-card">
-        <header className="profile-section-heading"><h2>Dein Rad</h2>{onGarage && <button className="profile-circle" aria-label="Garage öffnen" onClick={onGarage}><ArrowUpRight size={20} /></button>}</header>
-        <div className="profile-bike-content">{bike.imageUrl && <img src={bike.imageUrl} alt={bike.name} />}<strong>{bike.name}</strong></div>
-      </section> : garageState === 'ready' && onGarage ? <div className="profile-card profile-bike-empty"><Action onClick={onGarage} icon={<Bike size={20} />}>Dein Rad hinzufügen</Action></div> : null}
-
-      <div className="profile-details">
-        {(ftp || curve || onPower) && <Disclosure card title="Leistung & Entwicklung" note={ftp ? `FTP ${ftp.value} ${ftp.unit ?? 'W'}` : undefined}>
-          {ftp && <div className="profile-ftp"><span><strong>{ftp.value} <small>W</small></strong><span>Aktuelle FTP</span></span>{onEdit && <button className="profile-secondary" onClick={onEdit}>Werte ändern</button>}{ftp.note && <p>{ftp.note}</p>}</div>}
-          {curve && <W3FormCurve {...curve} embedded />}
-
-          {onPower && <Action onClick={onPower}>Leistungsprofil & Zonen</Action>}
-          {!ftp && onEdit && <Action onClick={onEdit}>Trainingswerte bearbeiten</Action>}
-        </Disclosure>}
-        <Disclosure card title="Erfolge & RideCoin" note={[vm.rider.badges ? `${vm.rider.badges.unlocked} Erfolge` : null, vm.coin ? `${vm.coin.balance} RC` : null].filter(Boolean).join(' · ')}>
-          {vm.rider.tier.note && <div className="profile-rewards"><strong>{vm.rider.tier.label}</strong><p>{vm.rider.tier.note}</p></div>}
-          {vm.rider.milestone && <p>{vm.rider.milestone.note}</p>}
-          {vm.rider.badges && <p>{vm.rider.badges.unlocked} von {vm.rider.badges.total} Erfolgen{vm.rider.badges.latest ? ` · ${vm.rider.badges.latest}` : ''}</p>}
-          {vm.rider.pills.some(p => p.v !== '—') && <p>{vm.rider.pills.filter(p => p.v !== '—').map(p => `${p.v} ${p.l.toLowerCase()}`).join(' · ')} insgesamt</p>}
-          {onBadges && <Action onClick={onBadges}>Alle Erfolge</Action>}
-        </Disclosure>
-      </div>
-
+      {insights}
+      <div className="profile-details">{onPower&&<Action onClick={onPower}>Leistungsprofil & Zonen</Action>}{curve&&<Disclosure card title="Deine Form" note={ftp?`FTP ${ftp.value} W`:undefined}><W3FormCurve {...curve} embedded/></Disclosure>}</div>
       <section className="profile-device-card profile-card">
         <div className="profile-section-heading"><h2>Deine Geräte</h2>{onSettings && <button className="profile-circle" aria-label="Geräte verwalten" onClick={onSettings}><ArrowUpRight size={20} /></button>}</div>
         {vm.devices.map(d => <button className="profile-device" aria-label={`${d.name} ${d.sub}`} key={d.name} onClick={() => onDevice?.(d.name)}><Watch size={19} /><span><strong>{d.name}</strong><small>{d.sub}</small></span><ArrowUpRight size={18} /></button>)}

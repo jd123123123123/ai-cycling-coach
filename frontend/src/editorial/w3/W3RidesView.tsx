@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { updateGoals } from '../../api/athletes'
@@ -20,6 +20,8 @@ export type W3RidePeriod = 'season' | 'month' | 'week'
 export interface W3RideCard {
   id: number | null                 // real activity id → /e/w3-ride/:id
   title: string
+  elevation?: number | null
+  tss?: number | null
   dateLabel: string                 // "TUE 12 AUG" (real)
   /** Das echte Startdatum. `dateLabel` ist formatiert und deutsch; danach
    *  zu filtern hiesse, auf einer Anzeige zu rechnen. Der Zeitraum-Filter
@@ -103,7 +105,7 @@ export default function W3RidesView({vm}:{vm:W3RidesVm}){
  // NUR AUSSERHALB DER SHELL. Im Hero-Raum wird `dock` per Portal in die
  // Shell gehaengt (`inShell` oben); dort besitzt die Shell das Layout, und
  // ein zweiter Scroll-Container darin waere ein Scroller im Scroller.
- return <div className="w3-root"><div className="w3-frame has-deck" style={{fontFamily:FONT,background:T.bg}}><W3StatusBar/><W3TopBar title="Fahrten"/>
+ return <div className="w3-root"><div className="w3-frame has-deck focus-rides" style={{fontFamily:FONT,background:T.bg,'--focus-bg':T.bg,'--focus-card':T.surface,'--focus-raised':T.surface2,'--focus-ink':T.ink,'--focus-muted':T.mid,'--focus-line':T.rule,'--focus-acid':T.acid} as CSSProperties}><W3StatusBar/><W3TopBar title="Fahrten"/>
   <div className="w3-deck" tabIndex={-1}>
    <section className="w3-deck-chapter is-hero"><div style={{padding:'8px 20px 0'}}>{dock}</div></section>
    <section className="w3-deck-chapter is-flow">{content}</section>

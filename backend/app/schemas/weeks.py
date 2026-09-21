@@ -58,6 +58,11 @@ class DayPlan(BaseModel):
     # strength fallback) so the week list can render it as a visible line item
     # instead of silently dropping its load (usability audit P0-5).
     secondary_target_tss: int | None = None
+    # Historical weeks mirror the recommendation against what the rider
+    # actually logged on that date. Optional so current/future responses keep
+    # their existing compact contract.
+    actual_tss: float | None = None
+    actual_duration_seconds: int | None = None
 
 
 class MesoBlockContext(BaseModel):
@@ -162,6 +167,16 @@ class MissedRide(BaseModel):
     is_quality: bool  # a quality day (reflows) vs endurance/recovery (absorbs)
 
 
+class WeekComparison(BaseModel):
+    """A quiet, auditable comparison for a selected historical week."""
+    planned_tss: int | None = None
+    actual_tss: int | None = None
+    fit_pct: int | None = None
+    planned_sessions: int = 0
+    completed_sessions: int = 0
+    ride_count: int = 0
+
+
 class WeekResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     week_start: date
@@ -191,6 +206,9 @@ class WeekResponse(BaseModel):
     # athlete honestly that a ride was missed (and, via the adaptation feed, how
     # the plan absorbs it). Never punitive — the plan waits for the athlete.
     missed_yesterday: MissedRide | None = None
+    # Present only for a selected week before the current week. It lets the
+    # plan card answer "what was recommended, what did I ride, and how close?"
+    week_comparison: WeekComparison | None = None
 
 
 __all__ = [
@@ -204,5 +222,6 @@ __all__ = [
     "Projection",
     "Readiness",
     "MissedRide",
+    "WeekComparison",
     "WeekResponse",
 ]
