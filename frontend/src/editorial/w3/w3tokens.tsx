@@ -26,7 +26,16 @@ const DARK = {
   // this size; lightening the top edge and deepening the bottom is what makes
   // a 13 px bar look like a lit object rather than a coloured rectangle.
   acidLite: '#EAFF8F',
-  ink: '#FFFFFF', mid: '#9BA0A6', quiet: '#6E7379',
+  ink: '#FFFFFF', mid: '#9BA0A6',
+  // GEMESSEN, NICHT GESCHAETZT. `#6E7379` lag bei Kontrast 4.12 auf `bg` und
+  // 3.63 auf `heroDock` -- WCAG AA verlangt 4.5 fuer Text unter 24 px. Auf
+  // EINEM Bildschirm fielen damit 15 Texte durch: jede Augenbraue, jede
+  // Einheit, jedes Etikett. Die dritte Textstufe war app-weit unlesbar, und
+  // das Hero-Feld hat es noch verschaerft, weil sein Grund heller ist.
+  // `#7E8389` haelt denselben blaeulichen Ton und besteht auf beiden
+  // Gruenden: 5.15 auf `bg`, 4.55 auf `heroDock`.
+  // (Der helle Modus lag mit 5.49 / 6.16 immer richtig.)
+  quiet: '#7E8389',
 
   // ── TODAY'S HERO (pen frames `YIU3g` / `qv4Aw`, read 2026-08-19) ─────────
   // `hero*`, NOT `stage*`: the `stageHi/Mid/Lo` triple above is the light a
@@ -459,6 +468,41 @@ export const Display = ({ size = 'md', children, style }: {
  * KEIN ACID IM FELD. Der Kopf hat bereits eine Heldenzahl; ein farbiger
  * Schimmer dahinter waere ein zweiter Ruf um dieselbe Aufmerksamkeit.
  */
+/**
+ * W3 · DIE SCHRIFTSKALA — sieben Stufen, und keine achte.
+ *
+ * Auf EINEM Bildschirm gemessen (Fahrten, 390x844): vierzehn verschiedene
+ * Schriftgroessen -- 9, 10, 11, 12, 13, 14, 15, 17, 19, 23, 31, 32, 48, 64.
+ * Das ist keine Skala, das ist Streuung. Der Unterschied zwischen 12 und 13
+ * ist fuer niemanden eine Aussage; er entsteht, wenn jede Flaeche ihre
+ * Groessen einzeln waehlt.
+ *
+ * Acht Stufen reichen fuer alles, was diese App sagt:
+ *
+ *   label    9    Augenbraue, versal, gesperrt
+ *   fein    11    Fussnote, Einheit, Nebenangabe
+ *   stuetz  12.5  Stuetztext unter einer Aussage
+ *   koerper 15    Fliesstext und Betonung
+ *   kopf    19    Kartentitel, Unterueberschrift
+ *   titel   26    Seitenueberschrift
+ *   held    40    Heldenzahl in einer Karte
+ *   gross   64    Heldenzahl einer Seite
+ *
+ * ES WAREN ERST SIEBEN, und der Kommentar behauptete, eine achte sei immer ein
+ * Hierarchieproblem. Dann stand die Seitenueberschrift "Deine Fahrten." auf
+ * 31 px und passte weder auf `kopf` (19, ein Kartentitel) noch auf `held` (40,
+ * eine Zahl). Es fehlte eine SEITENUEBERSCHRIFT -- eine echte Stufe, keine
+ * Bequemlichkeit.
+ *
+ * WER EINE NEUNTE BRAUCHT, sollte erst pruefen, ob er wirklich eine neue Rolle
+ * hat: zwei Dinge, die sich um 1 px unterscheiden, sind in Wahrheit gleich
+ * wichtig und gehoeren auf dieselbe Stufe.
+ */
+export const TYPE = {
+  label: 9, fein: 11, stuetz: 12.5, koerper: 15,
+  kopf: 19, titel: 26, held: 40, gross: 64,
+} as const
+
 export const HeroField = ({ children, style }: {
   children: ReactNode
   style?: CSSProperties

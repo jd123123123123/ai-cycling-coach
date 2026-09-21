@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, X } from 'lucide-react'
-import { T } from './w3tokens'
+import { T, TYPE } from './w3tokens'
 import W3NavMenu from './W3NavMenu'
 import W3RiderAvatar from './W3RiderAvatar'
 
@@ -60,7 +60,7 @@ export default function W3TopBar({ title, onBack, onClose, extra }: { title?: st
       {onBack
         ? <button type="button" onClick={onBack} aria-label="Zurück" style={{ width: 44, height: 44, borderRadius: 100, background: T.heroChip, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', flex: 'none' }}><ArrowLeft size={18} color={T.ink} /></button>
         : <div style={{ width: 44, flex: 'none' }} />}
-      <span style={{ flex: 1, textAlign: 'center', fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title ?? ''}</span>
+      <span style={{ flex: 1, textAlign: 'center', fontSize: TYPE.fein, fontWeight: 700, letterSpacing: 1.5, textTransform: 'uppercase', color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title ?? ''}</span>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 'none' }}>
         {extra}
         {!onProfile && (

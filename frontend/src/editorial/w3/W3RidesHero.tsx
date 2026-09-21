@@ -1,6 +1,6 @@
 import { useReducedMotion } from 'motion/react'
 import { Minus, Plus } from 'lucide-react'
-import { T, FONT, HeadRow, HeroField, Kicker, useInView } from './w3tokens'
+import { T, FONT, HeadRow, HeroField, Kicker, TYPE, useInView } from './w3tokens'
 import { hairline, TNUM } from './w3surfaces'
 
 /**
@@ -102,7 +102,9 @@ function Kurve({ values, labels, selected, onSelect }: {
                 onClick={() => onSelect(selected === i ? null : i)}
                 style={{
                   position: 'absolute', left: `${x / width * 100}%`, top: `${y / height * 100}%`,
-                  width: 40, height: 40, padding: 0, border: 0, background: 'transparent',
+                  // 44x44: darunter trifft ein Daumen nicht zuverlaessig.
+                  // Gemessen lagen hier 40x40, und der Schalter oben 36x36.
+                  width: 44, height: 44, padding: 0, border: 0, background: 'transparent',
                   transform: 'translate(-50%,-50%)', display: 'grid', placeItems: 'center',
                   cursor: 'pointer',
                 }}>
@@ -223,7 +225,7 @@ export default function W3RidesHero({
         <button type="button" onClick={onToggle} aria-expanded={open}
                 aria-label={open ? 'Details schließen' : 'Details öffnen'}
                 style={{
-                  width: 36, height: 36, borderRadius: '50%', border: 0, flex: 'none',
+                  width: 44, height: 44, borderRadius: '50%', border: 0, flex: 'none',
                   background: T.tile, color: T.mid, display: 'grid', placeItems: 'center',
                   cursor: 'pointer',
                 }}>
@@ -254,9 +256,9 @@ export default function W3RidesHero({
             nirgends steht. */}
         <HeadRow label={deck} counter={counter}>
           <span style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ ...TNUM, fontSize: 64, fontWeight: 700, letterSpacing: -3,
+            <span style={{ ...TNUM, fontSize: TYPE.gross, fontWeight: 700, letterSpacing: -3,
                            lineHeight: 0.92, color: T.acid }}>{km}</span>
-            <span style={{ fontSize: 19, fontWeight: 600, color: T.quiet }}>km</span>
+            <span style={{ fontSize: TYPE.kopf, fontWeight: 600, color: T.quiet }}>km</span>
           </span>
         </HeadRow>
       </div>
@@ -270,8 +272,8 @@ export default function W3RidesHero({
 
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 9 }}>
         <Kicker>{trendKicker}</Kicker>
-        <span style={{ fontSize: 13, fontWeight: 600, color: T.ink }}>{trendLabel}</span>
-        <span style={{ ...TNUM, marginLeft: 'auto', fontSize: 12, fontWeight: 600,
+        <span style={{ fontSize: TYPE.stuetz, fontWeight: 600, color: T.ink }}>{trendLabel}</span>
+        <span style={{ ...TNUM, marginLeft: 'auto', fontSize: TYPE.fein, fontWeight: 600,
                        color: T.quiet }}>
           {trendPct >= 0 ? '+' : '−'}{Math.abs(trendPct)} %
         </span>
@@ -284,9 +286,9 @@ export default function W3RidesHero({
           <div key={l.label} style={{ display: 'flex', flexDirection: 'column', gap: 5, minWidth: 0 }}>
             <Kicker>{l.label}</Kicker>
             <span style={{ display: 'flex', alignItems: 'baseline', gap: 3, whiteSpace: 'nowrap' }}>
-              <span style={{ ...TNUM, fontSize: 17, fontWeight: 700, letterSpacing: -0.4,
+              <span style={{ ...TNUM, fontSize: TYPE.kopf, fontWeight: 700, letterSpacing: -0.5,
                              color: T.ink }}>{l.value}</span>
-              {l.unit && <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{l.unit}</span>}
+              {l.unit && <span style={{ fontSize: TYPE.fein, fontWeight: 600, color: T.quiet }}>{l.unit}</span>}
             </span>
           </div>
         ))}
@@ -298,14 +300,14 @@ export default function W3RidesHero({
           <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
             <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
               <Kicker>Saisonziel</Kicker>
-              <span style={{ ...TNUM, fontSize: 13.5, fontWeight: 600, color: T.ink }}>
+              <span style={{ ...TNUM, fontSize: TYPE.stuetz, fontWeight: 600, color: T.ink }}>
                 {nf.format(goal.currentKm)} / {nf.format(goal.targetKm)} km
               </span>
             </div>
             <Messer pct={goal.progress} />
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: T.ink }}>{goal.realityLabel}</span>
-              <span style={{ fontSize: 11.5, fontWeight: 500, color: T.quiet }}>{goal.projectionLabel}</span>
+              <span style={{ fontSize: TYPE.stuetz, fontWeight: 600, color: T.ink }}>{goal.realityLabel}</span>
+              <span style={{ fontSize: TYPE.fein, fontWeight: 500, color: T.quiet }}>{goal.projectionLabel}</span>
             </div>
           </div>
         </>
@@ -321,8 +323,8 @@ export default function W3RidesHero({
                     background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: FONT,
                   }}>
             <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 14, fontWeight: 600, color: T.ink }}>Dein Saisonziel</span>
-              <span style={{ fontSize: 11.5, fontWeight: 500, color: T.quiet }}>
+              <span style={{ fontSize: TYPE.koerper, fontWeight: 600, color: T.ink }}>Dein Saisonziel</span>
+              <span style={{ fontSize: TYPE.fein, fontWeight: 500, color: T.quiet }}>
                 Setze eine Marke, die zu dir gehört.
               </span>
             </span>
