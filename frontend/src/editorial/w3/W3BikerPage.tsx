@@ -227,7 +227,7 @@ export default function W3BikerPage() {
       insights={<W3BikerFocus/>}
       season={season}
       seasonLabel={rhythm?.season?.label ? `Saison ${rhythm.season.label}` : `Saison ${new Date().getFullYear()}`}
-      seasonBuckets={rhythm?.season?.buckets ?? []}
+      seasonBuckets={(rhythm?.season?.buckets ?? []).filter(b => new Date(b.start+'T00:00:00') <= new Date())}
       seasonState={rhythmError ? 'error' : rhythmPending ? 'loading' : 'ready'}
       garageState={garageError ? 'error' : garagePending ? 'loading' : 'ready'}
       recordsState={recordsError ? 'error' : recordsPending ? 'loading' : 'ready'}

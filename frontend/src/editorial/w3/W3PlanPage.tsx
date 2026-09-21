@@ -198,13 +198,14 @@ export default function W3PlanPage() {
       ? targets.map((_, i) => {
           const ws = addDays(planStart, i * 7)
           const we = addDays(ws, 7)
-          const sum = acts
-            .filter((a) => { const d = new Date(a.started_at); return d >= ws && d < we })
-            .reduce((s, a) => s + (a.tss ?? 0), 0)
-          return sum > 0 ? sum : null
+          const rides=acts.filter(a=>{const d=new Date(a.started_at);return d>=ws&&d<we})
+          return rides.length&&rides.every(a=>a.tss!=null)?rides.reduce((s,a)=>s+a.tss!,0):null
         })
       : []
-    const weekBars = buildWeeklyBars(targets, currentIdx, actualByWeek)
+    // The selected week reflects the current prescription after adaptation,
+    // rather than the original block budget if those have since diverged.
+    const displayedTargets=targets?.map((t,i)=>i===currentIdx+weekOffset&&week?.planned_tss_total!=null?week.planned_tss_total:t)??null
+    const weekBars = buildWeeklyBars(displayedTargets, currentIdx, actualByWeek)
     const avg = targets && targets.length ? Math.round(targets.reduce((s, t) => s + t, 0) / targets.length) : null
 
     // ── this week ──
@@ -245,7 +246,7 @@ export default function W3PlanPage() {
         actualTss:weekOffset<0?d.actual_tss:recorded.actualTss,
         actualDuration:weekOffset<0?d.actual_duration_seconds:recorded.actualDuration,
         title: isSess ? (d.title ?? 'Einheit') : null,
-        weekday: dt ? DE_WD[(dt.getDay() + 6) % 7] : '',
+        weekday: dt ? DE_WD2[(dt.getDay() + 6) % 7] : '',
         dateLabel: dt ? fmtDEShort(dt) : '',
         isToday: !!d.is_today,
         isPast: !!dt && !d.is_today && dt < today,
