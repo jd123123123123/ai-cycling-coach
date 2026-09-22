@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { W3Rank } from './W3RideDetailView'
+import type { W3Rank } from './rideAtelierTypes'
 import { T } from './w3tokens'
 import { smoothCurve } from './w3SmoothCurve'
 

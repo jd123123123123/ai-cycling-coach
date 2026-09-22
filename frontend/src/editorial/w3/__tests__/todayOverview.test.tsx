@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { W3FormCardView } from '../W3FormCard'
-import { TrainingInstrument, type W3DayFull } from '../W3Sections'
+import type { W3DayFull } from '../W3Sections'
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { W3TodayOverviewView, type OverviewData } from '../W3TodayOverview'
@@ -39,41 +39,6 @@ describe('Today overview', () => {
     fireEvent.click(screen.getByRole('button',{name:'FTP steigern'}))
     fireEvent.click(screen.getByRole('button',{name:'Eigenes Ziel'}))
     expect(picks).toEqual(['ftp',null])
-  })
-  it('shows today’s prescription but suppresses stale training facts and bars for rest or no plan', () => {
-    const training = {...vm, weekDays:[{status:'today',rest:false,title:'4 × 8 Schwelle',targetW:'285 W',planned:112,letter:'M'}],sessionDur:'1 Std. 15 min',sessionBlocks:[{w:.8,work:true,label:'Block 1 · 285 W'}]} as W3Vm
-    const props = {data,week:null,form:null,crew:null,goals:null}
-    const {rerender} = render(<W3TodayOverviewView {...props} vm={training} />)
-    expect(screen.getByText('4 × 8 Schwelle')).toBeTruthy()
-    expect(screen.getByText('1 Std. 15 min')).toBeTruthy()
-    expect(screen.getByText('285 W')).toBeTruthy()
-    expect(screen.getByText('Dauer · 112 TSS')).toBeTruthy()
-    expect(screen.getByRole('group',{name:'Trainingsprofil: Block 1 · 285 W'})).toBeTruthy()
-    const block = screen.getByRole('button',{name:'Abschnitt 1: Block 1 · 285 W'})
-    fireEvent.click(block)
-    expect(block.getAttribute('aria-pressed')).toBe('true')
-    expect(screen.getByText('Block 1 · 285 W')).toBeTruthy()
-    rerender(<W3TodayOverviewView {...props} vm={{...training,weekDays:[{...training.weekDays[0],rest:true}]}} />)
-    expect(screen.getByText('Ruhetag')).toBeTruthy()
-    expect(screen.queryByRole('group',{name:/Trainingsprofil:/})).toBeNull()
-    expect(screen.queryByText('1 Std. 15 min')).toBeNull()
-    rerender(<W3TodayOverviewView {...props} vm={{...training,hasPlan:false}} />)
-    expect(screen.getByText('Noch kein Training geplant')).toBeTruthy()
-    expect(screen.queryByRole('group',{name:/Trainingsprofil:/})).toBeNull()
-    expect(screen.queryByText('4 × 8 Schwelle')).toBeNull()
-  })
-  it('retains a selected training section through opening and closing the card', async () => {
-    const blocks = [{w:.8,work:true,label:'Block 1 · 285 W'},{w:.2,work:false,label:'Erholung · 120 W'}]
-    const training = {...vm,weekDays:[{status:'today',rest:false,title:'Schwelle',targetW:'285 W',planned:112,letter:'M'}],sessionBlocks:blocks} as W3Vm
-    render(<W3TodayOverviewView vm={training} data={data} today={<TrainingInstrument title="Schwelle" blocks={blocks} target="285 W" />} week={null} form={null} crew={null} goals={null} />)
-    fireEvent.click(screen.getByRole('button',{name:'Abschnitt 2: Erholung · 120 W'}))
-    fireEvent.click(screen.getByRole('button',{name:'Heute öffnen'}))
-    expect(screen.getByRole('button',{name:'Abschnitt 2: Erholung · 120 W'}).getAttribute('aria-pressed')).toBe('true')
-    fireEvent.click(screen.getByRole('button',{name:'Profil erklären'}))
-    expect(screen.getByText(/Balkenbreite ist keine Dauer/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button',{name:'Heute schließen'}))
-    await waitFor(() => expect(screen.queryByText(/Balkenbreite ist keine Dauer/)).toBeNull())
-    expect(screen.getByRole('button',{name:'Abschnitt 2: Erholung · 120 W'}).getAttribute('aria-pressed')).toBe('true')
   })
   it('does not turn missing data into zero fitness or goal progress', () => {
     render(<W3TodayOverviewView vm={vm} data={{...data,form:null,ftp:null,ftpGoal:null,crewState:'error'}} week={null} form={null} crew={null} goals={null} />)

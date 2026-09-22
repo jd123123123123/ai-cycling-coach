@@ -42,7 +42,7 @@ export function RouteElevation({ samples, onOpen }: { samples: RideSample[]; onO
   const low = Math.floor(Math.min(...heights) / 500) * 500
   const high = Math.max(low + 500, Math.ceil(Math.max(...heights) / 500) * 500)
   const start = samples[0]?.distance ?? 0, end = samples.at(-1)?.distance ?? start
-  const points = samples.map(s => s.altitude == null || !Number.isFinite(s.altitude) ? null : ({
+  const points = samples.map(s => s.distance == null || s.altitude == null || !Number.isFinite(s.altitude) ? null : ({
     x: 42 + (s.distance - start) / Math.max(1, end - start) * 286,
     y: 58 - (s.altitude - low) / (high - low) * 40,
   }))
@@ -82,19 +82,6 @@ export const contributionValue = (value: number | null, key: ContributionKey) =>
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`
 }
 
-// Explicit demonstration totals BEFORE this ride. Production must supply period-matched aggregates.
-export const ATELIER_CONTRIBUTIONS: RideContributions = {
-  period: 'Dein Jahr 2026', rideDate:'2026-09-21', history:[
-    ['2026-01-01',0,0,0], ['2026-02-01',325,12,1450], ['2026-03-01',700,26,3800],
-    ['2026-04-01',1350,47,7950], ['2026-05-01',2140,74,13000], ['2026-06-01',2710,94,18500],
-    ['2026-07-01',3150,110,23000], ['2026-08-01',3870,131,28700], ['2026-09-01',4480,153,32700],
-    ['2026-09-20',4673.4,160.25,35621],
-  ].map(([date,distance,hours,ascent])=>({date:String(date),totals:{distance:Number(distance),time:Number(hours)*3600,ascent:Number(ascent)}})), metrics: [
-    { key: 'distance', label: 'Kilometer', unit: 'km', before: 4673.4, added: 138.6 },
-    { key: 'time', label: 'Sattelzeit', unit: 'h', before: 576900, added: 17100 },
-    { key: 'ascent', label: 'Höhenmeter', unit: 'hm', before: 35621, added: 5639 },
-  ],
-}
 const contributionIcons = { distance: Route, time: Clock3, ascent: Mountain }
 
 /** Actual calendar history with a highlighted final contribution. No fabricated intermediate values. */

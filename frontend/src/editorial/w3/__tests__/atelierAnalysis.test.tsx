@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { ATELIER_SAMPLES, ATELIER_FTP, ftpWindow, rideMean, ridePlot } from '../atelierRideData'
+import { ftpWindow, rideMean, ridePlot } from '../atelierRideData'
+import { ATELIER_SAMPLES, ATELIER_FTP } from '../atelierRideFixture'
 import { AtelierRideAnalysis } from '../AtelierRideAnalysis'
 import { storySVG, type RideStory } from '../AtelierStoryShare'
 import W3RideBestEfforts from '../W3RideBestEfforts'

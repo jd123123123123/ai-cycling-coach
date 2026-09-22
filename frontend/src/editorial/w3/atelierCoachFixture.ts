@@ -1,5 +1,5 @@
 import type { CoachEvidence } from './atelierCoachData'
-import { ATELIER_SAMPLES } from './atelierRideData'
+import { ATELIER_SAMPLES } from './atelierRideFixture'
 
 // Explicit design-only example matching the API shapes. Not fetched Garmin data.
 // Kept out of production routes; absent channels stay null to demonstrate honest gaps.

@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { ATELIER_CONTRIBUTIONS, contributionAfter, contributionValue, RideContributionView, RouteElevation, trainingEmphasis, planComparisonPlot, contributionHistory } from '../AtelierRideMeaning'
-import { ATELIER_SAMPLES } from '../atelierRideData'
+import { contributionAfter, contributionValue, RideContributionView, RouteElevation, trainingEmphasis, planComparisonPlot, contributionHistory } from '../AtelierRideMeaning'
+import { ATELIER_CONTRIBUTIONS } from '../atelierRideFixture'
+import { ATELIER_SAMPLES } from '../atelierRideFixture'
 import { REVIEW } from '../W3RideDetailPreview'
 import { storySVG, type RideStory } from '../AtelierStoryShare'
 

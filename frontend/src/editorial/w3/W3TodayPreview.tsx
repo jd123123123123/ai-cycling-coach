@@ -1,4 +1,3 @@
-import { useEffect } from 'react'
 import { stageThemeById } from './w3stageThemes'
 import W3TodayView, { type W3Vm } from './W3TodayView'
 import { STARTER_BIKE } from './starterBike'
@@ -130,12 +129,6 @@ const MOCK_ADAPT = async (kind: 'easier' | 'harder' | 'shorter' | 'indoor' | 're
 // ?theme=<id> forces a backdrop — the design flow's way to see all eight
 // stages without an account. Live riders pick theirs in the garage lane.
 export default function W3TodayPreview() {
-  useEffect(()=>{
-    if(!new URLSearchParams(window.location.search).has('training')) return
-    const timer=window.setTimeout(()=>{const card=document.querySelector('[data-today-card="today"]');if(card)window.scrollTo({top:card.getBoundingClientRect().top+window.scrollY,behavior:'instant'})},300)
-    return ()=>window.clearTimeout(timer)
-  },[])
-
   // THE BOLT NEEDS A HANDLER TO EXIST AT ALL. `W3TodayView` gates it on
   // `!chest.sealed && onOpenWrapped`, so a preview that passes no handler can
   // never show it — which is how a component mounted on the live Today screen

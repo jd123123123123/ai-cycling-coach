@@ -1,11 +1,10 @@
-import { createContext, useContext, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useRef, useState, type CSSProperties } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion, useReducedMotion } from 'motion/react'
-import { Info, CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
+import { CloudSun, Check, Minus, TrendingUp, TrendingDown, Moon, Zap, ArrowRight, Sparkles, SlidersHorizontal, ChevronDown, Clock, Home, Flag, Calendar, ChevronRight, Timer, Gauge, Percent, Wind, Droplets, Thermometer, type LucideIcon } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, card, band, DASH } from './w3tokens'
 import W3WhyButton from './W3WhyButton'
 import W3DayRoute from './W3DayRoute'
-import './w3TodayTrainingEditorial.css'
 
 // ────────────────────────────────────────────────────────────────────────
 // "Deine Woche" — ONE card: the week's day selector, the selected day's
@@ -377,7 +376,7 @@ export interface TodaySession {
   dur: string | null; blocks: W3Block[]; ftpTag: string; earn: string | null
 }
 
-export function IntervalBars({ blocks, ftpTag, h = 96, editorial = false }: { blocks: W3Block[]; ftpTag: string; h?: number; editorial?: boolean }) {
+export function IntervalBars({ blocks, ftpTag, h = 96 }: { blocks: W3Block[]; ftpTag: string; h?: number }) {
   const reduce = useReducedMotion()
   const [hov, setHov] = useState<number | null>(null)
   return (
@@ -401,14 +400,14 @@ export function IntervalBars({ blocks, ftpTag, h = 96, editorial = false }: { bl
               // runs light at the top into the deeper acid at the base, which is
               // the same direction the stage's key light falls — so a bar reads
               // as a solid with a lit face rather than as a filled rectangle.
-              background: editorial ? (b.work ? T.acid : T.heroOff) : b.work
+              background: b.work
                 ? `linear-gradient(180deg, ${T.acid} 0%, ${T.acid} 30%, ${T.acidDeep} 100%)`
                 : `linear-gradient(180deg, ${T.heroOff} 0%, ${T.heroDock} 100%)`,
               // The contact shadow that made the bike stand, at bar scale: a
               // dark pool where the column meets the floor, plus the thinnest
               // specular along its top edge. Work bars only — a recovery block
               // should sit BACK, and light is what puts it there.
-              boxShadow: !editorial && b.work
+              boxShadow: b.work
                 ? `inset 0 1px 0 ${T.ink}59, 0 2px 6px ${T.acidDeep}4D`
                 : 'none',
               outline: on ? `1px solid ${T.ink}` : 'none',
@@ -425,60 +424,6 @@ export function IntervalBars({ blocks, ftpTag, h = 96, editorial = false }: { bl
     </div>
   )
 }
-
-export const TrainingSelectionContext = createContext<{
-  selection: { key: string; index: number | null } | null;
-  setSelection: (value: { key: string; index: number | null }) => void;
-} | null>(null)
-
-/** The same prescription instrument in the quick view and its open detail.
- * Blocks retain their provided relative heights. Equal horizontal slots are
- * schematic sections: W3Block does not carry a reliable duration or axis unit. */
-export function TrainingInstrument({ title, blocks, duration, target, tss, ftpPct, ftpTag, accessory }: {
-  title: string; blocks: W3Block[]; duration?: string | null; target?: string | null;
-  tss?: number | null; ftpPct?: string | null; ftpTag?: string | null; accessory?: ReactNode;
-}) {
-  const [localSelected, setLocalSelected] = useState<number | null>(null)
-  const [showBasis, setShowBasis] = useState(false)
-  const basisId = useId()
-  const shared = useContext(TrainingSelectionContext)
-  const selectionKey = `${title}|${blocks.map(b => `${b.label}:${b.w}`).join('|')}`
-  const selected = shared ? (shared.selection?.key === selectionKey ? shared.selection.index : null) : localSelected
-  const setSelected = (index: number | null) => shared ? shared.setSelection({ key: selectionKey, index }) : setLocalSelected(index)
-  const phases = blocks.reduce((count, block, i) => count + (block.work && !blocks[i - 1]?.work ? 1 : 0), 0)
-  const selectedBlock = selected == null ? null : blocks[selected]
-  const phaseReading = phases > 1 ? `${phases} Belastungsphasen mit Erholung` : phases === 1 ? 'Eine zusammenhängende Belastungsphase' : 'Deine geplanten Abschnitte'
-  const power = target && target !== DASH ? target : null
-  const percent = ftpPct && ftpPct !== DASH ? `${ftpPct} FTP` : null
-  return <div className="w3-training-instrument" style={{
-    '--instrument-ink': T.ink, '--instrument-mid': T.mid, '--instrument-acid': T.acid,
-    '--instrument-off': T.heroOff, '--instrument-rule': T.rule,
-  } as CSSProperties}>
-    <div className="w3-training-instrument-heading"><div className="w3-training-instrument-title">{title}</div>{accessory}</div>
-    {(power || duration) && <div className="w3-training-instrument-readings">
-      {power && <div><strong>{power}</strong><span>Ziel{percent ? ` · ${percent}` : ''}</span></div>}
-      {duration && <div><strong>{duration}</strong><span>Dauer{tss != null ? ` · ${numTraining(tss)} TSS` : ''}</span></div>}
-    </div>}
-    {(!duration && tss != null || !power && percent) && <div className="w3-training-instrument-extra">{[!duration && tss != null ? `${numTraining(tss)} TSS` : null, !power ? percent : null].filter(Boolean).join(' · ')}</div>}
-    {blocks.length > 0 && <>
-      <div className="w3-training-instrument-profile" role="group" aria-description="Schematische Abschnitte, keine Zeitachse. Balkenbreite ist keine Dauer." aria-label={`Trainingsprofil: ${blocks.map(b => b.label).join(', ')}`}>
-        {blocks.map((block, i) => <button type="button" key={i} aria-pressed={selected === i}
-          aria-label={`Abschnitt ${i + 1}: ${block.label}`} title={block.label}
-          onClick={() => setSelected(selected === i ? null : i)}
-          className="w3-training-instrument-block" data-work={block.work}
-          style={{ '--block-height': `${Math.max(2, Math.min(100, block.w * 100))}%` } as CSSProperties}>
-          <span aria-hidden />
-        </button>)}
-      </div>
-      <div className="w3-training-instrument-caption" aria-live="polite">
-        <span>{selectedBlock?.label ?? phaseReading}</span>
-        <button type="button" className="w3-training-instrument-info" aria-label="Profil erklären" aria-expanded={showBasis} aria-controls={basisId} onClick={() => setShowBasis(!showBasis)} title="Schematische Abschnitte, keine Zeitachse"><Info size={16} /></button>
-      </div>
-    </>}
-    {showBasis && <p id={basisId} className="w3-training-instrument-basis">{ftpTag ? `${ftpTag}. ` : ''}Abschnitte schematisch; Balkenbreite ist keine Dauer. Tippe einen Abschnitt für seine Vorgabe an.</p>}
-  </div>
-}
-const numTraining = (value: number) => value.toLocaleString('de-DE', { maximumFractionDigits: 1 })
 
 export type Adapt = 'none' | 'easier' | 'harder' | 'shorter' | 'indoor' | 'rest'
 
@@ -542,7 +487,6 @@ function SessionNumbers({ stats }: { stats: DayStat[] }) {
   const lead = stats.find((s) => s.l === 'ZIEL') ?? stats[0]
   const rest = stats.filter((s) => s !== lead && s.v !== DASH)
   const has = lead.v !== DASH
-
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6, minWidth: 0 }}>
@@ -648,7 +592,7 @@ function PlannedVsDone({ day, reduce }: { day: W3DayFull; reduce: boolean | null
 /** The selected day's training, weather and actions — the lower two thirds of
  *  the week card. Mounted with a per-day key, so switching days resets the
  *  adapt state and replays the entrance. */
-export function DayTraining({ day, session, weather, onAdapt, appearance }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt; appearance?: 'editorial' }) {
+export function DayTraining({ day, session, weather, onAdapt }: { day: W3DayFull; session: TodaySession; weather: W3Weather; onAdapt?: OnAdapt }) {
   const [adapt, setAdapt] = useState<Adapt>('none')
   const [busy, setBusy] = useState<Adapt>('none')
   const [result, setResult] = useState<AdaptResult | null>(null)
@@ -657,14 +601,6 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   const navigate = useNavigate()
   const reduce = useReducedMotion()
   const isToday = day.status === 'today'
-  // Opted in by the primary Today slot; week/session consumers stay unchanged.
-  const editorial = appearance === 'editorial'
-  const editorialClass = editorial ? 'w3-today-training-editorial' : undefined
-  const editorialTokens = editorial ? {
-    '--today-training-surface': T.surface,
-    '--today-training-mid': T.mid,
-    '--today-training-acid': T.acid,
-  } as CSSProperties : undefined
   // "1 Std. 15 min" / "45 min" → minutes. The session states its duration as
   // display copy, which is the only place it exists on this card; a route
   // matched on TSS alone would ignore whether the ride even fits the evening.
@@ -695,7 +631,6 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   const curFtp = result ? (parseInt(result.ftpPct) || baseFtp) : baseFtp
   const isRest = adapt === 'rest'
   const adapted = adapt !== 'none'
-  const profileStale = !!result?.title && result.title !== day.title
   // The four supporting numbers. Duration is today-only (the view only knows
   // today's session length), so other days show three and the last card spans
   // the row rather than leaving a hole in the grid.
@@ -708,7 +643,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   ]
   // How to ride it + fuelling (the 60 g/h is standard endurance guidance, not a
   // fabricated per-ride number).
-  const tw = editorial && curT ? `${curT} W` : day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
+  const tw = day.targetW && day.targetW !== '—' ? day.targetW : 'im Zielbereich'
   const workDesc = `Intervalle bei ${tw} halten · locker ein- und ausfahren · ~60 g Kohlenhydrate pro Stunde`
 
   // Run the real coach adapt (or clear it when the same option is tapped off).
@@ -734,20 +669,20 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={{ minWidth: 0, fontSize: editorial ? 12.5 : 17, fontWeight: editorial ? 600 : 700, letterSpacing: editorial ? 0.5 : -0.4, color: editorial ? T.mid : T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {editorial ? day.dateLabel : isToday ? 'Heutige Einheit' : day.weekday}
+          <span style={{ minWidth: 0, fontSize: 17, fontWeight: 700, letterSpacing: -0.4, color: T.ink, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {isToday ? 'Heutige Einheit' : day.weekday}
           </span>
           {/* The explanation, where the doubt is. Only on TODAY: the reasoning
               is about this morning's signals, and offering it beside Thursday
               would promise an answer nothing computed. */}
           {isToday && <W3WhyButton />}
         </div>
-        {!editorial && <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.dateLabel}</span>}
+        <span style={{ fontSize: 10.5, fontWeight: 600, color: T.quiet, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.dateLabel}</span>
       </div>
-      {(!editorial || !isToday) && <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: chipBg }}>
+      <div style={{ flex: 'none', display: 'flex', gap: 6, alignItems: 'center', padding: '6px 11px', borderRadius: 100, background: chipBg }}>
         <StIcon size={11} color={chipHue} />
         <span style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: 1, textTransform: 'uppercase', color: chipHue }}>{st.label}</span>
-      </div>}
+      </div>
     </div>
   )
 
@@ -761,9 +696,9 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   const restDay = isRest || day.rest === true || day.status === 'rest' || (isFuture && !day.title)
   if (restDay && !isPast) {
     return (
-      <motion.div className={editorialClass} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
-        style={{ ...editorialTokens, display: 'flex', flexDirection: 'column', gap: editorial ? 20 : 14 }}>
-        {!editorial && <Rule />}
+      <motion.div initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
+        style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <Rule />
         {header}
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <div style={{ width: 40, height: 40, flex: 'none', borderRadius: 13, background: `${T.rem}1F`, display: 'grid', placeItems: 'center' }}><Moon size={19} color={T.rem} /></div>
@@ -785,10 +720,10 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
         <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} compact />
         {isToday && (
           <>
-            <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
+            <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
             {showAdapt
               ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
-              : <AdjustButton editorial={editorial} onOpen={() => setShowAdapt(true)} />}
+              : <AdjustButton onOpen={() => setShowAdapt(true)} />}
           </>
         )}
       </motion.div>
@@ -796,28 +731,20 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
   }
 
   return (
-    <motion.div className={editorialClass} key={adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
-      style={{ ...editorialTokens, display: 'flex', flexDirection: 'column', gap: 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
-      {!editorial && <Rule />}
-      {!editorial && header}
+    <motion.div key={adapt} initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.28, ease: EASE }}
+      style={{ display: 'flex', flexDirection: 'column', gap: 12, opacity: day.status === 'missed' ? 0.75 : 1 }}>
+      <Rule />
+      {header}
 
-      {editorial ? <TrainingInstrument
-        title={result?.title ?? day.title ?? 'Noch nicht festgelegt'}
-        blocks={day.title && !profileStale ? session.blocks : []}
-        duration={day.title && !profileStale ? session.dur : null}
-        target={day.title && curT ? `${curT} W` : null}
-        tss={day.title ? curTss || null : null}
-        ftpPct={curFtp ? `${curFtp}%` : null}
-        ftpTag={session.ftpTag}
-        accessory={isToday ? <W3WhyButton /> : undefined}
-      /> : <>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
-          {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
-        </div>
-        {(day.title != null && (curTss > 0 || curT > 0)) && <SessionNumbers stats={stats} />}
-      </>}
+      <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.6, lineHeight: 1.1, color: day.title ? T.ink : T.mid }}>
+        {day.title ?? (isFuture ? 'Noch nicht festgelegt' : 'Ruhetag')}
+      </div>
 
-      {isToday && editorial && <SessionLink editorial label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />}
+      {/* Stats only when there's a real prescription (title + a number). A
+          future day with no plan yet hides the empty dash row. */}
+      {(day.title != null && (curTss > 0 || curT > 0)) && (
+        <SessionNumbers stats={stats} />
+      )}
 
       {/* the coach's own explanation of the re-plan (real AI rationale) */}
       {isToday && adapted && (result || error) && (
@@ -830,32 +757,34 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
         </div>
       )}
 
-      {isToday && !editorial && (
+      {isToday && (
         <>
           {/* Guarded like the future-day branch below: with no prescribed
               session there are no bars to draw, and an empty chart frame is
               better than the invented profile this used to fall back to. */}
-          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} editorial={editorial} />}
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />}
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.mid }}>{workDesc}</span>
         </>
       )}
 
-      {isToday && editorial && <details className="w3-training-support"><summary>Durchführung & Verpflegung</summary><p>{day.dateLabel}</p><p>{workDesc}</p></details>}
-
       {isFuture && (
         <>
-          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} editorial={editorial} />}
+          {session.blocks.length > 0 && <IntervalBars blocks={session.blocks} ftpTag={session.ftpTag} h={104} />}
           <span style={{ fontSize: 11.5, fontWeight: 500, lineHeight: 1.4, color: T.quiet }}>
             Eine Woche im Voraus geplant — festgezurrt wird am Morgen, sobald deine Nachtwerte da sind.
           </span>
         </>
       )}
 
-      {editorial ? <details className="w3-training-support"><summary>Strecken & Wetter</summary>
-        <W3DayRoute caption="Draußen" targetTss={result?.tss ?? day.planned} durationMinutes={durMinutes} indoor={false} onOpen={() => navigate('/e/w3-rides')} />
-        <W3DayRoute caption="Drinnen" targetTss={result?.tss ?? day.planned} durationMinutes={durMinutes} indoor onOpen={() => navigate('/e/w3-rides')} />
-        <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
-      </details> : <>
+      {/* ── WHERE TO RIDE THIS ONE ────────────────────────────────────────
+           On today AND on every planned day, because "where do I ride this?"
+           is a question about a SESSION and the session is what this card is.
+           It follows the adaptation: take the session indoors and the answer
+           becomes a trainer route, because a mountain road for a 2x20 on the
+           rollers is not a worse suggestion, it is an unusable one.
+
+           Never on a rest day, and never before there is history to draw on —
+           see `W3DayRoute`, which renders nothing rather than guessing. ── */}
       {(isToday || isFuture) && day.status !== 'rest' && (
         <>
           {/* BOTH answers, not the one the app guessed. Whether this session
@@ -881,8 +810,6 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
         </>
       )}
 
-      </>}
-
       {isPast && day.status !== 'rest' && (
         day.status === 'missed' ? (
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -895,7 +822,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
       )}
 
       {/* ── Weather: the selected DATE's line. Real numbers for today only. ── */}
-      {!isPast && !editorial && (
+      {!isPast && (
         <>
           <Rule />
           <WeatherLine w={weather} isToday={isToday} dateLabel={day.dateLabel} />
@@ -912,10 +839,10 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
               <span style={{ flex: 1, minWidth: 0, fontSize: 11.5, color: T.mid, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{session.earn}</span>
             </div>
           )}
-          {!editorial && <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />}
+          <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
           {showAdapt
             ? <AdaptRow adapt={adapt} busy={busy} onPick={runAdapt} />
-            : <AdjustButton editorial={editorial} onOpen={() => setShowAdapt(true)} />}
+            : <AdjustButton onOpen={() => setShowAdapt(true)} />}
         </>
       )}
 
@@ -928,7 +855,7 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
            owns one keeps a way into it. Past days keep planned-vs-done, which
            is their detail. ── */}
       {isFuture && day.title != null && (
-        <SessionLink editorial={editorial} label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
+        <SessionLink label="Einheit & Wirkung ansehen" onOpen={() => navigate('/e/w3-session')} />
       )}
     </motion.div>
   )
@@ -936,22 +863,22 @@ export function DayTraining({ day, session, weather, onAdapt, appearance }: { da
 
 /** The way into a training's own screen. One element, because the today CTA
  *  and the planned-day CTA are the same promise and must not drift apart. */
-function SessionLink({ label, onOpen, editorial = false }: { label: string; onOpen: () => void; editorial?: boolean }) {
+function SessionLink({ label, onOpen }: { label: string; onOpen: () => void }) {
   return (
-    <button className={editorial ? 'w3-today-training-open' : undefined} onClick={onOpen}
-      style={{ height: 52, width: '100%', borderRadius: editorial ? 18 : 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
-      <span style={{ fontSize: editorial ? 14 : 16, fontWeight: editorial ? 600 : 700, letterSpacing: -0.2, color: T.bg }}>{label}</span>
+    <button onClick={onOpen}
+      style={{ height: 52, width: '100%', borderRadius: 100, background: T.acid, border: 0, cursor: 'pointer', fontFamily: FONT, display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 7px 0 20px' }}>
+      <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.2, color: T.bg }}>{label}</span>
       <div style={{ width: 38, height: 38, flex: 'none', borderRadius: 100, background: T.bg, display: 'grid', placeItems: 'center' }}><ArrowRight size={18} color={T.acid} /></div>
     </button>
   )
 }
 
-function AdjustButton({ onOpen, editorial = false }: { onOpen: () => void; editorial?: boolean }) {
+function AdjustButton({ onOpen }: { onOpen: () => void }) {
   return (
     <button onClick={onOpen}
-      style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: editorial ? 44 : 42, width: '100%', borderRadius: editorial ? 16 : 100, background: editorial ? 'transparent' : T.surface2, border: 0, cursor: 'pointer', fontFamily: FONT }}>
+      style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'center', height: 42, width: '100%', borderRadius: 100, background: T.surface2, border: 0, cursor: 'pointer', fontFamily: FONT }}>
       <SlidersHorizontal size={14} color={T.mid} />
-      <span style={{ fontSize: 12.5, fontWeight: editorial ? 600 : 700, letterSpacing: 0.3, color: T.mid }}>Anpassen</span>
+      <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: 0.3, color: T.mid }}>Anpassen</span>
       <ChevronDown size={14} color={T.quiet} />
     </button>
   )

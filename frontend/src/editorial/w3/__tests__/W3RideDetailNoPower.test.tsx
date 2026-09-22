@@ -116,10 +116,8 @@ describe('a ride recorded without a power meter', () => {
     mount()
     await waitFor(() => expect(screen.queryByText('Lade deine Fahrt…')).toBeNull())
 
-    // Elevation keeps its honest placeholder; absent power instruments are omitted.
-    expect(screen.getAllByText('—').length).toBe(1)
-    expect(screen.queryByText('Normalisierte Leistung')).toBeNull()
-    expect(screen.queryByText('Intensitätsfaktor')).toBeNull()
+    // Elevation, power and intensity are all genuinely absent here.
+    expect(screen.getAllByText('—').length).toBe(3)
     expect(screen.queryByText('0')).toBeNull()
     expect(screen.queryByText('0,0')).toBeNull()
   })

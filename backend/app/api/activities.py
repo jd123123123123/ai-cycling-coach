@@ -411,6 +411,52 @@ async def get_stream_analysis(
     return result
 
 
+@router.get("/{activity_id}/ride-chart", summary="Recorded ride charts and historical context")
+async def get_ride_chart(
+    activity_id: int,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+) -> dict:
+    from datetime import timedelta
+    from app.models.activity import Activity
+    from app.models.athlete_profile import AthleteProfile
+    from app.services import ride_chart
+
+    activity = await activity_service.get_activity(db=db, user_id=current_user.id, activity_id=activity_id)
+    if activity is None:
+        raise HTTPException(status_code=404, detail="Activity not found")
+    stream = (await db.execute(select(ActivityStream.streams, ActivityStream.mmp_curve).where(
+        ActivityStream.activity_id == activity_id, ActivityStream.user_id == current_user.id,
+    ))).one_or_none()
+    profile = (await db.execute(select(
+        AthleteProfile.ftp_history, AthleteProfile.max_heart_rate, AthleteProfile.timezone,
+    ).where(AthleteProfile.user_id == current_user.id))).one_or_none()
+    at = ride_chart.stamp(activity.started_at)
+    zone = ride_chart.rider_zone(profile)
+    year_start = at.astimezone(zone).replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+    # Aggregate the complete calendar year; the list API's 500-row cap is not a total.
+    prior = (await db.execute(select(
+        Activity.started_at, Activity.distance_meters, Activity.duration_seconds, Activity.elevation_gain_m,
+    ).where(Activity.user_id == current_user.id, Activity.sport == 'cycling',
+            Activity.started_at >= year_start, Activity.started_at < at,
+            Activity.id != activity_id).order_by(Activity.started_at))).all()
+    curves = (await db.execute(select(ActivityStream.mmp_curve).join(
+        Activity, Activity.id == ActivityStream.activity_id,
+    ).where(ActivityStream.user_id == current_user.id, Activity.user_id == current_user.id,
+            Activity.sport == 'cycling', Activity.started_at < at,
+            Activity.started_at >= at - timedelta(days=90), Activity.id != activity_id))).scalars().all()
+    raw = stream.streams if stream else None
+    ftp, history = ride_chart.ftp_context(activity, profile)
+    return {
+        'activity_id': activity_id, 'samples': ride_chart.chart_samples(raw),
+        'ftp_at_ride': ftp, 'ftp_history': history,
+        'hr_max': ride_chart.number(getattr(profile, 'max_heart_rate', None), positive=True),
+        'zone_seconds': ride_chart.zone_seconds(raw, ftp),
+        'efforts': ride_chart.best_efforts(stream.mmp_curve if stream else None, curves),
+        'contributions': ride_chart.contributions(activity, prior, zone),
+    }
+
+
 # ── Post-ride RPE loop (V3 Ride Recap) ───────────────────────────────────────
 #
 # The athlete's 1-tap "how hard did that feel?" answer. Persisted per

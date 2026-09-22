@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import W3RideDetailView, { type W3RideVm } from './W3RideDetailView'
+import W3RideDetailView from './W3RideDetailView'
+import type { W3RideVm } from './rideAtelierTypes'
 import W3TrainingReview from './W3TrainingReview'
 import type { TrainingReview } from '../../api/trainingReview'
 import { MARATONA } from './maratonaFixture'
@@ -44,5 +45,5 @@ export default function W3RideDetailPreview(){
   const review:TrainingReview=free?{...REVIEW,score:null,status:'unplanned',planned_title:null,pairs:REVIEW.pairs.map(p=>({...p,planned:null})),zones:REVIEW.zones.map(z=>({...z,planned_seconds:null})),trace:REVIEW.trace.map(p=>({...p,planned_pct:null})),impact:[],changes:[],adaptation:{state:'unchanged',automatic:true,reason:'Die Fahrt wurde im Belastungsverlauf berücksichtigt.'}}:REVIEW
   const shown=limited?{...review,score:null,coverage:null,trace:[],zones:[],impact:[],stimulus:'Fahrt erfasst',limitations:['Keine vollständige Leistungsaufzeichnung vorhanden.']}:review
   const vm={...FIXTURE,...(historical?{hero:{...FIXTURE.hero,dateLine:'12.08.2026 · 09:12'},movedFoot:'Aufgezeichnete Radfahrten bis zum 12. August 2026.',changesBody:'Vergleich mit dem 5. August. Das Modell berücksichtigt alle Trainingsbelastungen dieser Woche.'}:{})}
-  return <><div style={{textAlign:'center',fontSize:12,padding:8,color:'var(--w3-mid)',background:'var(--w3-bg)'}}>Vorschau · Beispieldaten</div><W3RideDetailView vm={limited?{...vm,ranks:[],zones:[],shifts:[],hero:{...vm.hero,watts:'—',ifValue:'—',ifFill:0}}:vm} trainingReview={<W3TrainingReview review={shown} rideDate={historical?'2026-08-12':new Date().toISOString()} onOpenPlan={()=>{window.location.href='/e/w3-plan-experience-preview?state=active'}}/>} onBack={()=>history.back()}/></>
+  return <><div style={{textAlign:'center',fontSize:12,padding:8,color:'var(--w3-mid)',background:'var(--w3-bg)'}}>Vorschau · Beispieldaten</div><W3RideDetailView vm={limited?{...vm,ranks:[],zones:[],shifts:[],hero:{...vm.hero,watts:'—',ifValue:'—',ifFill:0}}:vm} trainingReview={<W3TrainingReview review={shown} onOpenPlan={()=>{window.location.href='/e/w3-plan-experience-preview?state=active'}}/>} onBack={()=>history.back()}/></>
 }
