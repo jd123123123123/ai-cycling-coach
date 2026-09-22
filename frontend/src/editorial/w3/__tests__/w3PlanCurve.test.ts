@@ -5,6 +5,18 @@ const x = (i: number) => i * 10
 const y = (value: number) => 100 - value
 
 describe('weekly load curve', () => {
+  it('fills the week domain while keeping each selectable sample centred', () => {
+    const centres=(i:number)=>(i+.5)/4*320
+    const path=weekCurve([180,140,140,90],centres,y,{left:0,right:320})
+    expect(path).toMatch(/^M0 -80 H40/)
+    expect(path).toMatch(/280 10 H320$/)
+    expect(path.match(/C/g)).toHaveLength(3)
+  })
+  it('does not extend a recorded curve into missing boundary weeks', () => {
+    const path=weekCurve([null,20,null],i=>i*10+5,y,{left:0,right:30})
+    expect(path).toBe('M15 80')
+    expect(weekCurve([null,null],x,y,{left:0,right:30})).toBe('')
+  })
   it('leaves missing or invalid measurements disconnected', () => {
     const path = weekCurve([10, null, 30, NaN, 50], x, y)
     expect(path.match(/M/g)).toHaveLength(3)

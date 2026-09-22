@@ -27,8 +27,8 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
  const n=Math.max(1,vm.weekBars.length)
  const x=(i:number)=>(i+.5)/n*320
  const y=(value:number)=>102-value/max*82
- const plannedCurve=weekCurve(vm.weekBars.map(w=>w.planned),x,y)
- const actualCurve=weekCurve(vm.weekBars.map(w=>w.actual),x,y)
+ const plannedCurve=weekCurve(vm.weekBars.map(w=>w.planned),x,y,{left:0,right:320})
+ const actualCurve=weekCurve(vm.weekBars.map(w=>w.actual),x,y,{left:0,right:320})
  const selectedWeek=vm.weekBars[selectedIndex]
  const title=phase?.name??vm.block?.phase??'Dein Plan'
  return <section className="w3-focus-plan" aria-label="Dein Trainingsplan" aria-busy={loading}>
@@ -43,7 +43,7 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
            <svg viewBox="0 0 320 112" preserveAspectRatio="none" role="img" aria-label={`Wochenbelastung. Woche ${selectedIndex+1}: ${selectedWeek?.planned??'—'} TSS geplant${selectedWeek?.actual!=null?`, ${selectedWeek.actual} TSS gefahren`:''}.`} onClick={e=>{const r=e.currentTarget.getBoundingClientRect();const i=Math.min(n-1,Math.max(0,Math.floor((e.clientX-r.left)/r.width*n)));if(Math.abs(i-currentIndex)<=12)onWeek(i)}}>
              <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop stopColor="var(--plan-ink)" stopOpacity=".12"/><stop offset="1" stopColor="var(--plan-ink)" stopOpacity="0"/></linearGradient></defs>
              <path className="focus-plan-grid" d="M0 102H320"/>
-             {plannedCurve&&<path d={`${plannedCurve} L${x(n-1)} 102 L${x(0)} 102 Z`} fill={`url(#${gradientId})`}/>}
+             {plannedCurve&&<path d={`${plannedCurve} L320 102 L0 102 Z`} fill={`url(#${gradientId})`}/>}
              <path className="focus-plan-line" d={plannedCurve}/>
              <path className="focus-plan-actual" d={actualCurve}/>
              {selectedWeek&&<g className="focus-plan-cursor"><path d={`M${x(selectedIndex)} ${y(selectedWeek.planned)+7} V102`}/></g>}
