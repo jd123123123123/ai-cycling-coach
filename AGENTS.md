@@ -2,6 +2,10 @@
 
 Preserve the existing W3 black surfaces, design tokens, real rider/bike identity and user-approved component anatomy. Use the live app and supplied W3 designs as ground truth. Preview visual changes with before/after; do not silently substitute fixture data or reference bikes for production riders.
 
+## Design previews
+
+Always present both dark and light versions together, using real W3 theme tokens and matching data, viewport and state. The user explicitly requests both for every design iteration. Do not use image inversion as a substitute for the light theme.
+
 ## Required design review before deployment
 
 For every UI deployment, use `docs/design-review-pipeline.md` and the guard in `scripts/design_review_gate.py`. The default requires nine independent synthetic agent reviews: the roles in `configs/design-review-roles.json`. When the user explicitly enables the Luna fallback because the full panel is unavailable, use `--luna-fallback` with exactly one genuine Luna report covering the Awwwards, Apple and Whoop lenses; label it as a fallback and never present it as nine reviewers. Do not claim real users/company affiliation/awards.

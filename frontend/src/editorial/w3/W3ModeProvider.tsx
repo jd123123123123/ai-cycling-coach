@@ -30,8 +30,17 @@ interface Ctx {
 
 const ModeContext = createContext<Ctx>({ mode: 'dark', setMode: () => {} })
 
+/** Explicit themes in local preview frames never change the rider's saved mode. */
+function previewMode(): W3Mode | null {
+  if (!import.meta.env.DEV || !window.location.pathname.includes('-preview')) return null
+  const mode = new URLSearchParams(window.location.search).get('theme')
+  return mode === 'dark' || mode === 'light' ? mode : null
+}
+
 /** Read once, before the first paint, so a reload does not flash the old room. */
 function stored(): W3Mode {
+  const preview = previewMode()
+  if (preview) return preview
   try {
     return localStorage.getItem(KEY) === 'light' ? 'light' : 'dark'
   } catch {
@@ -49,7 +58,7 @@ export function W3ModeProvider({ children }: { children: ReactNode }) {
   const setMode = useCallback((m: W3Mode) => {
     if (m === w3Mode()) return
     setW3Mode(m)
-    try { localStorage.setItem(KEY, m) } catch { /* nothing to remember it with */ }
+    try { if (!previewMode()) localStorage.setItem(KEY, m) } catch { /* nothing to remember it with */ }
     setModeState(m)
   }, [])
 
@@ -77,6 +86,7 @@ export function W3ModeProvider({ children }: { children: ReactNode }) {
   // in the same place.
   const qc = useQueryClient()
   useEffect(() => {
+    if (previewMode()) return
     const sync = () => {
       const stage = qc.getQueryData<TodayStage>(TODAY_STAGE_KEY)?.stage
       if (stage) setMode(modeForBackdrop(stage))

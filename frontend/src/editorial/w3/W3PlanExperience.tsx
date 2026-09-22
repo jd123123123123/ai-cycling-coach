@@ -86,7 +86,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const currentBar=currentIndex+weekOffset
  const hasWorkout=!!selected?.title
  const openSession=()=>{if(selected?.isPast){setSheet('history');return}if(selected?.dateISO&&hasWorkout)onOpenSession(selected.dateISO);else setSheet('why')}
- const styles={'--plan-acid':T.acid,'--plan-ink':T.ink,'--plan-bg':T.bg,'--plan-card':T.surface,'--plan-card-top':T.cardTop,'--plan-card-bot':T.cardBot,'--plan-acid-lite':T.acidLite,'--plan-raised':T.surface2,'--plan-muted':T.mid,'--plan-stroke':T.stroke,fontFamily:FONT} as CSSProperties
+ const styles={'--plan-acid':T.acid,'--plan-ink':T.ink,'--plan-bg':T.bg,'--plan-card':T.surface,'--plan-card-top':T.cardTop,'--plan-card-bot':T.cardBot,'--plan-acid-lite':T.acidLite,'--plan-on-acid':T.heroInk,'--plan-shadow':T.shadowSoft,'--plan-acid-dim':T.acidDim,'--plan-raised':T.surface2,'--plan-muted':T.mid,'--plan-stroke':T.stroke,fontFamily:FONT} as CSSProperties
  return <div className={`w3-plan-experience state-${state}${state==='active'&&view==='plan'?' focus-active':''}`} style={styles}>
  <W3TopBar title="Plan" extra={<button className="w3-plan-help" aria-label="So funktioniert dein Plan" onClick={()=>setIntro(true)}><HelpCircle size={18}/></button>}/>
  <main className="w3-plan-content">
