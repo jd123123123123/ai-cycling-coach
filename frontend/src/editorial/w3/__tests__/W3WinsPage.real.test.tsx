@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 
 import ach from './fixtures/realAchievements.json'
@@ -40,11 +40,21 @@ vi.mock('../../../hooks/useRewardChallenges', () => ({
   useRewardChallenges: () => ({ data: undefined }),
 }))
 
+// This suite verifies the performance chapter; the collection and shell have
+// separate interaction coverage and must not issue account queries here.
+vi.mock('../W3TopBar', () => ({default: () => null}))
+vi.mock('../W3TabBar', () => ({default: () => null}))
+vi.mock('../W3SceneCollection', () => ({default: () => <div>Sammlung</div>}))
+
 const { default: W3WinsPage } = await import('../W3WinsPage')
 
 afterEach(cleanup)
 
-const draw = () => render(<MemoryRouter><W3WinsPage /></MemoryRouter>)
+const draw = () => {
+ const result=render(<MemoryRouter><W3WinsPage /></MemoryRouter>)
+ fireEvent.click(screen.getByRole('button',{name:'Leistung & Abzeichen'}))
+ return result
+}
 
 describe('the page draws real content for a real account', () => {
   it('IS NOT BLANK', () => {

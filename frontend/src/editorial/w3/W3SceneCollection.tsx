@@ -15,6 +15,7 @@ import W3SceneDevelop from './W3SceneDevelop'
 import RidrMark from '../../components/RidrMark'
 import { FONT, T } from './w3tokens'
 import './w3scenes.css'
+import './w3SceneGallery.css'
 
 const RARITY: Record<string,string> = { alltag:'Klassiker', ernsthaft:'Besonders', selten:'Selten', legendaer:'Legendär', mythisch:'Mythisch', kurios:'Kurios' }
 
@@ -22,9 +23,24 @@ export function ScenePortrait({ scene, obscured = false, fill = false }: { scene
   const image = scene.image || scene.plate_url || backdropImage(scene.id)
   const canvas=useRef<HTMLCanvasElement>(null)
   const [ready,setReady]=useState(false)
-  useEffect(()=>{setReady(false);if(!obscured||!image)return;let active=true;const img=new Image();img.onload=()=>{if(!active)return;const c=canvas.current?.getContext('2d');if(c){c.clearRect(0,0,24,43);c.drawImage(img,0,0,24,43);setReady(true)}};img.src=image;return()=>{active=false}},[image,obscured])
+  const [failed,setFailed]=useState(false)
+  useEffect(()=>{
+    setReady(false);setFailed(false)
+    if(!obscured||!image)return
+    let active=true
+    const img=new Image()
+    img.onload=()=>{
+      if(!active||!canvas.current)return
+      const el=canvas.current,c=el.getContext('2d')
+      if(c){el.width=24;el.height=Math.max(1,Math.round(24*img.naturalHeight/img.naturalWidth));c.drawImage(img,0,0,el.width,el.height);setReady(true)}
+    }
+    img.onerror=()=>{if(active)setFailed(true)}
+    img.src=image
+    return()=>{active=false}
+  },[image,obscured])
+
   return <div className={`w3-scene-portrait ${obscured ? 'is-pixelated' : ''}`} style={{ background: T.surface2, ...(fill ? { height: '100%', aspectRatio: 'auto' } : {}) }}>
-    {obscured?<><canvas ref={canvas} width={24} height={43} aria-label="Verpixelte Vorschau der gesperrten Kulisse" style={{width:'100%',height:'100%',objectFit:'contain',imageRendering:'pixelated',opacity:ready?1:0}}/>{!ready&&<LockKeyhole size={26} style={{position:'absolute',inset:0,margin:'auto'}}/>}</>:image?<img className="w3-scene-world" src={image} alt={scene.image ? "Dein Fahrrad in der Kulisse" : "Kulissenvorschau mit Referenzrad"} loading="lazy" />:<LockKeyhole size={26}/>}
+    {obscured?<><canvas ref={canvas} width={24} height={43} aria-label="Verpixelte Vorschau der gesperrten Kulisse" style={{width:'100%',height:'100%',objectFit:'contain',imageRendering:'pixelated',opacity:ready?1:0}}/>{!ready&&<span className="w3-scene-placeholder"><LockKeyhole size={22}/>{(!image||failed)&&<small>Vorschau folgt</small>}</span>}</>:image&&!failed?<img onError={()=>setFailed(true)} className="w3-scene-world" src={image} alt={scene.image ? "Dein Fahrrad in der Kulisse" : "Kulissenvorschau mit Referenzrad"} loading="lazy" />:<span className="w3-scene-placeholder"><LockKeyhole size={22}/><small>Vorschau folgt</small></span>}
   </div>
 }
 
@@ -165,11 +181,15 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
         {!s.owned && s.progress?.pct != null && <div className="w3-collectible-progress"><div><i style={{ width: `${s.progress.pct * 100}%` }} /></div><span>{progressText(s)}</span></div>}
       </button>)}
     </div>
-    <motion.dialog ref={dialog} animate={opening ? { x:[0,0,-1,1,-2,2,0], rotate:[0,0,-.3,.3,-.45,.45,0], boxShadow:['0 24px 100px #0008','0 24px 100px #0008','0 24px 110px #000a','0 24px 110px #000a','0 24px 110px #000a','0 24px 100px #c6f53c18','0 24px 100px #0008'] } : {x:0,rotate:0,boxShadow:'0 24px 100px #0008'}} transition={{duration:3.6,times:[0,.4,.52,.64,.78,.92,1]}} aria-labelledby="scene-reward-title" className={`w3-scene-dialog tier-${selected?.tier ?? 'alltag'} ${sealed ? 'is-sealed' : ''} ${opening ? 'is-unlocking' : ''}`} onClose={() => { revealTimers.current.forEach(clearTimeout); revealTimers.current = []; setOpening(false); setSealed(false); try { navigator.vibrate?.(0) } catch { /* Optional haptics. */ } }} onClick={e => { if (e.target === e.currentTarget) dialog.current?.close() }}>
+    <motion.dialog ref={dialog} animate={opening ? { x:[0,0,-1,1,-2,2,0], rotate:[0,0,-.3,.3,-.45,.45,0], boxShadow:['0 24px 100px #0008','0 24px 100px #0008','0 24px 110px #000a','0 24px 110px #000a','0 24px 110px #000a','0 24px 100px #c6f53c18','0 24px 100px #0008'] } : {x:0,rotate:0,boxShadow:'0 24px 100px #0008'}} transition={{duration:3.6,times:[0,.4,.52,.64,.78,.92,1]}} aria-labelledby="scene-reward-title" className={`w3-scene-dialog tier-${selected?.tier ?? 'alltag'} ${!reveal ? 'is-inspection' : ''} ${sealed ? 'is-sealed' : ''} ${opening ? 'is-unlocking' : ''}`} onClose={() => { revealTimers.current.forEach(clearTimeout); revealTimers.current = []; setOpening(false); setSealed(false); try { navigator.vibrate?.(0) } catch { /* Optional haptics. */ } }} onClick={e => { if (e.target === e.currentTarget) dialog.current?.close() }}>
       {selected && <>
       {(selected.image || selected.plate_url || backdropImage(selected.id)) && <img src={selected.image || selected.plate_url || backdropImage(selected.id)!} alt="" style={{display:'none'}} />}
       {opening && <div className="w3-reveal-fx" aria-hidden><i className="w3-reveal-halo" /><i className="w3-reveal-ring first" /><i className="w3-reveal-ring second" /><i className="w3-reveal-flash" />{Array.from({length:8},(_,i)=><i key={i} className={`w3-reveal-shard s${i}`} />)}</div>}
-      <span className="w3-scene-live-status" role="status" aria-live="polite">{!sealed && reveal ? `${selected.name_de}: Kulisse freigeschaltet. ${selected.unlock_de}.` : ''}</span><button className="w3-scene-close" aria-label="Schließen" onClick={() => dialog.current?.close()}><X size={20} /></button>{sealed ? <div className={`w3-scene-sealed ${opening ? 'is-opening' : ''}`}><span className="w3-sealed-tier">{RARITY[selected.tier] ?? 'Klassiker'}</span><W3RewardCase opening={opening} onOpen={unveil}/><h2 id="scene-reward-title">Diese Fahrt bleibt.</h2><p>{selected.unlock_de}</p><button type="button" className="w3-scene-reveal-action" disabled={opening} onClick={unveil}>Kulisse enthüllen</button></div> : <div className={`w3-scene-unsealed ${opening ? 'is-developing' : ''}`}><ScenePortrait scene={selected} bike={bike} obscured={!selected.owned} />{opening && selected.image && <W3SceneDevelop src={selected.image} />}{['legendaer','mythisch'].includes(selected.tier) && <div className="w3-legendary-atmosphere" aria-hidden><i className="w3-legendary-light"/><i className="w3-legendary-light second"/></div>}<RewardIdentity scene={selected} newlyRevealed={reveal && selected.owned} />{!SCENE_COPY[selected.id] && <div className="w3-reward-caption" />}</div>}<div className="w3-scene-detail" hidden={sealed}>{!selected.owned && progressText(selected) && <p>{progressText(selected)}</p>}
+      <span className="w3-scene-live-status" role="status" aria-live="polite">{!sealed && reveal ? `${selected.name_de}: Kulisse freigeschaltet. ${selected.unlock_de}.` : ''}</span><button className="w3-scene-close" aria-label="Schließen" onClick={() => dialog.current?.close()}><X size={20} /></button>{sealed ? <div className={`w3-scene-sealed ${opening ? 'is-opening' : ''}`}><span className="w3-sealed-tier">{RARITY[selected.tier] ?? 'Klassiker'}</span><W3RewardCase opening={opening} onOpen={unveil}/><h2 id="scene-reward-title">Diese Fahrt bleibt.</h2><p>{selected.unlock_de}</p><button type="button" className="w3-scene-reveal-action" disabled={opening} onClick={unveil}>Kulisse enthüllen</button></div> : !reveal ? <div className="w3-scene-inspection">
+        <header className="w3-inspection-heading"><div className="w3-inspection-meta"><RidrMark size={20} color="var(--inspect-ink)"/><span className="w3-rarity-pill">{RARITY[selected.tier]??'Klassiker'}</span></div><h2 id="scene-reward-title">{SCENE_COPY[selected.id]??selected.name_de.replace(/^Die |^Der |^Das /,'')}</h2></header>
+        <div className="w3-inspection-art"><ScenePortrait scene={selected} bike={bike} obscured={!selected.owned}/>{selected.owned&&['legendaer','mythisch'].includes(selected.tier)&&<div className="w3-legendary-atmosphere" aria-hidden><i className="w3-legendary-light"/></div>}</div>
+        <div className="w3-inspection-evidence"><span>{selected.owned ? selected.starter ? 'Dein Hintergrund' : 'Verdient' : 'Freischalten mit'}</span><strong>{selected.unlock_de||(selected.starter?'Startkulisse':selected.name_de)}</strong></div>
+      </div> : <div className={`w3-scene-unsealed ${opening ? 'is-developing' : ''}`}><ScenePortrait scene={selected} bike={bike} obscured={!selected.owned} />{opening && selected.image && <W3SceneDevelop src={selected.image} />}{['legendaer','mythisch'].includes(selected.tier) && <div className="w3-legendary-atmosphere" aria-hidden><i className="w3-legendary-light"/><i className="w3-legendary-light second"/></div>}<RewardIdentity scene={selected} newlyRevealed={reveal && selected.owned} />{!SCENE_COPY[selected.id] && <div className="w3-reward-caption" />}</div>}<div className="w3-scene-detail" hidden={sealed}>{!selected.owned && progressText(selected) && <p>{progressText(selected)}</p>}
         {selected.owned && <div className="w3-scene-actions"><button disabled={selecting || selected.selected} onClick={async () => { try { await onSelect(selected.id); setSelected({ ...selected, selected: true }); setMessage('Als Hintergrund gesetzt') } catch { setMessage('Hintergrund konnte nicht gesetzt werden') } }}>{selected.selected ? 'Aktiver Hintergrund' : selecting ? 'Wird gesetzt…' : 'Als Hintergrund setzen'}</button>{selected.image && <button aria-label="Als Story teilen" disabled={sharing} onClick={() => void share()}><Share2 size={18} /><span>Teilen</span></button>}</div>}
         {selected.owned && selected.activity_id != null && onRide && <button className="w3-scene-ride" onClick={() => onRide(selected.activity_id!)}>Die Fahrt dazu <ChevronRight size={15} /></button>}
         {selected.owned && !selected.image && <p role="status">{selected.render_status === 'pending' ? 'Dein Rad wird in Szene gesetzt. Die Kulisse gehört dir bereits.' : 'Kulissenvorschau. Beim Auswählen wird dein eigenes Rad eingesetzt.'}</p>}
