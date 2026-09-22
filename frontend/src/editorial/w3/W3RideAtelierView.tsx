@@ -12,6 +12,7 @@ import { AtelierPlot, AtelierRideAnalysis, AtelierFTPHistory } from './AtelierRi
 import { AtelierStoryShare, type RideStory } from './AtelierStoryShare'
 import { ftpWindow, ftpPlot, ridePlot, rideMean, METRICS, formatValue, elapsed, type RideMetric, type PlotModel, type FTPEntry, type RideSample } from './atelierRideData'
 import { contributionAfter, contributionValue, planComparisonPlot, CoachRead, RideContributionView, RouteElevation, TrainingEmphasis, trainingEmphasis, type ContributionKey, type RideContributions } from './AtelierRideMeaning'
+import W3ReturnInsight from './W3ReturnInsight'
 import { AtelierZoneTracks } from './AtelierZoneTracks'
 import { coachEvidence, type CoachEvidence } from './atelierCoachData'
 import './w3RideAtelier.css'
@@ -161,6 +162,7 @@ export function RideAtelier({vm,review,rideDate,contributions,coachData,samples,
      {vm.polyline&&vm.polyline.length>1?<RideRouteMap points={vm.polyline} onOpen={onExpandMap}/>:<p className="atelier-empty">Keine GPS-Route aufgezeichnet.</p>}
      <RouteElevation samples={samples} onOpen={()=>{setMetric('altitude');setPanel('Analyse')}}/>
      <div className="atelier-ride-facts"><div><Clock3 size={17}/><strong>{duration==null?vm.hero.duration:`${Math.floor(duration/60)}h ${Math.round(duration%60)}min`}</strong><span>Fahrzeit</span></div><div><Mountain size={18}/><strong>{vm.climb}</strong><span>Höhenmeter</span></div><div><Route size={17}/><strong>{vm.avgSpeed}</strong><span>Ø Tempo</span></div></div>
+     <W3ReturnInsight eyebrow="Coach-Read" title={trainingEmphasis(analysisReview.zones).title} detail={analysisReview.summary} metrics={[{label:'FTP',value:`${formatValue(ftp)} W`,tone:'accent'},{label:'Fahrzeit',value:vm.hero.duration},{label:'Ø Tempo',value:vm.avgSpeed}]}/>
      <TrainingEmphasis review={analysisReview} onAnalyse={()=>setPanel('Zonen')}/>
     </>}
     {panel==='Zonen'&&<><div className="atelier-panel-title"><span>Leistungszonen</span><h2>Dein Trainingsreiz.</h2></div><ZoneDial review={analysisReview} selected={selectedZone} onSelect={setSelectedZone}/></>}

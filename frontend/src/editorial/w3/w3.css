@@ -22,6 +22,55 @@
 }
 .w3-root {background:var(--w-bg);color:var(--w-ink);font-family:var(--w-font);-webkit-font-smoothing:antialiased}
 
+/* A quiet proof surface shared by Plan, Fahrten and Erfolge. It is deliberately
+ * smaller than a card: one resolved change, a few numbers, one optional door.
+ * The same geometry makes the product feel authored instead of assembled from
+ * page-specific nudges. */
+.w3-return-insight {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 9px;
+  padding: 15px 16px 14px;
+  border: 1px solid var(--w-stroke);
+  border-radius: 22px;
+  background:
+    radial-gradient(110% 140% at 100% 0, color-mix(in srgb, var(--insight-accent) 12%, transparent), transparent 58%),
+    var(--w-surface);
+  color: var(--w-ink);
+  text-align: left;
+  text-decoration: none;
+  cursor: default;
+  overflow: hidden;
+}
+.w3-return-insight:is(button) { cursor: pointer; font: inherit; }
+.w3-return-insight:is(button):focus-visible { outline: 2px solid var(--insight-accent); outline-offset: 3px; }
+.w3-return-insight::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--w-ink) 8%, transparent);
+}
+.w3-return-insight-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.w3-return-insight-kicker { display: inline-flex; align-items: center; gap: 6px; color: var(--insight-accent); font-size: 9px; font-weight: 750; letter-spacing: 1.25px; text-transform: uppercase; }
+.w3-return-insight-signal { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.w3-return-insight-title { color: var(--w-ink); font-size: 17px; font-weight: 650; line-height: 1.12; letter-spacing: -.45px; text-wrap: balance; }
+.w3-return-insight-detail { max-width: 34em; color: var(--w-mid); font-size: 12px; font-weight: 520; line-height: 1.4; }
+.w3-return-insight-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 2px; }
+.w3-return-insight-metric { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding-top: 9px; border-top: 1px solid var(--w-rule); }
+.w3-return-insight-metric b { color: var(--w-ink); font-size: 15px; font-weight: 700; letter-spacing: -.35px; }
+.w3-return-insight-metric small { overflow: hidden; color: var(--w-quiet); font-size: 8.5px; font-weight: 700; letter-spacing: .7px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.w3-return-insight-metric.is-positive b { color: var(--w-training); }
+.w3-return-insight-action { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; margin-top: 1px; font-size: 11px; font-weight: 700; }
+@media (max-width: 360px) {
+  .w3-return-insight { padding-inline: 14px; }
+  .w3-return-insight-title { font-size: 16px; }
+  .w3-return-insight-metric b { font-size: 14px; }
+}
+
 /* The device frame: the pen frame is 390 wide, clipped. On desktop we center
  * it; on a phone it fills the viewport. The page body is the scroll container
  * (native momentum scroll); the bottom nav is viewport-fixed (see W3TabBar), so

@@ -1,9 +1,10 @@
 import { type CSSProperties, type ReactNode } from 'react'
 import { motion, useReducedMotion } from 'motion/react'
-import { Activity, HeartPulse, Moon, BatteryCharging, Waves, Timer, Wind, TrendingUp, Sparkles } from 'lucide-react'
+import { Activity, HeartPulse, Moon, BatteryCharging, Waves, Timer, Wind, TrendingUp } from 'lucide-react'
 import { T, FONT, EASE, grow, Kicker, DASH } from './w3tokens'
 import W3StatusBar from './W3StatusBar'
 import W3TopBar from './W3TopBar'
+import W3ReturnInsight from './W3ReturnInsight'
 import './w3.css'
 
 /**
@@ -127,6 +128,7 @@ function DriverRow({ d, reduce }: { d: DriverVm; reduce: boolean }) {
 export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & W3ReadinessActions) {
   const reduce = useReducedMotion()
   const trendMax = Math.max(1, ...vm.trend)
+  const trendDelta = vm.trend.length > 1 ? (vm.trend.at(-1)! - vm.trend.at(-2)!) : null
   return (
     <div className="w3-root">
       <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
@@ -138,14 +140,16 @@ export default function W3ReadinessView({ vm, onBack }: { vm: W3ReadinessVm } & 
         <div style={{ ...band(24), paddingTop: 6, gap: 16, alignItems: 'center' }}>
           <ReadinessRing score={vm.score} word={vm.word} tier={vm.tierLabel} />
           <span style={{ fontSize: 11, fontWeight: 600, color: T.quiet, textAlign: 'center' }}>{vm.dateNote}</span>
-          {/* Guidance */}
-          <div style={{ ...bubble(`${T.acid}33`), gap: 8, background: `linear-gradient(180deg, ${T.acid}1A, ${T.surface})` }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <div style={{ width: 26, height: 26, borderRadius: 100, background: T.acid, display: 'grid', placeItems: 'center' }}><Sparkles size={14} color={T.bg} /></div>
-              <span style={{ fontSize: 16, fontWeight: 700, letterSpacing: -0.3, color: T.ink }}>{vm.guidanceTitle}</span>
-            </div>
-            <span style={{ fontSize: 12.5, fontWeight: 500, lineHeight: 1.5, color: T.mid }}>{vm.guidanceBody}</span>
-          </div>
+          <W3ReturnInsight
+            eyebrow="Heute"
+            title={vm.guidanceTitle}
+            detail={vm.guidanceBody}
+            metrics={[
+              { label: 'Bereitschaft', value: vm.score == null ? DASH : `${Math.round(vm.score)}`, tone: vm.score != null && vm.score >= 70 ? 'positive' : 'accent' },
+              { label: 'Trend', value: trendDelta == null ? DASH : `${trendDelta >= 0 ? '+' : ''}${Math.round(trendDelta)}`, tone: trendDelta != null && trendDelta >= 0 ? 'positive' : 'quiet' },
+              ...(vm.tierLabel ? [{ label: 'Zone', value: vm.tierLabel }] : []),
+            ]}
+          />
         </div>
 
         {vm.explanation && <div style={band(16)}>{vm.explanation}</div>}

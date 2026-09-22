@@ -7,6 +7,7 @@ import { T, FONT, DASH, EASE, Reveal, band } from './w3tokens'
 import { lux, hairline, TNUM } from './w3surfaces'
 import W3WinsRhythm, { W3ConsistencyGrid, type W3RhythmVm } from './W3WinsRhythm'
 import type { W3WinsDockVm } from './W3WinsDockPanel'
+import W3ReturnInsight from './W3ReturnInsight'
 import './w3.css'
 
 /**
@@ -717,6 +718,20 @@ export function W3WinsContent({ vm }: { vm: W3WinsVm }) {
           <Eyebrow text={vm.rhythm.eyebrow} tier={1} />
           <Statement tier={1}>{vm.rhythm.statement}</Statement>
           <W3WinsRhythm vm={vm.rhythm.rhythm} />
+        </Chapter>
+      )}
+
+      {vm.ftp && (
+        <Chapter pad={22}>
+          <W3ReturnInsight
+            eyebrow="Was sich bewegt"
+            title={vm.ftp.statement}
+            detail={vm.ftp.caption}
+            metrics={[
+              { label: vm.ftp.firstLabel, value: `${vm.ftp.firstValue} ${vm.ftp.unit}` },
+              { label: vm.ftp.nowLabel, value: `${vm.ftp.nowValue} ${vm.ftp.unit}`, tone: 'accent' },
+            ]}
+          />
         </Chapter>
       )}
 

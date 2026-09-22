@@ -94,7 +94,7 @@ export default function W3RidesView({vm}:{vm:W3RidesVm}){
   *  gegen genau die Grenze, aus der die Zahl darueber gerechnet ist. Fehlt der
   *  Rhythmus noch, filtert nichts -- lieber alle Fahrten als die falschen. */
  const windowStart=rhythm?.[period]?.buckets?.[0]?.start??null
- const dock=<RideSummary vm={vm} rhythm={rhythm} period={period} onPeriod={setPeriod} onSetGoal={()=>setGoalSheet(true)}/>
+ const dock=<RideSummary vm={vm} rhythm={rhythm} period={period} onPeriod={setPeriod} onSetGoal={()=>setGoalSheet(true)} onOpenLatest={id=>nav(`/e/w3-ride/${id}`)}/>
  const {inShell,portal}=useHeroPanel(dock)
  const content=<RideJournal vm={vm} period={period} windowStart={windowStart} windowLabel={rhythm?.[period]?.label??null} onOpen={id=>nav(`/e/w3-ride/${id}`)}/>
  const sheet=goalSheet?<SeasonGoalSheet onClose={()=>setGoalSheet(false)}/>:null
