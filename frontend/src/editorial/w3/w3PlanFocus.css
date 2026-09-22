@@ -329,3 +329,16 @@
 }
 @keyframes w3-plan-proof-in{from{opacity:0;transform:translateY(7px) scale(.985)}to{opacity:1;transform:none}}
 @media(prefers-reduced-motion:reduce){.w3-plan-experience.focus-active .w3-plan-content{scroll-behavior:auto}.w3-plan-alignment{animation:none}}
+
+/* The load curve is the orientation anchor. Give it a stable canvas instead
+   of letting the compressed one-screen layout collapse it to a hairline. */
+.w3-plan-experience.focus-active .focus-plan-rail{
+  height:clamp(124px,18dvh,158px);
+  min-height:clamp(124px,18dvh,158px);
+  flex:none;
+}
+.w3-plan-experience.focus-active .focus-plan-landscape{
+  height:clamp(82px,12dvh,112px);
+  min-height:clamp(82px,12dvh,112px);
+  flex:none;
+}
