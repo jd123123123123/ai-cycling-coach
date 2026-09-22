@@ -68,3 +68,34 @@ Physiology terminology was checked against TrainingPeaks' primary coaching refer
 The illustrative stream now uses unequal climbs rather than identical repeated humps; recorded demo ascent remains 5,639 m and elapsed time 285 minutes. Its zone distribution is reused consistently by the training emphasis, dial and coach. This fixture refinement is not an edit to any real ride.
 
 Final checks for this iteration: 30 focused tests pass, TypeScript and the production build pass, and the existing large-map-chunk warning remains. Visually inspected genuine React views at a 390 × 844 iframe viewport: coach next action, year contribution, zone plan difference, and the 1-second best-effort selection. Compacted the coach after its next-step card was initially clipped; shortened the best-effort heading to keep the enlarged duration selection legible. No production deployment was performed.
+
+### 22 September — aligned zone references and deeper Coach-Read
+
+User request: show recommended/actual in the zone graphic; make Coach-Read substantively deeper using Garmin bike data.
+
+The two concentric zone tracks now share a seconds scale and each zone's start angle. Zone capacity is max(recorded, recommended); neither distribution is stretched independently to 100%. Missing recommendations have no reference arc, recorded zero remains zero. Centre shows selected recorded minutes plus recommended minutes. PNG shares use the identical geometry.
+
+Coach is now an evidence adapter over existing `RaceDebrief` and `StreamAnalysis` types, not a new LLM call. Eight chapters: summary, pacing, body response, technique, climbing, energy, development, plan consequence. Summary links into the analysis. Detailed interpretation is progressively disclosed. UI remains W3 black, restrained lime, existing type and chart primitives. Local preview uses a separate explicitly synthetic API-shaped fixture; no real rider data was fetched and no live route was replaced. Production wiring is still part of adopting this preview.
+
+Repository source audit:
+- `garmin_details_parser.py` maps power, heart rate, cadence, GPS, distance, altitude, temperature, balance, pedal effectiveness/smoothness, PCO/power phases, stamina/potential and performance condition.
+- `ActivityStream` persists raw channels plus NP, decoupling, kJ, power models and MMP.
+- Existing debrief endpoint exposes pacing, climbs, efforts, efficiency, modeled W′ matches, quadrants, fueling and prescriptions.
+- Existing stream-analysis endpoint exposes L/R, PCO, power phases, stamina and performance condition. Training Effect, consumed fuel/fluid and a temperature curve are not part of this typed Coach input; the UI explicitly does not invent them. More Garmin capabilities are possible than are currently exposed here.
+- This adapter uses `durability.aerobic_decoupling`'s positive-drift convention via RaceDebrief, not the opposite-signed legacy advanced-metrics implementation.
+
+Interpretation limits: second-half NP loss is not proof of fatigue; mixed terrain/variability changes its meaning. Device Stamina is an estimate. Fueling is modeled and intake unknown unless recorded. Single-ride MMP is not a measured FTP gain. Existing historical effort reference has no disclosed time window; label it a reference, not an invented before-plan or matched-ride baseline. Actual plan mutations remain the existing engine's responsibility; pending changes must never appear applied.
+
+Primary references checked 22 September 2026:
+- Garmin Training Effect: https://www.garmin.com/en-US/garmin-technology/cycling-science/physiological-measurements/training-effect/
+- Garmin Normalized Power: https://support.garmin.com/en-AU/?faq=8r4llV3DFK5jc13BOHion5
+- Garmin Real-time Stamina: https://www.garmin.com/en-AU/garmin-technology/cycling-science/physiological-measurements/real-time-stamina/
+- Garmin Cycling Dynamics: https://www.garmin.com/de-AT/garmin-technology/cycling-science/cycling-dynamics/
+
+Tests cover missing sensors and references, true zero vs null, interval-weighted cadence, split and drift semantics, pending adaptation, unknown intake, equal angular units in dual rings, and shared export. Preview validation is local only; not deployment approval.
+
+### Viewport follow-up and final local validation
+
+All seven ride panels (including FTP inside Bestwerte) and eight Coach chapters now use the available viewport height. Header and bottom navigation remain fixed in the layout, charts receive the flexible space. The small preview toolbar still identifies demonstration data. Explanation text, source coverage and ride details open a bounded reader with previous/next controls, focus management, Escape and close; they no longer append to the page. Technique switches between cadence and force distribution. Main UI keeps a scroll fallback for unusually large accessibility text, but the tested default layouts do not overflow.
+
+Validated with Chromium, reduced motion, 375×667, 390×844, 430×932 and 1266×712: 60 panel/chapter scenarios, zero document or panel overflow. Another 44 explanation pages and share dialogs at 375×667 and 390×844: zero overflow. Genuine 375 px screenshots inspected for overview Coach and dual zone ring. Four test suites, 42 tests passed. TypeScript and production build passed; pre-existing large MapLibre chunk warning remains. No deployment performed.

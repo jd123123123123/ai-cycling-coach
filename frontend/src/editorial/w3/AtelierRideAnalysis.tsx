@@ -1,5 +1,6 @@
 import { useId, type CSSProperties, type PointerEvent } from 'react'
-import { ArrowUpRight, Info } from 'lucide-react'
+import { ArrowUpRight } from 'lucide-react'
+import { AtelierExplanation } from './AtelierExplanation'
 import { T } from './w3tokens'
 import { gradeColour } from './gradeColours'
 import { smoothCurve } from './w3SmoothCurve'
@@ -55,6 +56,6 @@ export function AtelierFTPHistory({entries,days,selected,onDays,onSelect}:{entri
   <div className="atelier-analysis-reading"><div><span>{selected==null?'Zuletzt gespeicherte FTP':active?.date}</span><strong>{f(active?.watts)}<small>W</small></strong></div>{delta!=null&&<div className="atelier-analysis-context"><b className={delta>0?'is-positive':''}>{delta>0?'+':''}{f(delta)} W</b><span>im Zeitraum</span></div>}</div>
   {entries.length?<AtelierPlot model={ftpPlot(entries,selected)} onInspect={inspect} label="Gespeicherte FTP-Werte über Kalenderzeit, Detailachse in Watt"/>:<p className="atelier-empty">Keine FTP-Werte in diesem Zeitraum.</p>}
   <div className="atelier-ftp-points" aria-label="FTP-Messung auswählen">{entries.map((e,i)=><button key={e.date} aria-pressed={active===e} aria-label={`${e.date}: ${e.watts} Watt, ${e.source}`} onClick={()=>onSelect(i)}><i/><span>{new Date(`${e.date}T12:00:00`).toLocaleDateString('de-DE',{day:'numeric',month:'numeric'})}</span></button>)}</div>
-  <details className="atelier-evidence-note"><summary>{active?.source??'Keine Messung'}{active?` · ${new Date(`${active.date}T12:00:00`).toLocaleDateString('de-DE')}`:''}<Info size={14}/></summary><p>Gespeicherte Werte, kein FTP-Gewinn aus einer einzelnen Fahrt. Die Linie verbindet die vorhandenen Einträge.</p></details>
+  <AtelierExplanation title={active?.source??'Messung einordnen'}><p>Gespeicherte Werte, kein FTP-Gewinn aus einer einzelnen Fahrt. Die Linie verbindet die vorhandenen Einträge.</p></AtelierExplanation>
  </div>
 }

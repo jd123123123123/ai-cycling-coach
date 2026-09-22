@@ -1,15 +1,11 @@
-import { useId, useState } from 'react'
+import { useId } from 'react'
 import { ArrowUpRight, Clock3, Mountain, Route } from 'lucide-react'
 import type { TrainingReview } from '../../api/trainingReview'
 import { T } from './w3tokens'
 import { smoothCurve } from './w3SmoothCurve'
-import { elapsed, formatValue, POWER_COLORS, type PlotModel, type RideSample } from './atelierRideData'
-import { AtelierPlot } from './AtelierRideAnalysis'
-
-const zonePurpose = [
-  'Lockere Belastung', 'Aerobe Ausdauer', 'Längeres, zügiges Fahren',
-  'Leistung nahe deiner Schwelle', 'Hohe aerobe Leistung', 'Kurze, intensive Belastungen', 'Sehr kurze Leistungsspitzen',
-]
+import { elapsed, formatValue, type PlotModel, type RideSample } from './atelierRideData'
+import { AtelierExplanation } from './AtelierExplanation'
+export { CoachRead } from './AtelierCoachRead'
 
 /** Zone exposure describes where time was spent; it is not a measured fitness gain. */
 export function trainingEmphasis(zones: TrainingReview['zones']) {
@@ -73,22 +69,6 @@ export function rideImpactPlot(review:TrainingReview):PlotModel|null {
     {color:T.warn,area:true,points:points.map(p=>({x:p.day/end,y:p.fatigue}))},
     {color:T.acid,points:points.map(p=>({x:p.day/end,y:p.fitness}))},
   ]}
-}
-
-export function CoachRead({review,onPlan,onFTP}:{review:TrainingReview;onPlan:()=>void;onFTP:()=>void}) {
-  const {zones,total,focus,title}=trainingEmphasis(review.zones)
-  const model=rideImpactPlot(review),change=review.changes[0],applied=review.adaptation?.state==='adapted'
-  const [selected,setSelected]=useState<number|null>(null),[why,setWhy]=useState(false)
-  const active=zones.find(z=>z.index===selected)??focus[0]??zones[0]
-  const purpose=active?zonePurpose[active.index]??'Zeit im gemessenen Leistungsbereich':null
-  return <div className="atelier-coach">
-    <div className="atelier-panel-title"><span>Coach-Read</span><h2>{title}.</h2></div>
-    <div className="atelier-coach-focus"><div className="atelier-coach-pills" aria-label="Trainingsreiz erklären">{zones.filter(z=>z.index>0).map(z=><button key={z.index} aria-pressed={active?.index===z.index} onClick={()=>setSelected(z.index)}>{z.label}</button>)}</div>
-      {active&&<><div className="atelier-coach-dose"><strong>{formatValue(active.seconds/60)}<small>min</small></strong><span>{formatValue(active.seconds/total*100)} % der Zonenzeit</span></div><div className="atelier-coach-dose-bar" aria-hidden="true">{zones.map(z=><i key={z.index} style={{flex:z.seconds,background:z.index===active.index?POWER_COLORS[z.index]:T.heroOff}}/>)}</div><p>{purpose}</p></>}
-    </div>
-    {model&&<section className="atelier-coach-impact"><header><span>Planwirkung</span><button aria-expanded={why} onClick={()=>setWhy(!why)}>Modell <span>ⓘ</span></button></header><div className="atelier-coach-key"><span><i style={{background:T.warn}}/>Ermüdung</span><span><i style={{background:T.acid}}/>Fitness</span><small>∆ zum Plan</small></div><AtelierPlot model={model} label="Modellierte zusätzliche Ermüdung und Fitness gegenüber der Empfehlung, keine gemessene Verbesserung"/>{why&&<p className="atelier-training-limit">{review.impact_basis??'Vereinfachtes Belastungsmodell.'} Die Kurven zeigen die zusätzliche Wirkung gegenüber der Empfehlung. Sie belegen keinen FTP-Gewinn.</p>}</section>}
-    {change?<button className="atelier-coach-action" onClick={onPlan}><span><small>{applied?'Im Plan angepasst':'Anpassung prüfen'} · {new Date(`${change.date}T12:00:00`).toLocaleDateString('de-DE',{day:'numeric',month:'short'})}</small><strong>{change.after}</strong></span><ArrowUpRight size={20}/></button>:<button className="atelier-coach-action" onClick={onFTP}><span><small>Dein nächster Schritt</small><strong>FTP-Verlauf ansehen</strong></span><ArrowUpRight size={20}/></button>}
-  </div>
 }
 
 export type ContributionKey = 'distance' | 'time' | 'ascent'
@@ -164,7 +144,6 @@ export function ContributionGraphic({data,selected}:{data:RideContributions;sele
 
 export function RideContributionView({ data, selected, onSelect }: { data: RideContributions; selected: ContributionKey; onSelect: (key: ContributionKey) => void }) {
   const active = data.metrics.find(m => m.key === selected) ?? data.metrics[0]
-  const [explained, setExplained] = useState(false)
   if (!active) return <p className="atelier-empty">Noch keine Jahreswerte verfügbar.</p>
   return <div className="atelier-contribution">
     <div className="atelier-panel-title"><span>{data.period}</span><h2>Diese Fahrt zählt.</h2></div>
@@ -173,7 +152,6 @@ export function RideContributionView({ data, selected, onSelect }: { data: RideC
       const Icon = contributionIcons[m.key]
       return <button key={m.key} aria-label={`${m.label} ansehen`} aria-pressed={m.key === selected} onClick={() => onSelect(m.key)}><Icon size={19}/><strong>{m.added == null ? '—' : `+${contributionValue(m.added, m.key)}`}</strong><span>{m.key==='time'?'Stunden':m.unit}</span></button>
     })}</div>
-    <button className="atelier-contribution-explain" aria-expanded={explained} onClick={() => setExplained(!explained)}>Was wird gezählt?<span>{explained ? '−' : '+'}</span></button>
-    {explained && <p className="atelier-training-limit">Fahrten seit Jahresbeginn bis zu dieser Ausfahrt. Vorher ohne diese Fahrt, jetzt inklusive. Sattelzeit ist die aufgezeichnete Fahrzeit, ohne Standzeit.</p>}
+    <AtelierExplanation title="Was wird gezählt?"><p>Fahrten seit Jahresbeginn bis zu dieser Ausfahrt. Vorher ohne diese Fahrt, jetzt inklusive. Sattelzeit ist die aufgezeichnete Fahrzeit, ohne Standzeit.</p></AtelierExplanation>
   </div>
 }

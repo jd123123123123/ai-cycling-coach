@@ -5,16 +5,19 @@ import { T, FONT } from './w3tokens'
 import { FIXTURE, REVIEW } from './W3RideDetailPreview'
 import { FIXTURE as TODAY } from './W3TodayPreview'
 import W3RideBestEfforts from './W3RideBestEfforts'
-import W3TrainingReview from './W3TrainingReview'
-import W3RideMapHero from './W3RideMapHero'
+import { AtelierExplanation } from './AtelierExplanation'
 import type { TrainingReview } from '../../api/trainingReview'
 import type { W3RideVm } from './W3RideDetailView'
 import type { W3Block } from './W3Sections'
 import { AtelierPlot, AtelierRideAnalysis, AtelierFTPHistory } from './AtelierRideAnalysis'
 import { AtelierStoryShare, type RideStory } from './AtelierStoryShare'
 import { ATELIER_SAMPLES, ATELIER_FTP, ftpWindow, ftpPlot, ridePlot, rideMean, METRICS, formatValue, elapsed, powerZone, type RideMetric, type PlotModel, type RideSample } from './atelierRideData'
-import { ATELIER_CONTRIBUTIONS, contributionAfter, contributionValue, planComparisonPlot, CoachRead, rideImpactPlot, RideContributionView, RouteElevation, TrainingEmphasis, trainingEmphasis, type ContributionKey, type RideContributions } from './AtelierRideMeaning'
+import { ATELIER_CONTRIBUTIONS, contributionAfter, contributionValue, planComparisonPlot, CoachRead, RideContributionView, RouteElevation, TrainingEmphasis, trainingEmphasis, type ContributionKey, type RideContributions } from './AtelierRideMeaning'
+import { AtelierZoneTracks } from './AtelierZoneTracks'
+import { ATELIER_COACH } from './atelierCoachFixture'
+import { coachEvidence, type CoachEvidence } from './atelierCoachData'
 import './w3RideAtelier.css'
+import './w3RideAtelierViewport.css'
 
 const n = (v:number) => v.toLocaleString('de-DE',{maximumFractionDigits:1})
 const zoneMinutes = (seconds:number) => formatValue(seconds/60,Math.abs(seconds)<600?1:0)
@@ -48,35 +51,34 @@ function RouteObject({points}:{points:[number,number][]}){
  </svg>
 }
 
-/** Every arc is a share of recorded zone time. A tap exposes minutes and any stored reference. */
+/** Aligned inner/outer arcs compare recommended and actual minutes on one scale. */
 export function ZoneDial({review,selected:controlled,onSelect}:{review:TrainingReview;selected?:number|null;onSelect?:(i:number)=>void}){
  const zones=review.zones.map((z,i)=>({...z,index:i})).filter(z=>(z.actual_seconds??0)>0||Boolean(review.planned_title&&(z.planned_seconds??0)>0))
  const [selected,setSelected]=useState<number|null>(null)
  const total=zones.reduce((sum,z)=>sum+(z.actual_seconds??0),0)
  const dominant=zones.reduce((a,b)=>(a?.actual_seconds??0)>(b.actual_seconds??0)?a:b,zones[0])
  const active=zones.find(z=>z.index===(controlled===undefined?selected:controlled))??dominant
- const reduce=useReducedMotion(),id=useId()
+ const id=useId()
  if(!total||!active)return <p className="atelier-empty">Keine Leistungsbereiche aufgezeichnet.</p>
- let accumulated=0
- const parts=zones.map(z=>{const offset=accumulated/total*100,length=(z.actual_seconds??0)/total*100;accumulated+=z.actual_seconds??0;return {...z,offset,length}})
  const actual=active.actual_seconds
  const percent=actual==null?null:Math.round(actual/total*100)
  const planned=review.planned_title?active.planned_seconds:null
  const difference=planned==null||actual==null?null:actual-planned
- const comparisonMax=Math.max(1,active.actual_seconds??0,planned??0)
+ const hasPlan=Boolean(review.planned_title&&review.zones.some(z=>z.planned_seconds!=null))
  return <>
+  <div className="atelier-zone-ring-key"><span><i/>Gefahren</span>{hasPlan&&<span><i/>Empfohlen</span>}</div>
   <div className="atelier-dial">
    <svg viewBox="0 0 360 350" role="img" aria-label={actual==null?`${active.label}: keine Messung`:`${active.label}: ${zoneMinutes(actual)} Minuten, ${percent} Prozent der gemessenen Zonenzeit`}>
     <defs><linearGradient id={id} x1="0" x2=".7" y1="0" y2="1"><stop stopColor={T.acidLite}/><stop offset="1" stopColor={T.acidDeep}/></linearGradient></defs>
     <circle cx="180" cy="172" r="140" fill="none" stroke={T.rule}/>
     {Array.from({length:60},(_,i)=>{const a=i*Math.PI/30;return <line key={i} x1={180+Math.sin(a)*149} y1={172-Math.cos(a)*149} x2={180+Math.sin(a)*(i%5?152:157)} y2={172-Math.cos(a)*(i%5?152:157)} stroke={i%5?T.heroOff:T.mid} strokeWidth="1"/>})}
-    {parts.filter(z=>z.length>0).map(z=><motion.circle key={z.index} cx="180" cy="172" r="122" pathLength="100" transform="rotate(-90 180 172)" fill="none" stroke={z.index===active.index?`url(#${id})`:T.heroOff} strokeWidth={z.index===active.index?22:12} strokeDasharray={`${Math.max(.01,z.length-1.3)} ${100-Math.max(.01,z.length-1.3)}`} strokeDashoffset={-z.offset} initial={false} animate={{opacity:z.index===active.index?1:.6}} transition={{duration:reduce?0:.25}}/>) }
-    <circle cx="180" cy="172" r="101" fill="none" stroke={T.rule}/>
+    <AtelierZoneTracks actual={review.zones.map(z=>z.actual_seconds)} planned={hasPlan?review.zones.map(z=>z.planned_seconds):undefined} selected={active.index} color={`url(#${id})`}/>
+
    </svg>
-   <div className="atelier-dial-reading" aria-live="polite"><span>{active.label}</span><strong key={active.label}>{actual==null?'—':zoneMinutes(actual)}<small>min</small></strong><span>{percent==null?'Messung fehlt':`${percent} % deiner Zonenzeit`}</span></div>
+   <div className="atelier-dial-reading" aria-live="polite"><span>{active.label}</span><strong key={active.label}>{actual==null?'—':zoneMinutes(actual)}<small>min</small></strong><span>{actual==null?'Messung fehlt':planned!=null?`${zoneMinutes(planned)} min empfohlen`:`${percent} % deiner Zonenzeit`}</span></div>
   </div>
   <div className="atelier-zone-select" role="group" aria-label="Leistungsbereich wählen">{zones.map(z=><button type="button" key={z.index} aria-pressed={active.index===z.index} aria-label={`Zone ${z.index+1}: ${z.label}`} onClick={()=>{setSelected(z.index);onSelect?.(z.index)}}><span>Z{z.index+1}</span><i style={{height:`${8+(z.actual_seconds??0)/total*38}px`}}/></button>)}</div>
-  {planned!=null?<div className="atelier-zone-compare"><div><span>Empfohlen <strong>{zoneMinutes(planned)} min</strong></span><strong>{difference==null?'—':`${difference>0?'+':''}${zoneMinutes(difference)} min`}<span>{difference==null?'Messung fehlt':difference===0?'wie geplant':difference>0?'mehr als geplant':'weniger als geplant'}</span></strong></div><div className="atelier-zone-rails"><i style={{width:`${planned/comparisonMax*100}%`}}/>{actual!=null&&<b style={{width:`${actual/comparisonMax*100}%`}}/>}</div><div className="atelier-zone-key"><span><i/>Empfohlen</span>{actual!=null&&<span><i/>Gefahren</span>}</div></div>:<p className="atelier-zone-context">Zeit im gemessenen Leistungsbereich.</p>}
+  {planned!=null?<div className="atelier-zone-compare"><div><span>Empfohlen <strong>{zoneMinutes(planned)} min</strong></span><strong>{difference==null?'—':`${difference>0?'+':''}${zoneMinutes(difference)} min`}<span>{difference==null?'Messung fehlt':difference===0?'wie geplant':difference>0?'mehr als geplant':'weniger als geplant'}</span></strong></div></div>:<p className="atelier-zone-context">Zeit im gemessenen Leistungsbereich.</p>}
  </>
 }
 
@@ -111,7 +113,7 @@ export function PlanConsequence({review,rideDate,samples,ftp}:{review:TrainingRe
  </div>
 }
 
-export function RideAtelier({vm,review,rideDate,contributions}:{vm:W3RideVm;review:TrainingReview;rideDate:string;contributions?:RideContributions}){
+export function RideAtelier({vm,review,rideDate,contributions,coachData}:{vm:W3RideVm;review:TrainingReview;rideDate:string;contributions?:RideContributions;coachData?:CoachEvidence}){
  const [panel,setPanel]=useState<Panel>(()=>{const requested=new URLSearchParams(window.location.search).get('panel');return requested==='Coach'?'Coach':requested==='Leistung'?'Analyse':nav.find(p=>p===requested)??'Fahrt'}),[details,setDetails]=useState(false)
  const reduce=useReducedMotion()
  const [metric,setMetric]=useState<RideMetric>(()=>METRICS.find(m=>m.key===new URLSearchParams(window.location.search).get('metric'))?.key??'power'),[sample,setSample]=useState<number|null>(null),[sharing,setSharing]=useState(false)
@@ -136,8 +138,9 @@ export function RideAtelier({vm,review,rideDate,contributions}:{vm:W3RideVm;revi
  if(panel==='Bestwerte'&&bestMode==='ftp'){const active=history[ftpIndex??history.length-1],first=history[0],last=history.at(-1);story={...story,routePath:undefined,title:'Dein FTP-Verlauf.',eyebrow:`FTP / ${days} Tage`,value:formatValue(active?.watts),unit:'W',caption:active?`${active.source} am ${active.date}`:'Keine Messungen',plot:ftpPlot(history,ftpIndex),facts:[{label:'Erster Wert',value:`${formatValue(first?.watts)} W`},{label:'Letzter Wert',value:`${formatValue(last?.watts)} W`},{label:'Veränderung',value:history.length>1?`${last!.watts-first.watts>0?'+':''}${formatValue(last!.watts-first.watts)} W`:'—'}]}}
  if(panel==='Plan'){const load=review.pairs.find(p=>p.unit==='TSS'),delta=load?.actual!=null&&load.planned!=null&&review.planned_title?load.actual-load.planned:null;story={...story,routePath:undefined,title:'Deine Fahrt im Plan.',eyebrow:vm.title,value:delta==null?'—':`${delta>0?'+':''}${formatValue(delta)}`,unit:'TSS',caption:'Lime: gefahren / gestrichelt: Plan',plot:planComparisonPlot(review,ATELIER_SAMPLES,280)??undefined,facts:[{label:'Gefahren',value:`${formatValue(load?.actual)} TSS`},{label:'Empfohlen',value:`${formatValue(load?.planned)} TSS`},{label:'Planfolge',value:review.changes[0]?.after??'Keine Änderung'}]}}
  if(panel==='Beitrag') {const current=contributions?.metrics.find(m=>m.key===contribution);story={...story,routePath:undefined,plot:undefined,title:'Diese Fahrt zählt.',eyebrow:contributions?.period??'Dein Beitrag',value:current?.added==null?'—':`+${contributionValue(current.added,current.key)}`,unit:current?.unit??'',caption:current?`${current.label} dazu`:'Noch keine Jahreswerte verfügbar',contribution:current?{before:contributionValue(current.before,current.key),after:contributionValue(contributionAfter(current),current.key),unit:current.unit,share:contributionAfter(current)!=null&&contributionAfter(current)!>0?current.added!/contributionAfter(current)!:null}:undefined,contributionData:contributions?{data:contributions,selected:contribution}:undefined,facts:contributions?.metrics.map(m=>({label:m.label,value:m.added==null?'—':`+${contributionValue(m.added,m.key)} ${m.unit}`}))??[]}}
- if(panel==='Zonen'){const total=actualZoneSeconds.reduce((s,n)=>s+n,0),index=selectedZone??actualZoneSeconds.indexOf(Math.max(...actualZoneSeconds));story={...story,routePath:undefined,plot:undefined,title:analysisReview.zones[index].label,eyebrow:'Dein Trainingsreiz',value:formatValue(actualZoneSeconds[index]/60),unit:'min',caption:`${formatValue(actualZoneSeconds[index]/total*100)} % deiner Zonenzeit`,zoneRing:{seconds:actualZoneSeconds,selected:index},facts:[{label:'Fahrzeit',value:vm.hero.duration},{label:'FTP zur Fahrt',value:'280 W'},{label:'Empfohlen',value:analysisReview.zones[index].planned_seconds==null?'—':`${formatValue(analysisReview.zones[index].planned_seconds!/60)} min`}]}}
- if(panel==='Coach'){const focus=trainingEmphasis(analysisReview.zones).focus[0];story={...story,routePath:undefined,title:trainingEmphasis(analysisReview.zones).title,eyebrow:'Coach-Read',value:focus?formatValue(focus.seconds/60):'—',unit:'min',caption:'Modellierte Wirkung der Abweichung vom Plan',plot:rideImpactPlot(review)??undefined,facts:[{label:'Trainingsreiz',value:focus?.label??'Offen'},{label:'Fahrzeit',value:vm.hero.duration},{label:'Planfolge',value:review.changes[0]?.after??'Keine Änderung'}]}}
+ if(panel==='Zonen'){const total=actualZoneSeconds.reduce((s,n)=>s+n,0),index=selectedZone??actualZoneSeconds.indexOf(Math.max(...actualZoneSeconds));story={...story,routePath:undefined,plot:undefined,title:analysisReview.zones[index].label,eyebrow:'Dein Trainingsreiz',value:formatValue(actualZoneSeconds[index]/60),unit:'min',caption:`${formatValue(actualZoneSeconds[index]/total*100)} % deiner Zonenzeit`,zoneRing:{seconds:actualZoneSeconds,planned:review.planned_title?analysisReview.zones.map(z=>z.planned_seconds):undefined,selected:index},facts:[{label:'Fahrzeit',value:vm.hero.duration},{label:'FTP zur Fahrt',value:'280 W'},{label:'Empfohlen',value:analysisReview.zones[index].planned_seconds==null?'—':`${formatValue(analysisReview.zones[index].planned_seconds!/60)} min`}]}}
+ if(panel==='Coach'){const insight=coachData?coachEvidence(coachData,analysisReview):null,p=coachData?.debrief?.pacing;story={...story,routePath:undefined,title:insight?.pacingTitle??'Deine Fahrt analysiert.',eyebrow:'Coach-Read',value:insight?.split==null?'—':`${insight.split>0?'+':''}${formatValue(insight.split,1)}`,unit:'% NP',caption:'Zweite Hälfte gegenüber erster Hälfte / Terrain berücksichtigen',plot:undefined,comparisons:p?[{label:'Normalisierte Leistung',actual:p.second_half_np,planned:p.first_half_np,unit:'W',labels:['Erste Hälfte','Zweite Hälfte']}]:undefined,facts:[{label:'Erste Hälfte',value:`${formatValue(p?.first_half_np)} W`},{label:'Zweite Hälfte',value:`${formatValue(p?.second_half_np)} W`},{label:'HF-Drift',value:`${formatValue(insight?.drift,1)} %`}]}}
+
  return <article className="atelier-device">
   <header className="atelier-app-header">{panel==='Coach'?<button aria-label="Zurück zur Fahrt" onClick={()=>setPanel('Fahrt')}><ArrowLeft size={20}/></button>:<a href="/e/w3-ride-preview" aria-label="Zur bisherigen Vorschau"><ArrowLeft size={20}/></a>}<span>{vm.hero.dateLine.split(' · ')[0]}</span><div className="atelier-header-actions">{panel!=='Coach'&&<button className="atelier-coach-open" onClick={()=>setPanel('Coach')}>Coach<ArrowUpRight size={13}/></button>}<button type="button" aria-label="Diese Ansicht teilen" onClick={()=>setSharing(true)}><Share2 size={18}/></button><button type="button" onClick={()=>setDetails(!details)} aria-expanded={details} aria-label={details?'Details schließen':'Fahrtdetails öffnen'}>{details?<X size={20}/>:<Info size={20}/>}</button></div></header>
   <div className="atelier-story" onTouchStart={e=>{e.currentTarget.dataset.touch=String(e.touches[0].clientX);e.currentTarget.dataset.touchY=String(e.touches[0].clientY)}} onTouchEnd={e=>{if(panel==='Coach'||(e.target as Element).closest('svg,input,button'))return;const diff=e.changedTouches[0].clientX-Number(e.currentTarget.dataset.touch);if(Math.abs(diff)>70&&Math.abs(diff)>Math.abs(e.changedTouches[0].clientY-Number(e.currentTarget.dataset.touchY))){const i=nav.indexOf(panel);setPanel(nav[Math.max(0,Math.min(nav.length-1,i+(diff<0?1:-1)))])}}}>
@@ -154,13 +157,13 @@ export function RideAtelier({vm,review,rideDate,contributions}:{vm:W3RideVm;revi
     {panel==='Analyse'&&<AtelierRideAnalysis samples={ATELIER_SAMPLES} metric={metric} selected={sample} ftp={280} hrMax={190} onMetric={setMetric} onSelect={setSample}/>}
     {panel==='Bestwerte'&&<><div className="atelier-best-mode" aria-label="Leistungsentwicklung auswählen"><button aria-pressed={bestMode==='efforts'} onClick={()=>setBestMode('efforts')}>Bestwerte der Fahrt</button><button aria-pressed={bestMode==='ftp'} onClick={()=>setBestMode('ftp')}>FTP-Trend</button></div>{bestMode==='efforts'?<><div className="atelier-panel-title"><h2>Deine Bestwerte.</h2></div><W3RideBestEfforts ranks={vm.ranks} selectedDuration={effort} onSelectDuration={setEffort}/>{!vm.ranks.length&&<p className="atelier-empty">Noch keine vergleichbaren Leistungswerte.</p>}</>:<AtelierFTPHistory entries={history} days={days} selected={ftpIndex} onDays={n=>{setDays(n);setFtpIndex(null)}} onSelect={setFtpIndex}/>}</>}
     {panel==='Plan'&&<PlanConsequence review={analysisReview} rideDate={rideDate} samples={ATELIER_SAMPLES} ftp={280}/>}
-    {panel==='Coach'&&<CoachRead review={analysisReview} onPlan={()=>setPanel('Plan')} onFTP={()=>{setBestMode('ftp');setPanel('Bestwerte')}}/>}
+    {panel==='Coach'&&<CoachRead review={analysisReview} data={coachData} onPlan={()=>setPanel('Plan')} onFTP={()=>{setBestMode('ftp');setPanel('Bestwerte')}}/>}
     {panel==='Beitrag'&&<RideContributionView data={contributions??{period:'Dein Beitrag',metrics:[]}} selected={contribution} onSelect={setContribution}/>}
    </motion.div></AnimatePresence>
   </div>
   <nav className="atelier-chapter-nav" aria-label="Fahrtrückblick wählen">{nav.map(p=><button type="button" key={p} aria-pressed={p===panel} onClick={()=>setPanel(p)}>{p}{p===panel&&<motion.i layoutId="atelier-panel" transition={{duration:reduce?0:.25}}/>}</button>)}</nav>
   {sharing&&<AtelierStoryShare story={story} onClose={()=>setSharing(false)}/>}
-  {details&&<div className="atelier-deep-details"><W3RideMapHero editorial vm={vm.hero}/><W3TrainingReview review={review} rideDate={rideDate}/></div>}
+  <AtelierExplanation title="Fahrtdetails" open={details} onClose={()=>setDetails(false)}><p><strong>{vm.title}</strong><br/>{vm.hero.dateLine}<br/>{vm.bigStat} {vm.bigStatUnit} · {vm.climb}<br/>{vm.hero.duration} Fahrzeit</p><p>{review.summary}</p><p>{review.method}</p><p>{review.limitations.join(' ')||'Die Auswertung beruht auf den vorhandenen Aufzeichnungen.'}</p></AtelierExplanation>
  </article>
 }
 
@@ -202,5 +205,5 @@ function TodayAtelier(){
 export default function W3RideAtelierPreview(){
  const [screen,setScreen]=useState<'ride'|'today'>(()=>new URLSearchParams(window.location.search).get('screen')==='today'?'today':'ride')
  const tokens={'--a-bg':T.bg,'--a-surface':T.surface,'--a-soft':T.surface2,'--a-ink':T.ink,'--a-mid':T.mid,'--a-acid':T.acid,'--a-rule':T.rule,'--report-ink':T.ink,'--report-mid':T.mid,'--report-acid':T.acid,'--report-line':T.rule,'--report-bg':T.bg,fontFamily:FONT} as CSSProperties
- return <main className="atelier-preview" style={tokens}><div className="atelier-preview-controls"><span>RIDR · neuer Entwurf · Beispieldaten</span><div><button type="button" aria-pressed={screen==='ride'} onClick={()=>setScreen('ride')}>Fahrtrückblick</button><button type="button" aria-pressed={screen==='today'} onClick={()=>setScreen('today')}>Heute</button></div></div>{screen==='ride'?<RideAtelier vm={{...FIXTURE,ranks:ATELIER_RANKS}} review={REVIEW} rideDate="2026-09-21T09:12:00" contributions={ATELIER_CONTRIBUTIONS}/>:<TodayAtelier/>}<aside className="atelier-references"><a href="https://www.awwwards.com/sites/radian" target="_blank" rel="noreferrer">Radian / Awwwards ↗</a><a href="https://tideguide.com/" target="_blank" rel="noreferrer">Tide Guide ↗</a><a href="https://developer.apple.com/design/awards/" target="_blank" rel="noreferrer">Apple Design Awards ↗</a></aside></main>
+ return <main className="atelier-preview" style={tokens}><div className="atelier-preview-controls"><span>Vorschau · Beispieldaten</span><div><button type="button" aria-pressed={screen==='ride'} onClick={()=>setScreen('ride')}>Fahrt</button><button type="button" aria-pressed={screen==='today'} onClick={()=>setScreen('today')}>Heute</button></div></div>{screen==='ride'?<RideAtelier vm={{...FIXTURE,ranks:ATELIER_RANKS}} review={REVIEW} rideDate="2026-09-21T09:12:00" contributions={ATELIER_CONTRIBUTIONS} coachData={ATELIER_COACH}/>:<TodayAtelier/>}<aside className="atelier-references"><a href="https://www.awwwards.com/sites/radian" target="_blank" rel="noreferrer">Radian / Awwwards ↗</a><a href="https://tideguide.com/" target="_blank" rel="noreferrer">Tide Guide ↗</a><a href="https://developer.apple.com/design/awards/" target="_blank" rel="noreferrer">Apple Design Awards ↗</a></aside></main>
 }

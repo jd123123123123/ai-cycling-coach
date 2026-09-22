@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { ATELIER_CONTRIBUTIONS, contributionAfter, contributionValue, RideContributionView, RouteElevation, trainingEmphasis, planComparisonPlot, contributionHistory, CoachRead } from '../AtelierRideMeaning'
+import { ATELIER_CONTRIBUTIONS, contributionAfter, contributionValue, RideContributionView, RouteElevation, trainingEmphasis, planComparisonPlot, contributionHistory } from '../AtelierRideMeaning'
 import { ATELIER_SAMPLES } from '../atelierRideData'
 import { REVIEW } from '../W3RideDetailPreview'
 import { storySVG, type RideStory } from '../AtelierStoryShare'
@@ -67,15 +67,6 @@ describe('ride purpose and contribution', () => {
     expect(history.filter(p=>p.date==='2026-09-21')).toHaveLength(1)
     expect(history.some(p=>p.value===99000)).toBe(false)
     expect(contributionHistory({...source,history:[]},'distance')).toEqual([])
-  })
-  it('provides coach drill-down and opens the attributed next step',()=>{
-    const onPlan=vi.fn(),onFTP=vi.fn()
-    render(<CoachRead review={REVIEW} onPlan={onPlan} onFTP={onFTP}/>)
-    fireEvent.click(screen.getByRole('button',{name:'Tempo'}))
-    expect(screen.getByText('Längeres, zügiges Fahren')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button',{name:/Im Plan angepasst/}))
-    expect(onPlan).toHaveBeenCalledOnce()
-    expect(screen.getByRole('img',{name:/Modellierte zusätzliche/})).toBeTruthy()
   })
   it('compares recorded power with the stored plan and preserves missing references',()=>{
     const model=planComparisonPlot(REVIEW,ATELIER_SAMPLES,280)!
