@@ -46,6 +46,12 @@ describe('live plan experience',()=>{
   const workout=screen.getByRole('heading',{name:'Schwelle'})
   expect(ort.compareDocumentPosition(workout)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
  })
+ it('keeps the plan comparison visible while a week is still unridden',()=>{
+  mount('active')
+  expect(screen.getByText('Planabgleich')).toBeTruthy()
+  expect(screen.getByText(/wartet auf deine Fahrt/)).toBeTruthy()
+  expect(screen.getByText('offen')).toBeTruthy()
+ })
  it('lets the rider change hours, days and the long-ride day',async()=>{
   const onRebuild=vi.fn().mockResolvedValue(true)
   render(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{enabled:false},mutations:{retry:false}}})}><MemoryRouter><W3PlanExperience vm={{...beforeVm,daySessions:[first]}} state="active" onOpenSession={()=>{}} onCreatedDone={()=>{}} weekOffset={0} onWeekOffset={()=>{}} onRebuild={onRebuild}/></MemoryRouter></QueryClientProvider>)

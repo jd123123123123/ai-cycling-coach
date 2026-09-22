@@ -33,7 +33,13 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
  const selectedWeek=vm.weekBars[selectedIndex]
  const title=phase?.name??vm.block?.phase??'Dein Plan'
  const weekAlignment=selectedWeek?.actual!=null&&selectedWeek.planned>0?Math.round(selectedWeek.actual/selectedWeek.planned*100):null
- return <section className="w3-focus-plan" aria-label="Dein Trainingsplan" aria-busy={loading}>
+ const alignmentTitle=weekAlignment!=null
+   ? `Woche ${String(selectedIndex+1).padStart(2,'0')} sitzt bei ${weekAlignment} % vom Soll.`
+   : `Woche ${String(selectedIndex+1).padStart(2,'0')} wartet auf deine Fahrt.`
+ const alignmentDetail=weekAlignment!=null
+   ? (weekAlignment>=95?'Dein Belastungsreiz liegt nah an der geplanten Spur.':'Die Abweichung ist sichtbar — die Tagesdetails zeigen, wo sie entstanden ist.')
+   : 'Noch keine Fahrt verbucht. Der Sollwert bleibt stehen, bis du diese Woche fährst.'
+ return <section className="w3-focus-plan" data-has-alignment="true" aria-label="Dein Trainingsplan" aria-busy={loading}>
    <section className="focus-plan-timeline" aria-label="Planverlauf">
      <header className="focus-phase-title">
        <div><h2>{title}</h2><span>{dateRange}</span></div>
@@ -61,7 +67,7 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
      </div>
      <div className="focus-plan-key"><div className="focus-plan-readout" aria-live="polite"><span><i data-actual/>Ist <strong>{selectedWeek?.actual!=null ? Math.round(selectedWeek.actual) : '—'}</strong><i/>Soll <strong>{selectedWeek ? Math.round(selectedWeek.planned) : '—'}</strong> TSS</span></div><button onClick={onDevelopment}>Entwicklung<ArrowUpRight size={14}/></button></div>
    </section>
-   {weekAlignment!=null&&<W3ReturnInsight eyebrow="Planabgleich" title={`Woche ${String(selectedIndex+1).padStart(2,'0')} sitzt bei ${weekAlignment} % vom Soll.`} detail={weekAlignment>=95?'Dein Belastungsreiz liegt nah an der geplanten Spur.':'Die Abweichung ist sichtbar — die Tagesdetails zeigen, wo sie entstanden ist.'} metrics={[{label:'Soll',value:`${Math.round(selectedWeek.planned)} TSS`},{label:'Ist',value:`${Math.round(selectedWeek.actual!)} TSS`,tone:weekAlignment>=95?'positive':'accent'},{label:'Differenz',value:`${selectedWeek.actual!>=selectedWeek.planned?'+':''}${Math.round(selectedWeek.actual!-selectedWeek.planned)} TSS`,tone:weekAlignment>=95?'positive':'quiet'}]}/>}
+   {selectedWeek&&<div className="w3-plan-alignment" aria-live="polite"><W3ReturnInsight eyebrow="Planabgleich" title={alignmentTitle} detail={alignmentDetail} metrics={[{label:'Soll',value:`${Math.round(selectedWeek.planned)} TSS`},{label:'Ist',value:selectedWeek.actual!=null?`${Math.round(selectedWeek.actual)} TSS`:'—',tone:weekAlignment==null?'quiet':weekAlignment>=95?'positive':'accent'},{label:'Differenz',value:selectedWeek.actual!=null?`${selectedWeek.actual>=selectedWeek.planned?'+':''}${Math.round(selectedWeek.actual-selectedWeek.planned)} TSS`:'offen',tone:weekAlignment==null?'quiet':weekAlignment>=95?'positive':'quiet'}]}/></div>}
    <section className="focus-plan-detail" aria-label="Ausgewählte Woche">
 
      <div className="focus-plan-days" role="group" aria-label="Trainingstag wählen">{days.map((d,i)=><button key={d.dateISO??i} aria-pressed={i===day} aria-current={d.isToday?'date':undefined} aria-label={`${d.weekday}, ${d.dateLabel}, ${d.title??'Ruhetag'}${Number.isFinite(Number(d.tss))?`, ${d.tss} TSS`:''}`} onClick={()=>{setExpanded(true);onDay(i)}}><span>{d.weekday.slice(0,2)}</span><b>{d.dateISO?Number(d.dateISO.slice(8,10)):d.dateLabel.match(/\d+/)?.[0]??'—'}</b><i aria-hidden><em style={{height:`${(Number(d.tss)||0)/maxDay*100}%`}}/></i></button>)}</div>
