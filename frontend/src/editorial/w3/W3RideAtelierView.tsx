@@ -1,7 +1,8 @@
-import { useId, useState, type ReactNode, type CSSProperties } from 'react'
+import { lazy, Suspense, useId, useState, type ReactNode, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { ArrowLeft, ArrowUpRight, Check, Clock3, Mountain, Route, X, Info, Share2 } from 'lucide-react'
 import { T, FONT } from './w3tokens'
+import { W3_MAP } from './w3map'
 import W3RideBestEfforts from './W3RideBestEfforts'
 import { AtelierExplanation } from './AtelierExplanation'
 import type { TrainingReview } from '../../api/trainingReview'
@@ -19,6 +20,7 @@ import './w3RideReport.css'
 const n = (v:number) => v.toLocaleString('de-DE',{maximumFractionDigits:1})
 const zoneMinutes = (seconds:number) => formatValue(seconds/60,Math.abs(seconds)<600?1:0)
 const nav = ['Fahrt','Zonen','Analyse','Bestwerte','Plan','Beitrag'] as const
+const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
 type Panel = typeof nav[number] | 'Coach'
 export type RideAtelierVm = Pick<W3RideVm, 'title'|'ranks'|'polyline'|'bigStat'|'bigStatUnit'|'climb'|'avgSpeed'> & {hero:Pick<W3RideVm['hero'],'dateLine'|'duration'>}
 export const ATELIER_TOKENS = {'--a-bg':T.bg,'--a-surface':T.surface,'--a-soft':T.surface2,'--a-ink':T.ink,'--a-mid':T.mid,'--a-acid':T.acid,'--a-rule':T.rule,'--report-ink':T.ink,'--report-mid':T.mid,'--report-acid':T.acid,'--report-line':T.rule,'--report-bg':T.bg,fontFamily:FONT} as CSSProperties
@@ -43,6 +45,19 @@ function RouteObject({points}:{points:[number,number][]}){
   <motion.path d={path} fill="none" stroke={`url(#${id})`} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" initial={reduce?false:{pathLength:0}} animate={{pathLength:1}} transition={{duration:1.3,ease:[.2,.7,.2,1]}}/>
   <text x="327" y="36" fill={T.mid} fontSize="10">N</text><path d="M331 43v18m-3-15 3-3 3 3" stroke={T.mid} fill="none"/>
  </svg>
+}
+
+/** Use the same geographic map as the full-screen ride view; retain GPS while tiles load. */
+function RideRouteMap({points,onOpen}:{points:[number,number][];onOpen?:()=>void}){
+ const [paintedPoints,setPaintedPoints]=useState<[number,number][]|null>(null)
+ const ready=paintedPoints===points
+ return <div className="atelier-map-surface" data-ready={ready}>
+  <Suspense fallback={null}><RouteMap polyline={points} styleKey="dark" interactive={false}
+   palette={W3_MAP} lineColor={T.acid} lineWidth={4} startColor={T.ink} endColor={T.acid}
+   fitPadding={28} attributionBottom={6} onReady={()=>setPaintedPoints(points)}/></Suspense>
+  {!ready&&<div className="atelier-map-fallback"><RouteObject points={points}/></div>}
+  <button type="button" className="atelier-map-open" aria-label="Karte öffnen" onClick={onOpen} disabled={!onOpen}/>
+ </div>
 }
 
 /** Aligned inner/outer arcs compare recommended and actual minutes on one scale. */
@@ -141,7 +156,7 @@ export function RideAtelier({vm,review,rideDate,contributions,coachData,samples,
     {panel==='Fahrt'&&<>
      <div className="atelier-panel-title"><span>Ausfahrt abgeschlossen</span><h1>{vm.title}</h1></div>
      <div className="atelier-distance"><strong>{vm.bigStat}</strong><span>{vm.bigStatUnit}</span><button className="atelier-ftp-anchor" aria-label={`FTP ${formatValue(ftp)} Watt. FTP-Verlauf öffnen`} onClick={()=>{setBestMode('ftp');setPanel('Bestwerte')}}><span>FTP <ArrowUpRight size={13}/></span><strong>{formatValue(ftp)}<small> W</small></strong></button></div>
-     {vm.polyline&&vm.polyline.length>1?<button className="atelier-map-open" aria-label="Karte öffnen" onClick={onExpandMap} disabled={!onExpandMap}><RouteObject points={vm.polyline}/></button>:<p className="atelier-empty">Keine GPS-Route aufgezeichnet.</p>}
+     {vm.polyline&&vm.polyline.length>1?<RideRouteMap points={vm.polyline} onOpen={onExpandMap}/>:<p className="atelier-empty">Keine GPS-Route aufgezeichnet.</p>}
      <RouteElevation samples={samples} onOpen={()=>{setMetric('altitude');setPanel('Analyse')}}/>
      <div className="atelier-ride-facts"><div><Clock3 size={17}/><strong>{duration==null?vm.hero.duration:`${Math.floor(duration/60)}h ${Math.round(duration%60)}min`}</strong><span>Fahrzeit</span></div><div><Mountain size={18}/><strong>{vm.climb}</strong><span>Höhenmeter</span></div><div><Route size={17}/><strong>{vm.avgSpeed}</strong><span>Ø Tempo</span></div></div>
      <TrainingEmphasis review={analysisReview} onAnalyse={()=>setPanel('Zonen')}/>

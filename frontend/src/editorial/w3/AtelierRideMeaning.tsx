@@ -1,4 +1,4 @@
-import { useId } from 'react'
+import { useId, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowUpRight, Clock3, Mountain, Route } from 'lucide-react'
 import type { TrainingReview } from '../../api/trainingReview'
 import { T } from './w3tokens'
@@ -37,26 +37,43 @@ export function planComparisonPlot(review: TrainingReview, samples?: RideSample[
 /** Altitude is plotted against recorded distance, preserving gaps and an explicit height scale. */
 export function RouteElevation({ samples, onOpen }: { samples: RideSample[]; onOpen: () => void }) {
   const id = useId()
+  const holder = useRef<HTMLButtonElement>(null)
+  const [width, setWidth] = useState(390)
   const heights = samples.flatMap(s => s.altitude != null && Number.isFinite(s.altitude) ? [s.altitude] : [])
+  const hasHeights = heights.length > 0
+  useLayoutEffect(() => {
+    const element = holder.current
+    if (!element) return
+    const measure = () => { if (element.clientWidth) setWidth(element.clientWidth) }
+    measure()
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', measure)
+      return () => window.removeEventListener('resize', measure)
+    }
+    const observer = new ResizeObserver(measure)
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [hasHeights])
   if (!heights.length) return <p className="atelier-elevation-empty">Kein Höhenverlauf aufgezeichnet.</p>
   const low = Math.floor(Math.min(...heights) / 500) * 500
   const high = Math.max(low + 500, Math.ceil(Math.max(...heights) / 500) * 500)
   const start = samples[0]?.distance ?? 0, end = samples.at(-1)?.distance ?? start
   const points = samples.map(s => s.distance == null || s.altitude == null || !Number.isFinite(s.altitude) ? null : ({
-    x: 42 + (s.distance - start) / Math.max(1, end - start) * 286,
+    x: (s.distance - start) / Math.max(1, end - start) * width,
     y: 58 - (s.altitude - low) / (high - low) * 40,
   }))
   const segments: { x: number; y: number }[][] = []
   let current: { x: number; y: number }[] = []
   for (const p of points) { if (p) current.push(p); else if (current.length) { segments.push(current); current = [] } }
   if (current.length) segments.push(current)
-  return <button className="atelier-route-elevation" onClick={onOpen} aria-label="Höhenprofil unter der Route. Detaillierte Höhenanalyse öffnen">
-    <svg viewBox="0 0 340 83" role="img" aria-label={`Höhe von ${formatValue(low)} bis ${formatValue(high)} Metern über ${formatValue((end - start) / 1000, 1)} Kilometer`}>
+  return <button ref={holder} className="atelier-route-elevation" onClick={onOpen} aria-label="Höhenprofil unter der Route. Detaillierte Höhenanalyse öffnen">
+    <svg viewBox={`0 0 ${width} 83`} preserveAspectRatio="none" role="img" aria-label={`Höhe von ${formatValue(low)} bis ${formatValue(high)} Metern über ${formatValue((end - start) / 1000, 1)} Kilometer`}>
       <defs><linearGradient id={id} x1="0" x2="0" y1="0" y2="1"><stop stopColor={T.ink} stopOpacity=".18"/><stop offset="1" stopColor={T.ink} stopOpacity=".02"/></linearGradient></defs>
-      {[{ y: 18, v: high }, { y: 58, v: low }].map(t => <g key={t.v}><text x="0" y={t.y + 3} fill={T.mid} fontSize="9">{formatValue(t.v)} m</text><path d={`M42 ${t.y}H328`} stroke={T.rule}/></g>)}
+      {[18,58].map(y => <path key={y} d={`M0 ${y}H${width}`} stroke={T.rule}/>)}
       {segments.map((segment, i) => <path key={i} d={`${smoothCurve(segment)}L${segment.at(-1)!.x} 58L${segment[0].x} 58Z`} fill={`url(#${id})`}/>)}
       <path d={smoothCurve(points)} fill="none" stroke={T.ink} strokeWidth="1.3" strokeLinejoin="round"/>
-      <text x="42" y="78" fill={T.mid} fontSize="9">{formatValue(start / 1000, 1)} km</text><text x="328" y="78" textAnchor="end" fill={T.mid} fontSize="9">{formatValue(end / 1000, 1)} km</text>
+      {[{y:18,v:high},{y:58,v:low}].map(t => <text key={t.v} x="23" y={t.y-5} fill={T.mid} stroke={T.bg} strokeWidth="3" paintOrder="stroke" fontSize="9">{formatValue(t.v)} m</text>)}
+      <text x="23" y="78" fill={T.mid} fontSize="9">{formatValue(start / 1000, 1)} km</text><text x={width-23} y="78" textAnchor="end" fill={T.mid} fontSize="9">{formatValue(end / 1000, 1)} km</text>
     </svg>
   </button>
 }

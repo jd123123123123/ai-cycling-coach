@@ -2,7 +2,7 @@
 .atelier-preview{height:100svh;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:10px 12px;gap:8px}
 .atelier-preview-controls{width:100%;max-width:390px;flex:none;margin:0 auto;padding:0;gap:8px;flex-direction:row;font-size:10px;min-height:34px}.atelier-preview-controls>div{padding:2px}.atelier-preview-controls button{min-height:30px;padding:0 12px;font-size:11px}
 .atelier-preview>.atelier-references{display:none}.atelier-device{flex:1;min-height:0;width:100%;margin:0 auto;display:flex;flex-direction:column;border-radius:24px}.atelier-app-header{height:56px;min-height:56px;flex:none;padding-top:6px;padding-bottom:6px}.atelier-story{height:auto;flex:1;min-height:0;container-type:size}
-.atelier-story-panel{position:absolute;inset:0;height:100%;padding:8px 23px;overflow-y:auto}.atelier-chapter-nav{flex:none;min-height:60px;padding:5px 16px max(9px,env(safe-area-inset-bottom));margin:0;gap:2px}.atelier-chapter-nav button{font-size:11px;min-height:44px}
+.atelier-story-panel{position:absolute;inset:0;height:100%;padding:8px 23px;overflow:hidden;overscroll-behavior:none}.atelier-story{touch-action:pan-x pinch-zoom}.atelier-chapter-nav{flex:none;min-height:60px;padding:5px 16px max(9px,env(safe-area-inset-bottom));margin:0;gap:2px}.atelier-chapter-nav button{font-size:11px;min-height:44px}
 .atelier-story-Fahrt>.atelier-route-object{height:auto;min-height:0;max-height:none;flex:1;margin:8px -16px 0}.atelier-story-Fahrt .atelier-panel-title h1{font-size:27px}.atelier-story-Fahrt .atelier-distance strong{font-size:56px}.atelier-route-elevation svg{height:75px}.atelier-training-meaning{margin:0;min-height:48px;padding:10px 13px}.atelier-story-Fahrt .atelier-ride-facts{padding:10px 0}
 .atelier-story-Zonen .atelier-dial{flex:1;min-height:0;margin:3px -14px}.atelier-story-Zonen .atelier-dial>svg{height:100%;max-height:none;width:100%}.atelier-zone-ring-key{margin-top:14px}.atelier-story-Zonen .atelier-zone-select button{height:58px}.atelier-zone-compare{padding-top:12px;margin-top:12px;padding-bottom:7px}
 .atelier-dial-reading>strong{font-size:clamp(40px,11cqh,60px)}.atelier-dial-reading>span:first-child{font-size:15px}.atelier-dial-reading{gap:8px}
@@ -22,8 +22,13 @@
 @container (height < 640px){.is-overview .coach-chapter h2{margin-bottom:5px}.coach-chapters,.is-overview .coach-chapters{margin-bottom:7px}.is-overview .coach-findings>button{min-height:48px;padding:7px 0}.coach-chapter[data-chapter="Körper"] .coach-chart-heading{margin-top:6px}.coach-chapter[data-chapter="Körper"] .coach-stats{margin:6px 0}.coach-chapter[data-chapter="Berge"] h2{margin-bottom:4px}.coach-chapter[data-chapter="Berge"] .coach-selectors{margin:4px 0}.coach-chapter[data-chapter="Energie"] .coach-energy{margin:8px 0}.coach-chapter[data-chapter="Energie"] .coach-fuel-range{margin-top:8px;padding:12px}.coach-chapter[data-chapter="Energie"] .coach-fuel-range>div{margin:12px 0 8px}.coach-chapter[data-chapter="Entwicklung"] .coach-next{min-height:46px;margin-top:5px;padding:9px 12px}.coach-chapter[data-chapter="Entwicklung"] .coach-next strong{font-size:16px}.coach-chapter[data-chapter="Planfolge"] .coach-plan-change{gap:8px;margin:8px 0}.coach-chapter[data-chapter="Planfolge"] .coach-next{margin-top:8px}}
 @container (height < 640px){.coach-chapter[data-chapter="Berge"] .coach-takeaway{margin:4px 0}.coach-chapter[data-chapter="Entwicklung"] .coach-selectors{margin:3px 0}}
 /* Production shell owns precisely one safe viewport; no mock-device frame. */
-.atelier-preview.atelier-live{height:100dvh;min-height:0;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);background:var(--a-bg)}
+html:has(.atelier-live),body:has(.atelier-live){height:100%;overflow:hidden;overscroll-behavior:none}
+.atelier-preview.atelier-live{position:fixed;inset:0;height:100dvh;min-height:0;box-sizing:border-box;padding:env(safe-area-inset-top,0px) 0 0;background:var(--a-bg);overscroll-behavior:none}
 .atelier-live .atelier-device{width:100%;max-width:480px;flex:1;min-height:0;margin:0 auto;border:0;border-radius:0}
-.atelier-map-open{flex:1;min-height:60px;display:flex;border:0;background:none;padding:0;width:100%;cursor:pointer}
-.atelier-map-open:disabled{cursor:default;opacity:1}.atelier-map-open .atelier-route-object{flex:1;width:100%;height:100%;min-height:0;max-height:none;margin:0}
+.atelier-map-surface{position:relative;isolation:isolate;flex:1;min-height:60px;width:calc(100% + 46px);margin:8px -23px 0;overflow:hidden;background:var(--a-bg)}
+.atelier-map-fallback{position:absolute;inset:0;background:var(--a-bg);pointer-events:none}
+.atelier-map-fallback .atelier-route-object{width:100%;height:100%;min-height:0;max-height:none;margin:0}
+.atelier-map-open{position:absolute;inset:0;z-index:1;border:0;background:none;padding:0;width:100%;cursor:pointer}
+.atelier-map-open:disabled{cursor:default;opacity:1}.atelier-map-open:focus-visible{outline:2px solid var(--a-acid);outline-offset:-3px}
+.atelier-story-Fahrt>.atelier-route-elevation{width:calc(100% + 46px);margin-inline:-23px;flex:none}
 .atelier-load-state{padding:24px;display:grid;place-content:center;gap:24px;flex:1;color:var(--a-mid)}
