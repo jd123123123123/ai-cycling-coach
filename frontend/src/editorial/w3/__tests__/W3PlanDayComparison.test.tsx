@@ -58,3 +58,10 @@ it('keeps endurance as one prescribed beam, and adds separate ride boundaries',(
  const two=recordedPower([previewPower(0,2640),previewPower(6,600)])
  expect(two.boundaries).toEqual([2640]);expect(two.duration).toBe(3240)
 })
+
+it('preserves elapsed gaps for rides without samples; hides ambiguous combined timelines',()=>{
+ const ride=previewPower(6,600), missing={...ride,samples:[],elapsed_seconds:900}
+ const first=recordedPower([missing,ride]);expect(first.duration).toBe(1500);expect(first.boundaries).toEqual([900]);expect(first.beams[0]).toEqual({start:0,end:900,ratio:null});expect(first.beams[1].start).toBe(900)
+ const middle=recordedPower([ride,missing,ride]);expect(middle.boundaries).toEqual([600,1500]);expect(middle.duration).toBe(2100);expect(middle.zones).toBeNull();expect(middle.partial).toBe(true)
+ const unknown=recordedPower([{...missing,elapsed_seconds:undefined},ride]);expect(unknown.beams).toEqual([]);expect(unknown.boundaries).toEqual([]);expect(unknown.partial).toBe(true)
+})

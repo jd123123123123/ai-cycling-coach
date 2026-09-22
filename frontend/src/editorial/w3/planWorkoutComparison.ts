@@ -36,12 +36,19 @@ export function plannedPower(day: PlanDaySession) {
 export function recordedPower(charts: DayPowerChart[], complete = true) {
   const beams: PowerBeam[] = [], boundaries: number[] = []
   const zones = Array<number>(7).fill(0)
-  let offset = 0, allZones = complete && charts.length > 0, hasMissing = !complete
+  let offset = 0, allZones = complete && charts.length > 0, hasMissing = !complete, unknownElapsed = false
   for (const chart of charts) {
     const ftp = chart.ftp_at_ride
     const source = chart.samples.filter(s => valid(s.seconds)).slice().sort((a,b) => a.seconds - b.seconds)
     if (offset > 0) boundaries.push(offset)
-    if (!source.length) { allZones = false; hasMissing = true; continue }
+    if (!source.length) {
+      allZones = false; hasMissing = true
+      if (valid(chart.elapsed_seconds) && chart.elapsed_seconds > 0) {
+        beams.push({start:offset,end:offset+chart.elapsed_seconds,ratio:null})
+        offset += chart.elapsed_seconds
+      } else unknownElapsed = true
+      continue
+    }
     const step = source.length > 1 ? source[1].seconds - source[0].seconds : source[0].seconds * 2 + 1
     const duration = valid(chart.elapsed_seconds) ? chart.elapsed_seconds : Math.round(source.at(-1)!.seconds + Math.max(1, step) / 2 + .5)
     if (!valid(ftp) || ftp <= 0) { hasMissing = true; allZones = false }
@@ -63,7 +70,7 @@ export function recordedPower(charts: DayPowerChart[], complete = true) {
     else chart.zone_seconds.forEach((s,i) => { zones[i] += s! })
     offset += duration
   }
-  return { beams, boundaries, duration: offset, zones: allZones ? zones : null, partial: hasMissing }
+  return { beams: unknownElapsed ? [] : beams, boundaries: unknownElapsed ? [] : boundaries, duration: offset, zones: allZones ? zones : null, partial: hasMissing }
 }
 
 export function zoneTime(seconds: number | null | undefined) {
