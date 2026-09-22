@@ -33,6 +33,7 @@ export function invalidateGarminData(qc: QueryClient, includeStatus = true) {
       if (includeStatus) qc.invalidateQueries({ queryKey: ['garmin', 'status'] })
       qc.invalidateQueries({ queryKey: ['readiness', 'decision'] })
       qc.invalidateQueries({ queryKey: MORNING_HEALTH_KEY })
+      qc.invalidateQueries({ queryKey: ['analytics', 'progress-explorer'] })
       // ── AND THE KEYS TODAY ACTUALLY READS ──────────────────────────────
       // The list above is the legacy dashboard's, and this hook was written
       // for it. Put the button on Today and it would have refreshed every

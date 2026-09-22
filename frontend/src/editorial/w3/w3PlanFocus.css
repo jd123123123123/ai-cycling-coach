@@ -69,6 +69,12 @@
 .focus-session-open{width:44px;height:44px;flex:none;display:grid;place-items:center;padding:0;background:none;border-radius:50%}
 .focus-session-action{width:34px;height:34px;display:grid;place-items:center;flex:none;border-radius:50%;background:var(--plan-acid);color:var(--plan-on-acid);transition:transform .22s ease}
 .focus-session-open:active .focus-session-action{transform:translateX(2px)}
+.focus-session-actions{display:flex;align-items:center;gap:2px;flex:none}
+.focus-session-expand{min-height:32px;padding:5px 9px;border:0;border-radius:999px;background:var(--plan-stroke);color:var(--plan-muted);font:inherit;font-size:11px;cursor:pointer}
+.focus-session-expand[aria-expanded=true]{background:var(--plan-acid-dim);color:var(--plan-ink)}
+.focus-session-collapsed{display:flex;align-items:center;justify-content:space-between;min-height:32px;color:var(--plan-muted);font-size:12px}
+.focus-session-collapsed strong{color:var(--plan-ink);font-size:19px;font-weight:500;font-variant-numeric:tabular-nums}
+.focus-session-collapsed small{font-size:10px;color:var(--plan-muted);font-weight:500}
 .focus-session-rest{height:113px;display:flex;align-items:center;gap:14px;color:var(--plan-muted);font-size:15px}.focus-session-rest>span{height:1px;flex:1;background:var(--plan-stroke)}
 .focus-session-no-power{height:60px;display:grid;place-items:center;font-size:13px;color:var(--plan-muted)}
 .focus-active .w3-plan-link.slim,.focus-active .w3-plan-adaptation{display:none}

@@ -22,6 +22,11 @@ export function useCurrentWeek(weekOffset = 0, enabled = true) {
     enabled,
     queryKey: [...WEEK_CURRENT_KEY_ROOT, language, locale, weekOffset],
     queryFn: () => fetchCurrentWeek(language, locale, weekOffset),
+    // Keep the last resolved week on screen while a newly selected week is
+    // fetched. This prevents the plan hero from collapsing into a loader and
+    // jumping vertically when a rider taps another week. The selected week
+    // still replaces it as soon as the request resolves.
+    placeholderData: (previous) => previous,
     staleTime: 30 * 60 * 1000, // 30 min — research §3 "one adaptation per day max"
     refetchOnWindowFocus: true, // morning re-open should pull a fresh plan
     retry: (count, error) => {

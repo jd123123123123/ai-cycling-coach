@@ -109,7 +109,7 @@ export default function W3HeroShell({ vm, children }: W3HeroShellProps) {
     <Ctx.Provider value={host}>
     <GroundCtx.Provider value={ground}>
       <div className="w3-root">
-        <div className="w3-frame" style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
+        <div className={`w3-frame${archive ? ' has-archive' : ''}`} style={{ fontFamily: FONT, display: 'flex', flexDirection: 'column', minHeight: '100dvh' }}>
           <div className={`w3-hero-slot${archive ? ' w3-hero-slot-archive' : ''}`} style={{
             position: 'relative',
             // FAHRTEN RESERVIERTE DEN GANZEN SCHIRM FUER EINE BUEHNE, DIE ES

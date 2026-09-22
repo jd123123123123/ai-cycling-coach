@@ -29,6 +29,17 @@
   overflow: hidden;
 }
 
+/* In the shared hero shell, Fahrten deliberately hides the bike stage and
+   owns the full document below the compact dock. Keep that document in one
+   touch-scroll surface so the list cannot be trapped behind the tab bar. */
+.w3-frame.has-archive {
+  height: 100dvh;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
 .w3-deck {
   flex: 1;
   /* OHNE `min-height: 0` waechst ein Flex-Kind an seinem Inhalt statt zu

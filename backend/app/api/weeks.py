@@ -60,6 +60,7 @@ from app.services.performance_projection import (
     project_performance,
 )
 from app.services.plan_change_explainer import detect_plan_changes, explain_plan_changes
+from app.services.plan_intervals import week_interval
 from app.services.readiness_detector import detect_readiness
 from app.services.training_periodization import _CATEGORY_CANDIDATES
 from app.services.run_workout_templates import RUN_TEMPLATES
@@ -467,7 +468,9 @@ def _build_day_plan(
         target_tss_val: int | None = int(round(tmpl.base_tss)) if tmpl else None
 
         interval_structure = pw.interval_structure or {}
-        raw_intervals = interval_structure.get("intervals", [])
+        # Adapted/custom/undo workouts retain the prescribed-workout key names.
+        # Decode existing rows as well as new ones; no plan rebuild is needed.
+        raw_intervals = [week_interval(b) for b in interval_structure.get("intervals", [])]
         # Structured-set backfill: persisted rows written before the composite
         # blocks carried reps/on_s/off_s (or by writers that project only
         # duration/pct/zone) still map 1:1 onto the template's block list, so

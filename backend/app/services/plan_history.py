@@ -16,6 +16,7 @@ from app.models.planned_workout import PlannedWorkout
 from app.models.activity import Activity
 from app.services.athlete_time import today_local, local_date_of, day_local_window, set_athlete_tz_from_profile
 from app.services.progress_explorer import load_progress
+from app.services.plan_intervals import week_interval
 
 KEY = 'plan_history_id'
 SPORTS = ('cycling', 'indoor_cycling', 'virtual_ride', 'road_biking', 'mountain_biking')
@@ -37,6 +38,7 @@ def target_tss(row):
     if not blocks:
         return None
     for b in blocks:
+        b = week_interval(b)
         duration, power = num(b.get('duration_seconds')), num(b.get('power_target_pct_ftp'))
         if duration is None or power is None:
             return None

@@ -204,10 +204,12 @@ export default function W3PlanPage() {
           return rides.length&&rides.every(a=>a.tss!=null)?rides.reduce((s,a)=>s+a.tss!,0):null
         })
       : []
-    // The selected week reflects the current prescription after adaptation,
-    // rather than the original block budget if those have since diverged.
-    const displayedTargets=targets?.map((t,i)=>i===currentIdx+weekOffset&&week?.planned_tss_total!=null?week.planned_tss_total:t)??null
-    const weekBars = buildWeeklyBars(displayedTargets, currentIdx, actualByWeek)
+    // Keep the horizon graph stable while a rider browses weeks. The selected
+    // week's live prescription belongs in the detail card below; replacing one
+    // point in this overview on every tap made the whole curve jump and implied
+    // that the plan's past had been rewritten. The horizon remains the saved
+    // plan, while /weeks/current still supplies the selected week's detail.
+    const weekBars = buildWeeklyBars(targets, currentIdx, actualByWeek)
     const avg = targets && targets.length ? Math.round(targets.reduce((s, t) => s + t, 0) / targets.length) : null
 
     // ── this week ──

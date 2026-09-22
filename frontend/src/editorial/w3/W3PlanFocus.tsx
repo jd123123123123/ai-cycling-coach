@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, type CSSProperties } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import type { W3PlanVm, PlanDaySession } from './W3PlanView'
 import './w3PlanFocus.css'
@@ -14,6 +14,7 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
  const blocks=vm.phases.map(p=>{const n=p.weeks.match(/\d+/g)?.map(Number)??[];return {...p,start:(n[0]??1)-1,end:(n[1]??n[0]??1)-1}}).filter(p=>p.start<vm.weekBars.length)
  const phase=blocks.find(p=>selectedIndex>=p.start&&selectedIndex<=p.end)
  const weekRail=useRef<HTMLDivElement>(null), gradientId=useId()
+ const [expanded,setExpanded]=useState(false)
  useEffect(()=>{
   const rail=weekRail.current,button=rail?.querySelector<HTMLElement>('[aria-pressed="true"]')
   if(!rail||!button)return
@@ -52,7 +53,7 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
            {vm.weekBars.map((w,i)=>w.actual==null?null:<i key={w.idx} aria-hidden className="focus-plan-ridden" style={{left:`${x(i)/320*100}%`,top:`${y(w.actual)/112*100}%`}}/>)}
            {selectedWeek&&<i aria-hidden className="focus-plan-marker" style={{left:`${x(selectedIndex)/320*100}%`,top:`${y(selectedWeek.planned)/112*100}%`}}/>}
          </div>
-         <div className="focus-plan-weeks" role="group" aria-label="Trainingswoche wählen">{vm.weekBars.map((w,i)=><button key={w.idx} aria-label={`Woche ${w.idx}: ${w.planned} TSS geplant${w.actual!=null?`, ${w.actual} TSS gefahren`:''}${i===currentIndex?', aktuelle Woche':''}`} aria-current={i===currentIndex?'step':undefined} aria-pressed={i===selectedIndex} disabled={Math.abs(i-currentIndex)>12} onClick={()=>onWeek(i)}><span>{String(w.idx).padStart(2,'0')}</span></button>)}</div>
+         <div className="focus-plan-weeks" role="group" aria-label="Trainingswoche wählen">{vm.weekBars.map((w,i)=><button key={w.idx} aria-label={`Woche ${w.idx}: ${w.planned} TSS geplant${w.actual!=null?`, ${w.actual} TSS gefahren`:''}${i===currentIndex?', aktuelle Woche':''}`} aria-current={i===currentIndex?'step':undefined} aria-pressed={i===selectedIndex} disabled={Math.abs(i-currentIndex)>12} onClick={()=>{setExpanded(false);onWeek(i)}}><span>{String(w.idx).padStart(2,'0')}</span></button>)}</div>
          <div className="focus-plan-phases" aria-label="Planphasen">{blocks.map(p=><button key={p.name} style={{gridColumn:`${p.start+1} / ${Math.min(vm.weekBars.length,p.end+1)+1}`}} aria-pressed={phase===p} disabled={p.start-currentIndex < -12 || p.start-currentIndex > 12} onClick={()=>onWeek(Math.min(vm.weekBars.length-1,p.start))}>{p.name}</button>)}</div>
        </div>
      </div>
@@ -60,10 +61,10 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
    </section>
    <section className="focus-plan-detail" aria-label="Ausgewählte Woche">
 
-     <div className="focus-plan-days" role="group" aria-label="Trainingstag wählen">{days.map((d,i)=><button key={d.dateISO??i} aria-pressed={i===day} aria-current={d.isToday?'date':undefined} aria-label={`${d.weekday}, ${d.dateLabel}, ${d.title??'Ruhetag'}${Number.isFinite(Number(d.tss))?`, ${d.tss} TSS`:''}`} onClick={()=>onDay(i)}><span>{d.weekday.slice(0,2)}</span><b>{d.dateISO?Number(d.dateISO.slice(8,10)):d.dateLabel.match(/\d+/)?.[0]??'—'}</b><i aria-hidden><em style={{height:`${(Number(d.tss)||0)/maxDay*100}%`}}/></i></button>)}</div>
+     <div className="focus-plan-days" role="group" aria-label="Trainingstag wählen">{days.map((d,i)=><button key={d.dateISO??i} aria-pressed={i===day} aria-current={d.isToday?'date':undefined} aria-label={`${d.weekday}, ${d.dateLabel}, ${d.title??'Ruhetag'}${Number.isFinite(Number(d.tss))?`, ${d.tss} TSS`:''}`} onClick={()=>{setExpanded(true);onDay(i)}}><span>{d.weekday.slice(0,2)}</span><b>{d.dateISO?Number(d.dateISO.slice(8,10)):d.dateLabel.match(/\d+/)?.[0]??'—'}</b><i aria-hidden><em style={{height:`${(Number(d.tss)||0)/maxDay*100}%`}}/></i></button>)}</div>
      <article className="focus-session" data-rest={!selected?.title||undefined}>
-       <div className="focus-session-heading"><div><span>{selected?.isToday?'Heute':selected?.dateLabel??'Einheit'}{selected?.isPast?' · Empfehlung':''}</span><h2>{selected ? selected.title??'Zeit für Erholung.' : loading?'Deine Woche lädt.':'Noch keine Einheit.'}</h2></div><button className="focus-session-open" disabled={loading||!selected} onClick={onOpen} aria-label={selected?.isPast?'Empfehlung & Rückblick':selected?.title?'Einheit ansehen':'Warum heute Pause?'}><span className="focus-session-action"><ArrowUpRight size={19}/></span></button></div>
-       {selected&&(selected.isPast||selected.title) ? <W3PlanDayComparison key={selected.dateISO??day} day={selected}/> : <div className="focus-session-rest"><span/>{selected?'Raum für Erholung.':loading?'Training wird geladen.':'Wähle eine andere Woche.'}<span/></div>}
+       <div className="focus-session-heading"><div><span>{selected?.isToday?'Heute':selected?.dateLabel??'Einheit'}{selected?.isPast?' · Empfehlung':''}</span><h2>{selected ? selected.title??'Zeit für Erholung.' : loading?'Deine Woche lädt.':'Noch keine Einheit.'}</h2></div><div className="focus-session-actions"><button className="focus-session-expand" aria-expanded={expanded} onClick={()=>setExpanded(v=>!v)} disabled={!selected} aria-label={expanded?'Details schließen':'Training anzeigen'}>{expanded?'Weniger':'Details'}</button><button className="focus-session-open" disabled={loading||!selected} onClick={onOpen} aria-label={selected?.isPast?'Empfehlung & Rückblick':selected?.title?'Einheit ansehen':'Warum heute Pause?'}><span className="focus-session-action"><ArrowUpRight size={19}/></span></button></div></div>
+       {expanded && selected&&(selected.isPast||selected.title) ? <W3PlanDayComparison key={selected.dateISO??day} day={selected}/> : !expanded ? <div className="focus-session-collapsed"><span>{selected?.title?'Tagesbelastung':'Erholung'}</span><strong>{selected?.tss??'—'}<small> TSS</small></strong></div> : <div className="focus-session-rest"><span/>{selected?'Raum für Erholung.':loading?'Training wird geladen.':'Wähle eine andere Woche.'}<span/></div>}
      </article>
    </section>
  </section>

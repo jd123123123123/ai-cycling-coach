@@ -260,7 +260,7 @@ function PhaseRail({ phases, currentWeek, totalWeeks }: { phases: PhaseSeg[]; cu
  * erreichbar. Es folgt der neuen Form -- Hoehe = geplant -- damit beide
  * dieselbe Aussage machen, bleibt aber bewusst schlicht.
  */
-function WeekChart({ bars }: { bars: WeekBar[] }) {
+function WeekChart({ bars, selected, onSelect }: { bars: WeekBar[]; selected?: number; onSelect?: (index: number) => void }) {
   const reduce = useReducedMotion()
   const max = Math.max(1, ...bars.map((b) => b.planned))
   const H = 118
@@ -274,7 +274,7 @@ function WeekChart({ bars }: { bars: WeekBar[] }) {
           // bleibt ungefuellt statt den Zielwert vorzutaeuschen.
           const fill = isCur ? T.acid : b.actual != null ? T.d4 : T.d2
           return (
-            <div key={i} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <button key={i} type="button" aria-pressed={selected === i} aria-label={`Woche ${b.idx}: ${b.planned} TSS geplant`} onClick={() => onSelect?.(i)} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 0, background: 'transparent', padding: 0, cursor: onSelect ? 'pointer' : 'default', fontFamily: FONT }}>
               <motion.div initial={reduce ? false : { height: 0 }} animate={{ height: h }} transition={grow(i * 0.03)}
                 style={{
                   width: '100%', height: h, borderRadius: '4px 4px 0 0',
@@ -282,7 +282,8 @@ function WeekChart({ bars }: { bars: WeekBar[] }) {
                   border: b.kind === 'planned' ? `1px dashed ${T.d3}` : 'none',
                   boxShadow: isCur ? `0 0 14px ${T.acid}55` : 'none',
                 }} />
-            </div>
+              <span style={{ width: '100%', height: 3, borderRadius: 99, background: selected === i ? T.acid : 'transparent' }} />
+            </button>
           )
         })}
       </div>
@@ -634,6 +635,7 @@ export default function W3PlanView({
   const [adaptMsg, setAdaptMsg] = useState<string | null>(null)
   const [adaptBusy, setAdaptBusy] = useState<AdaptKind | null>(null)
   const [canUndo, setCanUndo] = useState(false)
+  const [selectedWeek, setSelectedWeek] = useState(Math.max(0, vm.planWeekNum - 1))
 
   const doAdapt = async (kind: AdaptKind) => {
     if (!onAdapt || adaptBusy) return
@@ -661,6 +663,9 @@ export default function W3PlanView({
   const [selDay, setSelDay] = useState(todayIdx)
   const sel = vm.daySessions?.[selDay] ?? null
   const selIsToday = sel ? sel.isToday : true
+  const selectedWeekBar = vm.weekBars[selectedWeek] ?? vm.weekBars[vm.planWeekNum - 1]
+  const selectedWeekLabel = selectedWeekBar ? `Woche ${selectedWeekBar.idx} · ${selectedWeekBar.planned} TSS geplant` : vm.weekRangeLabel
+  const selectedIsCurrent = selectedWeek === vm.planWeekNum - 1
 
   return (
     <div className="w3-root">
@@ -723,19 +728,6 @@ export default function W3PlanView({
           <PhaseRail phases={vm.phases} currentWeek={vm.planWeekNum} totalWeeks={vm.totalWeeks} />
         </div>
 
-        {/* Ziel & Anforderungen link */}
-        <div style={{ ...band(24) }}>
-          <button onClick={onGoal} style={{ ...card(), flexDirection: 'row', alignItems: 'center', gap: 14, cursor: 'pointer', border: 0, fontFamily: FONT, textAlign: 'left' }}>
-            <div style={{ width: 42, height: 42, borderRadius: 14, background: T.acidDim, display: 'grid', placeItems: 'center', flex: 'none' }}><Flag size={19} color={T.acid} /></div>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 3 }}>
-              <span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>Ziel & Anforderungen</span>
-              <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>{vm.reqSummary}</span>
-            </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: T.mid }}>{vm.daysRight}</span>
-            <ChevronRight size={18} color={T.mid} />
-          </button>
-        </div>
-
         {/* Wo du gerade stehst */}
         <SectionTitle title="Wo du gerade stehst" right={<span style={{ fontSize: 12, fontWeight: 600, color: T.quiet }}>{vm.phaseOfTotal}</span>} />
         <div style={{ ...band(26) }}>
@@ -794,14 +786,14 @@ export default function W3PlanView({
         </div>
         <div style={{ ...band(26) }}>
           <div style={{ ...card() }}>
-            {vm.weekBars.length > 0 ? <WeekChart bars={vm.weekBars} /> : <span style={{ fontSize: 20, fontWeight: 600, color: T.quiet, textAlign: 'center' }}>{DASH}</span>}
+            {vm.weekBars.length > 0 ? <WeekChart bars={vm.weekBars} selected={selectedWeek} onSelect={setSelectedWeek} /> : <span style={{ fontSize: 20, fontWeight: 600, color: T.quiet, textAlign: 'center' }}>{DASH}</span>}
           </div>
         </div>
 
         {/* Diese Woche */}
-        <SectionTitle title="Diese Woche" right={<span style={{ padding: '4px 10px', borderRadius: 100, background: T.acidDim, fontSize: 11, fontWeight: 600, color: T.acid }}>{vm.weekBadge}</span>} />
+        <SectionTitle title={selectedIsCurrent ? 'Diese Woche' : `Woche ${selectedWeekBar?.idx ?? '—'}`} right={<span style={{ padding: '4px 10px', borderRadius: 100, background: T.acidDim, fontSize: 11, fontWeight: 600, color: T.acid }}>{selectedIsCurrent ? vm.weekBadge : selectedWeekBar ? `${selectedWeekBar.planned} TSS` : '—'}</span>} />
         <div style={{ ...band(26), gap: 16 }}>
-          <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, marginTop: -4 }}>{vm.weekRangeLabel}</span>
+          <span style={{ fontSize: 12, fontWeight: 600, color: T.quiet, marginTop: -4 }}>{selectedIsCurrent ? vm.weekRangeLabel : selectedWeekLabel}</span>
           {/* WHY this week is shaped like this — the engine's own sentence,
               not a canned phase paragraph. */}
           {vm.weekWhy && (
@@ -820,9 +812,9 @@ export default function W3PlanView({
             </div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            {vm.weekStats.map((s) => (
+            {vm.weekStats.map((s, i) => (
               <div key={s.label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-                <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.6, color: s.value === '—' ? T.quiet : T.ink }}>{s.value}</span>
+                <span style={{ fontSize: 22, fontWeight: 600, letterSpacing: -0.6, color: s.value === '—' ? T.quiet : T.ink }}>{!selectedIsCurrent && i === 1 && selectedWeekBar ? selectedWeekBar.planned : s.value}</span>
                 <span style={{ fontSize: 10, fontWeight: 600, color: T.quiet }}>{s.label}</span>
               </div>
             ))}
@@ -870,13 +862,23 @@ export default function W3PlanView({
               )
             })}
           </div>
+          {!selectedIsCurrent && <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 0', color: T.quiet, fontSize: 11.5, fontWeight: 600 }}><Activity size={14} color={T.acid} /> Wähle einen Tag, um die Einheit dieser Woche zu öffnen.</div>}
         </div>
 
         {/* THE SELECTED DAY'S SESSION. This card described today and only
             today, while the strip above it held a whole week the rider could
             not open — so "what is coming" was a question the plan screen could
             not answer. It now follows the strip. */}
-        <div style={{ ...band(26) }}>
+        {!selectedIsCurrent && (
+          <div style={{ ...band(26) }}>
+            <div style={{ ...card(), gap: 8, border: `1px solid ${T.stroke}` }}>
+              <Kicker>WOCHE {selectedWeekBar?.idx ?? '—'}</Kicker>
+              <span style={{ fontSize: 22, fontWeight: 600, color: T.ink }}>Tagesplan dieser Woche</span>
+              <span style={{ fontSize: 12.5, lineHeight: 1.45, color: T.mid }}>Tippe einen Tag oben an. Die Einheiten dieser Woche werden hier geöffnet, ohne die Planübersicht zu verändern.</span>
+            </div>
+          </div>
+        )}
+        <div style={{ ...band(26), display: selectedIsCurrent ? 'flex' : 'none' }}>
           <div style={{ ...card(), gap: 18 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               {/* A skipped Monday used to open as "GEFAHREN" with the
