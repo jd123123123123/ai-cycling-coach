@@ -86,11 +86,11 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  const currentBar=currentIndex+weekOffset
  const hasWorkout=!!selected?.title
  const openSession=()=>{if(selected?.isPast){setSheet('history');return}if(selected?.dateISO&&hasWorkout)onOpenSession(selected.dateISO);else setSheet('why')}
- const styles={'--plan-acid':T.acid,'--plan-ink':T.ink,'--plan-bg':T.bg,'--plan-card':T.surface,'--plan-raised':T.surface2,'--plan-muted':T.mid,'--plan-stroke':T.stroke,fontFamily:FONT} as CSSProperties
+ const styles={'--plan-acid':T.acid,'--plan-ink':T.ink,'--plan-bg':T.bg,'--plan-card':T.surface,'--plan-card-top':T.cardTop,'--plan-card-bot':T.cardBot,'--plan-acid-lite':T.acidLite,'--plan-raised':T.surface2,'--plan-muted':T.mid,'--plan-stroke':T.stroke,fontFamily:FONT} as CSSProperties
  return <div className={`w3-plan-experience state-${state}${state==='active'&&view==='plan'?' focus-active':''}`} style={styles}>
  <W3TopBar title="Plan" extra={<button className="w3-plan-help" aria-label="So funktioniert dein Plan" onClick={()=>setIntro(true)}><HelpCircle size={18}/></button>}/>
  <main className="w3-plan-content">
- {state!=='empty'&&<div className="w3-plan-view-switch"><button aria-pressed={view==='plan'} onClick={()=>setView('plan')}>{state==='ended'?'Ergebnis':'Plan'}</button><button aria-pressed={view==='profile'} onClick={()=>setView('profile')}>Entwicklung</button><button className="w3-plan-settings" aria-label="Zeit und Trainingstage anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button></div>}
+ {state!=='empty'&&(state!=='active'||view==='profile')&&<div className="w3-plan-view-switch"><button aria-pressed={view==='plan'} onClick={()=>setView('plan')}>{state==='ended'?'Ergebnis':'Plan'}</button><button aria-pressed={view==='profile'} onClick={()=>setView('profile')}>Entwicklung</button><button className="w3-plan-settings" aria-label="Zeit und Trainingstage anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button></div>}
  {state==='empty'?<>
  <h1>Was hast<br/>du vor?</h1>
  <p className="w3-plan-empty-note">Noch kein abgeschlossener Plan. Lege jetzt deinen Fokus fest — dann zeigt dir RIDR, warum jede Einheit dort steht.</p>
@@ -101,6 +101,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  <button className="w3-plan-primary" onClick={()=>setCompose(goal==='ftp'?'threshold':goal==='vo2'?'vo2':'endurance')}>Meinen Plan erstellen<ArrowRight size={20}/></button>
  </>:view==='profile'||state==='ended'?<>
  {state!=='ended'&&<div className="w3-plan-opening"><h1>{missingPlanHistory?<>Dein nächster<br/>Schritt.</>:<>Deine<br/>Entwicklung.</>}</h1><p>{missingPlanHistory?'Dein bisheriger Plan ist beendet. Wähle, was du als Nächstes verbessern möchtest.':title}</p></div>}
+ {state==='active'&&<button className="w3-plan-link slim" onClick={()=>setSheet('profile')}>Leistungsprofil<ArrowUpRight size={18}/></button>}
  {missingPlanHistory&&<button className="w3-plan-primary" onClick={()=>setCompose('choose')}>Nächstes Ziel wählen<ArrowRight size={20}/></button>}
  {state==='ended'&&!missingPlanHistory&&<section className="w3-plan-finish-hero" aria-labelledby="w3-plan-finish-title">
    <div className="w3-plan-finish-topline"><span>DEIN PLAN · ERGEBNIS</span><span>{vm.totalWeeks} WOCHEN</span></div>
@@ -149,6 +150,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
      Auskunft ein zweites Mal als "05/08" -- dieselbe Tatsache in zwei
      verschiedenen typografischen Systemen auf einem Bildschirm.
      In `created` gibt es keinen Bogen, dort bleibt sie. */}
+{state==='active'&&<button className="focus-plan-adjust" aria-label="Zeit und Trainingstage anpassen" onClick={()=>setSheet('adjust')}><SlidersHorizontal size={19}/></button>}
 {state!=='active'&&<div className="w3-plan-week-count">{String(progress).padStart(2,'0')}<span>/{String(vm.totalWeeks).padStart(2,'0')}</span></div>}</header>
  {state==='created'?<>
  <section className="w3-plan-overview">
@@ -195,7 +197,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
      SEHEN, wo sie im Ganzen liegt und worauf sie zulaeuft. */}
  <W3PlanFocus vm={vm} selectedIndex={currentBar} currentIndex={currentIndex} day={day}
    onWeek={i=>onWeekOffset(Math.min(12,Math.max(-12,i-currentIndex)))} onDay={setDay}
-   onOpen={openSession} onProfile={()=>setSheet('profile')} loading={loading}/>
+   onOpen={openSession} onDevelopment={()=>setView('profile')} loading={loading}/>
  {latest?<button className="w3-plan-adaptation" onClick={()=>setSheet('adaptation')}><span><Check size={17}/></span><strong>Dein Plan hat sich angepasst.</strong><ArrowUpRight size={18}/></button>:<button className="w3-plan-link slim" onClick={()=>setSheet('why')}><span><strong>Warum diese Woche?</strong></span><ArrowUpRight size={18}/></button>}
  </>}
  </>}
