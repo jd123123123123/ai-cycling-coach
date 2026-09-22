@@ -6,12 +6,12 @@
  * DAS DECK: der Kopf steht, der Rest kommt auf Zuruf.
  *
  * Gemeldet: "make the heroes always locked in and then use scroll like in
- * tiktok to get to the other content of the page". Genau das macht CSS-Snap --
- * und zwar besser als ein JS-Pager: `scroll-snap-stop: always` laesst eine
- * Wischbewegung auf GENAU einem Kapitel landen und nie eines ueberspringen,
- * und der Browser behaelt Schwung, Gummiband-Effekt und
- * Bedienhilfen-Verhalten, das ein eigener Pager alles schlecht nachbauen
- * muesste. React faehrt hier nichts; es beobachtet hoechstens.
+ * tiktok to get to the other content of the page". CSS-Snap keeps the
+ * chapters discoverable, but it must stay subordinate to the finger: the
+ * earlier `mandatory` + `scroll-snap-stop: always` combination made a short
+ * flick jump a whole chapter and made the long ride list feel locked. The
+ * current `proximity` snap gives a quiet landing when the gesture is already
+ * near a chapter boundary while preserving native momentum and accessibility.
  *
  * Dasselbe Muster laeuft seit Monaten im Morgen-Deck. Es hier nachzubauen
  * statt es zu uebernehmen waere die zweite Fassung derselben Sache.
@@ -37,6 +37,8 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  scroll-padding-bottom: calc(92px + env(safe-area-inset-bottom));
+  overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -48,7 +50,12 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  scroll-snap-type: y mandatory;
+  /* Proximity keeps the editorial chapters discoverable without making the
+     finger fight the browser. `mandatory` made a short flick jump an entire
+     chapter and made the long ride list feel like a locked carousel. */
+  scroll-snap-type: y proximity;
+  scroll-padding-block: 12px calc(92px + env(safe-area-inset-bottom));
+  overscroll-behavior-y: contain;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
   outline: none;
@@ -61,7 +68,7 @@
      scrollen duerfen und danach weiterschnappen -- niemals abschneiden. */
   min-height: 100%;
   scroll-snap-align: start;
-  scroll-snap-stop: always;
+  scroll-snap-stop: normal;
   box-sizing: border-box;
 }
 
