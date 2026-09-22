@@ -22,7 +22,10 @@
  *
  * ── Two tiers, and why ────────────────────────────────────────────────────
  * TIER 1 — the five bottom tabs. One tap away from wherever the rider is
- * standing, so they go out together on the first idle period.
+ * standing, so they are warmed during idle time, but one at a time.
+ * Downloading five route chunks together competed with the first data fetch
+ * on slower phones and made the app feel slower before anyone had asked for
+ * another tab.
  *
  * TIER 2 — the screens you reach THROUGH Today and Rides: a ride, a session,
  * the plan, a goal, readiness, the crew, the challenges, the avatar studio.
@@ -130,11 +133,23 @@ function warmSecondary(i = 0): void {
 
 /** Download + evaluate every W3 destination chunk, tabs first. Idempotent;
  *  failures are ignored (a prefetch that misses just means the tap pays for the
- *  chunk, as before). */
+ *  chunk, as before). One request at a time keeps speculative work from
+ *  competing with the screen the rider is actually reading. */
 export function prefetchW3Tabs(): void {
   if (warmed) return
   warmed = true
-  void Promise.allSettled(TABS.map((load) => load())).then(() => warmSecondary())
+  warmTabsSequentially()
+}
+
+function warmTabsSequentially(i = 0): void {
+  if (i >= TABS.length) {
+    warmSecondary()
+    return
+  }
+  void TABS[i]().catch(() => {}).finally(() => {
+    // Let the browser paint and service user-initiated work between chunks.
+    onIdle(() => warmTabsSequentially(i + 1), 1200)
+  })
 }
 
 /**
