@@ -4,6 +4,7 @@ import type { W3PlanVm, PlanDaySession } from './W3PlanView'
 import './w3PlanFocus.css'
 import type { IntervalBlockOut } from '../../api/weeks'
 import { weekCurve } from './w3PlanCurve'
+import W3PlanDayComparison, {tssDifference} from './W3PlanDayComparison'
 
 /** Plan, week and session use the saved prescription. Selection is not completion. */
 export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,onDay,onOpen,onDevelopment,loading}:{vm:W3PlanVm;selectedIndex:number;currentIndex:number;day:number;onWeek:(i:number)=>void;onDay:(i:number)=>void;onOpen:()=>void;onDevelopment:()=>void;loading:boolean}) {
@@ -54,14 +55,14 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
          <div className="focus-plan-phases" aria-label="Planphasen">{blocks.map(p=><button key={p.name} style={{gridColumn:`${p.start+1} / ${Math.min(vm.weekBars.length,p.end+1)+1}`}} aria-pressed={phase===p} disabled={p.start-currentIndex < -12 || p.start-currentIndex > 12} onClick={()=>onWeek(Math.min(vm.weekBars.length-1,p.start))}>{p.name}</button>)}</div>
        </div>
      </div>
-     <div className="focus-plan-key"><span><i/>Plan <i data-actual/>Gefahren</span><button onClick={onDevelopment}>Entwicklung<ArrowUpRight size={14}/></button></div>
+     <div className="focus-plan-key"><div className="focus-plan-readout" aria-live="polite"><span><i/>Plan <strong>{selectedWeek ? Math.round(selectedWeek.planned) : '—'}</strong><i data-actual/>Ist <strong>{selectedWeek?.actual!=null ? Math.round(selectedWeek.actual) : '—'}</strong> TSS</span>{selectedWeek?.actual!=null&&<small>{tssDifference(selectedWeek.planned,selectedWeek.actual)}</small>}</div><button onClick={onDevelopment}>Entwicklung<ArrowUpRight size={14}/></button></div>
    </section>
    <section className="focus-plan-detail" aria-label="Ausgewählte Woche">
 
      <div className="focus-plan-days" role="group" aria-label="Trainingstag wählen">{days.map((d,i)=><button key={d.dateISO??i} aria-pressed={i===day} aria-current={d.isToday?'date':undefined} aria-label={`${d.weekday}, ${d.dateLabel}, ${d.title??'Ruhetag'}${Number.isFinite(Number(d.tss))?`, ${d.tss} TSS`:''}`} onClick={()=>onDay(i)}><span>{d.weekday.slice(0,2)}</span><b>{d.dateISO?Number(d.dateISO.slice(8,10)):d.dateLabel.match(/\d+/)?.[0]??'—'}</b><i aria-hidden><em style={{height:`${(Number(d.tss)||0)/maxDay*100}%`}}/></i></button>)}</div>
      <article className="focus-session" data-rest={!selected?.title||undefined}>
        <div className="focus-session-heading"><div><span>{selected?.isToday?'Heute':selected?.dateLabel??'Einheit'}{selected?.isPast?' · Empfehlung':''}</span><h2>{selected ? selected.title??'Zeit für Erholung.' : loading?'Deine Woche lädt.':'Noch keine Einheit.'}</h2></div><button className="focus-session-open" disabled={loading||!selected} onClick={onOpen} aria-label={selected?.isPast?'Empfehlung & Rückblick':selected?.title?'Einheit ansehen':'Warum heute Pause?'}><span className="focus-session-action"><ArrowUpRight size={19}/></span></button></div>
-       {selected?.title?<>
+       {selected?.isPast ? <W3PlanDayComparison day={selected}/> : selected?.title?<>
          <div className="focus-session-chart">
            {bars.length?<div className="focus-session-graph" role="img" aria-label={`Geplantes Belastungsprofil, ${selected.ftpPct} FTP im Mittel. Gestrichelte Linie: 100 Prozent FTP.`}>
              <span className="focus-session-ftp" style={{bottom:`${(2/3)/rangeMax*100}%`}}><span>FTP</span></span>

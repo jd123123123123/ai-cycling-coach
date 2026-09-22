@@ -9,6 +9,7 @@ import {PlanAdjustSheet,type W3PlanVm,type W3PlanActions} from './W3PlanView'
 import {usePlanAdaptations} from '../../hooks/usePlanAdaptations'
 import W3AdaptationReceipt from './W3AdaptationReceipt'
 import W3PlanFocus from './W3PlanFocus'
+import W3PlanDayComparison from './W3PlanDayComparison'
 import {useProgressExplorer,W3ProgressAnalyticsView} from './W3ProgressAnalytics'
 import W3PlanIntro from './W3PlanIntro'
 import W3PowerProfile from './W3PowerProfile'
@@ -202,7 +203,7 @@ export default function W3PlanExperience({vm,state,userId,onRebuild,onOpenSessio
  </>}
  </>}
  </main><W3TabBar/>
- {sheet==='history'&&<PlanDialog title={selected?.dateLabel??'Dein Training'} onClose={()=>setSheet(null)}><h3>{selected?.title??'Kein Training geplant'}</h3><div className="w3-power-comparison"><span><small>Geplant</small><strong>{selected?.tss??'—'} TSS</strong></span><span><small>Gefahren</small><strong>{selected?.actualTss!=null?`${Math.round(selected.actualTss)} TSS`:'—'}</strong></span></div><p>{selected?.actualDuration!=null?`${Math.round(selected.actualDuration/60)} Minuten aufgezeichnet.`:selected?.actualKnown===false?'Fahrtdaten sind noch nicht verfügbar.':selected?.ridden?'Fahrt aufgezeichnet. Die Dauer ist nicht verfügbar.':'Für diesen Tag ist keine Fahrt hinterlegt.'}</p>{selected?.rationale&&<p>{selected.rationale}</p>}{selected?.dateISO&&selected?.title&&<button onClick={()=>onOpenSession(selected.dateISO!)}>Empfohlene Einheit ansehen</button>}</PlanDialog>}
+ {sheet==='history'&&selected&&<PlanDialog title={selected.dateLabel??'Dein Training'} onClose={()=>setSheet(null)}><h3>{selected.title??'Ruhetag empfohlen'}</h3><W3PlanDayComparison day={selected}/>{selected.actualRides?.map(ride=><button className="w3-plan-recorded-ride" key={ride.id} onClick={()=>nav(`/e/w3-ride/${ride.id}`)}><span><small>Aufgezeichnete Fahrt</small>{ride.title}</span><ArrowUpRight size={18}/></button>)}{selected.rationale&&<p>{selected.rationale}</p>}<p>Der Vergleich zeigt die Belastungsmenge. Ob die Intensität zur Empfehlung passt, siehst du im Fahrtrückblick.</p>{selected.dateISO&&selected.title&&<button onClick={()=>onOpenSession(selected.dateISO!)}>Empfohlene Einheit ansehen</button>}</PlanDialog>}
  {sheet==='profile'&&<PlanDialog title="Dein Leistungsprofil" onClose={()=>setSheet(null)}><W3PowerProfile data={progressData}/></PlanDialog>}
  {sheet==='progress'&&<PlanDialog title="Dein Fortschritt" onClose={()=>setSheet(null)}><W3ProgressAnalyticsView availablePeriods={missingPlanHistory?['week','month','year']:undefined} data={progressData} period={period} onPeriod={p=>{setPeriod(p);setReferenceDate(null)}} referenceDate={referenceDate} onReferenceDate={setReferenceDate} pending={previewProgress?false:results.isPending} error={previewProgress?false:results.isError}/></PlanDialog>}
  {sheet==='adjust'&&<PlanAdjustSheet vm={vm} onClose={()=>setSheet(null)} onRebuild={onRebuild}

@@ -245,6 +245,7 @@ export default function W3PlanPage() {
         actualKnown:weekOffset<0 || seasonActs!=null,
         actualTss:weekOffset<0?d.actual_tss:recorded.actualTss,
         actualDuration:weekOffset<0?d.actual_duration_seconds:recorded.actualDuration,
+        actualRides:recorded.actualRides,
         title: isSess ? (d.title ?? 'Einheit') : null,
         weekday: dt ? DE_WD2[(dt.getDay() + 6) % 7] : '',
         dateLabel: dt ? fmtDEShort(dt) : '',

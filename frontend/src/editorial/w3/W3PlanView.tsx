@@ -77,6 +77,7 @@ export interface PlanDaySession {
   actualKnown?: boolean
   actualTss?: number | null
   actualDuration?: number | null
+  actualRides?: { id: number; title: string }[]
   title: string | null
   weekday: string
   dateLabel: string
