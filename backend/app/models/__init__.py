@@ -14,6 +14,7 @@ from app.models.user_dashboard import UserDashboard  # noqa: F401
 from app.models.user_tab_layout import UserTabLayout  # noqa: F401
 from app.models.period_report_cache import PeriodReportCache  # noqa: F401
 from app.models.coach_recommendation import CoachRecommendation  # noqa: F401
+from app.models.plan_journey import PlanJourney  # noqa: F401
 from app.models.mesocycle_plan import MesocyclePlan  # noqa: F401
 from app.models.crew import Crew, CrewInvite, CrewMembership  # noqa: F401
 from app.models.crew_nudge import CrewNudge  # noqa: F401

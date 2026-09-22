@@ -61,7 +61,7 @@ def record_envelopes(rides, start, end):
         out.append(ProgressRecord(seconds=seconds,watts=now[0] if now else None,all_time_watts=historical[0] if historical else None,previous_watts=prev[0] if prev else None,date=now[1].isoformat() if now else None,activity_id=now[2] if now else None))
     return out
 
-async def load_progress(db,user_id,period,reference_date=None,plan_end=None):
+async def load_progress(db,user_id,period,reference_date=None,plan_end=None,*,plan_start_override=None):
     from sqlalchemy import select
     from app.models.athlete_profile import AthleteProfile
     from app.models.daily_metric import DailyMetric
@@ -86,6 +86,10 @@ async def load_progress(db,user_id,period,reference_date=None,plan_end=None):
                 anchor=recorded_start
         except (TypeError,ValueError):
             pass
+    if plan_start_override is not None:
+        if period != "plan" or plan_start_override > plan_day:
+            raise ValueError("Invalid saved plan range")
+        anchor = plan_start_override
     start,end=period_bounds(period,plan_day if plan_end else today,reference_date,anchor)
     ftp_points=[]
     for item in (profile.ftp_history or []) if profile else []:

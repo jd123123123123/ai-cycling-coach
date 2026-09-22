@@ -602,6 +602,9 @@ async def rebuild_plan(
         summary["rebuilt"] = False
         return summary
 
+    from app.services.plan_history import preserve_schedule
+    await preserve_schedule(db, user_id, profile)
+
     # Count the sacred rows we are about to preserve — the feed message
     # states this honestly.
     sacred_res = await db.execute(
@@ -651,6 +654,7 @@ async def rebuild_plan(
     meso = await generate_mesocycle(
         db, user_id, plan_start_date=monday, current_ctl=live_ctl
     )
+    await preserve_schedule(db, user_id, profile)
     # generate_mesocycle leaves the commit to its caller (weeks.py does the
     # same) — without this the fresh plan silently rolls back.
     if atomic:

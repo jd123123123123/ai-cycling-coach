@@ -310,6 +310,10 @@ async def cancel_plan(
     if already is not None:
         return PlanCancelResponse(status="ended", cancelled_on=already.isoformat())
 
+    from app.services.plan_history import finish_journey
+    await finish_journey(db, user.id, profile, 'cancelled')
+    # ensure_journey may add its stable identity; preserve it in the profile.
+    goals = dict(profile.goals or {})
     today = today_local()
     goals[PLAN_CANCELLED_KEY] = today.isoformat()
     # Neues dict, nicht mutieren: eine JSON-Spalte an Ort und Stelle zu aendern
@@ -535,3 +539,45 @@ async def swap_plan_days(
 
     await db.commit()
     return PlanDaySwapResponse(swapped=True, a_title=neu_a, b_title=neu_b)
+
+# Plan history is separate from the mutable generated blocks. Only the refresh
+# command writes snapshots; listing and opening past plans are read-only.
+@router.post('/history/refresh', summary='Preserve current plan and close elapsed plans')
+async def refresh_plan_history(
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+):
+    from app.services.plan_history import refresh_journey
+    profile = (await db.execute(select(AthleteProfile).where(AthleteProfile.user_id == user.id).with_for_update())).scalar_one_or_none()
+    if profile is None:
+        return {'saved': False}
+    await refresh_journey(db, user.id, profile)
+    await db.commit()
+    return {'saved': True}
+
+
+@router.get('/history', summary='Previously saved plans for the signed-in rider')
+async def plan_history(
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+    offset: Annotated[int, Query(ge=0, le=10000)] = 0,
+    limit: Annotated[int, Query(ge=1, le=30)] = 8,
+):
+    from app.models.plan_journey import PlanJourney
+    from app.services.plan_history import summary
+    records = (await db.execute(select(PlanJourney).where(PlanJourney.user_id == user.id, PlanJourney.status != 'active').order_by(PlanJourney.created_at.desc(), PlanJourney.id.desc()).offset(offset).limit(limit + 1))).scalars().all()
+    return {'plans': [summary(r) for r in records[:limit]], 'next_offset': offset + limit if len(records) > limit else None}
+
+
+@router.get('/history/{journey_id}', summary='Saved plan structure and observed outcomes')
+async def plan_history_detail(
+    journey_id: str,
+    user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db_for_user)],
+):
+    from app.models.plan_journey import PlanJourney
+    from app.services.plan_history import summary
+    record = (await db.execute(select(PlanJourney).where(PlanJourney.user_id == user.id, PlanJourney.id == journey_id))).scalar_one_or_none()
+    if record is None:
+        raise HTTPException(404, 'Plan not found')
+    return {**summary(record), 'goal': record.goal, 'revisions': record.revisions, 'outcome': record.outcome}

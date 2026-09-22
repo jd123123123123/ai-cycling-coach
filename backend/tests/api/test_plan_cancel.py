@@ -6,7 +6,7 @@ sein Renntag vergeht. Diese Datei haelt den zweiten Weg fest.
 """
 from datetime import date
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -35,7 +35,8 @@ def endpoint():
         app.dependency_overrides[get_db_for_user] = lambda: db
         return TestClient(app), db, profile
 
-    yield make
+    with patch("app.services.plan_history.finish_journey", new_callable=AsyncMock):
+        yield make
     app.dependency_overrides.clear()
 
 

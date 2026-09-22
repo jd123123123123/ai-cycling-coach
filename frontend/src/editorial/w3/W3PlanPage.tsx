@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { refreshPlanHistory } from '../../api/planHistory'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useCurrentWeek, WEEK_CURRENT_KEY_ROOT } from '../../hooks/useCurrentWeek'
 import { useAthleteProfile } from '../../hooks/useAthleteProfile'
@@ -69,7 +70,8 @@ export default function W3PlanPage() {
   const { data: profile, isLoading: profileLoading } = useAthleteProfile()
   const { data: streak } = useStreak()
   const seasonStart = useMemo(() => new Date(new Date().getFullYear(), 0, 1), [])
-  const activityStart = plan?.plan_start_date ? parseISO(plan.plan_start_date) : seasonStart
+  useQuery({queryKey:['plan-history-capture',profile?.user_id,plan?.goal_start,plan?.status],queryFn:async()=>{await refreshPlanHistory();return true},enabled:!!plan&&plan.status!=='empty',staleTime:1_800_000,retry:1})
+  const activityStart = plan?.goal_start ? parseISO(plan.goal_start) : plan?.plan_start_date ? parseISO(plan.plan_start_date) : seasonStart
   const { data: seasonActs } = useActivitiesRange(activityStart, new Date())
   // Read saved state first. The legacy weeks endpoint can generate a block;
   // do not call it for an empty or completed plan merely by opening this page.

@@ -54,7 +54,7 @@ import './w3.css'
 // ── view model ──
 export interface PlanStat { value: string; label: string }
 export interface PlanDayCell { letter: string; date: string; frac: number; isToday: boolean; isRest: boolean; ridden?: boolean }
-export interface PlanSessionBar { w: number; work: boolean; seconds?: number }
+export interface PlanSessionBar { w: number; work: boolean; seconds?: number; ftpRatio?: number | null; estimated?: boolean }
 export interface ActiveBlockVm {
   phase: string
   dateRange: string
@@ -79,6 +79,8 @@ export interface PlanDaySession {
   actualDuration?: number | null
   plannedDuration?: number | null
   actualRides?: { id: number; title: string }[]
+  /** Optional already-loaded chart data; design fixtures supply this only on the dev route. */
+  powerCharts?: import('./planWorkoutComparison').DayPowerChart[]
   title: string | null
   weekday: string
   dateLabel: string

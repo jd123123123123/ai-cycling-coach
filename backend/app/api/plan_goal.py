@@ -50,6 +50,9 @@ async def apply(payload: CustomGoalInput,
     if (profile.primary_sport or "cycling") != "cycling" or (profile.ftp_watts or 0) < 100:
         raise HTTPException(409, "Set your cycling FTP before building a cycling plan")
     try:
+        from app.services.plan_history import finish_journey, KEY
+        await finish_journey(db, user.id, profile)
+        profile.goals = {k:v for k,v in (profile.goals or {}).items() if k != KEY}
         apply_goal_to_profile(profile, result, today_local())
         await db.flush()
         summary = await rebuild_plan(db, user.id, profile, source="plan_change",

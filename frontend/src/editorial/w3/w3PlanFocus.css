@@ -156,3 +156,144 @@
 
 .w3-plan-sheet{width:100%;max-width:430px;margin-inline:auto;box-sizing:border-box}.w3-plan-sheet>*{flex-shrink:0}
 @container plancontent (max-height:440px){.focus-plan-detail{padding-block:8px}.focus-compare-lane{min-height:44px}}
+
+/* One workout, one elapsed-time scale. Filled ride beams sit inside the saved
+   prescription outline; the zone view uses the same visual grammar. */
+.focus-plan-detail{padding:24px 20px 22px;gap:24px}
+.focus-plan-days{gap:4px;padding-block:4px 8px}
+.focus-plan-days button{min-height:56px;gap:4px;border-radius:14px}
+.focus-plan-days [aria-pressed=true]{box-shadow:none}
+.focus-session{gap:16px}
+.focus-workout-comparison{display:flex;flex-direction:column;gap:10px;position:relative;min-width:0}
+.focus-workout-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:32px}
+.focus-workout-legend{display:flex;align-items:center;gap:12px;font-size:11px;color:var(--plan-muted)}
+.focus-workout-legend>span{display:flex;align-items:center;gap:5px}
+.focus-workout-legend i{width:10px;height:8px;border:1px solid var(--plan-muted);border-radius:2px}
+.focus-workout-legend i[data-actual]{background:var(--plan-acid);border-color:var(--plan-acid)}
+.focus-workout-tabs{display:flex;gap:2px;padding:3px;background:color-mix(in srgb,var(--plan-ink) 5%,transparent);border-radius:20px}
+.focus-workout-tabs button{font-size:11px;line-height:16px;min-height:28px;min-width:55px;padding:4px 9px;background:none;color:var(--plan-muted);border-radius:16px}
+.focus-workout-tabs [aria-pressed=true]{background:var(--plan-ink);color:var(--plan-bg)}
+.focus-workout-plot{position:relative;height:108px;flex:none}
+.focus-workout-plot>svg{width:100%;height:100%;display:block;overflow:visible}
+.focus-workout-plot text{font-family:inherit;font-variant-numeric:tabular-nums}
+.workout-baseline{stroke:var(--plan-stroke);stroke-width:1;fill:none}
+.workout-ftp{stroke:var(--plan-muted);stroke-width:.6;stroke-dasharray:2 4;opacity:.45;fill:none}
+.workout-target{fill:color-mix(in srgb,var(--plan-muted) 5%,transparent);stroke:var(--plan-muted);stroke-width:1;stroke-opacity:.9;vector-effect:non-scaling-stroke}
+.workout-actual{fill:var(--plan-acid);fill-opacity:.82}
+.workout-cursor{stroke:var(--plan-ink);stroke-width:1;stroke-opacity:.8}
+.workout-axis{font-size:10px;fill:var(--plan-muted)}
+.workout-zone-minutes{font-size:12px;fill:var(--plan-ink);font-weight:500}
+.focus-workout-scrub{position:absolute;inset:0 0 20px;width:100%;height:calc(100% - 20px);margin:0;opacity:0;cursor:crosshair;touch-action:pan-y}
+.focus-workout-plot:focus-within{outline:1px solid var(--plan-muted);outline-offset:4px;border-radius:4px}
+.focus-workout-empty{position:absolute;inset:0 0 24px;display:grid;place-items:center;font-size:12px;color:var(--plan-muted)}
+.focus-workout-zone-buttons{position:absolute;left:0;right:0;bottom:-4px;display:grid;grid-template-columns:repeat(7,1fr)}
+.focus-workout-zone-buttons button{min-width:0;min-height:28px;padding:2px 0;background:none;color:var(--plan-muted);font-size:10px;border-radius:8px;position:relative}
+.focus-workout-zone-buttons button:before{content:'';position:absolute;left:0;right:0;bottom:0;height:108px;z-index:1}
+.focus-workout-zone-buttons [aria-pressed=true]{color:var(--plan-ink);font-weight:650;background:color-mix(in srgb,var(--plan-ink) 7%,transparent)}
+.focus-workout-caption{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:18px;font-size:10px;line-height:16px;color:var(--plan-muted);font-variant-numeric:tabular-nums}
+.focus-workout-caption>span:last-child{display:flex;align-items:center;gap:4px;white-space:nowrap}
+.focus-workout-caption b{font-weight:550;color:var(--plan-ink)}
+.focus-workout-caption i{height:9px;width:1px;background:var(--plan-stroke);margin-inline:3px}
+.focus-workout-caption button{padding:0;background:none;color:var(--plan-ink);font-size:11px}
+.focus-workout-facts{display:grid;grid-template-columns:repeat(var(--fact-count,2),minmax(0,1fr));gap:16px;padding-top:11px;border-top:1px solid var(--plan-stroke)}
+.focus-workout-facts>div,.focus-workout-facts>button{background:none;min-height:38px;min-width:0;padding:0;display:flex;flex-direction:column;gap:5px;align-items:flex-start;color:var(--plan-ink);border:0;border-radius:0;text-align:left}
+.focus-workout-facts>button>div{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.focus-workout-facts>:last-child{align-items:flex-end;text-align:right}
+.focus-workout-facts>:nth-child(2):not(:last-child){align-items:center}
+.focus-workout-facts strong{font-weight:500;font-size:21px;letter-spacing:-.6px;line-height:25px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.focus-workout-facts small{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--plan-muted);font-variant-numeric:tabular-nums}
+.focus-workout-facts small i{height:7px;width:7px;border:1px solid var(--plan-muted);border-radius:1px}
+.focus-workout-facts span{font-size:10px;line-height:13px;color:var(--plan-muted)}
+.focus-workout-note{position:absolute;right:0;bottom:56px;padding:6px 9px;border-radius:8px;background:var(--plan-card);color:var(--plan-ink);font-size:11px;box-shadow:0 0 0 1px var(--plan-stroke),0 3px 12px var(--plan-shadow);z-index:2;pointer-events:none}
+@container plancontent (max-height:620px){
+ .focus-active .w3-focus-plan{gap:20px}.focus-plan-detail{padding:20px;gap:22px}
+ .focus-workout-plot{height:94px}.focus-session{gap:12px}.focus-workout-comparison{gap:8px}
+}
+@container plancontent (max-height:530px){
+ .focus-active .w3-focus-plan{gap:14px}.focus-plan-detail{padding:16px;gap:14px}.focus-plan-days{padding-block:2px 6px;gap:3px}
+ .focus-plan-days button{min-height:49px;gap:2px}.focus-workout-plot{height:72px}.focus-workout-comparison{gap:6px}.focus-workout-facts{padding-top:8px}
+ .focus-workout-facts strong{font-size:19px;line-height:23px}.focus-workout-zone-buttons button:before{height:72px}
+}
+@container plancontent (max-height:440px){
+ .focus-active .w3-focus-plan{gap:10px}.focus-plan-detail{padding:12px;gap:10px}.focus-plan-days{padding-block:0 4px;gap:2px}
+ .focus-plan-days button{min-height:44px}.focus-session{gap:8px}.focus-workout-comparison{gap:4px}.focus-workout-plot{height:58px}
+ .focus-workout-toolbar{min-height:26px}.focus-workout-tabs{padding:2px}.focus-workout-tabs button{min-height:22px;padding:3px 7px;font-size:10px;line-height:14px;min-width:49px}
+ .focus-workout-legend{font-size:10px;gap:8px}.focus-workout-caption{min-height:16px;font-size:9px;line-height:14px}
+ .focus-workout-facts{padding-top:5px;gap:12px}.focus-workout-facts>button>div{gap:6px}.focus-workout-facts strong{font-size:17px;line-height:21px}.focus-workout-facts small{font-size:10px}
+ .focus-workout-facts>div,.focus-workout-facts>button{min-height:32px;gap:2px}.focus-workout-zone-buttons button:before{height:58px}
+ .focus-workout-zone-buttons button{min-height:22px}.focus-workout-scrub{bottom:12px;height:calc(100% - 12px)}
+}
+/* Reserve space for both sections instead of allowing the session to squeeze
+   the phase rail. The selected date already lives in the day selector. */
+.focus-plan-detail{padding:18px 20px;gap:18px}
+.focus-plan-days{padding:2px 0 6px;gap:4px}.focus-plan-days button{min-height:52px;gap:3px}
+.focus-session{gap:10px}.focus-session-heading{min-height:36px}
+.focus-active .focus-session-heading>div>span{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.w3-plan-experience.focus-active .focus-session h2{margin-top:0;font-size:23px;line-height:28px}
+.focus-workout-comparison{gap:6px}.focus-workout-plot{height:84px}
+.focus-workout-toolbar{min-height:30px}.focus-workout-tabs button{min-height:25px}
+.focus-workout-facts{padding-top:8px}.focus-workout-facts strong{font-size:21px}
+.focus-workout-facts small{font-size:12px;gap:4px}
+.focus-workout-caption{min-height:16px;line-height:16px}
+.focus-plan-timeline{min-height:212px}.focus-plan-rail{min-height:94px}
+.focus-plan-landscape{min-height:34px}
+@container plancontent (max-height:620px){
+ .focus-plan-detail{padding:16px 18px;gap:16px}.focus-plan-days{padding:2px 0 6px}.focus-plan-days button{min-height:50px}
+ .focus-workout-plot{height:74px}.focus-plan-timeline{min-height:196px}.focus-plan-rail{min-height:88px}.focus-plan-landscape{min-height:30px}
+ .focus-active .w3-focus-plan{gap:20px}
+}
+@container plancontent (max-height:530px){
+ .focus-plan-detail{padding:14px 16px;gap:12px}.focus-plan-days{padding:0 0 4px}.focus-plan-days button{min-height:46px}
+ .focus-workout-plot{height:65px}.focus-workout-caption{font-size:9px;min-height:14px;line-height:14px}.focus-workout-facts{padding-top:6px}
+ .focus-workout-comparison{gap:4px}.focus-plan-timeline{min-height:165px}.focus-plan-rail{min-height:72px}.focus-plan-landscape{min-height:24px}
+ .focus-active .w3-focus-plan{gap:14px}.focus-session{gap:8px}.focus-session-heading{min-height:32px}
+ .w3-plan-experience.focus-active .focus-session h2{font-size:21px;line-height:25px}
+ .focus-workout-facts strong{font-size:19px}.focus-workout-facts small{font-size:11px}
+}
+@container plancontent (max-height:440px){
+ .focus-plan-detail{padding:10px 12px;gap:8px}.focus-plan-days{padding:0 0 2px}.focus-plan-days button{min-height:44px;gap:1px}
+ .focus-workout-plot{height:50px}.focus-workout-comparison{gap:3px}.focus-session{gap:5px}.focus-session-heading{min-height:30px}
+ .w3-plan-experience.focus-active .focus-session h2{font-size:18px;line-height:23px}
+ .focus-plan-timeline{min-height:129px;gap:4px}.focus-plan-rail{min-height:56px}.focus-plan-landscape{min-height:10px}
+ .focus-active .w3-focus-plan{gap:10px}.focus-workout-facts strong{font-size:16px;line-height:20px}.focus-workout-facts small{font-size:10px}
+ .focus-workout-facts{padding-top:4px}.focus-workout-toolbar{min-height:24px}.focus-workout-tabs button{min-height:20px}
+ .focus-workout-facts>button{min-height:30px}.focus-workout-caption{font-size:9px;line-height:12px;min-height:12px}
+ .focus-workout-zone-buttons button{min-height:18px}.focus-workout-zone-buttons button:before{height:50px}
+}
+.focus-active .w3-focus-plan{gap:20px}.focus-plan-timeline{min-height:220px}.focus-plan-rail{min-height:102px}
+@container plancontent (max-height:620px){.focus-plan-timeline{min-height:199px}.focus-plan-rail{min-height:91px}.focus-active .w3-focus-plan{gap:16px}}
+@container plancontent (max-height:530px){.focus-plan-timeline{min-height:168px}.focus-plan-rail{min-height:75px}.focus-active .w3-focus-plan{gap:12px}}
+@container plancontent (max-height:440px){.focus-plan-timeline{min-height:131px}.focus-plan-rail{min-height:58px}.focus-active .w3-focus-plan{gap:8px}}
+.focus-workout-facts>button>div{width:100%;justify-content:space-between}
+.focus-fact-beam{height:5px;position:relative;width:100%;display:block;margin-block:1px}
+.focus-fact-beam i{position:absolute;inset:0 auto 0 0;border:1px solid var(--plan-muted);border-radius:2px;box-sizing:border-box}
+.focus-fact-beam b{position:absolute;left:0;top:1px;height:3px;background:var(--plan-acid);border-radius:1px}
+.focus-workout-facts small{color:var(--plan-muted);font-size:14px}
+@container plancontent (max-height:530px){.focus-workout-facts small{font-size:12px}}
+@container plancontent (max-height:440px){.focus-workout-facts small{font-size:11px}.focus-fact-beam{height:3px;margin-block:0}.focus-fact-beam b{height:2px;top:.5px}}
+/* Fixed chart budget: switching to zone detail never moves the phase rail. */
+.focus-workout-comparison{--workout-height:84px;--workout-caption:0px}
+.focus-workout-comparison:has(>.focus-workout-caption){--workout-caption:22px}
+.focus-workout-plot{height:calc(var(--workout-height) - var(--workout-caption))}
+.focus-plan-days i{position:absolute;bottom:3px;height:3px}
+.focus-plan-days button{padding:4px 0 7px;gap:2px}
+.focus-plan-days b{line-height:22px}
+@container plancontent (max-height:620px){.focus-workout-comparison{--workout-height:74px}}
+@container plancontent (max-height:530px){
+ .focus-workout-comparison{--workout-height:65px}.focus-workout-comparison:has(>.focus-workout-caption){--workout-caption:18px}
+ .focus-week-number>span{display:none}.focus-plan-timeline{min-height:171px}.focus-plan-rail{min-height:87px}.focus-plan-landscape{min-height:32px}
+ .focus-plan-days button{padding:2px 0 5px;min-height:44px;gap:1px}.focus-plan-days b{line-height:21px}
+ .focus-workout-tabs{padding:2px}.focus-workout-tabs button{min-height:22px;line-height:16px;padding:3px 7px}
+ .focus-active .w3-focus-plan{gap:8px}.focus-workout-facts>button>span:last-child{display:none}
+ .focus-workout-facts>button:last-child strong:after{content:' TSS';font-size:9px;font-weight:400;letter-spacing:0;color:var(--plan-muted)}
+ .focus-workout-facts>button{gap:3px;min-height:33px}.focus-workout-facts small{font-size:12px}.focus-workout-facts{gap:14px}
+}
+@container plancontent (max-height:440px){
+ .focus-workout-comparison{--workout-height:50px}.focus-workout-comparison:has(>.focus-workout-caption){--workout-caption:15px}
+ .focus-plan-timeline{min-height:131px}.focus-plan-rail{min-height:58px}.focus-plan-landscape{min-height:10px}
+ .focus-workout-tabs button{min-height:20px;line-height:14px;padding:3px 6px}.focus-workout-tabs{padding:2px}
+ .focus-plan-detail{padding-block:5px;gap:7px}.focus-plan-days button{min-height:44px}.focus-plan-days{padding:0}
+ .focus-workout-facts>button{min-height:26px}.focus-workout-facts small{font-size:11px}.focus-workout-toolbar{min-height:24px}
+}
+@container plancontent (min-height:441px) and (max-height:530px){.focus-plan-detail{padding-block:10px;gap:9px}}
+.focus-workout-tabs button{position:relative}.focus-workout-tabs button:before{content:'';position:absolute;inset:-10px 0;z-index:2}

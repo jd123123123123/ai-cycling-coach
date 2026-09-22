@@ -32,6 +32,14 @@ from app.services.plan_interview import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolate_history_storage():
+    # This suite isolates generator/rebuild behavior. SQL archive persistence,
+    # transaction rollback and ownership live in api/test_plan_history.py.
+    with patch("app.services.plan_history.preserve_schedule", new_callable=AsyncMock) as capture:
+        yield capture
+
+
 # ──────────────────────────────────────────────────────────────────────────
 #  Helpers
 # ──────────────────────────────────────────────────────────────────────────

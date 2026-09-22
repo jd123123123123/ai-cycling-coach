@@ -1,6 +1,8 @@
 import { useMemo,useState } from 'react'
 import W3PlanExperience from './W3PlanExperience'
 import { beforeVm, sessions } from '../../review-plan/data'
+import { PLAN_HISTORY_PREVIEW } from './planHistoryPreview'
+import { previewPrescription, previewPower } from './planPowerPreview'
 import type { ProgressExplorer } from '../../api/progressExplorer'
 
 // This route mounts the production PlanExperience itself with deterministic
@@ -32,13 +34,14 @@ export default function W3PlanExperiencePreview() {
   if(actual!=null)ridden[5]=(ridden[5]??0)+actual-ridden.reduce<number>((sum,t)=>sum+(t??0),0)
   const previewVm={...beforeVm,daySessions:beforeVm.daySessions?.map((d,i)=>{
     const date=new Date(2026,8,14+offset*7+i),didRide=actual!=null&&weights[i]>0
-    return {...d,plannedDuration:sessions[i].minutes*60,tss:String(planned[i]),dateISO:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,dateLabel:date.toLocaleDateString('de-DE',{day:'numeric',month:'short'}),bars:d.bars.map(b=>({...b,w:b.w/1.5,work:b.w>=.6})),isPast:offset<0,isToday:offset===0&&i===0,actualKnown:offset<0,ridden:didRide,actualTss:didRide?ridden[i]:null,actualDuration:didRide?Math.round((ridden[i]??0)*55):null,actualRides:[]}
+    return {...d,plannedDuration:sessions[i].minutes*60,tss:String(planned[i]),dateISO:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,dateLabel:date.toLocaleDateString('de-DE',{day:'numeric',month:'short'}),bars:previewPrescription(i),powerCharts:didRide?[previewPower(i,Math.round((ridden[i]??0)*55))]:[],isPast:offset<0,isToday:offset===0&&i===0,actualKnown:offset<0,ridden:didRide,actualTss:didRide?ridden[i]:null,actualDuration:didRide?Math.round((ridden[i]??0)*55):null,actualRides:[]}
   })}
 
   return <W3PlanExperience
     vm={{...previewVm, finishStats:{tss:'1.984',km:'642,0',hours:'26,4',rides:'18'}, finishAnalysis:{planned:[230,260,285,300,320,280,340,269],actual:[214,248,301,276,345,265,329,258],adherence:94,note:'94% der geplanten Belastung umgesetzt · dein tatsächlicher Weg lag nah am Plan',impact:'Die Belastungsdosis lag nah am Plan. Dadurch ist der Vergleich von Startwert und Abschluss besonders belastbar.'}}}
     state={state}
     previewProgress={PROGRESS}
+    previewHistory={PLAN_HISTORY_PREVIEW}
     planStart="2026-08-17"
     planEnd="2026-10-11"
     onRebuild={async () => true}

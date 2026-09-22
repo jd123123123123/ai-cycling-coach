@@ -449,6 +449,7 @@ async def get_ride_chart(
     ftp, history = ride_chart.ftp_context(activity, profile)
     return {
         'activity_id': activity_id, 'samples': ride_chart.chart_samples(raw),
+        'elapsed_seconds': max((len(raw.get(k, [])) for k in ride_chart.CHANNELS if isinstance(raw, dict) and isinstance(raw.get(k), list)), default=0),
         'ftp_at_ride': ftp, 'ftp_history': history,
         'hr_max': ride_chart.number(getattr(profile, 'max_heart_rate', None), positive=True),
         'zone_seconds': ride_chart.zone_seconds(raw, ftp),

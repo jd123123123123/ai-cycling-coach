@@ -60,7 +60,7 @@ def client():
     app.dependency_overrides[get_current_active_user] = lambda: user
     app.dependency_overrides[get_current_user] = lambda: user
     app.dependency_overrides[get_db_for_user] = lambda: db
-    with patch("app.api.plan_goal.today_local", return_value=TODAY):
+    with patch("app.api.plan_goal.today_local", return_value=TODAY), patch("app.services.plan_history.finish_journey", new_callable=AsyncMock):
         yield TestClient(app), db, profile
     app.dependency_overrides.clear()
 
