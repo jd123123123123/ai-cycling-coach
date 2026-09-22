@@ -63,4 +63,3 @@ export interface W3RideVm {
   fitness: string; fitnessD: string; fatigue: string; fatigueD: string; form: string; formD: string
   changesBody: string
 }
-

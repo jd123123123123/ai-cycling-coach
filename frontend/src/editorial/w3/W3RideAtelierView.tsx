@@ -115,7 +115,7 @@ export function RideAtelier({vm,review,rideDate,contributions,coachData,samples,
  const [contribution,setContribution]=useState<ContributionKey>('distance')
  const actualZoneSeconds=review.zones.map(z=>z.actual_seconds??0)
  const analysisReview=review
- const history=ftpWindow(ftpEntries,days,rideDate.slice(0,10))
+ const history=ftpWindow(ftpEntries,days,contributions?.rideDate??rideDate.slice(0,10))
  const record=vm.ranks.find(r=>r.pr&&r.bestWattsValue!=null&&r.wattsValue>r.bestWattsValue)
  const duration=review.pairs.find(p=>p.label==='Dauer')?.actual
 
@@ -159,4 +159,3 @@ export function RideAtelier({vm,review,rideDate,contributions,coachData,samples,
   <AtelierExplanation title="Fahrtdetails" open={details} onClose={()=>setDetails(false)}><p><strong>{vm.title}</strong><br/>{vm.hero.dateLine}<br/>{vm.bigStat} {vm.bigStatUnit} · {vm.climb}<br/>{vm.hero.duration} Fahrzeit</p><p>{review.summary}</p><p>{review.method}</p><p>{review.limitations.join(' ')||'Die Auswertung beruht auf den vorhandenen Aufzeichnungen.'}</p>{detailsExtra&&<div>{detailsExtra}</div>}</AtelierExplanation>
  </article>
 }
-
