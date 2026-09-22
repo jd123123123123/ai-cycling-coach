@@ -12,6 +12,7 @@ import './w3.css'
 import './w3profile.css'
 import './w3BikerFocus.css'
 import W3FocusCurve from './W3FocusCurve'
+import W3ReturnInsight from './W3ReturnInsight'
 
 export interface W3Device { name: string; sub: string; icon: 'watch' | 'activity' | 'zap' | 'heart'; on: boolean }
 export interface W3BikerVm {
@@ -116,6 +117,8 @@ export default function W3BikerView({ vm, season = [], curve = null, bike = null
         </>}
         {seasonState === 'ready' && !km && <p>Noch keine Saison verfügbar.</p>}
       </section>
+
+      {curve && curve.delta != null && <W3ReturnInsight eyebrow="Dein Signal" title={`Deine Form bewegt sich ${curve.delta >= 0 ? 'nach oben' : 'nach unten'}.`} detail="Der Verlauf bleibt auf deiner Profilseite sichtbar und wird mit jeder synchronisierten Fahrt aktualisiert." metrics={[{ label: 'Aktuell', value: String(curve.value), tone: 'accent' }, { label: 'Veränderung', value: `${curve.delta >= 0 ? '+' : ''}${curve.delta}` , tone: curve.delta >= 0 ? 'positive' : 'quiet' }, ...(ftp ? [{ label: 'FTP', value: `${ftp.value} W` }] : [])]} />}
 
       {recordsState === 'error' && <p className="profile-state" role="status">Bestleistungen konnten nicht geladen werden. <button className="profile-inline" onClick={onRetry}>Erneut versuchen</button></p>}
       {lead && <section className="profile-memory profile-card" aria-label="Deine Bestleistungen">
