@@ -54,7 +54,7 @@ function RideRouteMap({points,onOpen}:{points:[number,number][];onOpen?:()=>void
  return <div className="atelier-map-surface" data-ready={ready}>
   <Suspense fallback={null}><RouteMap polyline={points} styleKey="dark" interactive={false}
    palette={W3_MAP} lineColor={T.acid} lineWidth={4} startColor={T.ink} endColor={T.acid}
-   fitPadding={28} attributionBottom={6} onReady={()=>setPaintedPoints(points)}/></Suspense>
+   fitPadding={28} refitOnResize attributionBottom={6} onReady={()=>setPaintedPoints(points)}/></Suspense>
   {!ready&&<div className="atelier-map-fallback"><RouteObject points={points}/></div>}
   <button type="button" className="atelier-map-open" aria-label="Karte öffnen" onClick={onOpen} disabled={!onOpen}/>
  </div>

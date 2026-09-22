@@ -93,6 +93,8 @@ export interface RouteMapProps {
    *  one edge more than another — which is how a share card gets the ride in
    *  its MIDDLE band, with the top and bottom left clear for type. */
   fitPadding?: number | { top: number; bottom: number; left: number; right: number }
+  /** Keep a static, flex-sized ride preview fitted as late data changes its height. */
+  refitOnResize?: boolean
   /** Called once the tiles have settled, with a reader for the composited
    *  frame. Returns null when the context is gone or the buffer was not kept. */
   onSnapshot?: (read: () => string | null) => void
@@ -307,7 +309,7 @@ function repaint(map: MlMap, p: MapPalette): void {
 
 export default function RouteMap({
   polyline, waypoints = [], styleKey = 'dark', interactive = false, onReady, className,
-  snapshot = false, onSnapshot, fitPadding,
+  snapshot = false, onSnapshot, fitPadding, refitOnResize = false,
   lineColors, markerLatLng = null,
   lineColor = '#FF5A3C', lineWidth = 4, startColor = '#16E08A', endColor = '#FF5A3C',
   attributionBottom, palette, terrain = false,
@@ -355,6 +357,11 @@ export default function RouteMap({
           ...(snapshot ? { canvasContextAttributes: { preserveDrawingBuffer: true } } : {}),
         })
         mapRef.current = map
+        if (refitOnResize && !interactive) {
+          map.on('resize', () => {
+            if (!cancelled) map?.fitBounds(boundsOf(polyline), { padding: fitPadding ?? 34, animate: false })
+          })
+        }
 
         // Attribution comes from the TILEJSON, which already ships a compliant
         // "© Maptoolkit © Openstreetmap" with both links. Passing our own
@@ -560,7 +567,7 @@ export default function RouteMap({
     // change to one would mean a different screen rather than a new value on
     // this one. Pass them as literals; animating them will not work.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polyline, styleKey, interactive, failed, palette, terrain, fitPadding])
+  }, [polyline, styleKey, interactive, failed, palette, terrain, fitPadding, refitOnResize])
 
   // Scrub position. Deliberately NOT part of the effect above: rebuilding a
   // MapLibre instance per pointer-move would be unusable on a phone.
