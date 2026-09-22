@@ -183,12 +183,12 @@ const LIGHT: typeof DARK = {
   // ── The ground, and the surfaces that lift off it ──────────────────────
   // Inverted in RELATIONSHIP, not in value: a card is lighter than the ground
   // in both modes, so the ground is paper and the cards are white.
-  bg: '#F2F2EE', ground: '#EDEDE9',
+  bg: '#FFFFFF', ground: '#F5F5F5',
   paper: '#FFFFFF',
-  surface: '#FFFFFF', surface2: '#F6F6F2',
-  cardTop: '#FFFFFF', cardMid: '#FBFBF8', cardBot: '#F6F6F2',
+  surface: '#F7F7F7', surface2: '#F1F1F1',
+  cardTop: '#FFFFFF', cardMid: '#FAFAFA', cardBot: '#F5F5F5',
   sheet: '#FFFFFF', tile: '#FFFFFF', card: '#FFFFFF', lift: '#FFFFFF',
-  chip: '#E8E8E2',
+  chip: '#EBEBEB',
   glass: '#FFFFFFC4',
   // Darkened for the light ground: the dark palette's gold is a light on
   // near-black and would be unreadable as type on white.
@@ -199,8 +199,8 @@ const LIGHT: typeof DARK = {
   ink: '#0B0B0B', mid: '#5A6068', quiet: '#5C626A',
 
   // ── Today's hero keeps its own small palette, one mode over ────────────
-  heroBg: '#F2F2EE', heroChip: '#E4E4DE', heroDock: '#FFFFFF',
-  heroMid: '#5F646D', heroOff: '#C9C9C2',
+  heroBg: '#FFFFFF', heroChip: '#F1F1F1', heroDock: '#FFFFFF',
+  heroMid: '#5F646D', heroOff: '#C9C9C9',
   // Text set ON the accent. The accent is dark in this mode, so this flips.
   heroInk: '#FFFFFF',
   bar: '#FFFFFFF2', handle: '#0B0B0B40',

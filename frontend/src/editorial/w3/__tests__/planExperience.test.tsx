@@ -1,7 +1,7 @@
 import {render,screen,fireEvent,cleanup,waitFor} from '@testing-library/react'
 import {MemoryRouter} from 'react-router-dom'
 import {QueryClient, QueryClientProvider} from '@tanstack/react-query'
-import {afterEach,describe,it,expect,vi} from 'vitest'
+import {afterEach, beforeEach,describe,it,expect,vi} from 'vitest'
 import W3PlanExperience from '../W3PlanExperience'
 import {beforeVm} from '../../../review-plan/data'
 vi.mock('../W3TopBar',()=>({default:()=>null}))
@@ -9,6 +9,7 @@ vi.mock('../W3TabBar',()=>({default:()=>null}))
 vi.mock('../W3PlanIntro',()=>({default:()=>null}))
 vi.mock('../../../hooks/usePlanAdaptations',()=>({usePlanAdaptations:()=>({data:{adaptations:[]}})}))
 vi.mock('../W3ProgressAnalytics',()=>({useProgressExplorer:()=>({isPending:false,isError:false}),W3ProgressAnalyticsView:()=>null}))
+beforeEach(()=>{HTMLElement.prototype.scrollTo=vi.fn()})
 afterEach(cleanup)
 const first={title:'Schwelle',weekday:'Montag',dateLabel:'14. Sept.',dateISO:'2026-09-14',isToday:true,isPast:false,dur:'60 min',tss:'65',targetW:'240 W',ftpPct:'100%',bars:[{w:.8,work:true}]}
 function mount(state:'empty'|'active'|'created'|'ended'='active'){

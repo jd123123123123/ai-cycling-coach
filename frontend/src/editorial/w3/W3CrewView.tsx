@@ -255,7 +255,7 @@ export default function W3CrewView({ vm, onBack, onProps, onInvite, onEditGoal, 
             between tabs made the furniture jump. The pen has no back button at
             all here — it shows the tab bar instead — but this screen IS pushed
             in the running app, so the shared bar is the honest reading of it. */}
-        <W3TopBar
+        <W3TopBar title="Crew"
           onBack={onBack}
           extra={!board && onBoard ? (
             <button type="button" onClick={onBoard} style={{

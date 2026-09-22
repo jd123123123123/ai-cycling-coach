@@ -1,6 +1,6 @@
 /* Inspection is separate from the cinematic reveal. The artwork keeps its
    native proportions; title, evidence and controls have their own space. */
-.w3-scene-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:#9ba0a6}
+.w3-scene-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;color:var(--w-mid,#9ba0a6)}
 .w3-scene-placeholder small{font-size:11px}
 .w3-scene-dialog.is-inspection:not(.is-sealed){--inspect-bg:#0b0b0b;--inspect-ink:#fff;--inspect-muted:#9ba0a6;--inspect-line:#ffffff18;width:min(430px,calc(100vw - 24px));max-width:430px;height:min(880px,calc(100dvh - 24px - env(safe-area-inset-top,0px) - env(safe-area-inset-bottom,0px)));max-height:calc(100dvh - 24px);min-height:0;padding:0;margin:auto;border:1px solid var(--inspect-line);border-radius:26px;overflow:hidden;background:var(--inspect-bg);color:var(--inspect-ink)}
 .w3-scene-dialog.is-inspection[open]{display:flex!important;flex-direction:column}
@@ -32,3 +32,4 @@
 }
 
 .w3-inspection-meta{display:flex;align-items:center;gap:10px}
+.w3-scenes.is-reveal-only>.w3-gallery-tools{display:none}

@@ -77,6 +77,7 @@ export interface PlanDaySession {
   actualKnown?: boolean
   actualTss?: number | null
   actualDuration?: number | null
+  plannedDuration?: number | null
   actualRides?: { id: number; title: string }[]
   title: string | null
   weekday: string
@@ -440,11 +441,11 @@ export function PlanAdjustSheet({ vm, onClose, onRebuild, onRestart, onCancelPla
         </span>
       </div>
 
-      {error && <div role="alert" style={{ padding: '10px 12px', borderRadius: 12, background: '#ff6b6b12', color: '#ff9f9f', fontSize: 12, fontWeight: 600 }}>{error}</div>}
+      {error && <div role="alert" style={{ padding: '10px 12px', borderRadius: 12, background: `${T.bad}12`, color: T.bad, fontSize: 12, fontWeight: 600 }}>{error}</div>}
 
       <button onClick={submit} disabled={busy || !onRebuild}
-        style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
-        <RefreshCw size={18} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>{busy ? 'Rechne…' : 'Plan neu berechnen'}</span>
+        style={{ height: 56, minHeight: 56, flexShrink: 0, borderRadius: 100, background: T.acid, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: busy ? 'default' : 'pointer', fontFamily: FONT, opacity: busy ? 0.7 : 1 }}>
+        <RefreshCw size={18} color={T.heroInk} /><span style={{ fontSize: 16, fontWeight: 600, color: T.heroInk }}>{busy ? 'Rechne…' : 'Plan neu berechnen'}</span>
       </button>
 
       {/* ── DEIN ALLTAG ────────────────────────────────────────────────────
@@ -611,7 +612,7 @@ function SheetShell({ children, onClose }: { children: ReactNode; onClose: () =>
   return (
     <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
       <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: '#000000B0' }} />
-      <motion.div initial={reduce ? false : { y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.4, ease: EASE }}
+      <motion.div className="w3-plan-sheet" initial={reduce ? false : { y: '100%' }} animate={{ y: 0 }} transition={{ duration: 0.4, ease: EASE }}
         style={{ position: 'relative', background: T.bg, borderRadius: '28px 28px 0 0', padding: '12px 20px calc(28px + env(safe-area-inset-bottom))', maxHeight: '92dvh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 22, boxShadow: `0 -1px 0 ${T.stroke}` }}>
         <div style={{ width: 42, height: 5, borderRadius: 100, background: T.d3, alignSelf: 'center' }} />
         {children}
@@ -1023,8 +1024,8 @@ export default function W3PlanView({
         {/* CTAs */}
         <div style={{ ...band(40), gap: 10 }}>
           <button onClick={() => setSheet('adjust')}
-            style={{ height: 56, borderRadius: 100, background: T.evening, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: 'pointer', fontFamily: FONT }}>
-            <SlidersHorizontal size={17} color={T.ink} /><span style={{ fontSize: 16, fontWeight: 600, color: T.ink }}>Plan anpassen</span>
+            style={{ height: 56, minHeight: 56, flexShrink: 0, borderRadius: 100, background: T.acid, display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', border: 0, cursor: 'pointer', fontFamily: FONT }}>
+            <SlidersHorizontal size={17} color={T.heroInk} /><span style={{ fontSize: 16, fontWeight: 600, color: T.heroInk }}>Plan anpassen</span>
           </button>
           <button onClick={() => setSheet('goal')}
             style={{ height: 50, borderRadius: 100, background: 'transparent', border: `1px solid ${T.stroke}`, display: 'flex', gap: 9, justifyContent: 'center', alignItems: 'center', cursor: 'pointer', fontFamily: FONT }}>

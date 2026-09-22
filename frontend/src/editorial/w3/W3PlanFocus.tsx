@@ -3,8 +3,8 @@ import { ArrowUpRight } from 'lucide-react'
 import type { W3PlanVm, PlanDaySession } from './W3PlanView'
 import './w3PlanFocus.css'
 import type { IntervalBlockOut } from '../../api/weeks'
-import { weekCurve } from './w3PlanCurve'
-import W3PlanDayComparison, {tssDifference} from './W3PlanDayComparison'
+import { weekCurve, weekComparisonAreas } from './w3PlanCurve'
+import W3PlanDayComparison from './W3PlanDayComparison'
 
 /** Plan, week and session use the saved prescription. Selection is not completion. */
 export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,onDay,onOpen,onDevelopment,loading}:{vm:W3PlanVm;selectedIndex:number;currentIndex:number;day:number;onWeek:(i:number)=>void;onDay:(i:number)=>void;onOpen:()=>void;onDevelopment:()=>void;loading:boolean}) {
@@ -29,6 +29,7 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
  const y=(value:number)=>102-value/max*82
  const plannedCurve=weekCurve(vm.weekBars.map(w=>w.planned),x,y,{left:0,right:320})
  const actualCurve=weekCurve(vm.weekBars.map(w=>w.actual),x,y,{left:0,right:320})
+ const comparisonAreas=weekComparisonAreas(vm.weekBars.map(w=>w.planned),vm.weekBars.map(w=>w.actual),x,y)
  const selectedWeek=vm.weekBars[selectedIndex]
  const title=phase?.name??vm.block?.phase??'Dein Plan'
  return <section className="w3-focus-plan" aria-label="Dein Trainingsplan" aria-busy={loading}>
@@ -44,9 +45,11 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
              <defs><linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1"><stop stopColor="var(--plan-ink)" stopOpacity=".12"/><stop offset="1" stopColor="var(--plan-ink)" stopOpacity="0"/></linearGradient></defs>
              <path className="focus-plan-grid" d="M0 102H320"/>
              {plannedCurve&&<path d={`${plannedCurve} L320 102 L0 102 Z`} fill={`url(#${gradientId})`}/>}
+             {comparisonAreas.map((d,i)=><path key={i} className="focus-plan-difference" d={d}/>)}
              <path className="focus-plan-line" d={plannedCurve}/>
              <path className="focus-plan-actual" d={actualCurve}/>
              {selectedWeek&&<g className="focus-plan-cursor"><path d={`M${x(selectedIndex)} ${y(selectedWeek.planned)+7} V102`}/></g>}
+             {selectedWeek?.actual!=null&&<path className="focus-plan-connection" d={`M${x(selectedIndex)} ${y(selectedWeek.planned)} V${y(selectedWeek.actual)}`}/>}
            </svg>
            {vm.weekBars.map((w,i)=>w.actual==null?null:<i key={w.idx} aria-hidden className="focus-plan-ridden" style={{left:`${x(i)/320*100}%`,top:`${y(w.actual)/112*100}%`}}/>)}
            {selectedWeek&&<i aria-hidden className="focus-plan-marker" style={{left:`${x(selectedIndex)/320*100}%`,top:`${y(selectedWeek.planned)/112*100}%`}}/>}
@@ -55,7 +58,7 @@ export default function W3PlanFocus({vm,selectedIndex,currentIndex,day,onWeek,on
          <div className="focus-plan-phases" aria-label="Planphasen">{blocks.map(p=><button key={p.name} style={{gridColumn:`${p.start+1} / ${Math.min(vm.weekBars.length,p.end+1)+1}`}} aria-pressed={phase===p} disabled={p.start-currentIndex < -12 || p.start-currentIndex > 12} onClick={()=>onWeek(Math.min(vm.weekBars.length-1,p.start))}>{p.name}</button>)}</div>
        </div>
      </div>
-     <div className="focus-plan-key"><div className="focus-plan-readout" aria-live="polite"><span><i/>Plan <strong>{selectedWeek ? Math.round(selectedWeek.planned) : '—'}</strong><i data-actual/>Ist <strong>{selectedWeek?.actual!=null ? Math.round(selectedWeek.actual) : '—'}</strong> TSS</span>{selectedWeek?.actual!=null&&<small>{tssDifference(selectedWeek.planned,selectedWeek.actual)}</small>}</div><button onClick={onDevelopment}>Entwicklung<ArrowUpRight size={14}/></button></div>
+     <div className="focus-plan-key"><div className="focus-plan-readout" aria-live="polite"><span><i data-actual/>Ist <strong>{selectedWeek?.actual!=null ? Math.round(selectedWeek.actual) : '—'}</strong><i/>Soll <strong>{selectedWeek ? Math.round(selectedWeek.planned) : '—'}</strong> TSS</span></div><button onClick={onDevelopment}>Entwicklung<ArrowUpRight size={14}/></button></div>
    </section>
    <section className="focus-plan-detail" aria-label="Ausgewählte Woche">
 

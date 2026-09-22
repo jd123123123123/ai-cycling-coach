@@ -1,33 +1,53 @@
-/* One consistent portrait format; the gallery never stretches its first artwork. */
-.w3-frame.focus-collection{width:100%;min-width:0;max-width:430px!important;padding-top:var(--w3-header-safe-top,env(safe-area-inset-top,0px))}
+/* Portraits as a collection of editions. Native swipe keeps the artwork intact. */
+.w3-frame.focus-collection{width:100%;min-width:0;max-width:430px!important;padding-top:var(--w3-header-safe-top,env(safe-area-inset-top,0px));--gallery-ink:var(--w-ink);--gallery-muted:var(--w-mid);--gallery-stroke:var(--w-stroke);--gallery-bg:var(--w-bg)}
 .focus-collection .w3-wins-tabs{padding:4px 20px;gap:24px}
 .focus-collection .w3-wins-tabs button{font-size:13px;min-height:44px;color:var(--gallery-muted)}
-.focus-collection .w3-wins-tabs button[aria-pressed=true]{color:var(--gallery-ink)}
-.focus-collection{--gallery-ink:#fff;--gallery-muted:#9ba0a6;--gallery-stroke:#ffffff18;--gallery-bg:#0b0b0b}
-.focus-collection .w3-scenes{padding:24px 20px 32px}
-.focus-collection .w3-scenes-heading{gap:16px;margin-bottom:18px;align-items:flex-end}
-.focus-collection .w3-scenes-heading h2{font-size:34px;letter-spacing:-1.3px;line-height:1.04;font-weight:500;margin:0}
-.focus-collection .w3-scenes-count strong{font-size:30px;font-weight:450}
-.focus-collection .w3-scenes-count span{font-size:11px;color:var(--gallery-muted)}
-.focus-collection .w3-scenes-switch{background:none;border:0;border-bottom:1px solid var(--gallery-stroke);padding:0;gap:22px;margin-bottom:22px;justify-content:flex-start;border-radius:0}
-.focus-collection .w3-scenes-switch button{flex:none;background:none;color:var(--gallery-muted);box-shadow:none;border-radius:0;min-height:44px;padding:8px 0;border-bottom:2px solid transparent;font-size:13px;font-weight:500}
+.focus-collection .w3-wins-tabs button[aria-pressed=true]{color:var(--gallery-ink);border-bottom-color:var(--gallery-ink)}
+.focus-collection .w3-scenes{padding:20px 20px 20px;--edition-height:clamp(280px,calc(100svh - 444px),480px)}
+.focus-collection .w3-scenes-heading{gap:16px;margin-bottom:12px;align-items:baseline}
+.focus-collection .w3-scenes-heading h2{font-size:25px;letter-spacing:-.85px;line-height:1.15;font-weight:500;margin:0}
+.focus-collection .w3-scenes-count{flex-direction:row;align-items:baseline;gap:4px}
+.focus-collection .w3-scenes-count strong{font-size:14px;font-weight:500;letter-spacing:0}
+.focus-collection .w3-scenes-count span{font-size:12px;color:var(--gallery-muted);letter-spacing:0}
+.focus-collection .w3-scenes-switch{background:none;border:0;padding:0;gap:24px;margin-bottom:18px;justify-content:flex-start;border-radius:0}
+.focus-collection .w3-scenes-switch button{flex:none;background:none;color:var(--gallery-muted);box-shadow:none;border-radius:0;min-height:44px;padding:8px 0;border-bottom:1px solid transparent;font-size:13px;font-weight:500}
 .focus-collection .w3-scenes-switch button[aria-pressed=true]{border-bottom-color:var(--gallery-ink);color:var(--gallery-ink)}
-.focus-collection .w3-scenes-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:28px 16px}
-.focus-collection .w3-collectible{background:none;border:0;padding:0;box-shadow:none;overflow:visible;border-radius:0}
-.focus-collection .w3-collectible-face{border-radius:16px;padding:1px}
-.focus-collection .w3-scene-portrait{border-radius:15px;aspect-ratio:9/16}
-.focus-collection .w3-collectible-crown{top:10px;left:9px;right:9px;gap:4px}
-.focus-collection .w3-collectible-rarity{font-size:10px;padding:6px 8px;border-radius:100px;letter-spacing:0;text-transform:none}
-.focus-collection .w3-collectible-title{padding:12px 0 0;gap:7px;color:var(--gallery-ink)}
-.focus-collection .w3-collectible-title strong{font-weight:500;font-size:17px;line-height:1.2;letter-spacing:-.4px;overflow-wrap:anywhere}
-.focus-collection .w3-collectible-title>span{font-size:12px;line-height:1.4;color:var(--gallery-muted);max-width:none}
+.focus-collection .w3-scenes-grid{display:flex;align-items:flex-start;gap:24px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scroll-padding-left:20px;scrollbar-width:none;margin:0 -20px;padding:0 20px;width:calc(100% + 40px);overscroll-behavior-x:contain;touch-action:pan-x pan-y}
+.focus-collection .w3-scenes-grid::-webkit-scrollbar{display:none}
+.focus-collection .w3-scenes-grid::after{content:'';flex:0 0 max(0px,calc(100% - var(--edition-height)*.5625 - 40px));height:1px}
+.focus-collection .w3-collectible{flex:0 0 calc(var(--edition-height)*.5625);width:calc(var(--edition-height)*.5625);min-width:0;scroll-snap-align:start;scroll-snap-stop:always;background:none;border:0;padding:0;box-shadow:none;overflow:visible;border-radius:0;transform:none!important;transition:none;text-align:left;color:var(--gallery-ink)}
+.focus-collection .w3-collectible-face{border-radius:12px;padding:0;background:none;box-shadow:inset 0 0 0 1px var(--gallery-stroke);overflow:hidden;isolation:isolate}
+.focus-collection .w3-collectible-face::before,.focus-collection .w3-collectible-face::after{display:none}
+.focus-collection .w3-scene-portrait{border-radius:12px;height:var(--edition-height);aspect-ratio:9/16;background:var(--w-surface-2)}
+.focus-collection .w3-collectible.is-locked .w3-scene-portrait{filter:none;opacity:1}
+.focus-collection .w3-collectible-edition{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:16px;min-height:20px;color:var(--gallery-muted)}
+.focus-collection .w3-collectible-edition>span:last-child:not(:first-child){display:flex;align-items:center;gap:4px;font-size:11px}
+.focus-collection .w3-collectible-rarity{font-size:11px;line-height:18px;padding:0;border:0;border-radius:0;letter-spacing:.025em;text-transform:none;color:var(--gallery-muted);background:none;box-shadow:none}
+.focus-collection .tier-legendaer .w3-collectible-rarity{color:#c1a274}.focus-collection .tier-mythisch .w3-collectible-rarity{color:#baabe1}
+.focus-collection .w3-collectible-title{padding:7px 0 0;gap:8px;color:var(--gallery-ink)}
+.focus-collection .w3-collectible-title strong{font-weight:500;font-size:23px;line-height:1.12;letter-spacing:-.6px;overflow-wrap:normal;text-wrap:balance}
+.focus-collection .w3-collectible-title>span{font-size:13px;line-height:1.4;color:var(--gallery-muted);max-width:none}
 .focus-collection .w3-collectible-progress{padding:12px 0 0}
-.focus-collection .w3-collectible-progress>span{color:var(--gallery-muted)}
-.focus-collection .w3-collectible-progress>div{background:var(--gallery-stroke)}
-:root[data-w3-mode=light] .focus-collection{--gallery-ink:#0b0b0b;--gallery-muted:#5a6068;--gallery-stroke:#0b0b0b14;--gallery-bg:#fff;background:#fff!important}
-:root[data-w3-mode=light] .focus-collection [data-w3-topbar] button{background:#fff!important}
-@media(max-width:350px){.focus-collection .w3-scenes-grid{gap:24px 12px}.focus-collection .w3-scenes-switch{gap:16px}.focus-collection .w3-collectible-title strong{font-size:16px}.focus-collection .w3-collectible-crown{left:7px;right:7px}}
-.focus-collection{--w-bg:var(--gallery-bg);--w-ink:var(--gallery-ink)}
-:root[data-w3-mode=light] .focus-collection [data-w3-topbar]{background:#ffffffed;border-bottom-color:var(--gallery-stroke)}
-:root[data-w3-mode=light] .focus-collection [data-w3-tabbar]{box-shadow:0 -4px 24px #0b0b0b05}
-:root[data-w3-mode=light] .focus-collection .w3-wins-tabs button[aria-pressed=true]{border-bottom-color:#477800}
+.focus-collection .w3-collectible-progress>span{display:none}
+.focus-collection .w3-collectible-progress>div{height:2px;background:var(--gallery-stroke)}
+.focus-collection .w3-gallery-navigation{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:14px;font-size:14px;font-variant-numeric:tabular-nums;color:var(--gallery-ink)}
+.focus-collection .w3-gallery-navigation>span>span{color:var(--gallery-muted)}
+.focus-collection .w3-gallery-navigation>div{display:flex;gap:8px}
+.focus-collection .w3-gallery-navigation button{width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--gallery-stroke);border-radius:50%;padding:0;background:none;color:var(--gallery-ink);cursor:pointer}
+.focus-collection .w3-gallery-navigation button:disabled{opacity:.25;cursor:default}
+:root[data-w3-mode=light] .focus-collection .tier-legendaer .w3-collectible-rarity{color:#79603c}
+:root[data-w3-mode=light] .focus-collection .tier-mythisch .w3-collectible-rarity{color:#70569e}
+@media(max-width:350px){.focus-collection .w3-scenes-heading h2{font-size:22px}.focus-collection .w3-scenes-count span{font-size:11px}.focus-collection .w3-scenes-switch{gap:20px}}
+/* The tab already names the collection; avoid a second visual heading. */
+.focus-collection .w3-scenes{padding-top:8px;--edition-height:clamp(260px,calc(100svh - 466px),466px)}
+.focus-collection .w3-scenes-heading{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.focus-collection .w3-scenes-switch{margin-bottom:16px}
+.focus-collection .w3-collectible-title strong{min-height:calc(1.12em * 3)}
+.focus-collection .w3-collectible-title>span{min-height:2.8em}
+
+.focus-collection .w3-gallery-tools{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+.focus-collection .w3-gallery-tools .w3-scenes-switch{margin:0;gap:16px;flex:1}
+.focus-collection .w3-gallery-navigation{margin:0;flex:none}
+.focus-collection .w3-gallery-navigation>span{position:absolute;width:1px;height:1px;clip-path:inset(50%);overflow:hidden}
+.focus-collection .w3-gallery-navigation>div{gap:4px}
+.focus-collection .w3-gallery-navigation button{border:0;background:none}

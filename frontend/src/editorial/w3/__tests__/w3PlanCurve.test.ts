@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { weekCurve } from '../w3PlanCurve'
+import { weekCurve, weekComparisonAreas } from '../w3PlanCurve'
 
 const x = (i: number) => i * 10
 const y = (value: number) => 100 - value
@@ -53,4 +53,18 @@ describe('weekly load curve', () => {
       }
     })
   })
+})
+
+describe('paired load shading',()=>{
+ it('leaves missing and future weeks unshaded',()=>{
+ const areas=weekComparisonAreas([10,20,30,40,50,60],[8,15,null,30,45,null],x,y)
+ expect(areas).toHaveLength(2)
+ expect(areas[0]).toMatch(/^M0 90/)
+ expect(areas[1]).toMatch(/^M30 60/)
+ expect(areas.join(' ')).not.toMatch(/NaN|null|undefined/)
+ })
+ it('does not draw areas from isolated or missing measurements',()=>{
+ expect(weekComparisonAreas([10,20,30],[8,null,20],x,y)).toEqual([])
+ expect(weekComparisonAreas([10,20],[null,null],x,y)).toEqual([])
+ })
 })

@@ -15,3 +15,22 @@ export function weekCurve(values:(number|null)[],x:(i:number)=>number,y:(v:numbe
  })
  return path.trim()
 }
+
+/** Shade only spans with paired observations; never bridge missing ride data. */
+export function weekComparisonAreas(planned:number[],actual:(number|null)[],x:(i:number)=>number,y:(v:number)=>number):string[] {
+ const areas:string[]=[], groups:number[][]=[]
+ let group:number[]=[]
+ planned.forEach((value,i)=>{
+  if(Number.isFinite(value)&&actual[i]!=null&&Number.isFinite(actual[i]))group.push(i)
+  else if(group.length){groups.push(group);group=[]}
+ })
+ if(group.length)groups.push(group)
+ for(const indexes of groups){
+  if(indexes.length<2)continue
+  const forward=weekCurve(indexes.map(i=>planned[i]),i=>x(indexes[i]),y)
+  const reverse=[...indexes].reverse()
+  const back=weekCurve(reverse.map(i=>actual[i]!),i=>x(reverse[i]),y).replace(/^M/,'L')
+  areas.push(`${forward} ${back} Z`)
+ }
+ return areas
+}

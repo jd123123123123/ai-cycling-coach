@@ -56,3 +56,12 @@ describe('the back button', () => {
     expect(screen.queryByLabelText('Zurück')).toBeNull()
   })
 })
+
+it('keeps close-only sheets separate from page navigation',()=>{
+ const onClose=vi.fn();draw('/e/w3-plan',{title:'Deine Woche',onClose});
+ expect(screen.getByLabelText('Schließen')).toBeTruthy();expect(screen.queryByTestId('menu')).toBeNull();expect(screen.queryByLabelText('Profil & Einstellungen')).toBeNull()
+})
+it('retains the shared menu and contextual tools in a ride detail',()=>{
+ draw('/e/w3-ride/307',{title:'21.09.2026',showAvatar:false,onBack:()=>{},extra:<button aria-label="Fahrt teilen">Teilen</button>});
+ expect(screen.getByTestId('menu')).toBeTruthy();expect(screen.getByLabelText('Fahrt teilen')).toBeTruthy();expect(screen.queryByLabelText('Profil & Einstellungen')).toBeNull()
+})

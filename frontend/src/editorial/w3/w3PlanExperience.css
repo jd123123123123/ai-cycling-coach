@@ -155,3 +155,10 @@
 .w3-plan-vessel[data-over]>i{border-radius:999px}
 @media(prefers-reduced-motion:reduce){.w3-plan-vessel,.w3-plan-vessel>i{transition:none}}
 
+
+:root[data-w3-mode=light] .w3-plan-dialog{background:#fff;color:#0b0b0b;border-color:#0b0b0b18;--plan-ink:#0b0b0b;--plan-muted:#5a6068;--plan-acid:#447200;--plan-card:#f7f7f7;--plan-bg:#fff;--plan-raised:#f1f1f1;--plan-stroke:#0b0b0b1a}
+:root[data-w3-mode=light] .w3-plan-dialog button{background:#f1f1f1;color:#0b0b0b}
+:root[data-w3-mode=light] .w3-plan-dialog p{color:#5a6068}
+:root[data-w3-mode=light] .w3-plan-change-list article{border-color:#0b0b0b14}
+:root[data-w3-mode=light] .w3-plan-change-list time{color:#5a6068}
+:root[data-w3-mode=light] .w3-plan-primary{color:#fff!important}

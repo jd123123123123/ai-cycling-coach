@@ -30,7 +30,7 @@
 .w3-root select,
 .w3-root textarea {
   font-size: max(16px, 1em);
-  color-scheme: dark;
+  color-scheme: inherit;
 }
 
 /* Every persistent navigation control keeps the Apple-sized hit target even
@@ -40,17 +40,6 @@
 .w3-root .w3-topbar-control {
   min-width: 44px;
   min-height: 44px;
-}
-
-/* The top bar reads like a native navigation bar while content scrolls below. */
-.w3-root [data-w3-topbar] {
-  position: sticky;
-  top: 0;
-  z-index: 40;
-  background: color-mix(in srgb, var(--w-bg, #0b0b0b) 78%, transparent);
-  -webkit-backdrop-filter: saturate(145%) blur(18px);
-  backdrop-filter: saturate(145%) blur(18px);
-  border-bottom: 1px solid color-mix(in srgb, var(--w-ink, #fff) 7%, transparent);
 }
 
 /* Fixed tab bars get the same translucent separation as iOS TabView. */
@@ -91,3 +80,5 @@
     transition-duration: 1ms !important;
   }
 }
+
+:root[data-w3-mode=light] .w3-root [data-w3-tabbar]{box-shadow:0 -4px 24px #0b0b0b05}

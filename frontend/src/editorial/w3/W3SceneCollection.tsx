@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Check, ChevronRight, Share2, X, LockKeyhole } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Share2, X, LockKeyhole } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { fetchStageGallery, fetchStageImage, type StageCard, type StageGallery } from '../../api/stageGallery'
 import { useSelectStage } from '../../hooks/useGarage'
@@ -143,6 +143,29 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
   const collected = data.stages.filter(s => s.owned && (!s.starter || !!s.image))
   const open = data.stages.filter(s => !s.owned && !s.starter).sort((a, b) => TIER_ORDER.indexOf(a.tier) - TIER_ORDER.indexOf(b.tier) || (b.progress?.pct ?? -1) - (a.progress?.pct ?? -1))
   const cards = filter === 'owned' ? collected : filter === 'open' ? open : [...collected,...open]
+  const gallery = useRef<HTMLDivElement>(null)
+  const [activeCard, setActiveCard] = useState(0)
+  const cardIds = cards.map(card=>card.id).join(',')
+  useEffect(() => { setActiveCard(0); gallery.current?.scrollTo?.({left:0,behavior:'instant'}) }, [filter,cardIds])
+  const browse = (index: number, focus = false) => {
+    const el = gallery.current, card = el?.children[index] as HTMLElement | undefined
+    if (!el || !card) return
+    const first = el.children[0] as HTMLElement
+    if (focus) card.focus({preventScroll:true})
+    el.scrollTo({left:card.offsetLeft-first.offsetLeft,behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'})
+  }
+  const trackCard = () => {
+    const el = gallery.current
+    if (!el) return
+    const first = el.children[0] as HTMLElement | undefined
+    if (!first) return
+    let nearest = 0, distance = Infinity
+    Array.from(el.children).forEach((card, index) => {
+      const delta = Math.abs((card as HTMLElement).offsetLeft-first.offsetLeft-el.scrollLeft)
+      if (delta < distance) { distance = delta; nearest = index }
+    })
+    setActiveCard(nearest)
+  }
   const openedOnce = useRef(false)
   useEffect(() => {
     if (!openedOnce.current && reveal && data.stages.some(s => s.owned)) {
@@ -165,22 +188,20 @@ export function SceneCollectionView({ data, bike, onSelect, selecting = false, o
     finally { setSharing(false) }
   }
   return <section className={`w3-scenes ${revealOnly ? 'is-reveal-only' : ''}`} style={{ fontFamily: FONT, color: T.ink }}>
-    <header className="w3-scenes-heading"><div><h2>Deine<br />Sammlung.</h2></div><div className="w3-scenes-count"><strong>{collected.length}</strong><span>von {data.stages.filter(s => !s.starter || !!s.image).length} Kulissen</span></div></header>
-    <div className="w3-scenes-switch" role="group" aria-label="Kulissen filtern"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Alle</button><button aria-pressed={filter === 'owned'} onClick={() => setFilter('owned')}>Verdient <span>{collected.length}</span></button><button aria-pressed={filter === 'open'} onClick={() => setFilter('open')}>Noch offen <span>{open.length}</span></button></div>
+    <header className="w3-scenes-heading"><div><h2>Deine Sammlung.</h2></div><div className="w3-scenes-count"><strong>{collected.length}</strong><span>von {data.stages.filter(s => !s.starter || !!s.image).length} Kulissen</span></div></header>
+    <div className="w3-gallery-tools"><div className="w3-scenes-switch" role="group" aria-label="Kulissen filtern"><button aria-pressed={filter === 'all'} onClick={() => setFilter('all')}>Alle</button><button aria-pressed={filter === 'owned'} onClick={() => setFilter('owned')}>Deine <span>{collected.length}</span></button><button aria-pressed={filter === 'open'} onClick={() => setFilter('open')}>Offen <span>{open.length}</span></button></div>{cards.length>0&&<nav className="w3-gallery-navigation" aria-label="Kulissen wechseln"><span aria-live="polite">{Math.min(activeCard+1,cards.length)}<span> / {cards.length}</span></span><div><button type="button" aria-label="Vorherige Kulisse" disabled={activeCard===0} onClick={()=>browse(activeCard-1)}><ChevronLeft size={20}/></button><button type="button" aria-label="Nächste Kulisse" disabled={activeCard>=cards.length-1} onClick={()=>browse(activeCard+1)}><ChevronRight size={20}/></button></div></nav>}</div>
     {cards.length === 0 && <div className="w3-scenes-empty"><h3>{filter === 'owned' ? 'Die erste kommt mit deiner Fahrt.' : 'Deine Sammlung ist komplett.'}</h3>{filter === 'owned' && <button onClick={() => setFilter('open')}>Kulissen entdecken <ChevronRight size={16} /></button>}</div>}
-    <div className={'w3-scenes-grid'}>
+    <div className="w3-scenes-grid" ref={gallery} onScroll={trackCard} role="region" aria-label="Kulissen durchblättern" onKeyDown={e=>{if(e.key==='ArrowRight'){e.preventDefault();browse(Math.min(cards.length-1,activeCard+1),true)}if(e.key==='ArrowLeft'){e.preventDefault();browse(Math.max(0,activeCard-1),true)}}}>
       {cards.map(s => <button key={s.id} className={`w3-collectible tier-${s.tier} ${s.owned ? 'is-earned' : 'is-locked'}`} onClick={() => inspect(s)} aria-label={`${s.name_de} · ${RARITY[s.tier] ?? 'Klassiker'} · ${s.unlock_de}`}>
         <div className="w3-collectible-face">
           <ScenePortrait scene={s} bike={bike} obscured={!s.owned} />
-          <div className="w3-collectible-grain" aria-hidden />
-          <div className="w3-collectible-crown"><span className="w3-collectible-rarity"><i aria-hidden />{RARITY[s.tier] ?? 'Klassiker'}</span>{s.selected ? <Check size={14} aria-label="Aktiv" /> : !s.owned ? <LockKeyhole size={13} aria-label="Noch offen" /> : <RidrMark size={18} color="#ffffffb0" />}</div>
-          
-          <i className="w3-collectible-glint" aria-hidden />
         </div>
+        <div className="w3-collectible-edition"><span className="w3-collectible-rarity">{RARITY[s.tier] ?? 'Klassiker'}</span>{s.selected ? <span><Check size={13}/>Aktiv</span> : !s.owned ? <LockKeyhole size={14} aria-label="Noch offen"/> : <RidrMark size={18} color="currentColor"/>}</div>
         <div className="w3-collectible-title"><strong>{SCENE_COPY[s.id]??s.name_de.replace(/^Die |^Der |^Das /, '')}</strong><span>{s.unlock_de}</span></div>
         {!s.owned && s.progress?.pct != null && <div className="w3-collectible-progress"><div><i style={{ width: `${s.progress.pct * 100}%` }} /></div><span>{progressText(s)}</span></div>}
       </button>)}
     </div>
+
     <motion.dialog ref={dialog} animate={opening ? { x:[0,0,-1,1,-2,2,0], rotate:[0,0,-.3,.3,-.45,.45,0], boxShadow:['0 24px 100px #0008','0 24px 100px #0008','0 24px 110px #000a','0 24px 110px #000a','0 24px 110px #000a','0 24px 100px #c6f53c18','0 24px 100px #0008'] } : {x:0,rotate:0,boxShadow:'0 24px 100px #0008'}} transition={{duration:3.6,times:[0,.4,.52,.64,.78,.92,1]}} aria-labelledby="scene-reward-title" className={`w3-scene-dialog tier-${selected?.tier ?? 'alltag'} ${!reveal ? 'is-inspection' : ''} ${sealed ? 'is-sealed' : ''} ${opening ? 'is-unlocking' : ''}`} onClose={() => { revealTimers.current.forEach(clearTimeout); revealTimers.current = []; setOpening(false); setSealed(false); try { navigator.vibrate?.(0) } catch { /* Optional haptics. */ } }} onClick={e => { if (e.target === e.currentTarget) dialog.current?.close() }}>
       {selected && <>
       {(selected.image || selected.plate_url || backdropImage(selected.id)) && <img src={selected.image || selected.plate_url || backdropImage(selected.id)!} alt="" style={{display:'none'}} />}

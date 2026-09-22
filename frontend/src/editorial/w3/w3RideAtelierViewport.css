@@ -32,3 +32,5 @@ html:has(.atelier-live),body:has(.atelier-live){height:100%;overflow:hidden;over
 .atelier-map-open:disabled{cursor:default;opacity:1}.atelier-map-open:focus-visible{outline:2px solid var(--a-acid);outline-offset:-3px}
 .atelier-story-Fahrt>.atelier-route-elevation{width:calc(100% + 46px);margin-inline:-23px;flex:none}
 .atelier-load-state{padding:24px;display:grid;place-content:center;gap:24px;flex:1;color:var(--a-mid)}
+
+.atelier-chapter-nav{overflow-x:auto;scrollbar-width:none;overscroll-behavior-x:contain}.atelier-chapter-nav::-webkit-scrollbar{display:none}.atelier-chapter-nav button{flex:1 0 auto;padding-inline:4px}

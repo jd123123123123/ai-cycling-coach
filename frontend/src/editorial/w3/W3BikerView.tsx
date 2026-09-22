@@ -88,7 +88,7 @@ export default function W3BikerView({ vm, season = [], curve = null, bike = null
     '--profile-error': T.bad, '--focus-muted': T.mid, fontFamily: FONT, background: T.bg,
   } as CSSProperties
   return <div className="w3-root"><div className="w3-frame w3-profile focus-biker" style={style}>
-    <W3StatusBar /><W3TopBar />
+    <W3StatusBar /><W3TopBar title="Biker" />
     <main>
       <div className="profile-editorial-hero"><section className={`profile-identity ${!vm.rider.avatarUrl ? 'profile-identity-empty' : ''}`} aria-label="Dein Profil">
         <div className="profile-name">

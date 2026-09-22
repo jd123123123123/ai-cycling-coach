@@ -4,48 +4,23 @@
  * (read via the Pencil MCP, 2026-08-11). Do not "improve" them.
  * Scoped under .w3-root so nothing leaks into the app's or EDITORIAL II's palette.
  */
-.w3-root {
-  /* Palette — pen `w-*` variables, verbatim. */
-  --w-bg: #0B0B0B;
+/* These CSS roles mirror the runtime palette; both consumers share a theme. */
+:root, .w3-root {
+  --w-bg:#0B0B0B; --w-surface:#161616; --w-surface-2:#202020;
+  --w-ink:#FFFFFF; --w-mid:#9BA0A6; --w-quiet:#7E8389;
+  --w-rule:#FFFFFF14; --w-stroke:#FFFFFF1A; --w-acid:#BFFF3C; --w-bad:#FF4356;
+  --w-training:#2BE68F; --w-cool:#6B8CFF; --w-evening:#7B5CFF;
+  --w-font:"Inter Tight",ui-sans-serif,system-ui,sans-serif;
+  --w-display:"Archivo Narrow","Inter Tight",ui-sans-serif,sans-serif;
+  --w-radius-card:24px; --w-radius-pill:100px;
 }
-
-/* WHITE MODE. `W3ModeProvider` stamps this on <html> when the rider stands the
-   bike on the white studio floor. Only the ground lives here — every other
-   colour in the app comes from the palette in `w3tokens`, which switches with
-   it. Kept in step by hand, which is why there is exactly one value. */
-:root[data-w3-mode='light'] {
-  --w-bg: #F2F2EE;
-  --w-surface: #161616;
-  --w-surface-2: #202020;
-  /* `--w-acid` and `--w-acid-deep` lived here and were read by nobody: W3
-     styles come from `w3tokens.tsx`, not from CSS variables. They were also
-     the WRONG lime (the original editorial palette's `#C8FF00`), so the one
-     thing they could have done, had anything used them, was reintroduce the
-     previous design language. Removed rather than corrected. */
-  --w-ink: #FFFFFF;
-  --w-mid: #9BA0A6;
-  --w-quiet: #6E7379;
-  --w-rule: #FFFFFF14;
-  --w-stroke: #FFFFFF1A;
-
-  /* State hues reused from the pen (st-training green, st-evening violet). */
-  --w-training: #2BE68F;
-  --w-cool: #6B8CFF;
-  --w-evening: #7B5CFF;
-
-  /* Type — pen `w-font` is Inter Tight; the decks use Archivo Narrow for the
-   * big condensed display numerals. Both are loaded by index.html. */
-  --w-font: "Inter Tight", ui-sans-serif, system-ui, sans-serif;
-  --w-display: "Archivo Narrow", "Inter Tight", ui-sans-serif, sans-serif;
-
-  --w-radius-card: 24px;
-  --w-radius-pill: 100px;
-
-  background: var(--w-bg);
-  color: var(--w-ink);
-  font-family: var(--w-font);
-  -webkit-font-smoothing: antialiased;
+:root[data-w3-mode='light'], :root[data-w3-mode='light'] .w3-root {
+  --w-bg:#FFFFFF; --w-surface:#F7F7F7; --w-surface-2:#F1F1F1;
+  --w-ink:#0B0B0B; --w-mid:#5A6068; --w-quiet:#5C626A;
+  --w-rule:#0B0B0B14; --w-stroke:#0B0B0B1A; --w-acid:#447200; --w-bad:#C22036;
+  --w-training:#0F9E5E; --w-cool:#3E60CE; --w-evening:#5B41D6;
 }
+.w3-root {background:var(--w-bg);color:var(--w-ink);font-family:var(--w-font);-webkit-font-smoothing:antialiased}
 
 /* The device frame: the pen frame is 390 wide, clipped. On desktop we center
  * it; on a phone it fills the viewport. The page body is the scroll container

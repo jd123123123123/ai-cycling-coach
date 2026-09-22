@@ -88,7 +88,7 @@ export default function W3NavMenu({
 
   return (
     <>
-      <button onClick={() => setOpen(true)} aria-label="Menü"
+      <button className="w3-navigation-trigger" onClick={() => setOpen(true)} aria-label="Menü"
         style={{ width: size, height: size, borderRadius: 100, background, border: 0, display: 'grid', placeItems: 'center', cursor: 'pointer', padding: 0 }}>
         <Icon size={iconSize} color={color} />
       </button>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useId, useState, type ReactNode, type CSSProperties } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { ArrowLeft, ArrowUpRight, Check, Clock3, Mountain, Route, X, Info, Share2 } from 'lucide-react'
+import { ArrowUpRight, Check, Clock3, Mountain, Route, X, Info, Share2 } from 'lucide-react'
+import W3TopBar from './W3TopBar'
 import { T, FONT } from './w3tokens'
 import { W3_MAP } from './w3map'
 import W3RideBestEfforts from './W3RideBestEfforts'
@@ -19,11 +20,11 @@ import './w3RideAtelierViewport.css'
 import './w3RideReport.css'
 const n = (v:number) => v.toLocaleString('de-DE',{maximumFractionDigits:1})
 const zoneMinutes = (seconds:number) => formatValue(seconds/60,Math.abs(seconds)<600?1:0)
-const nav = ['Fahrt','Zonen','Analyse','Bestwerte','Plan','Beitrag'] as const
+const nav = ['Fahrt','Zonen','Analyse','Bestwerte','Plan','Beitrag','Coach'] as const
 const RouteMap = lazy(() => import('../../components/crew/RouteMap'))
 type Panel = typeof nav[number] | 'Coach'
 export type RideAtelierVm = Pick<W3RideVm, 'title'|'ranks'|'polyline'|'bigStat'|'bigStatUnit'|'climb'|'avgSpeed'> & {hero:Pick<W3RideVm['hero'],'dateLine'|'duration'>}
-export const ATELIER_TOKENS = {'--a-bg':T.bg,'--a-surface':T.surface,'--a-soft':T.surface2,'--a-ink':T.ink,'--a-mid':T.mid,'--a-acid':T.acid,'--a-rule':T.rule,'--report-ink':T.ink,'--report-mid':T.mid,'--report-acid':T.acid,'--report-line':T.rule,'--report-bg':T.bg,fontFamily:FONT} as CSSProperties
+export const atelierTokens = () => ({'--a-bg':T.bg,'--a-surface':T.surface,'--a-soft':T.surface2,'--a-ink':T.ink,'--a-mid':T.mid,'--a-acid':T.acid,'--a-rule':T.rule,'--report-ink':T.ink,'--report-mid':T.mid,'--report-acid':T.acid,'--report-line':T.rule,'--report-bg':T.bg,fontFamily:FONT} as CSSProperties)
 export interface RideAtelierProps {vm:RideAtelierVm;review:TrainingReview;rideDate:string;contributions?:RideContributions;coachData?:CoachEvidence;samples:RideSample[];ftp:number|null;hrMax:number|null;ftpEntries:FTPEntry[];demo?:boolean;onBack:()=>void;onExpandMap?:()=>void;detailsExtra?:ReactNode}
 /** North-up GPS silhouette with latitude compensation. It is a route, not invented terrain. */
 export function routeSilhouette(points:[number,number][]){
@@ -150,7 +151,8 @@ export function RideAtelier({vm,review,rideDate,contributions,coachData,samples,
  if(panel==='Coach'){const insight=coachData?coachEvidence(coachData,analysisReview):null,p=coachData?.debrief?.pacing;story={...story,routePath:undefined,title:insight?.pacingTitle??'Deine Fahrt analysiert.',eyebrow:'Coach-Read',value:insight?.split==null?'—':`${insight.split>0?'+':''}${formatValue(insight.split,1)}`,unit:'% NP',caption:'Zweite Hälfte gegenüber erster Hälfte / Terrain berücksichtigen',plot:undefined,comparisons:p?[{label:'Normalisierte Leistung',actual:p.second_half_np,planned:p.first_half_np,unit:'W',labels:['Erste Hälfte','Zweite Hälfte']}]:undefined,facts:[{label:'Erste Hälfte',value:`${formatValue(p?.first_half_np)} W`},{label:'Zweite Hälfte',value:`${formatValue(p?.second_half_np)} W`},{label:'HF-Drift',value:`${formatValue(insight?.drift,1)} %`}]}}
 
  return <article className="atelier-device">
-  <header className="atelier-app-header">{panel==='Coach'?<button aria-label="Zurück zur Fahrt" onClick={()=>setPanel('Fahrt')}><ArrowLeft size={20}/></button>:<button onClick={onBack} aria-label="Zurück zu den Fahrten"><ArrowLeft size={20}/></button>}<span>{vm.hero.dateLine.split(' · ')[0]}</span><div className="atelier-header-actions">{panel!=='Coach'&&<button className="atelier-coach-open" onClick={()=>setPanel('Coach')}>Coach<ArrowUpRight size={13}/></button>}<button type="button" aria-label="Diese Ansicht teilen" onClick={()=>setSharing(true)}><Share2 size={18}/></button><button type="button" onClick={()=>setDetails(!details)} aria-expanded={details} aria-label={details?'Details schließen':'Fahrtdetails öffnen'}>{details?<X size={20}/>:<Info size={20}/>}</button></div></header>
+  <W3TopBar title={vm.hero.dateLine.split(' · ')[0]} showAvatar={false} onBack={panel==='Coach'?()=>setPanel('Fahrt'):onBack} extra={<><button type="button" aria-label="Diese Ansicht teilen" onClick={()=>setSharing(true)}><Share2 size={20}/></button><button type="button" onClick={()=>setDetails(!details)} aria-expanded={details} aria-label={details?'Details schließen':'Fahrtdetails öffnen'}>{details?<X size={20}/>:<Info size={20}/>}</button></>}/>
+
   <div className="atelier-story" onTouchStart={e=>{e.currentTarget.dataset.touch=String(e.touches[0].clientX);e.currentTarget.dataset.touchY=String(e.touches[0].clientY)}} onTouchEnd={e=>{if(panel==='Coach'||(e.target as Element).closest('svg,input,button'))return;const diff=e.changedTouches[0].clientX-Number(e.currentTarget.dataset.touch);if(Math.abs(diff)>70&&Math.abs(diff)>Math.abs(e.changedTouches[0].clientY-Number(e.currentTarget.dataset.touchY))){const i=nav.indexOf(panel);setPanel(nav[Math.max(0,Math.min(nav.length-1,i+(diff<0?1:-1)))])}}}>
    <AnimatePresence mode="wait" initial={false}><motion.div key={panel} className={`atelier-story-panel atelier-story-${panel}`} initial={reduce?false:{opacity:0,y:12}} animate={{opacity:1,y:0}} exit={reduce?undefined:{opacity:0,y:-8}} transition={{duration:.22}}>
     {panel==='Fahrt'&&<>

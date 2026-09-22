@@ -32,7 +32,7 @@ export default function W3PlanExperiencePreview() {
   if(actual!=null)ridden[5]=(ridden[5]??0)+actual-ridden.reduce<number>((sum,t)=>sum+(t??0),0)
   const previewVm={...beforeVm,daySessions:beforeVm.daySessions?.map((d,i)=>{
     const date=new Date(2026,8,14+offset*7+i),didRide=actual!=null&&weights[i]>0
-    return {...d,tss:String(planned[i]),dateISO:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,dateLabel:date.toLocaleDateString('de-DE',{day:'numeric',month:'short'}),bars:d.bars.map(b=>({...b,w:b.w/1.5,work:b.w>=.6})),isPast:offset<0,isToday:offset===0&&i===0,actualKnown:offset<0,ridden:didRide,actualTss:didRide?ridden[i]:null,actualDuration:didRide?Math.round((ridden[i]??0)*55):null,actualRides:[]}
+    return {...d,plannedDuration:sessions[i].minutes*60,tss:String(planned[i]),dateISO:`${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`,dateLabel:date.toLocaleDateString('de-DE',{day:'numeric',month:'short'}),bars:d.bars.map(b=>({...b,w:b.w/1.5,work:b.w>=.6})),isPast:offset<0,isToday:offset===0&&i===0,actualKnown:offset<0,ridden:didRide,actualTss:didRide?ridden[i]:null,actualDuration:didRide?Math.round((ridden[i]??0)*55):null,actualRides:[]}
   })}
 
   return <W3PlanExperience
